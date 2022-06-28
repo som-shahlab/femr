@@ -1,0 +1,180 @@
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+  name = "com_google_absl",
+  urls = ["https://github.com/abseil/abseil-cpp/archive/a59b4daa07a14326d2ceb28cc6d0e079feea3338.zip"],
+  strip_prefix = "abseil-cpp-a59b4daa07a14326d2ceb28cc6d0e079feea3338",
+)
+
+http_archive(
+    name = "gtest",
+    url = "https://github.com/google/googletest/archive/release-1.10.0.zip",
+    sha256 = "94c634d499558a76fa649edb13721dce6e98fb1e7018dfaeba3cd7a083945e91",
+    strip_prefix = "googletest-release-1.10.0",
+)
+
+new_git_repository(
+    name = "concurrentqueue",
+    remote = "https://github.com/cameron314/concurrentqueue.git",
+    commit = "79cec4c3bf1ca23ea4a03adfcd3c2c3659684dd2",
+    shallow_since = "1580387311 -0500",
+    build_file_content = """
+
+cc_library(
+    name = "concurrentqueue",
+    hdrs = ["concurrentqueue.h", "blockingconcurrentqueue.h", "lightweightsemaphore.h"],
+    visibility = ["//visibility:public"],
+)
+""",
+)
+
+new_git_repository(
+    name = "readerwriterqueue",
+    remote = "https://github.com/cameron314/readerwriterqueue.git",
+    commit = "435e36540e306cac40fcfeab8cc0a22d48464509",
+    shallow_since = "1594429759 -0400",
+    build_file_content = """
+
+cc_library(
+    name = "readerwriterqueue",
+    hdrs = ["readerwriterqueue.h", "atomicops.h"],
+    visibility = ["//visibility:public"],
+)
+""",
+)
+
+new_git_repository(
+    name = "pybind11",
+    commit = "80d452484c5409444b0ec19383faa84bb7a4d351",
+    remote = "https://github.com/pybind/pybind11.git",
+    build_file_content = """
+
+cc_library(
+    name = "pybind11",
+    hdrs = glob(["include/pybind11/*.h"]) + 
+        glob(["include/pybind11/detail/*.h"]),
+    visibility = ["//visibility:public"],
+    includes = ["include"],
+)
+""",
+    shallow_since = "1571097444 +0200"
+)
+
+new_git_repository(
+    name = "streamvbyte",
+    commit = "92ab8a74c96b9e0f684c45aec9cf7f57405ff8da",
+    remote = "https://github.com/lemire/streamvbyte.git",
+    build_file_content = """
+cc_library (
+    name = "streamvbyte",
+    hdrs = glob(["include/*"]) + glob(["src/*"]),
+    srcs = [
+        "src/streamvbyte_decode.c",
+        "src/streamvbyte_encode.c",
+        "src/streamvbytedelta_decode.c",
+        "src/streamvbytedelta_encode.c",
+        "src/streamvbyte_0124_encode.c",
+        "src/streamvbyte_0124_decode.c",
+        "src/streamvbyte_zigzag.c"
+    ],
+    visibility = ["//visibility:public"],
+    includes = ["include"],
+    copts = ["-std=c99"],
+)
+""",
+    shallow_since = "1557332318 -0400"
+)
+
+new_git_repository(
+    name = "json",
+    commit = "e7b3b40b5a95bc74b9a7f662830a27c49ffc01b4",
+    remote = "https://github.com/nlohmann/json.git",
+     build_file_content = """
+cc_library (
+    name = "json",
+    hdrs = glob(["include/nlohmann/**"]),
+     visibility = ["//visibility:public"],
+     includes = ["include"],
+ )
+ """,
+   shallow_since = "1573989704 +0100"
+)
+
+new_git_repository(
+    name = "picosha2",
+    commit = "b699e6c900be6e00152db5a3d123c1db42ea13d0",
+    remote = "https://github.com/okdshin/PicoSHA2.git",
+    build_file_content = """
+cc_library (
+    name = "picosha2",
+    hdrs = ['picosha2.h'],
+    visibility = ["//visibility:public"],
+)
+""",
+shallow_since = "1531968639 +0900"
+)
+
+new_git_repository(
+    name = "streamvbyte",
+    commit = "92ab8a74c96b9e0f684c45aec9cf7f57405ff8da",
+    remote = "https://github.com/lemire/streamvbyte.git",
+    build_file_content = """
+cc_library (
+    name = "streamvbyte",
+    hdrs = glob(["include/*"]) + glob(["src/*"]),
+    srcs = [
+        "src/streamvbyte_decode.c",
+        "src/streamvbyte_encode.c",
+        "src/streamvbytedelta_decode.c",
+        "src/streamvbytedelta_encode.c",
+        "src/streamvbyte_0124_encode.c",
+        "src/streamvbyte_0124_decode.c",
+        "src/streamvbyte_zigzag.c"
+    ],
+    visibility = ["//visibility:public"],
+    includes = ["include"],
+    copts = ["-std=c99"],
+)
+""",
+    shallow_since = "1557332318 -0400"
+)
+
+
+
+# Rule repository
+http_archive(
+   name = "rules_foreign_cc",
+   strip_prefix = "rules_foreign_cc-main",
+   url = "https://github.com/bazelbuild/rules_foreign_cc/archive/main.zip",
+#   sha256 = "c823078385e9f6891f7e245be4eb319d6d74f1a3d6d5ba7392f1e382ef190651",
+)
+
+load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_dependencies")
+rules_foreign_cc_dependencies()
+
+
+# Group the sources of the library so that CMake rule have access to it
+all_content = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
+
+
+# zlib_ng source code repository
+http_archive(
+    name = "source_zlib_ng",
+    build_file_content = all_content,
+    strip_prefix = "zlib-ng-7606b9f39a2c7701a30d06a786fb2a99334b1feb",
+    urls = ["https://github.com/zlib-ng/zlib-ng/archive/7606b9f39a2c7701a30d06a786fb2a99334b1feb.zip"],
+    sha256 = "e4e77c332959a9c6e61943696adade98ffaa64f8ee53db8e2aaba55561a2d8c5",
+)
+
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "com_github_nelhage_rules_boost",
+    commit = "1e3a69bf2d5cd10c34b74f066054cd335d033d71",
+    remote = "https://github.com/nelhage/rules_boost",
+    shallow_since = "1591047380 -0700",
+)
+
+load("@com_github_nelhage_rules_boost//:boost/boost.bzl", "boost_deps")
+boost_deps()
