@@ -1,4 +1,4 @@
-#include "timeline_extension.h"
+#include "patient_collection_extension.h"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -8,6 +8,8 @@
 #include "reader.h"
 #include "parse_utils.h"
 #include "csv.h"
+#include "register_iterable.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/replace.hpp>
 
@@ -48,34 +50,6 @@ struct Patient {
 
     absl::Span<const Event> get_events() const { return events; }
 };
-
-absl::CivilDay parse_date(std::string_view datestr) {
-    std::string_view time_column = datestr;
-    auto location = time_column.find(' ');
-    if (location != std::string_view::npos) {
-        time_column = time_column.substr(0, location);
-    }
-
-    location = time_column.find('T');
-    if (location != std::string_view::npos) {
-        time_column = time_column.substr(0, location);
-    }
-
-    auto first_dash = time_column.find('-');
-    int year;
-    attempt_parse_or_die(time_column.substr(0, first_dash), year);
-    time_column = time_column.substr(first_dash + 1, std::string_view::npos);
-
-    auto second_dash = time_column.find('-');
-    int month;
-    attempt_parse_or_die(time_column.substr(0, second_dash), month);
-    time_column = time_column.substr(second_dash + 1, std::string_view::npos);
-
-    int day;
-    attempt_parse_or_die(time_column, day);
-
-    return absl::CivilDay(year, month, day);
-}
 
 /** Currently using a dummy reader designed to be as simple as possible for easy changes **/
 class TimelineReader {
@@ -194,86 +168,6 @@ class TimelineReader {
     std::vector<uint32_t> patient_ids;
 };
 
-template <typename T>
-constexpr auto type_name() {
-    std::string_view name, prefix, suffix;
-#ifdef __clang__
-    name = __PRETTY_FUNCTION__;
-    prefix = "auto type_name() [T = ";
-    suffix = "]";
-#elif defined(__GNUC__)
-    name = __PRETTY_FUNCTION__;
-    prefix = "constexpr auto type_name() [with T = ";
-    suffix = "]";
-#elif defined(_MSC_VER)
-    name = __FUNCSIG__;
-    prefix = "auto __cdecl type_name<";
-    suffix = ">(void)";
-#endif
-    name.remove_prefix(prefix.size());
-    name.remove_suffix(suffix.size());
-    return name;
-}
-
-namespace detail {
-template <typename L, typename R>
-struct has_operator_equals_impl {
-    template <typename T = L,
-              typename U = R>  // template parameters here to enable SFINAE
-    static auto test(T&& t, U&& u)
-        -> decltype(t == u, void(), std::true_type{});
-    static auto test(...) -> std::false_type;
-    using type = decltype(test(std::declval<L>(), std::declval<R>()));
-};
-}  // namespace detail
-
-template <typename L, typename R = L>
-struct has_operator_equals : detail::has_operator_equals_impl<L, R>::type {};
-
-template <typename T, typename std::enable_if<has_operator_equals<
-                          typename T::value_type>::value>::type* = nullptr>
-void register_iterable(py::module& m) {
-    py::class_<T>(m, std::string(type_name<T>()).c_str())
-        .def(
-            "__iter__",
-            [](const T& span) {
-                return py::make_iterator(std::begin(span), std::end(span));
-            },
-            py::keep_alive<0, 1>())
-        .def("__len__", [](const T& span) { return span.size(); })
-        .def("__getitem__",
-             [](const T& span, ssize_t index) {
-                 if (index < 0) {
-                     index = span.size() + index;
-                 }
-                 return span[index];
-             })
-        .def("__contains__",
-             [](const T& span, const typename T::value_type& value) {
-                 return std::find(std::begin(span), std::end(span), value) !=
-                        std::end(span);
-             });
-}
-
-template <typename T, typename std::enable_if<!has_operator_equals<
-                          typename T::value_type>::value>::type* = nullptr>
-void register_iterable(py::module& m) {
-    py::class_<T>(m, std::string(type_name<T>()).c_str())
-        .def(
-            "__iter__",
-            [](const T& span) {
-                return py::make_iterator(std::begin(span), std::end(span));
-            },
-            py::keep_alive<0, 1>())
-        .def("__len__", [](const T& span) { return span.size(); })
-        .def("__getitem__", [](const T& span, ssize_t index) {
-            if (index < 0) {
-                index = span.size() + index;
-            }
-            return span[index];
-        });
-}
-
 void convert_patients_to_extract(std::string patient_directory, std::string extract_file, int num_threads) {
     /* 
         Currently we do a nullopt extractor and use the raw gzip files as format. Could obviously be optimized as necessary.
@@ -305,7 +199,7 @@ void convert_patients_to_extract(std::string patient_directory, std::string extr
     }
 }
 
-void register_timeline_extension(py::module& root) {
+void register_patient_collection_extension(py::module& root) {
     register_iterable<absl::Span<const Event>>(root);
     register_iterable<absl::Span<const uint32_t>>(root);
 

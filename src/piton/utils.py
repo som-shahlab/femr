@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-import argparse
-import bisect
+import logging
+import math
 import os
+from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
-from .extension.timeline import (
-    Value,
-    TimelineReader,
-    Patient,
-    Event,
-    ValueType,
-)
+def set_up_logging(filename: str) -> None:
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
 
-__all__ = ["Value", "TimelineReader", "Patient", "Event", "ValueType"]
+    logFormatter = logging.Formatter("%(asctime)s %(message)s")
+    rootLogger = logging.getLogger()
 
+    fileHandler = logging.FileHandler(filename, mode="w")
+    fileHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(fileHandler)
 
-def inspect_timelines() -> None:
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(consoleHandler)
+    rootLogger.setLevel(logging.INFO)
+
+def inspect_patient_collection() -> None:
     parser = argparse.ArgumentParser(
-        description="A tool for inspecting an ehr_ml extract"
+        description="A tool for inspecting a piton patient_collection"
     )
 
     parser.add_argument(

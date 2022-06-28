@@ -1,6 +1,6 @@
 import piton
 import piton.fileio
-import piton.transform
+import piton.transforms
 import datetime
 import os
 import json
@@ -25,7 +25,7 @@ with piton.fileio.EventWriter('events/example.csv.gz') as w:
 if not os.path.exists('raw_patients'):
     os.mkdir('raw_patients')
 
-piton.transform.convert_events_to_patients('events', 'raw_patients', 10)
+piton.transforms.convert_events_to_patients('events', 'raw_patients', 10)
 
 if not os.path.exists('processed_patients'):
     os.mkdir('processed_patients')
@@ -34,9 +34,9 @@ def transform(input: piton.Patient) -> piton.Patient:
     input.events = [a for a in input.events if a.code != 'E11.4'] # Remove E11.4 for some reason
     return input
 
-piton.transform.transform_patients('raw_patients', 'processed_patients', transform)
+piton.transforms.transform_patients('raw_patients', 'processed_patients', transform)
 
-piton.transform.convert_patients_to_patient_collection('processed_patients', 'patient_collection')
+piton.transforms.convert_patients_to_patient_collection('processed_patients', 'patient_collection')
 
 with piton.fileio.PatientCollectionReader('patient_collection') as collection:
     patient = collection.get_patient(10)

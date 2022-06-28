@@ -14,9 +14,6 @@ dependencies = [
 requires-python=">3.10"
 version = "0.1.0"
 
-[tool.setuptools]
-packages = ["piton"]
-
 [project.scripts]
 extract_omop = "ehr_ml.extract.omop_converter:extract_omop_program"
 inspect_timelines = "ehr_ml.timeline:inspect_timelines"
