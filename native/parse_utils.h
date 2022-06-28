@@ -5,6 +5,7 @@
 
 #include "absl/strings/numbers.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/civil_time.h"
 
 template <typename T>
 void attempt_parse_or_die(std::string_view text, T& value) {
@@ -13,5 +14,9 @@ void attempt_parse_or_die(std::string_view text, T& value) {
         abort();
     }
 }
+
+absl::CivilDay parse_date(std::string_view datestr);
+
+
 
 #endif

@@ -26,26 +26,27 @@ cc_library(
     deps = []
 )
 
-cc_library(
-    name="sort_csv",
-    srcs = [
-        "sort_csv.cpp",
-    ],
-    hdrs = ["sort_csv.h"],
-    deps = [
-        ":csv",
-        "@boost//:filesystem",
-        "@concurrentqueue",
-    ],
-    linkopts = [ "-lpthread" ]
-)
-
 cc_library (
     name="parse_utils",
     hdrs = [
         "parse_utils.h",
     ],
+    srcs = [
+        "parse_utils.cpp",
+    ],
     deps = [
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library (
+    name="register_iterable",
+    hdrs = [
+        "register_iterable.h",
+    ],
+    deps = [
+        "@pybind11",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -305,23 +306,12 @@ cc_binary(
     name="extension.so",
     srcs = [
         "extension.cpp",
-        "timeline_extension.cpp",
-        "timeline_extension.h",
+        "patient_collection_extension.cpp",
+        "patient_collection_extension.h",
         "civil_day_caster.h",
-        # "index_extension.cpp",
-        # "index_extension.h",
-    #     "ontology_extension.cpp",
-    #     "ontology_extension.h",
-    #     "patient2vec_extension.cpp",
-    #     "patient2vec_extension.h",
-    #     "clmbr_extension.h",
-    #     "clmbr_extension.cpp",
-    #     "extract_extension.cpp",
-    #     "extract_extension.h",
-	# "extract_subset_extension.cpp",
-	# "extract_subset_extension.h"
     ],
     deps = [
+	":register_iterable",
         ":parse_utils",
         ":concept",
         ":python",
@@ -337,7 +327,6 @@ cc_binary(
         ":gem",
         ":umls",
         ":csv",
-        ":sort_csv",
         ":rxnorm",
         "@boost//:filesystem",
         "@boost//:algorithm",

@@ -4,6 +4,7 @@ db_auth.json
 __pycache__
 .pytest_cache
 piton.egg-info
+demo/*
 output
 build
 dist

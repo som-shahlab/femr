@@ -3,6 +3,6 @@
 
 #include <pybind11/pybind11.h>
 
-void register_timeline_extension(pybind11::module& m);
+void register_patient_collection_extension(pybind11::module& m);
 
 #endif
