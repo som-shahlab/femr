@@ -7,6 +7,10 @@ import json
 
 import dataclasses
 
+#####################################
+##### Part 1: Create events #########
+#####################################
+
 if not os.path.exists('events'):
     os.mkdir('events')
 
@@ -21,11 +25,23 @@ dummy_events = [
 with piton.fileio.EventWriter('events/example.csv.gz') as w:
     for dummy_event in dummy_events:
         w.add_event(patient_id, dummy_event)
+        
+
+
+#####################################
+##### Part 2: Create patients #######
+#####################################
 
 if not os.path.exists('raw_patients'):
     os.mkdir('raw_patients')
 
-piton.transforms.convert_events_to_patients('events', 'raw_patients', 10)
+# Converts the events directory "events" to the patient directory "raw_patients"
+piton.transforms.convert_events_to_patients('events', 'raw_patients', shards=10)
+
+
+#####################################################################
+##### Part 3: Apply a transformation to the patients patients #######
+#####################################################################
 
 if not os.path.exists('processed_patients'):
     os.mkdir('processed_patients')
@@ -36,30 +52,22 @@ def transform(input: piton.Patient) -> piton.Patient:
 
 piton.transforms.transform_patients('raw_patients', 'processed_patients', transform)
 
+
+#####################################################################
+##### Part 4: Convert the patients to a patient collection ##########
+#####################################################################
+
 piton.transforms.convert_patients_to_patient_collection('processed_patients', 'patient_collection')
 
 with piton.fileio.PatientCollectionReader('patient_collection') as collection:
+    # The key part of a patient collection is that it supports queries
     patient = collection.get_patient(10)
 
+    
+    
 print(patient)
 
 print(patient.birth_date)
 
 for event in patient.events:
     print(event.start_age, event.code, event.event_type)
-
-# How to convert to JSON
-
-class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        elif isinstance(o, datetime.datetime):
-            return o.isoformat()
-        return super().default(o)
-
-for root, dirs, files in os.walk('processed_patients'):
-    for file in files:
-        with piton.fileio.PatientReader(os.path.join(root, file)) as r:
-            for patient in r.get_patients():
-                print(json.dumps(patient, cls=EnhancedJSONEncoder))
