@@ -39,9 +39,9 @@ if not os.path.exists('raw_patients'):
 piton.transforms.convert_events_to_patients('events', 'raw_patients', shards=10)
 
 
-#####################################################################
-##### Part 3: Apply a transformation to the patients patients #######
-#####################################################################
+#############################################################
+##### Part 3: Apply a transformation to the  patients #######
+#############################################################
 
 if not os.path.exists('processed_patients'):
     os.mkdir('processed_patients')
