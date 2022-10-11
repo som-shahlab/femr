@@ -17,9 +17,9 @@ conda create -n env_name python=3.10 bazel=5 clangxx=14 -c conda-forge
 
 conda activate env_name
 
-git clone https://github.com/som-shahlab/ehr_ml_fork.git
+git clone https://github.com/som-shahlab/piton.git
 
-cd ehr_ml_fork
+cd piton
 
 pip install -e .
 ```
