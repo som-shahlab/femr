@@ -7,10 +7,10 @@
 // #include "index_extension.h"
 // #include "ontology_extension.h"
 // #include "patient2vec_extension.h"
-#include "patient_collection_extension.h"
+#include "datasets_extension.h"
 
 PYBIND11_MODULE(extension, m) {
-    register_patient_collection_extension(m);
+    register_datasets_extension(m);
     // register_index_extension(m);
     // register_ontology_extension(m);
     // register_patient2vec_extension(m);

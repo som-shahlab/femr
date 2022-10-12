@@ -15,8 +15,7 @@ requires-python=">3.10"
 version = "0.1.0"
 
 [project.scripts]
-extract_omop = "ehr_ml.extract.omop_converter:extract_omop_program"
-inspect_timelines = "ehr_ml.timeline:inspect_timelines"
+extract_omop = "piton.extractors.omop_converter:extract_omop_program"
 
 [project.optional-dependencies]
 build = [
@@ -42,5 +41,3 @@ line_length = 80
 [tool.black]
 line_length = 80
 target_version = ['py38']
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"

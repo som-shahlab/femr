@@ -1,6 +1,16 @@
 import tempfile
-from . import *
-from .csv_converter import *
+import argparse
+from .. import Event, Patient
+from ..datasets import (
+    convert_patient_collection_to_patient_database,
+    convert_event_collection_to_patient_collection,
+)
+from .csv_converter import CSVConverter, run_csv_converters
+
+from typing import Sequence, Mapping, Optional
+import os
+
+import datetime
 
 
 class DemographicsConverter(CSVConverter):
@@ -19,17 +29,17 @@ class DemographicsConverter(CSVConverter):
             day = 1
 
             if row["year_of_birth"]:
-                year = int(row[4])
+                year = int(row["year_of_birth"])
 
             if row["month_of_birth"]:
-                month = int(row[5])
+                month = int(row["month_of_birth"])
 
             if row["day_of_birth"]:
-                day = int(row[6])
+                day = int(row["day_of_birth"])
 
             birth = datetime.datetime(year=year, month=month, day=day)
 
-        return [Event(start=birth, code="birth"),] + [
+        return [Event(start=birth, code="birth")] + [
             Event(start=birth, code=row[target])
             for target in [
                 "gender_source_concept_id",
@@ -61,7 +71,7 @@ class StandardConceptTableConverter(CSVConverter):
         ]
 
 
-def get_omop_csv_converters() -> List[CSVConverter]:
+def get_omop_csv_converters() -> Sequence[CSVConverter]:
     converters = [
         DemographicsConverter(),
         StandardConceptTableConverter(
@@ -93,7 +103,7 @@ def get_omop_csv_converters() -> List[CSVConverter]:
 
 
 class OmopTransformer:
-    def __call__(self, patient: Patient) -> Patient:
+    def __call__(self, patient: Patient) -> Optional[Patient]:
         new_events = []
 
         birth_date = None
@@ -106,6 +116,7 @@ class OmopTransformer:
 
         for event in patient.events:
             if event.start > birth_date + datetime.timedelta(days=100 * 365):
+                print("WAT", event)
                 continue
 
             new_events.append(event)
@@ -123,46 +134,17 @@ def extract_omop_program() -> None:
     )
 
     parser.add_argument(
-        "omop_source", type=str, help="Path of the folder to the omop source",
-    )
-
-    parser.add_argument(
-        "umls_location", type=str, help="The location of the umls directory",
-    )
-
-    parser.add_argument(
-        "gem_location", type=str, help="The location of the gem directory",
-    )
-
-    parser.add_argument(
-        "rxnorm_location",
+        "omop_source",
         type=str,
-        help="The location of the rxnorm directory",
+        help="Path of the folder to the omop source",
     )
 
     parser.add_argument(
-        "target_location", type=str, help="The place to store the extract",
-    )
-
-    parser.add_argument(
-        "--delimiter",
+        "target_location",
         type=str,
-        default=",",
-        help="The delimiter used in the raw OMOP source",
+        help="The place to store the extract",
     )
 
-    parser.add_argument(
-        "--ignore_quotes",
-        dest="use_quotes",
-        action="store_false",
-        help="Ignore quotes while parsing",
-    )
-    parser.add_argument(
-        "--use_quotes",
-        dest="use_quotes",
-        action="store_true",
-        help="Use quotes while parsing",
-    )
     parser.set_defaults(use_quotes=True)
 
     args = parser.parse_args()
@@ -173,17 +155,23 @@ def extract_omop_program() -> None:
         cleaned_patients_dir = os.path.join(temp_dir, "patients_cleaned")
 
         print("Converting to events")
-        run_csv_converters(
+        event_collection = run_csv_converters(
             args.omop_source, event_dir, 1, get_omop_csv_converters()
         )
 
         print("Converting to patients")
-        convert_events_to_patients(event_dir, raw_patients_dir, 1)
+        patient_collection = convert_event_collection_to_patient_collection(
+            event_collection, raw_patients_dir, 1
+        )
 
         transformer = OmopTransformer()
 
         print("Transforming entries")
-        transform_patients(raw_patients_dir, cleaned_patients_dir, transformer)
+        patient_collection = patient_collection.transform(
+            cleaned_patients_dir, transformer
+        )
 
         print("Converting to extract")
-        convert_patients_to_extract(cleaned_patients_dir, args.target_location)
+        convert_patient_collection_to_patient_database(
+            patient_collection, args.target_location
+        ).close()
