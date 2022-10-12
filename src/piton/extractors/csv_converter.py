@@ -7,6 +7,7 @@ from sys import prefix
 from typing import Sequence, Mapping, Tuple
 
 import datetime
+import contextlib
 import abc
 import multiprocessing
 import os
@@ -19,6 +20,8 @@ from dataclasses import dataclass
 from typing import List
 
 from . import *
+from .. import Event
+from ..datasets import EventCollection
 
 
 class CSVConverter(abc.ABC):
@@ -26,7 +29,7 @@ class CSVConverter(abc.ABC):
     An interface for converting a csv into events.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     @abc.abstractmethod
@@ -50,17 +53,18 @@ class CSVConverter(abc.ABC):
         ...
 
 
-def run_csv_converter(args: Tuple[str, str, CSVConverter]) -> None:
+def run_csv_converter(args: Tuple[str, EventCollection, CSVConverter]) -> None:
     source, target, converter = args
-    os.makedirs(os.path.dirname(target), exist_ok=True)
 
     with gzip.open(source, "rt") as f:
         reader = csv.DictReader(f)
-        with EventWriter(target) as o:
+        with contextlib.closing(target.create_writer()) as o:
             for _, row in zip(range(1000), reader):
                 lower_row = {a.lower(): b for a, b in row.items()}
                 for event in converter.get_events(lower_row):
-                    o.add_event(row[converter.get_patient_id_field()], event)
+                    o.add_event(
+                        int(row[converter.get_patient_id_field()]), event
+                    )
 
 
 def run_csv_converters(
@@ -68,18 +72,16 @@ def run_csv_converters(
     target_location: str,
     num_threads: int,
     converters: Sequence[CSVConverter],
-) -> None:
-    pool = multiprocessing.Pool(num_threads)
+) -> EventCollection:
 
-    os.makedirs(target_location, exist_ok=True)
+    target = EventCollection(target_location)
 
     to_process = []
 
     for root, dirs, files in os.walk(source_csvs):
         for name in files:
-            full_path = PurePosixPath(root, name)
-            relative_path = full_path.relative_to(source_csvs)
-            target_path = PurePosixPath(target_location) / relative_path
+            full_path = os.path.join(root, name)
+            relative_path = os.path.relpath(full_path, source_csvs)
             matching_converters = [
                 a
                 for a in converters
@@ -97,9 +99,9 @@ def run_csv_converters(
                 pass
             else:
                 converter = matching_converters[0]
-                to_process.append((full_path, target_path, converter))
+                to_process.append((full_path, target, converter))
 
-    pool.map(run_csv_converter, to_process, chunksize=1)
+    with multiprocessing.Pool(num_threads) as pool:
+        pool.imap_unordered(run_csv_converter, to_process, chunksize=1)
 
-    pool.close()
-    pool.join()
+    return target
