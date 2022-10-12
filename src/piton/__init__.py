@@ -37,11 +37,14 @@ class EventWriter:
 
     def __init__(self, filename):
         """
-        Open a file for writing.
+        Set name of file where events will be written
         """
         self.filename = filename
 
     def __enter__(self):
+        """
+        Open a file for writing.
+        """
         self.o = gzip.open(self.filename, "wt")
         self.writer = csv.DictWriter(
             self.o,
@@ -107,7 +110,7 @@ class PatientReader:
         for id, event in itertools.chain(
             self.reader.get_events(), [(None, None)]
         ):
-            if id != last_id:
+            if id != last_id:  # if event is associated with new patient
                 if last_id is not None:
                     patient = Patient(
                         patient_id=last_id, events=current_events
@@ -115,7 +118,7 @@ class PatientReader:
                     yield patient
                 last_id = id
                 current_events = [event]
-            elif last_id is not None:
+            elif last_id is not None:  # if event is still associated w/ prev patient
                 current_events.append(event)
 
 
@@ -125,20 +128,22 @@ class PatientReader:
     
 class PatientWriter:
     """
-    Writes events into a file for later use in ehr_ml extraction.
+    Writes patients into a file for later use in ehr_ml extraction.
 
     Note: this must be used in a context manager in order to close the file properly.
     """
 
     def __init__(self, filename):
         """
-        Open a file for writing.
+        Initialize an EventWriter
         """
         self.writer = EventWriter(filename)
 
     def __enter__(self):
+        """
+        Open a file for writing
+        """
         self.writer = self.writer.__enter__()
-
         return self
 
     def add_patient(self, patient: Patient):
@@ -146,7 +151,7 @@ class PatientWriter:
         Add a patient to the record.
         """
         for event in patient.events:
-            self.add_patient(patient.patient_id, event)
+            self.writer.add_patient(patient.patient_id, event)
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.writer.close()
