@@ -1,5 +1,4 @@
-#ifndef CIVIL_DAY_CASTER_H_INCLUDED
-#define CIVIL_DAY_CASTER_H_INCLUDED
+#pragma once
 
 #include <pybind11/pybind11.h>
 
@@ -28,7 +27,6 @@ struct type_caster<absl::CivilDay> {
         return std::move(date_obj);
     }
 };
+
 }  // namespace detail
 }  // namespace pybind11
-
-#endif
