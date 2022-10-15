@@ -1,33 +1,29 @@
-load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake", "configure_make")
-
-cmake(
-    name="zlib_ng",
-    # Values to be passed as -Dkey=value on the CMake command line;
-    # here are serving to provide some CMake script configuration options
-    cache_entries={
-        "WITH_NATIVE_INSTRUCTIONS": "on",
-        "WITH_GZFILEOP": "on",
-        "WITH_SSE4": "off",
-        "ZLIB_COMPAT": "on",
-        "CMAKE_POSITION_INDEPENDENT_CODE": "on",
-    },
-    lib_source="@source_zlib_ng//:all",
-    # We are selecting the resulting static library to be passed in C/C++ provider
-    # as the result of the build;
-    # However, the cmake_external dependants could use other artefacts provided by the build,
-    # according to their CMake script
-    out_static_libs=["libz.a"],
+load(
+    "@rules_foreign_cc//foreign_cc:defs.bzl", "cmake", "configure_make", "make"
 )
 
-cc_library(name="flatmap", hdrs=["flatmap.h"], deps=[])
+load("@pybind11_bazel//:build_defs.bzl", "pybind_library", "pybind_extension")
+
+make(
+    name="zstd",
+    lib_source="@source_zstd//:all",
+    lib_name="libzstd",
+    copts=["-fPIC"],
+)
+
+filegroup(
+    name="clang_tidy_config",
+    srcs=[".clang-tidy"],
+    visibility=["//visibility:public"],
+)
 
 cc_library(
     name="parse_utils",
     hdrs=[
-        "parse_utils.h",
+        "parse_utils.hh",
     ],
     srcs=[
-        "parse_utils.cpp",
+        "parse_utils.cc",
     ],
     deps=[
         "@com_google_absl//absl/time",
@@ -38,7 +34,7 @@ cc_library(
 cc_library(
     name="register_iterable",
     hdrs=[
-        "register_iterable.h",
+        "register_iterable.hh",
     ],
     deps=[
         "@pybind11",
@@ -46,61 +42,30 @@ cc_library(
     ],
 )
 
+
 cc_library(
-    name="umls",
+    name="dictionary",
     hdrs=[
-        "umls.h",
+        "dictionary.hh",
+    ],
+    srcs=[
+        "dictionary.cc",
     ],
     deps=[
+        "@streamvbyte",
+        "@com_google_absl//absl/strings",
         "@boost//:filesystem",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
 
 cc_test(
-    name="umls_test",
+    name="dictionary_test",
     srcs=[
-        "umls_test.cpp",
+        "dictionary_test.cc",
     ],
     deps=[
-        ":umls",
+        ":dictionary",
         "@gtest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name="rxnorm",
-    hdrs=[
-        "rxnorm.h",
-    ],
-    deps=[
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-    ],
-)
-
-cc_test(
-    name="rxnorm_test",
-    srcs=[
-        "rxnorm_test.cpp",
-    ],
-    deps=[
-        ":rxnorm",
-        "@gtest//:gtest_main",
-    ],
-)
-
-
-cc_library(
-    name="gem",
-    hdrs=[
-        "gem.h",
-    ],
-    deps=[
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
 
@@ -108,205 +73,176 @@ cc_library(
 cc_library(
     name="csv",
     hdrs=[
-        "csv.h",
+        "csv.hh",
     ],
-    deps=[
-        ":zlib_ng",
-        "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_library(
-    name="concept",
-    hdrs=[
-        "concept.h",
-    ],
-    deps=[
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-        "@boost//:filesystem",
-        ":parse_utils",
-    ],
-)
-
-cc_library(
-    name="reader",
-    hdrs=[
-        "reader.h",
-    ],
-    deps=[
-        ":constdb",
-        "@json",
-        "@streamvbyte",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_library(
-    name="writer",
-    hdrs=[
-        "writer.h",
-    ],
-    deps=[
-        ":constdb",
-        ":reader",
-        "@readerwriterqueue",
-    ],
-)
-
-cc_library(
-    name="constdb",
-    hdrs=["constdb.h"],
     srcs=[
-        "constdb.cpp",
+        "csv.cc",
     ],
     deps=[
-        "@com_google_absl//absl/container:flat_hash_map",
-    ],
-)
-
-cc_library(
-    name="python",
-    hdrs=glob(["python/*.h", "python/*/*.h"]),
-    includes=["python"],
-)
-
-cc_library(
-    name="numpy",
-    hdrs=glob(["numpy/numpy/*.h"]),
-)
-
-cc_binary(
-    name="extract_omop",
-    srcs=["extract_omop.cpp"],
-    deps=[
-        ":csv",
-        ":constdb",
-        ":reader",
-        ":concept",
-        "@streamvbyte",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_binary(
-    name="omop_ontology",
-    srcs=["omop_ontology.cpp"],
-    deps=[
-        ":csv",
-        ":constdb",
-        ":reader",
-        ":concept",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_binary(
-    name="extract_optum",
-    srcs=["extract_optum.cpp"],
-    deps=[
-        ":csv",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-        ":writer",
-        ":parse_utils",
-        "@readerwriterqueue",
-    ],
-)
-
-cc_binary(
-    name="clean_optum",
-    srcs=["clean_optum.cpp"],
-    deps=[
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-        ":reader",
-        ":writer",
-        ":umls",
-        ":rxnorm",
-        ":gem",
-    ],
-)
-
-cc_binary(
-    name="ontology_optum",
-    srcs=["ontology_optum.cpp"],
-    deps=[
-        ":constdb",
-        ":reader",
-        ":umls",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_binary(
-    name="create_index",
-    srcs=["create_index.cpp"],
-    deps=[
-        ":constdb",
-        ":reader",
-        "@streamvbyte",
-        "@com_google_absl//absl/container:flat_hash_map",
+        ":zstd",
         "@com_google_absl//absl/strings",
         "@boost//:filesystem",
     ],
 )
 
-cc_binary(
-    name="featurize",
-    srcs=["featurize.cpp"],
-    deps=[
-        ":constdb",
-        ":reader",
-        ":flatmap",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings",
-        "@boost//:filesystem",
-        ":python",
-        ":npy",
-    ],
-)
-
-
-cc_library(
-    name="npy",
-    hdrs=["npy.hpp"],
-)
-
-cc_binary(
-    name="extension.so",
+cc_test(
+    name="csv_test",
     srcs=[
-        "extension.cpp",
-        "datasets_extension.cpp",
-        "datasets_extension.h",
-        "civil_day_caster.h",
+        "csv_test.cc",
     ],
     deps=[
-        ":register_iterable",
-        ":parse_utils",
-        ":concept",
-        ":python",
-        "@pybind11",
-        ":reader",
-        ":writer",
-        ":numpy",
+        ":csv",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="join_csvs",
+    hdrs=[
+        "join_csvs.hh",
+    ],
+    srcs=[
+        "join_csvs.cc",
+    ],
+    deps=[
+        ":csv",
+        "@readerwriterqueue",
         "@concurrentqueue",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@picosha2",
-        ":flatmap",
-        ":gem",
-        ":umls",
-        ":csv",
-        ":rxnorm",
+        "@com_google_absl//absl/strings",
         "@boost//:filesystem",
-        "@boost//:algorithm",
     ],
-    linkstatic=1,
-    linkshared=1,
+)
+
+cc_test(
+    name="join_csvs_test",
+    srcs=[
+        "join_csvs_test.cc",
+    ],
+    deps=[
+        ":join_csvs",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="thread_utils",
+    hdrs=[
+        "thread_utils.hh",
+    ],
+    srcs=[],
+    deps=[],
+)
+
+cc_library(
+    name="count_codes_and_values",
+    hdrs=[
+        "count_codes_and_values.hh",
+    ],
+    srcs=[
+        "count_codes_and_values.cc",
+    ],
+    deps=[
+        "@picosha2",
+        ":csv",
+        ":parse_utils",
+        ":thread_utils",
+        "@com_google_absl//absl/strings",
+        "@readerwriterqueue",
+        "@concurrentqueue",
+        "@boost//:filesystem",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_test(
+    name="count_codes_and_values_test",
+    srcs=[
+        "count_codes_and_values_test.cc",
+    ],
+    deps=[
+        ":count_codes_and_values",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="database",
+    hdrs=[
+        "database.hh",
+    ],
+    srcs=[
+        "database.cc",
+    ],
+    deps=[
+        "@picosha2",
+        ":dictionary",
+        ":csv",
+        ":parse_utils",
+        ":thread_utils",
+        ":count_codes_and_values",
+        "@com_google_absl//absl/strings",
+        "@readerwriterqueue",
+        "@concurrentqueue",
+        "@boost//:filesystem",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_test(
+    name="database_test",
+    srcs=[
+        "database_test.cc",
+    ],
+    deps=[
+        ":database",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="civil_day_caster",
+    hdrs=["civil_day_caster.hh"],
+)
+
+cc_library(
+    name="filesystem_caster",
+    hdrs=["filesystem_caster.hh"],
+)
+
+pybind_library(
+    name="datasets_extension",
+    hdrs=[
+        "datasets_extension.hh",
+    ],
+    srcs=[
+        "datasets_extension.cc",
+    ],
+    deps=[
+        ":database",
+        ":filesystem_caster",
+        ":civil_day_caster",
+        ":register_iterable",
+        ":join_csvs",
+    ],
+)
+
+pybind_extension(
+    name="extension",
+    srcs=[
+        "extension.cc",
+    ],
+    deps=[
+        ":datasets_extension",
+    ],
+)
+
+cc_binary(
+    name="compute_statistics",
+    srcs=[
+        "compute_statistics.cc",
+    ],
+    deps=[
+        "@json",
+        ":database",
+    ],
 )

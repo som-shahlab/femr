@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import sysconfig
 from typing import Any, Dict
 
 import setuptools
 from setuptools.command.build_ext import build_ext
-import pathlib
-
-import sysconfig
-import os
-import subprocess
-import shutil
-import sys
-
-import numpy as np
 
 
 class BazelExtension(setuptools.Extension):
@@ -38,32 +34,18 @@ class cmake_build_ext(build_ext):
                 raise RuntimeError("Cannot find bazel executable")
 
         for ext in bazel_extensions:
-            python_include_lib = sysconfig.get_config_var("INCLUDEPY")
-            if python_include_lib is None:
-                raise RuntimeError(
-                    "INCLUDEPY did not point to the correct include directory"
-                )
-
-            numpy_include_lib = np.get_include()
-
-            python_target_location = os.path.join(ext.sourcedir, "python")
-            numpy_target_location = os.path.join(ext.sourcedir, "numpy")
-            if os.path.lexists(python_target_location):
-                os.remove(python_target_location)
-
-            if os.path.lexists(numpy_target_location):
-                os.remove(numpy_target_location)
-
-            os.symlink(python_include_lib, python_target_location)
-            os.symlink(numpy_include_lib, numpy_target_location)
-
             source_env = dict(os.environ)
             env = {
                 **source_env,
             }
 
+            extra_args = []
+
+            if source_env.get('DISTDIR'):
+                extra_args.extend(['--distdir', source_env['DISTDIR']])
+
             subprocess.run(
-                args=["bazel", "build", "-c", "dbg", ext.target],
+                args=["bazel", "build", "-c", "opt", ext.target] + extra_args,
                 cwd=ext.sourcedir,
                 env=env,
                 check=True,
@@ -83,10 +65,10 @@ class cmake_build_ext(build_ext):
             os.chmod(self.get_ext_fullpath(ext.name), 0o700)
 
 
-print("wat")
-
 setuptools.setup(
-    ext_modules=[BazelExtension("piton.extension", "extension.so", "native"),],
+    ext_modules=[
+        BazelExtension("piton.extension", "extension.so", "native"),
+    ],
     cmdclass={"build_ext": cmake_build_ext},
     zip_safe=False,
 )

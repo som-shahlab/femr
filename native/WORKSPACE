@@ -29,42 +29,48 @@ cc_library(
 """,
 )
 
-new_git_repository(
-    name = "readerwriterqueue",
-    remote = "https://github.com/cameron314/readerwriterqueue.git",
-    commit = "435e36540e306cac40fcfeab8cc0a22d48464509",
-    shallow_since = "1594429759 -0400",
+http_archive(
+    name = "readerwriterqueue", 
+    url = "https://github.com/cameron314/readerwriterqueue/archive/refs/tags/v1.0.6.tar.gz",
+    strip_prefix = "readerwriterqueue-1.0.6",
+    sha256 = "fc68f55bbd49a8b646462695e1777fb8f2c0b4f342d5e6574135211312ba56c1",
     build_file_content = """
 
 cc_library(
     name = "readerwriterqueue",
-    hdrs = ["readerwriterqueue.h", "atomicops.h"],
+    hdrs = ["readerwritercircularbuffer.h", "readerwriterqueue.h", "atomicops.h"],
     visibility = ["//visibility:public"],
 )
 """,
 )
 
-new_git_repository(
-    name = "pybind11",
-    commit = "80d452484c5409444b0ec19383faa84bb7a4d351",
-    remote = "https://github.com/pybind/pybind11.git",
-    build_file_content = """
+pybind11_bazel_version = "9a24c33cbdc510fa60ab7f5ffb7d80ab89272799"
 
-cc_library(
-    name = "pybind11",
-    hdrs = glob(["include/pybind11/*.h"]) + 
-        glob(["include/pybind11/detail/*.h"]),
-    visibility = ["//visibility:public"],
-    includes = ["include"],
-)
-""",
-    shallow_since = "1571097444 +0200"
+http_archive(
+  name = "pybind11_bazel",
+  strip_prefix = "pybind11_bazel-" + pybind11_bazel_version,
+  urls = ["https://github.com/pybind/pybind11_bazel/archive/" + pybind11_bazel_version + ".tar.gz"],
+  sha256 = "32feba648e364da83b0876713cca8a7113f58433cee0680591218dbc202f1392",
 )
 
-new_git_repository(
+pybind11_version = 'aa304c9c7d725ffb9d10af08a3b34cb372307020'
+
+# We still require the pybind library.
+http_archive(
+  name = "pybind11",
+  build_file = "@pybind11_bazel//:pybind11.BUILD",
+  strip_prefix = "pybind11-" + pybind11_version,
+  urls = ["https://github.com/pybind/pybind11/archive/" + pybind11_version + ".tar.gz"],
+  sha256 = "dcda69c3355ce81407a18d9f3aa3fdfd0a84a7e19218356d0c4768cbe1cda02b",
+)
+
+load("@pybind11_bazel//:python_configure.bzl", "python_configure")
+python_configure(name = "local_config_python")
+
+http_archive(
     name = "streamvbyte",
-    commit = "92ab8a74c96b9e0f684c45aec9cf7f57405ff8da",
-    remote = "https://github.com/lemire/streamvbyte.git",
+    url = "https://github.com/lemire/streamvbyte/archive/refs/tags/v0.5.1.zip",
+    strip_prefix = "streamvbyte-0.5.1",
     build_file_content = """
 cc_library (
     name = "streamvbyte",
@@ -83,7 +89,7 @@ cc_library (
     copts = ["-std=c99"],
 )
 """,
-    shallow_since = "1557332318 -0400"
+    sha256 = "7d5899e0a8908db423dca82259388a291c642cc335d5c6ef6a6beb08be39b0ef",
 )
 
 new_git_repository(
@@ -115,39 +121,11 @@ cc_library (
 shallow_since = "1531968639 +0900"
 )
 
-new_git_repository(
-    name = "streamvbyte",
-    commit = "92ab8a74c96b9e0f684c45aec9cf7f57405ff8da",
-    remote = "https://github.com/lemire/streamvbyte.git",
-    build_file_content = """
-cc_library (
-    name = "streamvbyte",
-    hdrs = glob(["include/*"]) + glob(["src/*"]),
-    srcs = [
-        "src/streamvbyte_decode.c",
-        "src/streamvbyte_encode.c",
-        "src/streamvbytedelta_decode.c",
-        "src/streamvbytedelta_encode.c",
-        "src/streamvbyte_0124_encode.c",
-        "src/streamvbyte_0124_decode.c",
-        "src/streamvbyte_zigzag.c"
-    ],
-    visibility = ["//visibility:public"],
-    includes = ["include"],
-    copts = ["-std=c99"],
-)
-""",
-    shallow_since = "1557332318 -0400"
-)
-
-
-
-# Rule repository
 http_archive(
-   name = "rules_foreign_cc",
-   strip_prefix = "rules_foreign_cc-main",
-   url = "https://github.com/bazelbuild/rules_foreign_cc/archive/main.zip",
-#   sha256 = "c823078385e9f6891f7e245be4eb319d6d74f1a3d6d5ba7392f1e382ef190651",
+    name = "rules_foreign_cc",
+    sha256 = "2a4d07cd64b0719b39a7c12218a3e507672b82a97b98c6a89d38565894cf7c51",
+    strip_prefix = "rules_foreign_cc-0.9.0",
+    url = "https://github.com/bazelbuild/rules_foreign_cc/archive/refs/tags/0.9.0.tar.gz",
 )
 
 load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_dependencies")
@@ -157,24 +135,43 @@ rules_foreign_cc_dependencies()
 # Group the sources of the library so that CMake rule have access to it
 all_content = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
 
-
-# zlib_ng source code repository
 http_archive(
-    name = "source_zlib_ng",
+    name = "source_zstd",
+    url = "https://github.com/facebook/zstd/releases/download/v1.5.2/zstd-1.5.2.tar.gz",
+    strip_prefix="zstd-1.5.2",
     build_file_content = all_content,
-    strip_prefix = "zlib-ng-7606b9f39a2c7701a30d06a786fb2a99334b1feb",
-    urls = ["https://github.com/zlib-ng/zlib-ng/archive/7606b9f39a2c7701a30d06a786fb2a99334b1feb.zip"],
-    sha256 = "e4e77c332959a9c6e61943696adade98ffaa64f8ee53db8e2aaba55561a2d8c5",
+    sha256 = "7c42d56fac126929a6a85dbc73ff1db2411d04f104fae9bdea51305663a83fd0",
 )
 
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+_RULES_BOOST_COMMIT = "ce6bd1a54c9527ffee7d0a87e97a2bdd50162ac2"
 
-git_repository(
+http_archive(
     name = "com_github_nelhage_rules_boost",
-    commit = "1e3a69bf2d5cd10c34b74f066054cd335d033d71",
-    remote = "https://github.com/nelhage/rules_boost",
-    shallow_since = "1591047380 -0700",
+    strip_prefix = "rules_boost-%s" % _RULES_BOOST_COMMIT,
+    sha256 = "781c5413ce5d5ae8e0f90e524dc712e0ccc329bf4d5dc5850d883e64db8eff9b",
+    urls = [
+        "https://github.com/nelhage/rules_boost/archive/%s.tar.gz" % _RULES_BOOST_COMMIT,
+    ],
 )
 
 load("@com_github_nelhage_rules_boost//:boost/boost.bzl", "boost_deps")
 boost_deps()
+
+http_archive(
+    name = "com_github_storypku_bazel_iwyu",
+    strip_prefix = "bazel_iwyu-0.0.5",
+    sha256 = "b4596e4f11e61c1ead77065dca8755fccff51e98a903b79ff61562c93ae7138d",
+    urls = [
+        "https://github.com/storypku/bazel_iwyu/archive/0.0.5.tar.gz",
+    ],
+)
+
+load("@com_github_storypku_bazel_iwyu//bazel:dependencies.bzl", "bazel_iwyu_dependencies")
+bazel_iwyu_dependencies()
+
+git_repository(
+       name = "bazel_clang_tidy",
+       commit = "068891fa0720b9ce24ee9649ace0a5ce4f93e417",
+       remote = "https://github.com/Lalaland/bazel_clang_tidy.git",
+       shallow_since = "1665975942 +0000",
+)

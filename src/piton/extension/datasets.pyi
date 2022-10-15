@@ -5,17 +5,13 @@ from __future__ import annotations
 import datetime
 from typing import (
     Iterator,
-    Literal,
+    List,
+    NewType,
     Optional,
     Sequence,
-    Union,
-    List,
-    Tuple,
-    NewType,
 )
 
 from .. import Patient
-
 from ..datasets import PatientCollection
 
 TextValue = NewType("TextValue", int)
@@ -38,5 +34,16 @@ class PatientDatabase:
     def close(self) -> None: ...
 
 def convert_patient_collection_to_patient_database(
-    patient_collection: PatientCollection, target_path: str
-) -> PatientDatabase: ...
+    patients_path: str,
+    concept_path: str,
+    target_path: str,
+    delimiter: str,
+    num_threads: int,
+) -> None: ...
+def sort_and_join_csvs(
+    source_path: str,
+    target_path: str,
+    sort_keys: Sequence[str],
+    delimiter: str,
+    num_threads: int,
+) -> None: ...

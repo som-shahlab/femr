@@ -1,27 +1,22 @@
 from __future__ import annotations
-from optparse import Option
 
-from .. import Event, Patient
-import gzip
 import csv
+import dataclasses
 import datetime
 import io
-
+import tempfile
 from typing import (
-    Iterable,
-    Tuple,
-    Optional,
-    cast,
     Any,
-    List,
-    IO,
-    Sequence,
     Iterator,
+    List,
+    Optional,
+    Tuple,
+    cast,
 )
 
-import dataclasses
+import zstandard
 
-import tempfile
+from .. import Event, Patient
 
 
 class EventWriter:
@@ -35,11 +30,13 @@ class EventWriter:
         """
 
         self.file = tempfile.NamedTemporaryFile(
-            prefix=path, suffix="csv.gz", delete=False
+            dir=path, suffix=".csv.zst", delete=False
         )
+        compressor = zstandard.ZstdCompressor(level=1)
         self.o = io.TextIOWrapper(
-            cast(IO[bytes], gzip.GzipFile(fileobj=self.file))
+            compressor.stream_writer(self.file),
         )
+        self.rows_written = 0
         self.writer = csv.DictWriter(
             self.o,
             fieldnames=[
@@ -47,10 +44,10 @@ class EventWriter:
                 "start",
                 "end",
                 "code",
+                "visit_id",
                 "value",
+                "value_type",
                 "event_type",
-                "id",
-                "parent_id",
             ],
         )
         self.writer.writeheader()
@@ -59,18 +56,27 @@ class EventWriter:
         """
         Add an event to the record.
         """
+        self.rows_written += 1
         data = dataclasses.asdict(event)
         data["patient_id"] = patient_id
+        data["start"] = data["start"].isoformat()
+        if data["end"]:
+            data["end"] = data["end"].isoformat()
         self.writer.writerow(data)
 
     def close(self) -> None:
+        if self.rows_written == 0:
+            raise RuntimeError("Event writer with zero rows?")
         self.o.close()
 
 
 class EventReader:
     def __init__(self, filename: str):
         self.filename = filename
-        self.o = gzip.open(self.filename, "rt")
+        decompressor = zstandard.ZstdDecompressor()
+        self.o = io.TextIOWrapper(
+            decompressor.stream_reader(open(self.filename, "rb"))
+        )
         self.reader = csv.DictReader(self.o)
 
     def __iter__(self) -> Iterator[Tuple[int, Event]]:
@@ -78,10 +84,32 @@ class EventReader:
             id = int(row["patient_id"])
             del row["patient_id"]
             row["start"] = datetime.datetime.fromisoformat(row["start"])
-            if row["end"] != "":
+
+            if row["end"]:
                 row["end"] = datetime.datetime.fromisoformat(row["end"])
             else:
-                row["end"] = None
+                del row["end"]
+
+            row["code"] = int(row["code"])
+
+            if row["visit_id"]:
+                row["visit_id"] = int(row["visit_id"])
+            else:
+                del row["visit_id"]
+
+            if row["value_type"] == "ValueType.NONE":
+                row["value"] = None
+            elif row["value_type"] == "ValueType.NUMERIC":
+                row["value"] = float(row["value"])
+            elif row["value_type"] == "ValueType.TEXT":
+                row["value"] = row["value"]
+            else:
+                raise RuntimeError("Invalid value type", row["value_type"])
+            del row["value_type"]
+
+            if not row["event_type"]:
+                del row["event_type"]
+
             yield (id, Event(**cast(Any, row)))
 
     def close(self) -> None:
