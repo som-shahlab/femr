@@ -1,6 +1,7 @@
 #include "database.hh"
 
 #include <boost/filesystem.hpp>
+#include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <deque>
 #include <queue>
@@ -186,7 +187,7 @@ void read_patient_from_buffer(Patient& current_patient,
 
 void reader_thread(
     const boost::filesystem::path& patient_file,
-    moodycamel::BlockingReaderWriterCircularBuffer<std::optional<Entry>>& queue,
+    moodycamel::BlockingReaderWriterCircularBuffer<boost::optional<Entry>>& queue,
     std::atomic<uint32_t>& long_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
@@ -296,7 +297,7 @@ void reader_thread(
 
     output_patient();
 
-    queue.wait_enqueue(std::nullopt);
+    queue.wait_enqueue(boost::none);
 }
 
 PatientDatabase convert_patient_collection_to_patient_database(
@@ -352,7 +353,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
         }
 
         std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-            std::optional<Entry>>>
+            boost::optional<Entry>>>
             queues;
         queues.reserve(files.size());
 
@@ -483,7 +484,7 @@ uint64_t PatientDatabase::get_original_patient_id(uint32_t patient_id) {
     return read_span<uint64_t>(*meta_dictionary, 0)[patient_id];
 }
 
-std::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
+boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
     uint64_t original_patient_id) {
     absl::Span<const uint32_t> sorted_span =
         read_span<uint32_t>(*meta_dictionary, 1);
@@ -524,11 +525,11 @@ Dictionary& PatientDatabase::get_long_text_dictionary() {
 
 template <typename F>
 void process_nested_helper(
-    moodycamel::BlockingConcurrentQueue<std::optional<boost::filesystem::path>>&
+    moodycamel::BlockingConcurrentQueue<boost::optional<boost::filesystem::path>>&
         queue,
     const F& f,
     std::vector<std::result_of_t<F(const boost::filesystem::path&)>>& result) {
-    std::optional<boost::filesystem::path> next_item;
+    boost::optional<boost::filesystem::path> next_item;
     while (true) {
         queue.wait_dequeue(next_item);
 
@@ -552,7 +553,7 @@ std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
     } else if (boost::filesystem::exists(directory)) {
         std::vector<std::thread> threads;
         moodycamel::BlockingConcurrentQueue<
-            std::optional<boost::filesystem::path>>
+            boost::optional<boost::filesystem::path>>
             queue;
         std::vector<
             std::vector<std::result_of_t<F(const boost::filesystem::path&)>>>
@@ -568,7 +569,7 @@ std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
             threads.emplace_back([i, &queue, &f, &result_queues]() {
                 process_nested_helper(queue, f, result_queues[i]);
             });
-            queue.enqueue(std::nullopt);
+            queue.enqueue(boost::none);
         }
 
         for (auto& thread : threads) {
@@ -726,7 +727,7 @@ std::vector<std::string> get_concept_text(
 }
 
 const std::vector<uint32_t>& all_parents_helper(
-    std::vector<std::optional<std::vector<uint32_t>>>& all_parents,
+    std::vector<boost::optional<std::vector<uint32_t>>>& all_parents,
     std::vector<std::vector<uint32_t>>& parents, uint32_t index) {
     auto& value = all_parents[index];
     if (!value) {
@@ -780,7 +781,7 @@ Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
         }
     }
     {
-        std::vector<std::optional<std::vector<uint32_t>>> all_parents(
+        std::vector<boost::optional<std::vector<uint32_t>>> all_parents(
             parent_info.second.size());
 
         DictionaryWriter all_parent(target / "all_parents");

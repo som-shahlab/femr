@@ -26,11 +26,11 @@ TEST(DictionaryTest, WriteDictionary) {
         std::vector<std::string_view> expected = {"foo", "bar", "zoo"};
         EXPECT_EQ(dict.get_all_text(), expected);
         EXPECT_EQ(dict.get_text(1), "bar");
-        EXPECT_EQ(dict.get_code("zoo"), std::optional<uint32_t>(2));
-        EXPECT_EQ(dict.get_code("bar"), std::optional<uint32_t>(1));
-        EXPECT_EQ(dict.get_code("foo"), std::optional<uint32_t>(0));
-        EXPECT_EQ(dict.get_code("missing"), std::nullopt);
-        EXPECT_EQ(dict.get_code("zzzzzmissing"), std::nullopt);
+        EXPECT_EQ(dict.get_code("zoo"), boost::optional<uint32_t>(2));
+        EXPECT_EQ(dict.get_code("bar"), boost::optional<uint32_t>(1));
+        EXPECT_EQ(dict.get_code("foo"), boost::optional<uint32_t>(0));
+        EXPECT_EQ(dict.get_code("missing"), boost::none);
+        EXPECT_EQ(dict.get_code("zzzzzmissing"), boost::none);
         EXPECT_EQ(dict.get_num_entries(), 3);
 
         for (size_t i = 0; i < dict.get_num_entries(); i++) {

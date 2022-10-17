@@ -103,14 +103,14 @@ std::string_view Dictionary::get_text(uint32_t code) const {
     return values[code];
 }
 
-std::optional<uint32_t> Dictionary::get_code(std::string_view word) {
+boost::optional<uint32_t> Dictionary::get_code(std::string_view word) {
     const auto& sorted = get_sorted_values();
     auto iter = std::lower_bound(
         std::begin(sorted), std::end(sorted), word,
         [&](uint32_t a, std::string_view b) { return values[a] < b; });
 
     if (iter == std::end(sorted) || values[*iter] != word) {
-        return std::nullopt;
+        return boost::none;
     } else {
         return *iter;
     }

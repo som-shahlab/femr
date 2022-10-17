@@ -10,6 +10,7 @@
 #include "picosha2.h"
 #include "readerwritercircularbuffer.h"
 #include "thread_utils.hh"
+#include <boost/optional.hpp>
 
 using CodeCounter = absl::flat_hash_map<uint64_t, size_t>;
 
@@ -42,7 +43,7 @@ convert_to_vector(const T& container) {
 
 void reader_thread(CodeCounter& code_counts,
                    moodycamel::BlockingReaderWriterCircularBuffer<
-                       std::optional<std::pair<size_t, std::string>>>& queue,
+                       boost::optional<std::pair<size_t, std::string>>>& queue,
                    const boost::filesystem::path& source) {
     CSVReader reader(source.string(), {"value", "value_type", "code"}, ',');
 
@@ -58,14 +59,14 @@ void reader_thread(CodeCounter& code_counts,
         }
     }
 
-    queue.wait_enqueue(std::nullopt);
+    queue.wait_enqueue(boost::none);
 }
 
 void multiplex_thread(
     std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-        std::optional<std::pair<size_t, std::string>>>>& in_queues,
+        boost::optional<std::pair<size_t, std::string>>>>& in_queues,
     std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-        std::optional<std::string>>>& out_queues) {
+        boost::optional<std::string>>>& out_queues) {
     dequeue_many_loop(
         in_queues, [&out_queues](std::pair<size_t, std::string>& next_entry) {
             out_queues[next_entry.first % out_queues.size()].wait_enqueue(
@@ -73,16 +74,16 @@ void multiplex_thread(
         });
 
     for (auto& out_queue : out_queues) {
-        out_queue.wait_enqueue(std::nullopt);
+        out_queue.wait_enqueue(boost::none);
     }
 }
 
 void writer_thread(moodycamel::BlockingReaderWriterCircularBuffer<
-                       std::optional<std::string>>& queue,
+                       boost::optional<std::string>>& queue,
                    const boost::filesystem::path& target) {
     CSVWriter writer(target.string(), {"value"}, ',');
 
-    std::optional<std::string> next_item;
+    boost::optional<std::string> next_item;
     std::vector<std::string> next_row(1);
 
     while (true) {
@@ -97,11 +98,11 @@ void writer_thread(moodycamel::BlockingReaderWriterCircularBuffer<
 }
 
 void process_thread(
-    moodycamel::BlockingConcurrentQueue<std::optional<boost::filesystem::path>>&
+    moodycamel::BlockingConcurrentQueue<boost::optional<boost::filesystem::path>>&
         in_queue,
     moodycamel::BlockingReaderWriterCircularBuffer<
-        std ::optional<std::pair<std::string, size_t>>>& out_queue) {
-    std::optional<boost::filesystem::path> next_item;
+        boost::optional<std::pair<std::string, size_t>>>& out_queue) {
+    boost::optional<boost::filesystem::path> next_item;
     std::vector<std::string> rows;
     while (true) {
         in_queue.wait_dequeue(next_item);
@@ -129,7 +130,7 @@ void process_thread(
             }
         }
     }
-    out_queue.wait_enqueue(std::nullopt);
+    out_queue.wait_enqueue(boost::none);
 }
 
 std::pair<std::vector<std::pair<uint64_t, size_t>>,
@@ -162,11 +163,11 @@ count_codes_and_values(const boost::filesystem::path& path,
     {
         std::vector<CodeCounter> code_counts(files.size());
         std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-            std::optional<std::string>>>
+            boost::optional<std::string>>>
             write_queues;
         write_queues.reserve(num_pieces);
         std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-            std::optional<std::pair<size_t, std::string>>>>
+            boost::optional<std::pair<size_t, std::string>>>>
             read_queues;
         read_queues.reserve(files.size());
 
@@ -203,12 +204,12 @@ count_codes_and_values(const boost::filesystem::path& path,
     std::vector<std::pair<std::string, size_t>> string_result;
     {
         std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-            std::optional<std::pair<std::string, size_t>>>>
+            boost::optional<std::pair<std::string, size_t>>>>
             out_queues;
         out_queues.reserve(num_threads);
 
         moodycamel::BlockingConcurrentQueue<
-            std::optional<boost::filesystem::path>>
+            boost::optional<boost::filesystem::path>>
             in_queue;
 
         for (size_t i = 0; i < num_pieces; i++) {
@@ -222,7 +223,7 @@ count_codes_and_values(const boost::filesystem::path& path,
             threads.emplace_back([i, &in_queue, &out_queues]() {
                 process_thread(in_queue, out_queues[i]);
             });
-            in_queue.enqueue(std::nullopt);
+            in_queue.enqueue(boost::none);
         }
 
         dequeue_many_loop(

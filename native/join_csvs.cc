@@ -3,7 +3,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <iostream>
-#include <optional>
 #include <queue>
 
 #include "blockingconcurrentqueue.h"
@@ -13,7 +12,7 @@
 constexpr int QUEUE_SIZE = 100;
 
 using Row = std::vector<std::string>;
-using QueueItem = std::optional<std::vector<std::string>>;
+using QueueItem = boost::optional<std::vector<std::string>>;
 using QueueType = moodycamel::BlockingReaderWriterCircularBuffer<QueueItem>;
 
 bool compare_rows_using_indices(const std::vector<size_t>& sort_indices,
@@ -50,10 +49,10 @@ std::vector<size_t> get_sort_indices(
 }
 
 void sort_processor(
-    moodycamel::BlockingConcurrentQueue<std::optional<
+    moodycamel::BlockingConcurrentQueue<boost::optional<
         std::pair<boost::filesystem::path, boost::filesystem::path>>>& queue,
     const std::vector<std::string>& sort_keys, char delimiter) {
-    std::optional<std::pair<boost::filesystem::path, boost::filesystem::path>>
+    boost::optional<std::pair<boost::filesystem::path, boost::filesystem::path>>
         item;
     while (true) {
         queue.wait_dequeue(item);
@@ -94,7 +93,7 @@ void sort_csvs(const boost::filesystem::path& source_directory,
                const std::vector<std::string>& sort_keys, char delimiter,
                size_t num_threads) {
     boost::filesystem::create_directory(target_directory);
-    moodycamel::BlockingConcurrentQueue<std::optional<
+    moodycamel::BlockingConcurrentQueue<boost::optional<
         std::pair<boost::filesystem::path, boost::filesystem::path>>>
         queue;
 
@@ -132,7 +131,7 @@ void read_join_processor(QueueType& read_queue,
     while (reader.next_row()) {
         read_queue.wait_enqueue(reader.get_row());
     }
-    read_queue.wait_enqueue(std::nullopt);
+    read_queue.wait_enqueue(boost::none);
 }
 
 void multiplex_join_processor(std::vector<QueueType>& read_queues,
@@ -172,7 +171,7 @@ void multiplex_join_processor(std::vector<QueueType>& read_queues,
         }
     }
 
-    next_item = std::nullopt;
+    next_item = boost::nullopt;
     for (auto& write_queue : write_queues) {
         write_queue.wait_enqueue(next_item);
     }
