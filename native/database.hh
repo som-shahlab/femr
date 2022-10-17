@@ -1,8 +1,8 @@
 #pragma once
 
 #include <boost/filesystem.hpp>
+#include <boost/optional.hpp>
 #include <cstdint>
-#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -13,7 +13,7 @@
 class LazyDictionary {
    public:
     LazyDictionary(const boost::filesystem::path& _path, bool _read_all)
-        : path(_path), read_all(_read_all), value(std::nullopt) {}
+        : path(_path), read_all(_read_all), value(boost::none) {}
 
     Dictionary* operator->() {
         init();
@@ -34,7 +34,7 @@ class LazyDictionary {
 
     boost::filesystem::path path;
     bool read_all;
-    std::optional<Dictionary> value;
+    boost::optional<Dictionary> value;
 };
 
 class Ontology {
@@ -131,7 +131,7 @@ class PatientDatabase {
         absl::Span<const uint32_t> text_values);
 
     // Map back to original patient ids
-    std::optional<uint32_t> get_patient_id_from_original(
+    boost::optional<uint32_t> get_patient_id_from_original(
         uint64_t original_patient_id);
     uint64_t get_original_patient_id(uint32_t patient_id);
 

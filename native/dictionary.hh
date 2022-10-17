@@ -1,6 +1,7 @@
 #pragma once
 
 #include <boost/filesystem.hpp>
+#include <boost/optional.hpp>
 #include <fstream>
 
 class Dictionary {
@@ -9,7 +10,7 @@ class Dictionary {
     ~Dictionary() noexcept(false);
 
     std::string_view get_text(uint32_t code) const;
-    std::optional<uint32_t> get_code(std::string_view word);
+    boost::optional<uint32_t> get_code(std::string_view word);
 
     const std::vector<std::string_view>& get_all_text() const;
 
@@ -23,7 +24,7 @@ class Dictionary {
     std::vector<std::string_view> values;
 
     const std::vector<uint32_t>& get_sorted_values();
-    std::optional<std::vector<uint32_t>> possib_sorted_values;
+    boost::optional<std::vector<uint32_t>> possib_sorted_values;
 };
 
 class DictionaryWriter {
