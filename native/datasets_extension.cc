@@ -22,7 +22,7 @@ void register_datasets_extension(py::module& root) {
     m.def("sort_and_join_csvs", sort_and_join_csvs);
 
     m.def("convert_patient_collection_to_patient_database",
-          convert_patient_collection_to_patient_database);
+          convert_patient_collection_to_patient_database, py::return_value_policy::move);
 
     py::class_<PatientDatabase>(m, "PatientDatabase")
         .def(py::init<const char*, bool>(), py::arg("filename"),
@@ -30,13 +30,13 @@ void register_datasets_extension(py::module& root) {
         .def("get_patient", &PatientDatabase::get_patient)
         .def("get_num_patients", &PatientDatabase::get_num_patients)
 
-        .def("get_code_dictionary", &PatientDatabase::get_code_dictionary)
+        .def("get_code_dictionary", &PatientDatabase::get_code_dictionary, py::return_value_policy::reference_internal)
         .def("get_short_text_dictionary",
-             &PatientDatabase::get_short_text_dictionary)
+             &PatientDatabase::get_short_text_dictionary, py::return_value_policy::reference_internal)
         .def("get_long_text_dictionary",
-             &PatientDatabase::get_long_text_dictionary)
+             &PatientDatabase::get_long_text_dictionary, py::return_value_policy::reference_internal)
 
-        .def("get_ontology", &PatientDatabase::get_ontology)
+        // .def("get_ontology", &PatientDatabase::get_ontology)
 
         .def("get_patient_id_from_original",
              &PatientDatabase::get_patient_id_from_original)
@@ -70,16 +70,17 @@ void register_datasets_extension(py::module& root) {
                     break;
 
                 case ValueType::NUMERIC:
-                    value = " value=" + std::to_string(e.numeric_value);
+                    value = " numeric value=" + std::to_string(e.numeric_value);
                     break;
 
                 case ValueType::SHORT_TEXT:
                 case ValueType::LONG_TEXT:
-                    value = " value=" + std::to_string(e.text_value);
+                    value = " text value=" + std::to_string(e.text_value);
                     break;
             }
             float age =
                 (e.age_in_days + e.minutes_offset / (24.0 * 60.0)) / 365.0;
+
             return absl::StrCat("<Event code=", e.code, " age=", age, value,
                                 ">");
         });
@@ -90,4 +91,16 @@ void register_datasets_extension(py::module& root) {
         .value("LONG_TEXT", ValueType::LONG_TEXT)
         .value("NUMERIC", ValueType::NUMERIC)
         .export_values();
+
+     py::class_<Ontology>(m, "Ontology")
+        .def("get_parents", &Ontology::get_parents, py::return_value_policy::reference_internal)
+        .def("get_children", &Ontology::get_children, py::return_value_policy::reference_internal)
+        .def("get_all_parents", &Ontology::get_all_parents, py::return_value_policy::reference_internal)
+        .def("get_dictionary", &Ontology::get_dictionary, py::return_value_policy::reference_internal);
+
+     py::class_<Dictionary>(m, "Dictionary")
+        .def("get_text", &Dictionary::get_text, py::return_value_policy::reference_internal)
+        .def("get_code", &Dictionary::get_code)
+        .def("get_all_text", &Dictionary::get_all_text, py::return_value_policy::reference_internal)
+        .def("get_num_entries", &Dictionary::get_num_entries);
 }
