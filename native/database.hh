@@ -105,6 +105,7 @@ class PatientDatabaseIterator {
 class PatientDatabase {
    public:
     PatientDatabase(const boost::filesystem::path& path, bool read_all);
+    PatientDatabase(PatientDatabase&&) = default;
 
     PatientDatabaseIterator iterator();
     friend PatientDatabaseIterator;

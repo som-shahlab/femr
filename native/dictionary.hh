@@ -7,6 +7,9 @@
 class Dictionary {
    public:
     Dictionary(const boost::filesystem::path& path, bool read_all);
+    Dictionary(const Dictionary&) = delete;
+    Dictionary(Dictionary&&) = default;
+
     ~Dictionary() noexcept(false);
 
     std::string_view get_text(uint32_t code) const;
@@ -35,7 +38,6 @@ class DictionaryWriter {
     void add_value(std::string_view value);
 
    private:
-    uint64_t total_size;
     std::ofstream writer;
     std::vector<uint32_t> entries;
 };

@@ -2,6 +2,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/range/iterator_range.hpp>
+#include <boost/optional.hpp>
 #include <iostream>
 #include <queue>
 
@@ -171,7 +172,7 @@ void multiplex_join_processor(std::vector<QueueType>& read_queues,
         }
     }
 
-    next_item = boost::nullopt;
+    next_item = boost::none;
     for (auto& write_queue : write_queues) {
         write_queue.wait_enqueue(next_item);
     }

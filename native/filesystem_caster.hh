@@ -4,6 +4,7 @@
 #include <pybind11/stl.h>
 
 #include <boost/filesystem.hpp>
+#include <boost/optional.hpp>
 
 #include "absl/time/civil_time.h"
 
@@ -25,5 +26,12 @@ struct type_caster<boost::filesystem::path> {
         return pybind11::cast(src.string()).release();
     }
 };
+
+template <typename T>
+struct type_caster<boost::optional<T>> : optional_caster<boost::optional<T>> {};
+
+template <>
+struct type_caster<boost::none_t> : void_caster<boost::none_t> {};
+
 }  // namespace detail
 }  // namespace pybind11
