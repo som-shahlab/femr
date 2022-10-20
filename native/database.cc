@@ -813,5 +813,3 @@ absl::Span<const uint32_t> Ontology::get_all_parents(uint32_t code) {
     return read_span<uint32_t>(*all_parents_dict, code);
 }
 Dictionary& Ontology::get_dictionary() { return *main_dictionary; }
-
-PatientDatabase create_dummy_database() {}
