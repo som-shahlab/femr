@@ -72,9 +72,10 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
                            mmap_data + table_offset + sizeof(uint32_t)),
                        sizes.data(), num_sizes);
 
+    values_.reserve(num_sizes);
     uint64_t index = 0;
     for (const auto& size : sizes) {
-        values.emplace_back(mmap_data + index, size);
+        values_.emplace_back(mmap_data + index, size);
         index += size;
     }
 }
@@ -92,45 +93,63 @@ Dictionary::~Dictionary() noexcept(false) {
     }
 }
 
-uint32_t Dictionary::get_num_entries() const { return values.size(); }
+uint32_t Dictionary::size() const { return values_.size(); }
 
-std::string_view Dictionary::get_text(uint32_t code) const {
-    if (code >= values.size()) {
-        throw std::runtime_error(absl::StrCat("Cannot look up index ", code,
+std::string_view Dictionary::operator[](uint32_t idx) const {
+    if (idx >= values_.size()) {
+        throw std::runtime_error(absl::StrCat("Cannot look up index ", idx,
                                               " in dictionary of size ",
-                                              values.size()));
+                                              values_.size()));
     }
-    return values[code];
+    return values_[idx];
 }
 
-boost::optional<uint32_t> Dictionary::get_code(std::string_view word) {
-    const auto& sorted = get_sorted_values();
-    auto iter = std::lower_bound(
-        std::begin(sorted), std::end(sorted), word,
-        [&](uint32_t a, std::string_view b) { return values[a] < b; });
+boost::optional<uint32_t> Dictionary::find(std::string_view word) {
+    if (word.data() >= values_.front().data() &&
+        word.data() <= values_.back().data()) {
+        // This is an internal reference, we can use a fast path to find it
+        auto iter =
+            std::lower_bound(std::begin(values_), std::end(values_), word,
+                             [&](std::string_view a, std::string_view b) {
+                                 return a.data() < b.data();
+                             });
+        if (iter == std::end(values_)) {
+            throw std::runtime_error("This should never happen per invariants");
+        }
+        if (word.data() != iter->data() || word.size() != iter->size()) {
+            throw std::runtime_error(
+                "This should never happen, reference to invalid entry");
+        }
+        return iter - std::begin(values_);
 
-    if (iter == std::end(sorted) || values[*iter] != word) {
-        return boost::none;
     } else {
-        return *iter;
+        const auto& sorted = get_sorted_values();
+        auto iter = std::lower_bound(
+            std::begin(sorted), std::end(sorted), word,
+            [&](uint32_t a, std::string_view b) { return values_[a] < b; });
+        if (iter == std::end(sorted) || values_[*iter] != word) {
+            return boost::none;
+        } else {
+            return *iter;
+        }
     }
 }
 
-const std::vector<std::string_view>& Dictionary::get_all_text() const {
-    return values;
+const std::vector<std::string_view>& Dictionary::values() const {
+    return values_;
 }
 
 const std::vector<uint32_t>& Dictionary::get_sorted_values() {
     if (!possib_sorted_values) {
         possib_sorted_values.emplace();
-        possib_sorted_values->reserve(values.size());
-        for (size_t i = 0; i < values.size(); i++) {
+        possib_sorted_values->reserve(values_.size());
+        for (size_t i = 0; i < values_.size(); i++) {
             possib_sorted_values->push_back(i);
         }
 
         std::sort(
             std::begin(*possib_sorted_values), std::end(*possib_sorted_values),
-            [&](uint32_t a, uint32_t b) { return values[a] < values[b]; });
+            [&](uint32_t a, uint32_t b) { return values_[a] < values_[b]; });
     }
     return *possib_sorted_values;
 }

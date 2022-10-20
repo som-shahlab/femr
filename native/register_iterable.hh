@@ -2,30 +2,10 @@
 #define REGISTER_ITERABLE_H_INCLUDED
 
 #include <pybind11/pybind11.h>
+
 #include <string_view>
 
 namespace py = pybind11;
-
-template <typename T>
-constexpr auto type_name() {
-    std::string_view name, prefix, suffix;
-#ifdef __clang__
-    name = __PRETTY_FUNCTION__;
-    prefix = "auto type_name() [T = ";
-    suffix = "]";
-#elif defined(__GNUC__)
-    name = __PRETTY_FUNCTION__;
-    prefix = "constexpr auto type_name() [with T = ";
-    suffix = "]";
-#elif defined(_MSC_VER)
-    name = __FUNCSIG__;
-    prefix = "auto __cdecl type_name<";
-    suffix = ">(void)";
-#endif
-    name.remove_prefix(prefix.size());
-    name.remove_suffix(suffix.size());
-    return name;
-}
 
 namespace detail {
 template <typename L, typename R>
@@ -44,8 +24,8 @@ struct has_operator_equals : detail::has_operator_equals_impl<L, R>::type {};
 
 template <typename T, typename std::enable_if<has_operator_equals<
                           typename T::value_type>::value>::type* = nullptr>
-void register_iterable(py::module& m) {
-    py::class_<T>(m, std::string(type_name<T>()).c_str())
+void register_iterable(py::module& m, const char* name) {
+    py::class_<T>(m, name)
         .def(
             "__iter__",
             [](const T& span) {
@@ -69,8 +49,8 @@ void register_iterable(py::module& m) {
 
 template <typename T, typename std::enable_if<!has_operator_equals<
                           typename T::value_type>::value>::type* = nullptr>
-void register_iterable(py::module& m) {
-    py::class_<T>(m, std::string(type_name<T>()).c_str())
+void register_iterable(py::module& m, const char* name) {
+    py::class_<T>(m, name)
         .def(
             "__iter__",
             [](const T& span) {

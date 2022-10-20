@@ -40,6 +40,7 @@ class LazyDictionary {
 class Ontology {
    public:
     Ontology(const boost::filesystem::path& path);
+    Ontology(Ontology&&) = default;
 
     absl::Span<const uint32_t> get_parents(uint32_t code);
     absl::Span<const uint32_t> get_children(uint32_t code);
@@ -56,8 +57,8 @@ class Ontology {
 enum class ValueType {
     NONE,
     NUMERIC,
-    SHORT_TEXT,
-    LONG_TEXT,
+    SHARED_TEXT,
+    UNIQUE_TEXT,
 };
 
 struct Event {
@@ -111,12 +112,12 @@ class PatientDatabase {
     friend PatientDatabaseIterator;
 
     Patient get_patient(uint32_t patient_id);
-    uint32_t get_num_patients();
+    uint32_t size();
 
     // Dictionary handling
     Dictionary& get_code_dictionary();
-    Dictionary& get_short_text_dictionary();
-    Dictionary& get_long_text_dictionary();
+    Dictionary& get_unique_text_dictionary();
+    Dictionary& get_shared_text_dictionary();
 
     // Ontology
     Ontology& get_ontology();
@@ -126,9 +127,9 @@ class PatientDatabase {
     absl::Span<const uint32_t> get_patient_ids_with_codes(
         absl::Span<const uint32_t> codes);
 
-    absl::Span<const uint32_t> get_patient_ids_with_short_text(
+    absl::Span<const uint32_t> get_patient_ids_with_shared_text(
         uint32_t text_value);
-    absl::Span<const uint32_t> get_patient_ids_with_short_text(
+    absl::Span<const uint32_t> get_patient_ids_with_shared_text(
         absl::Span<const uint32_t> text_values);
 
     // Map back to original patient ids
@@ -138,24 +139,24 @@ class PatientDatabase {
 
     // Count information
     uint32_t get_code_count(uint32_t code);
-    uint32_t get_short_text_count(uint32_t text_value);
+    uint32_t get_shared_text_count(uint32_t text_value);
 
    private:
     LazyDictionary patients;
 
     Ontology ontology;
-    LazyDictionary short_text_dictionary;
-    LazyDictionary long_text_dictionary;
+
+    LazyDictionary shared_text_dictionary;
+    LazyDictionary unique_text_dictionary;
 
     LazyDictionary code_index_dictionary;
     LazyDictionary value_index_dictionary;
-
-    LazyDictionary meta_dictionary;
 
     // 0 original_patient_ids
     // 1 sorted_original_patient_ids
     // 2 code counts
     // 3 text value counts
+    LazyDictionary meta_dictionary;
 };
 
 PatientDatabase convert_patient_collection_to_patient_database(

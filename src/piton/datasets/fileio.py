@@ -4,6 +4,7 @@ import csv
 import dataclasses
 import datetime
 import io
+import numbers
 import tempfile
 from typing import (
     Any,
@@ -11,6 +12,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Dict,
     cast,
 )
 
@@ -46,7 +48,6 @@ class EventWriter:
                 "code",
                 "visit_id",
                 "value",
-                "value_type",
                 "event_type",
             ],
         )
@@ -57,11 +58,22 @@ class EventWriter:
         Add an event to the record.
         """
         self.rows_written += 1
-        data = dataclasses.asdict(event)
+        data: Dict[str, Any] = {}
         data["patient_id"] = patient_id
+        for f in dataclasses.fields(event):
+            data[f.name] = getattr(event, f.name)
+
         data["start"] = data["start"].isoformat()
         if data["end"]:
             data["end"] = data["end"].isoformat()
+
+        if data["value"] is None:
+            data["value"] = ""
+        elif isinstance(data["value"], (int, float)):
+            data["value"] = str(data["value"])
+        else:
+            data["value"] = bytes(data["value"]).decode("utf8")
+
         self.writer.writerow(data)
 
     def close(self) -> None:
@@ -97,15 +109,13 @@ class EventReader:
             else:
                 del row["visit_id"]
 
-            if row["value_type"] == "ValueType.NONE":
+            if row["value"] == "":
                 row["value"] = None
-            elif row["value_type"] == "ValueType.NUMERIC":
-                row["value"] = float(row["value"])
-            elif row["value_type"] == "ValueType.TEXT":
-                row["value"] = row["value"]
             else:
-                raise RuntimeError("Invalid value type", row["value_type"])
-            del row["value_type"]
+                try:
+                    row["value"] = float(row["value"])
+                except ValueError:
+                    row["value"] = memoryview(row["value"].encode("utf8"))
 
             if not row["event_type"]:
                 del row["event_type"]

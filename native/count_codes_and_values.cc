@@ -1,5 +1,6 @@
 #include "count_codes_and_values.hh"
 
+#include <boost/optional.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <thread>
 
@@ -10,7 +11,6 @@
 #include "picosha2.h"
 #include "readerwritercircularbuffer.h"
 #include "thread_utils.hh"
-#include <boost/optional.hpp>
 
 using CodeCounter = absl::flat_hash_map<uint64_t, size_t>;
 
@@ -45,14 +45,19 @@ void reader_thread(CodeCounter& code_counts,
                    moodycamel::BlockingReaderWriterCircularBuffer<
                        boost::optional<std::pair<size_t, std::string>>>& queue,
                    const boost::filesystem::path& source) {
-    CSVReader reader(source.string(), {"value", "value_type", "code"}, ',');
+    CSVReader reader(source.string(), {"value", "code"}, ',');
 
     while (reader.next_row()) {
         uint64_t code;
-        attempt_parse_or_die(reader.get_row()[2], code);
+        attempt_parse_or_die(reader.get_row()[1], code);
         code_counts[code] += 1;
 
-        if (reader.get_row()[1] == "ValueType.TEXT") {
+        if (reader.get_row()[0].empty()) {
+            continue;
+        }
+
+        float value;
+        if (!absl::SimpleAtof(reader.get_row()[0], &value)) {
             size_t string_hash = std::hash<std::string>()(reader.get_row()[0]);
             queue.wait_enqueue(
                 std::make_pair(string_hash, std::move(reader.get_row()[0])));
@@ -98,8 +103,8 @@ void writer_thread(moodycamel::BlockingReaderWriterCircularBuffer<
 }
 
 void process_thread(
-    moodycamel::BlockingConcurrentQueue<boost::optional<boost::filesystem::path>>&
-        in_queue,
+    moodycamel::BlockingConcurrentQueue<
+        boost::optional<boost::filesystem::path>>& in_queue,
     moodycamel::BlockingReaderWriterCircularBuffer<
         boost::optional<std::pair<std::string, size_t>>>& out_queue) {
     boost::optional<boost::filesystem::path> next_item;

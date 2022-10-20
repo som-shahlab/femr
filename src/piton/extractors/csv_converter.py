@@ -4,10 +4,11 @@ import abc
 import contextlib
 import csv
 import io
+import collections
 import multiprocessing
 import os
 import sys
-from typing import Mapping, Sequence, Tuple, Optional
+from typing import Mapping, Sequence, Tuple, Optional, Dict
 
 import zstandard
 
@@ -15,6 +16,8 @@ from .. import Event
 from ..datasets import EventCollection
 
 csv.field_size_limit(sys.maxsize)
+
+StatsDictType = Optional[Dict[str, Dict[str, int]]]
 
 
 class CSVConverter(abc.ABC):
@@ -48,8 +51,9 @@ class CSVConverter(abc.ABC):
 
 def run_csv_converter(
     args: Tuple[str, EventCollection, CSVConverter, Optional[str]]
-) -> None:
+) -> Tuple[str, Dict[str, int]]:
     source, target, converter, debug_file = args
+    stats: Dict[str, int] = collections.defaultdict(int)
     try:
         with contextlib.ExitStack() as stack:
             f = stack.enter_context(
@@ -67,13 +71,17 @@ def run_csv_converter(
                 for row in reader:
                     lower_row = {a.lower(): b for a, b in row.items()}
                     events = converter.get_events(lower_row)
+                    stats["input_rows"] += 1
                     if events:
+                        stats["valid_rows"] += 1
                         for event in events:
+                            stats["valid_events"] += 1
                             o.add_event(
                                 int(row[converter.get_patient_id_field()]),
                                 event,
                             )
                     else:
+                        stats["invalid_rows"] += 1
                         # This is a bad row, should be inspected further
                         if debug_file is not None:
                             if debug_writer is None:
@@ -96,6 +104,7 @@ def run_csv_converter(
                                 debug_writer.writeheader()
                             row["converter"] = repr(converter)
                             debug_writer.writerow(row)
+        return (converter.get_file_prefix(), stats)
 
     except Exception as e:
         print("Failing on", source, converter)
@@ -108,7 +117,11 @@ def run_csv_converters(
     converters: Sequence[CSVConverter],
     num_threads: int = 1,
     debug_folder: Optional[str] = None,
+    stats_dict: StatsDictType = None,
 ) -> EventCollection:
+    stats: Dict[str, Dict[str, int]] = collections.defaultdict(
+        lambda: collections.defaultdict(int)
+    )
 
     if debug_folder:
         os.mkdir(debug_folder)
@@ -156,7 +169,11 @@ def run_csv_converters(
             print("Could not find any files for", c)
 
     with multiprocessing.Pool(num_threads) as pool:
-        for _ in pool.imap_unordered(run_csv_converter, to_process):
-            pass
+        for (prefix, s) in pool.imap_unordered(run_csv_converter, to_process):
+            for k, v in s.items():
+                stats[prefix][k] += v
+
+    if stats_dict is not None:
+        stats_dict.update(stats)
 
     return target
