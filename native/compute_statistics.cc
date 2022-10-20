@@ -5,8 +5,7 @@
 using json = nlohmann::json;
 
 boost::filesystem::path extract =
-    "/local-scratch/nigam/projects/ethanid/piton/targetb/"
-    "omop_extractor_40flu58k/targetb";
+    "/local-scratch/nigam/projects/ethanid/piton/target/";
 
 int main() {
     PatientDatabase database(extract, true);

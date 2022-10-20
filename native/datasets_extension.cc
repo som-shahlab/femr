@@ -3,6 +3,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <iostream>
+
 #include "absl/strings/str_cat.h"
 #include "absl/time/civil_time.h"
 #include "civil_day_caster.hh"
@@ -76,8 +78,9 @@ void register_datasets_extension(py::module& root) {
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
                     absl::CivilSecond event_time = p.birth_date;
-                    event_time += 60 * (event.minutes_offset +
-                                        24 * 60 * event.age_in_days);
+                    uint32_t minutes = event.minutes_offset;
+                    minutes += 24 * 60 * event.age_in_days;
+                    event_time += 60 * minutes;
                     py::object value;
                     py::object value_type;
                     switch (event.value_type) {
