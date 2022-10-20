@@ -24,20 +24,25 @@ TEST(DictionaryTest, WriteDictionary) {
         Dictionary dict(dictionary_path, true);
 
         std::vector<std::string_view> expected = {"foo", "bar", "zoo"};
-        EXPECT_EQ(dict.get_all_text(), expected);
-        EXPECT_EQ(dict.get_text(1), "bar");
-        EXPECT_EQ(dict.get_code("zoo"), boost::optional<uint32_t>(2));
-        EXPECT_EQ(dict.get_code("bar"), boost::optional<uint32_t>(1));
-        EXPECT_EQ(dict.get_code("foo"), boost::optional<uint32_t>(0));
-        EXPECT_EQ(dict.get_code("missing"), boost::none);
-        EXPECT_EQ(dict.get_code("zzzzzmissing"), boost::none);
-        EXPECT_EQ(dict.get_num_entries(), 3);
+        EXPECT_EQ(dict.values(), expected);
+        EXPECT_EQ(dict[1], "bar");
+        EXPECT_EQ(dict.find("zoo"), boost::optional<uint32_t>(2));
+        EXPECT_EQ(dict.find("bar"), boost::optional<uint32_t>(1));
+        EXPECT_EQ(dict.find("foo"), boost::optional<uint32_t>(0));
+        EXPECT_EQ(dict.find("missing"), boost::none);
+        EXPECT_EQ(dict.find("zzzzzmissing"), boost::none);
+        EXPECT_EQ(dict.size(), 3);
 
-        for (size_t i = 0; i < dict.get_num_entries(); i++) {
-            std::string text = std::string(dict.get_text(i));
-            auto other_i = dict.get_code(text);
+        for (size_t i = 0; i < dict.size(); i++) {
+            std::string text = std::string(dict[i]);
+            auto other_i = dict.find(text);
+            auto alternative_i = dict.find(dict[i]);
+            // auto alternative_i =
+            //    dict.find(std::string_view(dict[i].data(), 300));
             EXPECT_EQ(other_i.has_value(), true);
+            EXPECT_EQ(alternative_i.has_value(), true);
             EXPECT_EQ(*other_i, i);
+            EXPECT_EQ(*alternative_i, i);
         }
     }
 
