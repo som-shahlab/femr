@@ -16,19 +16,19 @@ class Patient:
 @dataclass(frozen=True)
 class Event:
     start: datetime.datetime
-    code: int
+    code: int # OMOP code
 
     end: datetime.datetime | None = None
-    visit_id: int | None = None
     value: memoryview | float | None = None
+    # TODO - Seems like it should be separated from the Event class as it creates unnecessary
+    # interdependencies between Events (since visits are Events)
+    visit_id: int | None = None
 
-    event_type: str | None = None
+    # TODO - add the below property
+    omop_table: str = None # OMOP table where this event comes from
 
-    # TODO: Implement the following
-    # event_type: str | None = None
-
-    # id: int | None = None
-    # parent_id: int | None = None
+    # TODO - rename or make __private (confusing)
+    event_type: str | None = None # Clarity table name where this event comes from (for ETL purposes only)
 
     def __post_init__(self) -> None:
         if not (
