@@ -17,8 +17,6 @@ from ..datasets import EventCollection
 
 csv.field_size_limit(sys.maxsize)
 
-StatsDictType = Optional[Dict[str, Dict[str, int]]]
-
 
 class CSVConverter(abc.ABC):
     """
@@ -49,9 +47,12 @@ class CSVConverter(abc.ABC):
         ...
 
 
-def run_csv_converter(
+def _run_csv_converter(
     args: Tuple[str, EventCollection, CSVConverter, Optional[str]]
 ) -> Tuple[str, Dict[str, int]]:
+    """
+    Run a single csv converter, returns the prefix and the count dicts
+    """
     source, target, converter, debug_file = args
     stats: Dict[str, int] = collections.defaultdict(int)
     try:
@@ -117,8 +118,23 @@ def run_csv_converters(
     converters: Sequence[CSVConverter],
     num_threads: int = 1,
     debug_folder: Optional[str] = None,
-    stats_dict: StatsDictType = None,
+    stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
 ) -> EventCollection:
+    """Run a collection of CSV converters over a directory, producing an EventCollection
+
+    Args:
+        source_csvs: A path to the directory containing the source csvs.
+        target_location: A path where you want to store the EventCollection.
+        converters: A series of classes that implement the CSVConverter API.
+        num_threads: The number of threads to use when converting.
+        debug_folder: An optional directory where the unmapped rows should be stored for debuggin
+        stats_dict: An optional dictionary to store statistics about the conversion process.
+
+
+    Returns:
+        An EventCollection storing the resulting events
+    """
+
     stats: Dict[str, Dict[str, int]] = collections.defaultdict(
         lambda: collections.defaultdict(int)
     )
@@ -169,7 +185,7 @@ def run_csv_converters(
             print("Could not find any files for", c)
 
     with multiprocessing.Pool(num_threads) as pool:
-        for (prefix, s) in pool.imap_unordered(run_csv_converter, to_process):
+        for (prefix, s) in pool.imap_unordered(_run_csv_converter, to_process):
             for k, v in s.items():
                 stats[prefix][k] += v
 
