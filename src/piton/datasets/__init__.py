@@ -204,7 +204,9 @@ def _transform_helper(
                     if current_patient is None:
                         if capture_statistics:
                             information[str(transform)]["lost_patients"] += 1
-                            information[str(transform)]["lost_events"] += current_event_count
+                            information[str(transform)][
+                                "lost_events"
+                            ] += current_event_count
                         break
                     else:
                         if capture_statistics:
@@ -252,7 +254,7 @@ class PatientCollection:
         transform: Callable[[Patient], Optional[Patient]]
         | Sequence[Callable[[Patient], Optional[Patient]]],
         num_threads: int = 1,
-        capture_statistics: bool = False,
+        stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> PatientCollection:
         """
         Applies a transformation to the patient files in a folder to generate a modified output folder.
@@ -274,7 +276,7 @@ class PatientCollection:
                     _transform_helper,
                     target_path,
                     transform,
-                    capture_statistics,
+                    stats_dict is not None,
                 ),
                 self.sharded_readers(),
             ):
@@ -282,9 +284,8 @@ class PatientCollection:
                     for k, v in stats.items():
                         for sub_k, sub_v in v.items():
                             total_stats[k][sub_k] += sub_v
-
-        if capture_statistics:
-            print(total_stats)
+        if stats_dict is not None:
+            stats_dict.update(total_stats)
 
         return PatientCollection(target_path)
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import argparse
+import numbers
 import random
 import collections
 import functools
@@ -11,10 +13,11 @@ import resource
 import tempfile
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence, Dict, Tuple, Set
+import logging
 
 from piton.datasets import EventCollection, PatientCollection
 
-from .. import Event, Patient, ValueType
+from .. import Event, Patient
 from .csv_converter import CSVConverter, run_csv_converters
 
 
@@ -65,13 +68,13 @@ class DemographicsConverter(CSVConverter):
         ]
 
 
-def try_numeric(val: str) -> float | str | None:
+def try_numeric(val: str) -> float | memoryview | None:
     if val == "":
         return None
     try:
         return float(val)
     except ValueError:
-        return val
+        return memoryview(val.encode("utf8"))
 
 
 @dataclass
@@ -103,8 +106,8 @@ class ConceptTableConverter(CSVConverter):
 
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
         def helper(
-            field_name: Optional[str], value: str | float | None
-        ) -> str | float | None:
+            field_name: Optional[str], value: memoryview | float | None
+        ) -> memoryview | float | None:
             if field_name is not None:
                 val = try_numeric(row[field_name])
                 if val is not None:
@@ -240,8 +243,7 @@ def move_billing_codes(patient: Patient) -> Patient:
 
     new_events.sort(key=lambda a: a.start)
 
-    patient.events = new_events
-    return patient
+    return Patient(patient_id=patient.patient_id, events=new_events)
 
 
 # Remove redunant rows
@@ -258,7 +260,7 @@ def remove_redundant_rows(patient: Patient) -> Patient:
 
     for event in patient.events:
         counts = value_count[(event.code, event.start)]
-        if event.value_type == ValueType.NONE:
+        if event.value is None:
             # Remove if any of another type
             if any(v is not None for v in counts.keys()):
                 continue
@@ -372,56 +374,82 @@ def extract_omop_program() -> None:
     )
 
     parser.add_argument(
+        "temp_location",
+        type=str,
+        help="The place to store temporary files",
+        default=None,
+    )
+
+    parser.add_argument(
         "--num_threads",
         type=int,
         help="The number of threads to use",
         default=1,
     )
 
-    parser.add_argument(
-        "--debug_folder",
-        type=str,
-        help="The number of threads to use",
-        default=None,
-    )
-
     parser.set_defaults(use_quotes=True)
 
     args = parser.parse_args()
 
+    args.target_location = os.path.abspath(args.target_location)
+    args.temp_location = os.path.abspath(args.temp_location)
+
     if not os.path.exists(args.target_location):
         os.mkdir(args.target_location)
+    if not os.path.exists(args.temp_location):
+        os.mkdir(args.temp_location)
 
-    with mkdtemp_persistent(
-        dir=args.target_location,
-        prefix="omop_extractor_",
-        persistent=True,
-        # force="targeta/omop_extractor_y7j4xfji",
-    ) as temp_dir:
-        print(temp_dir)
-        event_dir = os.path.join(temp_dir, "events")
-        raw_patients_dir = os.path.join(temp_dir, "patients_raw")
-        cleaned_patients_dir = os.path.join(temp_dir, "patients_cleaned")
+    logFormatter = logging.Formatter(
+        "%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s"
+    )
+    rootLogger = logging.getLogger()
+
+    fileHandler = logging.FileHandler(os.path.join(args.target_location, "log"))
+    fileHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(fileHandler)
+
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(consoleHandler)
+
+    rootLogger.setLevel(logging.INFO)
+    rootLogger.info(f"Extracting from OMOP with arguments {args}")
+
+    try:
+        event_dir = os.path.join(args.temp_location, "events")
+        raw_patients_dir = os.path.join(args.temp_location, "patients_raw")
+        cleaned_patients_dir = os.path.join(
+            args.temp_location, "patients_cleaned"
+        )
 
         if not os.path.exists(event_dir):
-            print("Converting to events", datetime.datetime.now())
+            rootLogger.info("Converting to events")
+            stats_dict: Dict[str, Dict[str, int]] = {}
             event_collection = run_csv_converters(
                 args.omop_source,
                 event_dir,
                 get_omop_csv_converters(),
                 num_threads=args.num_threads,
-                debug_folder=args.debug_folder,
+                debug_folder=os.path.join(args.temp_location, "lost_csv_rows"),
+                stats_dict=stats_dict,
             )
+            rootLogger.info("Got converter statistics " + str(stats_dict))
+            with open(
+                os.path.join(args.target_location, "convert_stats.json"), "w"
+            ) as f:
+                json.dump(stats_dict, f)
         else:
+            rootLogger.info("Already converted to events, skipping")
             event_collection = EventCollection(event_dir)
 
         if not os.path.exists(raw_patients_dir):
-            print("Converting to patients", datetime.datetime.now())
+            rootLogger.info("Converting to patients")
             patient_collection = event_collection.to_patient_collection(
                 raw_patients_dir,
                 num_threads=args.num_threads,
             )
         else:
+            rootLogger.info("Already converted to patients, skipping")
             patient_collection = PatientCollection(raw_patients_dir)
 
         # All of these transformations are information preserving
@@ -442,17 +470,33 @@ def extract_omop_program() -> None:
         _ = _disabled_transforms
 
         if not os.path.exists(cleaned_patients_dir):
-            print("Transforming entries", datetime.datetime.now())
+            stats_dict = {}
+            rootLogger.info("Appling transformations")
             patient_collection = patient_collection.transform(
                 cleaned_patients_dir,
                 transforms,
                 num_threads=args.num_threads,
-                capture_statistics=True,
+                stats_dict=stats_dict,
             )
+            rootLogger.info("Got transform statistics " + str(stats_dict))
+            with open(
+                os.path.join(args.target_location, "transform_stats.json"), "w"
+            ) as f:
+                json.dump(stats_dict, f)
         else:
+            rootLogger.info("Already applied transformations, skipping")
             patient_collection = PatientCollection(cleaned_patients_dir)
 
-        print("Converting to extract", datetime.datetime.now())
-        patient_collection.to_patient_database(
-            os.path.join(temp_dir, args.target_location), args.omop_source
-        ).close()
+        if not os.path.exists(os.path.join(args.target_location, "meta")):
+            rootLogger.info("Converting to extract")
+
+            print("Converting to extract", datetime.datetime.now())
+            patient_collection.to_patient_database(
+                args.target_location, args.omop_source
+            ).close()
+        else:
+            rootLogger.info("Already converted to extract, skipping")
+
+    except Exception as e:
+        rootLogger.critical(e, exc_info=True)
+        raise e

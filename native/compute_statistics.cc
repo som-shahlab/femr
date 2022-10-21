@@ -4,7 +4,8 @@
 #include "database.hh"
 using json = nlohmann::json;
 
-boost::filesystem::path extract = "/local-scratch/nigam/projects/ethanid/piton/targetb/omop_extractor_40flu58k/targetb";
+boost::filesystem::path extract =
+    "/local-scratch/nigam/projects/ethanid/piton/target/";
 
 int main() {
     PatientDatabase database(extract, true);
@@ -13,8 +14,7 @@ int main() {
 
     auto iter = database.iterator();
 
-    for (uint32_t patient_id = 0; patient_id < database.get_num_patients();
-         patient_id++) {
+    for (uint32_t patient_id = 0; patient_id < database.size(); patient_id++) {
         const Patient& p = iter.get_patient(patient_id);
 
         length_counts[p.events.size()] += 1;

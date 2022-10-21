@@ -22,20 +22,22 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
     for (int i = 1; i <= 100; i++) {
         for (int j = 1; j <= 3; j++) {
             entries.push_back({std::to_string(i), std::to_string(j * 100),
-                               std::to_string(i % 3 == 0), "ValueType.TEXT"});
+                               "a" + std::to_string(i % 3 == 0)});
         }
     }
-    entries.push_back(
-        {"100", "darn", "please don't waste this", "ValueType.TEXT"});
-    entries.push_back(
-        {"100", "darn", "please don't waste this", "ValueType.TEXT"});
+    // Make sure we ignore numbers
+    entries.push_back({"999", "darn", "101"});
+    entries.push_back({"999", "darn", "101.1"});
+    entries.push_back({"999", "darn", "1e9"});
 
-    entries.push_back(
-        {"100", "darn", "please don't waste this 2", "ValueType.TEXT"});
+    entries.push_back({"100", "darn", "please don't waste this"});
+    entries.push_back({"100", "darn", "please don't waste this"});
+
+    entries.push_back({"100", "darn", "please don't waste this 2"});
 
     std::shuffle(std::begin(entries), std::end(entries),
                  std::default_random_engine(1235423));
-    std::vector<std::string> columns = {"code", "foo", "value", "value_type"};
+    std::vector<std::string> columns = {"code", "foo", "value"};
 
     size_t num_chunks = 7;
 
@@ -51,9 +53,9 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
             }
         }
         if (i == 0) {
-            writer.add_row({"100", "darn", "edge case", "ValueType.TEXT"});
-            writer.add_row({"100", "darn", "edge case", "ValueType.TEXT"});
-            writer.add_row({"100", "darn", "edge case", "ValueType.TEXT"});
+            writer.add_row({"100", "darn", "edge case"});
+            writer.add_row({"100", "darn", "edge case"});
+            writer.add_row({"100", "darn", "edge case"});
         }
     }
 
@@ -71,8 +73,8 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
     }
 
     std::vector<std::pair<std::string, size_t>> value_counts = {
-        {"0", 201},
-        {"1", 99},
+        {"a0", 201},
+        {"a1", 99},
         {"edge case", 3},
         {"please don't waste this", 2},
     };

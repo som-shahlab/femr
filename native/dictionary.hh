@@ -12,19 +12,18 @@ class Dictionary {
 
     ~Dictionary() noexcept(false);
 
-    std::string_view get_text(uint32_t code) const;
-    boost::optional<uint32_t> get_code(std::string_view word);
+    std::string_view operator[](uint32_t idx) const;
+    boost::optional<uint32_t> find(std::string_view value);
 
-    const std::vector<std::string_view>& get_all_text() const;
-
-    uint32_t get_num_entries() const;
+    const std::vector<std::string_view>& values() const;
+    uint32_t size() const;
 
    private:
     int fd;
     char* mmap_data;
     ssize_t length;
 
-    std::vector<std::string_view> values;
+    std::vector<std::string_view> values_;
 
     const std::vector<uint32_t>& get_sorted_values();
     boost::optional<std::vector<uint32_t>> possib_sorted_values;

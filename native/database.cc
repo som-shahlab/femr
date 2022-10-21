@@ -31,17 +31,17 @@ std::string_view container_to_view(const T& data) {
 
 template <typename T>
 absl::Span<const T> read_span(const Dictionary& dict, uint32_t index) {
-    std::string_view mapping = dict.get_text(index);
+    std::string_view mapping = dict[index];
     return {reinterpret_cast<const T*>(mapping.data()),
             mapping.size() / sizeof(T)};
 }
 
-using LongValue = std::pair<uint32_t, std::string>;
+using UniqueValue = std::pair<uint32_t, std::string>;
 
 struct Entry {
     uint64_t original_patient_id;
     std::string bytes;
-    std::vector<LongValue> long_values;
+    std::vector<UniqueValue> unique_values;
 };
 
 void write_patient_to_buffer(uint64_t original_patient_id,
@@ -95,12 +95,12 @@ void write_patient_to_buffer(uint64_t original_patient_id,
                 buffer.push_back((event.code << 2));
                 break;
 
-            case ValueType::LONG_TEXT:
-            case ValueType::SHORT_TEXT: {
+            case ValueType::UNIQUE_TEXT:
+            case ValueType::SHARED_TEXT: {
                 buffer.push_back((event.code << 2) | 1);
-                bool is_short = event.value_type == ValueType::SHORT_TEXT;
+                bool is_shared = event.value_type == ValueType::SHARED_TEXT;
                 buffer.push_back((event.text_value << 1) |
-                                 static_cast<uint32_t>(is_short));
+                                 static_cast<uint32_t>(is_shared));
                 break;
             }
 
@@ -155,9 +155,9 @@ void read_patient_from_buffer(Patient& current_patient,
 
             case 1: {
                 uint32_t text_value = buffer[index++];
-                bool is_short = (text_value & 1) == 1;
+                bool is_shared = (text_value & 1) == 1;
                 event.value_type =
-                    is_short ? ValueType::SHORT_TEXT : ValueType::LONG_TEXT;
+                    is_shared ? ValueType::SHARED_TEXT : ValueType::UNIQUE_TEXT;
                 event.text_value = text_value >> 1;
                 break;
             }
@@ -187,12 +187,12 @@ void read_patient_from_buffer(Patient& current_patient,
 
 void reader_thread(
     const boost::filesystem::path& patient_file,
-    moodycamel::BlockingReaderWriterCircularBuffer<boost::optional<Entry>>& queue,
-    std::atomic<uint32_t>& long_counter,
+    moodycamel::BlockingReaderWriterCircularBuffer<boost::optional<Entry>>&
+        queue,
+    std::atomic<uint32_t>& unique_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
-    CSVReader reader(patient_file,
-                     {"patient_id", "code", "start", "value_type", "value"},
+    CSVReader reader(patient_file, {"patient_id", "code", "start", "value"},
                      ',');
 
     Entry current_entry;
@@ -256,7 +256,7 @@ void reader_thread(
             current_patient.events.clear();
 
             current_entry.original_patient_id = patient_id;
-            current_entry.long_values.clear();
+            current_entry.unique_values.clear();
         }
 
         Event next_event;
@@ -269,26 +269,24 @@ void reader_thread(
             (next_event.age_in_days * hours_per_day * minutes_per_hour);
         next_event.code = code_to_index.find(code)->second;
 
-        if (reader.get_row()[3] == "ValueType.NONE") {
+        if (reader.get_row()[3].empty()) {
             next_event.value_type = ValueType::NONE;
-        } else if (reader.get_row()[3] == "ValueType.NUMERIC") {
-            next_event.value_type = ValueType::NUMERIC;
-            bool parse_number = absl::SimpleAtof(reader.get_row()[4],
+        } else {
+            bool parse_number = absl::SimpleAtof(reader.get_row()[3],
                                                  &next_event.numeric_value);
-            if (!parse_number) {
-                throw std::runtime_error("Could not parse number " +
-                                         reader.get_row()[4]);
-            }
-        } else if (reader.get_row()[3] == "ValueType.TEXT") {
-            auto iter = text_value_to_index.find(reader.get_row()[4]);
-            if (iter != std::end(text_value_to_index)) {
-                next_event.value_type = ValueType::SHORT_TEXT;
-                next_event.text_value = iter->second;
+            if (parse_number) {
+                next_event.value_type = ValueType::NUMERIC;
             } else {
-                next_event.value_type = ValueType::LONG_TEXT;
-                next_event.text_value = long_counter.fetch_add(1);
-                current_entry.long_values.emplace_back(
-                    next_event.text_value, std::move(reader.get_row()[4]));
+                auto iter = text_value_to_index.find(reader.get_row()[3]);
+                if (iter != std::end(text_value_to_index)) {
+                    next_event.value_type = ValueType::SHARED_TEXT;
+                    next_event.text_value = iter->second;
+                } else {
+                    next_event.value_type = ValueType::UNIQUE_TEXT;
+                    next_event.text_value = unique_counter.fetch_add(1);
+                    current_entry.unique_values.emplace_back(
+                        next_event.text_value, std::move(reader.get_row()[3]));
+                }
             }
         }
 
@@ -330,7 +328,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
 
     absl::flat_hash_map<std::string, uint32_t> text_value_to_index;
     {
-        DictionaryWriter writer(target / "short_text");
+        DictionaryWriter writer(target / "shared_text");
 
         for (size_t i = 0; i < codes_and_values.second.size(); i++) {
             const auto& entry = codes_and_values.second[i];
@@ -357,42 +355,48 @@ PatientDatabase convert_patient_collection_to_patient_database(
             queues;
         queues.reserve(files.size());
 
-        std::atomic<uint32_t> long_counter(0);
+        std::atomic<uint32_t> unique_counter(0);
 
         for (size_t i = 0; i < files.size(); i++) {
             queues.emplace_back(QUEUE_SIZE);
-            threads.emplace_back([i, &files, &queues, &long_counter,
+            threads.emplace_back([i, &files, &queues, &unique_counter,
                                   &text_value_to_index, &code_to_index]() {
-                reader_thread(files[i], queues[i], long_counter, code_to_index,
-                              text_value_to_index);
+                reader_thread(files[i], queues[i], unique_counter,
+                              code_to_index, text_value_to_index);
             });
         }
 
-        uint32_t next_write_long = 0;
-        DictionaryWriter long_text(target / "long_text");
-        std::priority_queue<LongValue, std::vector<LongValue>, std::greater<>>
-            long_value_heap;
+        uint32_t next_write_unique = 0;
+        DictionaryWriter unique_text(target / "unique_text");
+        std::priority_queue<UniqueValue, std::vector<UniqueValue>,
+                            std::greater<>>
+            unique_value_heap;
 
         dequeue_many_loop(queues, [&](Entry& entry) {
-            for (auto& long_value : entry.long_values) {
-                if (long_value.first == next_write_long) {
-                    long_text.add_value(long_value.second);
-                    next_write_long++;
+            for (auto& unique_value : entry.unique_values) {
+                if (unique_value.first == next_write_unique) {
+                    unique_text.add_value(unique_value.second);
+                    next_write_unique++;
 
-                    while (!long_value_heap.empty() &&
-                           long_value_heap.top().first == next_write_long) {
-                        long_text.add_value(long_value_heap.top().second);
-                        next_write_long++;
-                        long_value_heap.pop();
+                    while (!unique_value_heap.empty() &&
+                           unique_value_heap.top().first == next_write_unique) {
+                        unique_text.add_value(unique_value_heap.top().second);
+                        next_write_unique++;
+                        unique_value_heap.pop();
                     }
                 } else {
-                    long_value_heap.emplace(std::move(long_value));
+                    unique_value_heap.emplace(std::move(unique_value));
                 }
             }
 
             original_patient_ids.push_back(entry.original_patient_id);
             patients.add_value(entry.bytes);
         });
+
+        if (!unique_value_heap.empty()) {
+            throw std::runtime_error(
+                "Should have an empty heap after done processing?");
+        }
 
         for (auto& thread : threads) {
             thread.join();
@@ -439,7 +443,7 @@ PatientDatabaseIterator::PatientDatabaseIterator(const Dictionary* d)
     : parent_dictionary(d) {}
 
 Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
-    std::string_view data = parent_dictionary->get_text(patient_id);
+    std::string_view data = (*parent_dictionary)[patient_id];
 
     uint32_t count;
     std::memcpy(&count, data.data(), sizeof(count));
@@ -461,15 +465,13 @@ PatientDatabase::PatientDatabase(boost::filesystem::path const& path,
                                  bool read_all)
     : patients(path / "patients", read_all),
       ontology(path / "ontology"),
-      short_text_dictionary(path / "short_text", read_all),
-      long_text_dictionary(path / "long_text", read_all),
+      shared_text_dictionary(path / "shared_text", read_all),
+      unique_text_dictionary(path / "unique_text", read_all),
       code_index_dictionary(path / "code_index", read_all),
       value_index_dictionary(path / "value_index", read_all),
       meta_dictionary(path / "meta", read_all) {}
 
-uint32_t PatientDatabase::get_num_patients() {
-    return patients->get_num_entries();
-}
+uint32_t PatientDatabase::size() { return patients->size(); }
 
 PatientDatabaseIterator PatientDatabase::iterator() {
     return PatientDatabaseIterator(&(*patients));
@@ -505,7 +507,7 @@ uint32_t PatientDatabase::get_code_count(uint32_t code) {
     return read_span<uint32_t>(*meta_dictionary, 2)[code];
 }
 
-uint32_t PatientDatabase::get_short_text_count(uint32_t value) {
+uint32_t PatientDatabase::get_shared_text_count(uint32_t value) {
     return read_span<uint32_t>(*meta_dictionary, 3)[value];
 }
 
@@ -515,18 +517,18 @@ Dictionary& PatientDatabase::get_code_dictionary() {
     return get_ontology().get_dictionary();
 }
 
-Dictionary& PatientDatabase::get_short_text_dictionary() {
-    return *short_text_dictionary;
+Dictionary& PatientDatabase::get_shared_text_dictionary() {
+    return *shared_text_dictionary;
 }
 
-Dictionary& PatientDatabase::get_long_text_dictionary() {
-    return *long_text_dictionary;
+Dictionary& PatientDatabase::get_unique_text_dictionary() {
+    return *unique_text_dictionary;
 }
 
 template <typename F>
 void process_nested_helper(
-    moodycamel::BlockingConcurrentQueue<boost::optional<boost::filesystem::path>>&
-        queue,
+    moodycamel::BlockingConcurrentQueue<
+        boost::optional<boost::filesystem::path>>& queue,
     const F& f,
     std::vector<std::result_of_t<F(const boost::filesystem::path&)>>& result) {
     boost::optional<boost::filesystem::path> next_item;

@@ -169,9 +169,11 @@ cc_library(
     name="database",
     hdrs=[
         "database.hh",
+        "database_test_helper.hh",
     ],
     srcs=[
         "database.cc",
+        "database_test_helper.cc",
     ],
     deps=[
         "@picosha2",
@@ -234,6 +236,15 @@ pybind_extension(
     deps=[
         ":datasets_extension",
     ],
+)
+
+py_test(
+    name="extension_test",
+    srcs=["extension_test.py"],
+    data=[
+        ":extension.so",
+    ],
+    deps=[],
 )
 
 cc_binary(
