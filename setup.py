@@ -41,8 +41,8 @@ class cmake_build_ext(build_ext):
 
             extra_args = []
 
-            if source_env.get('DISTDIR'):
-                extra_args.extend(['--distdir', source_env['DISTDIR']])
+            if source_env.get("DISTDIR"):
+                extra_args.extend(["--distdir", source_env["DISTDIR"]])
 
             subprocess.run(
                 args=["bazel", "build", "-c", "opt", ext.target] + extra_args,

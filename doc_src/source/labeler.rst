@@ -7,7 +7,7 @@ ehr_ml.labeler
 Definition Of A Labeler
 ****************************
 
-:py:mod:`stride_ml.labeler` works on the assumption that there may be multiple or zero labels per patient. 
+:py:mod:`stride_ml.labeler` works on the assumption that there may be multiple or zero labels per patient.
 
 Each label is defined by :py:class:`Label` to consist of a day offset and a label as defined by :py:class:`Label`.
 Labels can be either time to event labels, numeric labels, categorical or binary labels.

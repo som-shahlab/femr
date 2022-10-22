@@ -15,7 +15,7 @@ Accessing this ontology is done through the OntologyReader class.
 
     A class for accessing onotlogy information
 
-    
+
     .. py:method:: __init__(filename: str)
 
         Construct an ontology reader given the filename.
@@ -40,14 +40,14 @@ Accessing this ontology is done through the OntologyReader class.
 
         Given an ontology code, retrieve all corresponding timeline codes.
 
-    
+
     .. py:method:: get_words_for_subword_term(term: str) -> Sequence[int]
 
         Given an ontology string term, retrieve all corresponding timeline codes.
 
-        
+
     .. py:method:: get_recorded_date_codes() -> Sequence[int]
-        
+
         Some types of observations are more or less reliable than others.
         This returns the set of reliable timeline codes that should be used for prediction models.
 

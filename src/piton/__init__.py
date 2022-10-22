@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import datetime
 import enum
+import numbers
 from dataclasses import dataclass, field, fields
 from typing import Sequence
-import numbers
 
 
 @dataclass(frozen=True)

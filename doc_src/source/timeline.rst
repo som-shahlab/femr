@@ -15,7 +15,7 @@ It consists of a compact and efficient patient timeline format as well as some t
 
     The records for a single patient.
 
-    .. py:attribute:: patient_id 
+    .. py:attribute:: patient_id
         :type: int
 
         The id for this particular patient.
@@ -29,22 +29,22 @@ It consists of a compact and efficient patient timeline format as well as some t
 
     A day of observations for a patient.
 
-    .. py:attribute:: date 
+    .. py:attribute:: date
         :type: datetime.date
 
         The calendar date.
 
-    .. py:attribute:: age 
+    .. py:attribute:: age
         :type: int
 
         The age in days.
 
-    .. py:attribute:: observations 
+    .. py:attribute:: observations
         :type: Sequence[int]
 
         The events that occurred on that day.
 
-    .. py:attribute:: observations_with_values 
+    .. py:attribute:: observations_with_values
         :type: Sequence[ObservationWithValue]
 
         The events with values that occurred on that day.
@@ -54,12 +54,12 @@ It consists of a compact and efficient patient timeline format as well as some t
 
     An observation code that is attached to either a text or numeric value.
 
-    .. py:attribute:: code 
+    .. py:attribute:: code
         :type: int
 
         The observation code.
 
-    .. py:attribute:: is_text 
+    .. py:attribute:: is_text
         :type: bool
 
         Whether the observation is a text observation
@@ -84,12 +84,12 @@ It consists of a compact and efficient patient timeline format as well as some t
 
     .. py:attribute:: map(term: str) -> Optional[int]:
 
-        Convert a dictionary term into the corresponding integer code. 
+        Convert a dictionary term into the corresponding integer code.
         Returns None if that term is not in the dictionary.
 
     .. py:attribute:: get_word(self, code: int) -> Optional[str]:
 
-        Convert a code back to the string term. 
+        Convert a code back to the string term.
         Returns None if the code is not in the dictionary.
 
 
@@ -129,11 +129,11 @@ Storing and retreiving patients is done through the :py:mod:`ehr_ml.timeline.Tim
         Note that the order of the result is the same as get_patient_ids().
 
     .. py:method:: get_dictionary(self) -> TermDictionary:
-        
+
         Obtain the dictionary used for mapping observation codes.
 
     .. py:method:: get_value_dictionary(self) -> TermDictionary:
-        
+
         Obtain the dictionary used for mapping text observation values.
 
 

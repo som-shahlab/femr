@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import json
 import argparse
-import numbers
-import random
 import collections
-import functools
 import contextlib
 import datetime
+import functools
+import json
+import logging
+import numbers
 import os
+import random
 import resource
 import tempfile
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence, Dict, Tuple, Set
-import logging
+from typing import Any, Dict, Mapping, Optional, Sequence, Set, Tuple
 
 from piton.datasets import EventCollection, PatientCollection
 

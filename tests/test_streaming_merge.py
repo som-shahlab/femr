@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import contextlib
-import pytest
 import functools
 import itertools
 import multiprocessing
 import random
-from typing import Iterable, Optional, List, Iterator, Any
+from typing import Any, Iterable, Iterator, List, Optional
+
+import pytest
 
 import piton.datasets.utils
 

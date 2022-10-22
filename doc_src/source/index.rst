@@ -23,19 +23,19 @@ ehr_ml is designed as a combination of multiple relatively independent component
 
 The main modules are:
 
-:py:mod:`ehr_ml.timeline` 
+:py:mod:`ehr_ml.timeline`
     Contains both a common data format and utilities interacting with it.
-:py:mod:`ehr_ml.labeler` 
+:py:mod:`ehr_ml.labeler`
     Contains an abstract definition of a labeling function as well as some useful shared labeling functions.
-:py:mod:`ehr_ml.featurizer` 
+:py:mod:`ehr_ml.featurizer`
     Contains an abstract definition of a featurizer and some useful default choices.
-:py:mod:`ehr_ml.utils` 
+:py:mod:`ehr_ml.utils`
     Contains various utility classes which are not directly connected to ehr_ml.
-:py:mod:`ehr_ml.ontology` 
+:py:mod:`ehr_ml.ontology`
     Contains utilities for working with ontologies and mapping codes to subcodes.
-:py:mod:`ehr_ml.index` 
+:py:mod:`ehr_ml.index`
     Enables a user to quickly find patients who have certain codes.
-:py:mod:`ehr_ml.clmbr` 
+:py:mod:`ehr_ml.clmbr`
     An implementation of the CLMBR EHR representation learning algorithm.
 
 ****************
@@ -62,4 +62,3 @@ Documentation
    ontology
    m-index
    clmbr
-

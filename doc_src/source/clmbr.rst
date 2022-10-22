@@ -71,12 +71,12 @@ clmbr_train_model takes the following parameters:
 Language Model Feature Extraction
 ***********************************
 
-Once a language model is trained, it is then possible to extract features for use in other tasks. 
+Once a language model is trained, it is then possible to extract features for use in other tasks.
 
 The function featurize_patients provides code that performs this tasks
 
 .. py:function:: ehr_ml.clmbr.featurize_patients(model_dir: str, extract_dir: str, l: labeler.SavedLabeler) -> np.array
-    
+
     Featurize patients using the given model and labeler.
     The result is a numpy array aligned with l.get_labeler_data().
     This function will use the GPU if it is available.

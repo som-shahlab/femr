@@ -6,15 +6,7 @@ import datetime
 import io
 import numbers
 import tempfile
-from typing import (
-    Any,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    Dict,
-    cast,
-)
+from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 
 import zstandard
 

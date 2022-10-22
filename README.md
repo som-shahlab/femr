@@ -8,7 +8,7 @@ There are four main groups of functionality in piton. The ability to:
 3. Apply featurization schemes on those patients to obtain feature matrices
 4. Perform other common tasks necessary for research with EHR data
 
-https://ehr-ml.readthedocs.io/en/latest/ has the full documentation, including setup instructions and a tutorial using SynPuf data. 
+https://ehr-ml.readthedocs.io/en/latest/ has the full documentation, including setup instructions and a tutorial using SynPuf data.
 
 Installation instructions:
 

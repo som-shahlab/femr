@@ -50,7 +50,7 @@ The first step of extraction is to generate raw event files for each patient.
 
 You simply create a directory with event files generated in any manner of your choosing.
 
-This can be done using the EventWriter class 
+This can be done using the EventWriter class
 
 .. autoclass:: ehr_ml.extract.EventWriter
     :members:

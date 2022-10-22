@@ -29,7 +29,7 @@ Note that all patients have both a primary id and an original id. The original i
    original_patient_ids = timelines.get_original_patient_ids()
 
    print(patient_ids[0], original_patient_ids[0])
-   
+
 
 It's now possible to extract a given patient using the get_patient function of a TimelineReader.
 Each patient has a patient id and a list of days. The first day is the birth date.
@@ -105,7 +105,7 @@ We can also perform the reverse operation of getting all parent codes for a part
 
    print(dictionary.get_word(diabetes_codes[0]))
    for ontology_code in ontologies.get_subwords(diabetes_codes[0]):
-      
+
       print("Got parent", ontology_dictionary.get_word(ontology_code))
 
 Finally, we can use the index as a tool to quickly find patients with particular codes.
@@ -123,7 +123,7 @@ Labeling
 ******************************
 
 ehr_ml contains an API and utilities for easily defining labeling functions.
-The core part of a labeling function is that it takes in a patient and returns labels for that patient. 
+The core part of a labeling function is that it takes in a patient and returns labels for that patient.
 
 First, we need to import the labeling utilities.
 
@@ -164,7 +164,7 @@ We can now use this labeler to label patients in our dataset.
    print(labels)
 
 
-Whenever using a labeler, it's often worth considering whether SavedLabeler can improve the effectiveness of your pipelines. 
+Whenever using a labeler, it's often worth considering whether SavedLabeler can improve the effectiveness of your pipelines.
 SavedLabeler enables labelers to be saved and then loaded later, which makes debugging easier and code run faster.
 
 See the rest of the labeler package for additional utilities and the full labeler API.
@@ -173,7 +173,7 @@ See the rest of the labeler package for additional utilities and the full labele
 Featurization
 ******************************
 
-The final part of the ehr_ml toolkit is featurizers. 
+The final part of the ehr_ml toolkit is featurizers.
 Featurizers take in a patient record and a set of labels and generate features for each label.
 
 First, we must import the featurization library:
@@ -225,13 +225,13 @@ Note that the date parameters might need to be changed depending on your dataset
 
 .. code-block:: console
 
-   clmbr_create_info  --save_dir INFO_DIR --extract_dir EHR_ML_EXTRACT_DIR --train_end_date '2010-01-01' --val_end_date '2011-01-01' 
+   clmbr_create_info  --save_dir INFO_DIR --extract_dir EHR_ML_EXTRACT_DIR --train_end_date '2010-01-01' --val_end_date '2011-01-01'
 
 Second, given an info directory it's necessary to train a CLMBR model.
 
 .. code-block:: console
 
-   clmbr_train_model --model_dir MODEL_DIR --info_dir INFO_DIR --lr 0.0001 --use_gru --size 800 --code_dropout 0 
+   clmbr_train_model --model_dir MODEL_DIR --info_dir INFO_DIR --lr 0.0001 --use_gru --size 800 --code_dropout 0
 
 Finally, it is now possible to use that model to generate features.
 
@@ -250,4 +250,3 @@ For our example, we will use the labeler defined in the previous tutorial sectio
    features, labels, patient_ids, day_offsets = ehr_ml.clmbr.featurize_patients("MODEL_DIR", saved_labeler)
 
    print(features.shape, labels.shape, patient_ids.shape, day_offsets.shape)
-
