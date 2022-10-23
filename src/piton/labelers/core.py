@@ -257,7 +257,7 @@ class LabeledPatients(MutableMapping):
 
 
 ##########################################################
-# Specific Labeler Types
+# Specific Labeler Superclasses
 ##########################################################
 
 class FixedTimeHorizonEventLF(LabelingFunction):
