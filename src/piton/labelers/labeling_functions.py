@@ -25,6 +25,11 @@ from ..extension import datasets as extension_datasets
 
 import numpy as np
 
+
+##########################################################
+# FixedTimeHorizonEventLF
+##########################################################
+
 class CodeLF(FixedTimeHorizonEventLF):
     """
         Applies a label based on a single code's occurrence over a fixed time horizon
@@ -74,7 +79,13 @@ class MortalityLF(CodeLF):
             super().__init__(code=death_code,
                              time_horizon=time_horizon)
 
+
+##########################################################
+# Other
+##########################################################
+
 class IsMaleLF(LabelingFunction):
+    # TODO - Untested
     """
         This labeler tries to predict whether or not a patient is male or not.
         The prediction time is on admission.
@@ -83,30 +94,29 @@ class IsMaleLF(LabelingFunction):
     """
 
     def __init__(self, ontology: extension_datasets.Ontology):
+        INPATIENT_VISIT_CODE = "Visit/IP"
         self.male_code: int = ontology.get_dictionary().index("demographics/gender/Male")
-        self.admission_helper = InpatientAdmissionHelper(timelines)
+        admission_code = dictionary.map(INPATIENT_VISIT_CODE)
+        if admission_code is None:
+            raise ValueError(
+                f"Could not find inpatient visit code for: {INPATIENT_VISIT_CODE}"
+            )
+        else:
+            self.admission_code = admission_code
+
+    def is_inpatient_admission(self, event: Event) -> bool:
+        return event.code == self.admission_code
 
     def label(self, patient: Patient) -> List[Label]:
         if len(patient.events) == 0:
             return []
+        
+        labels: List[Label] = []
+        is_male: bool = self.male_code in [ event.code for event in patient.events ]
 
-        current_admission_index = 0
-        admissions = self.admission_helper.get_inpatient_admissions(patient)
-
-        labels = []
-
-        is_male = self.male_code in patient.days[0].observations
-
-        for i, day in enumerate(patient.days):
-            if current_admission_index >= len(admissions):
-                continue
-            current_admission = admissions[current_admission_index]
-            assert day.age <= current_admission.start_age
-
-            if day.age == current_admission.start_age:
-                current_admission_index += 1
-                labels.append(Label(event_index=i, boolean_value=is_male))
-                
+        for event in patient.events:
+            if self.is_inpatient_admission(event):
+                labels.append(Label(time=event.time, value=is_male, label_type="boolean"))
         return labels
 
     def get_labeler_type(self) -> LabelType:
