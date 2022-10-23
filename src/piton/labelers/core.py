@@ -98,7 +98,6 @@ class LabelingFunction(ABC):
     A labeling function applies a label to a specific datetime in a given patient's timeline.
     It can be thought of as generating the following list given a specific patient:
         [(patient ID, datetime_1, label_1), (patient ID, datetime_2, label_2), ... ]
-
     Usage:
         labeling_function: LabelingFunction = LF(...)
         patients: Sequence[Patient] = ...
