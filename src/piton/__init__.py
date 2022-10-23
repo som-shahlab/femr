@@ -6,22 +6,20 @@ from dataclasses import dataclass, field, fields
 from typing import Sequence
 import numbers
 
-
 @dataclass(frozen=True)
 class Patient:
     patient_id: int
     events: Sequence[Event]
 
-
 @dataclass(frozen=True)
 class Event:
     start: datetime.datetime
-    code: int # OMOP code
+    code: int # Is this an OMOP code (or is it an index into your Piton Ontology object?)
 
     end: datetime.datetime | None = None
     value: memoryview | float | None = None
-    # TODO - Seems like it should be separated from the Event class as it creates unnecessary
-    # interdependencies between Events (since visits are Events)
+    # TODO - Seems like `visit_id` should be separated from the Event class as it creates a weird
+    # interdependency between Events (since visits are Events)
     visit_id: int | None = None
 
     # TODO - add the below property
