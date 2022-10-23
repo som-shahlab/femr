@@ -194,7 +194,6 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         patient_ids: List[int] = []
         label_values: List[Any] = []
         label_times: List[datetime.datetime] = []
-
         if self.labeler_type in ["boolean", "numerical", "categorical"]:
             for patient_id, labels in self.patients_to_labels.items():
                 for label in labels:
