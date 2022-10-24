@@ -295,7 +295,7 @@ def _move_billing_codes(patient: Patient) -> Patient:
 
 
 def _remove_nones(patient: Patient) -> Patient:
-    """Remove redundant NONE values.
+    """Remove duplicate codes w/in same day if duplicate code has None value
 
     There is no point having a NONE value in a timeline when we have an actual value within the same day.
 
