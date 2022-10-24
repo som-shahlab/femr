@@ -7,6 +7,7 @@ import datetime
 import functools
 import json
 import logging
+from locale import normalize
 import os
 import random
 import resource
@@ -56,7 +57,7 @@ class _DemographicsConverter(CSVConverter):
             birth = datetime.datetime(year=year, month=month, day=day)
 
         return [
-            # 4216316 is the birth code
+            # 4216316 is the OMOP birth code
             Event(start=birth, code=4216316, event_type=row["load_table_id"])
         ] + [
             Event(
@@ -114,7 +115,7 @@ class _ConceptTableConverter(CSVConverter):
         return None
 
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        def helper(
+        def normalize_to_float_if_possible(
             field_name: Optional[str], value: memoryview | float | None
         ) -> memoryview | float | None:
             if field_name is not None:
@@ -123,8 +124,8 @@ class _ConceptTableConverter(CSVConverter):
                     return val
             return value
 
-        value = helper(self.string_value_field, None)
-        value = helper(self.numeric_value_field, value)
+        value = normalize_to_float_if_possible(self.string_value_field, None)
+        value = normalize_to_float_if_possible(self.numeric_value_field, value)
 
         concept_id_field = self.concept_id_field or (
             self.prefix + "_concept_id"
@@ -221,6 +222,7 @@ def _remove_pre_birth(patient: Patient) -> Optional[Patient]:
     """Remove all events before the birth of a patient"""
     birth_date = None
     for event in patient.events:
+        # 4216316 is the SNOMED Concept ID for Birth
         if event.code == 4216316:
             birth_date = event.start
 
@@ -235,9 +237,14 @@ def _remove_pre_birth(patient: Patient) -> Optional[Patient]:
     return Patient(patient_id=patient.patient_id, events=new_events)
 
 
-def _remove_small_patients(patient: Patient) -> Optional[Patient]:
+def _remove_short_patients(
+    patient: Patient, min_num_dates: int = 3
+) -> Optional[Patient]:
     """Remove patients with too few timepoints"""
-    if len(set(event.start for event in patient.events)) <= 3:
+    if (
+        len(set(event.start.date() for event in patient.events))
+        <= min_num_dates
+    ):
         return None
     else:
         return patient
@@ -362,13 +369,13 @@ def _get_omop_transformations() -> Sequence[
 ]:
     """Get the list of current OMOP transformations"""
     # All of these transformations are information preserving
-    transforms = [
+    transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
         _remove_pre_birth,
         _move_to_day_end,
         _move_billing_codes,
         _remove_nones,
         _delta_encode,
-        _remove_small_patients,
+        _remove_short_patients,
     ]
 
     return transforms

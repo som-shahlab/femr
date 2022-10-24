@@ -51,7 +51,8 @@ def _run_csv_converter(
     args: Tuple[str, EventCollection, CSVConverter, Optional[str]]
 ) -> Tuple[str, Dict[str, int]]:
     """
-    Run a single csv converter, returns the prefix and the count dicts
+    Run a single csv converter, returns the prefix and the count dicts.
+    This function is supposed to run with a multiprocess pool.
     """
     source, target, converter, debug_file = args
     stats: Dict[str, int] = collections.defaultdict(int)
