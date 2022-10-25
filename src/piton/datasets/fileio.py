@@ -32,15 +32,8 @@ class EventWriter:
         self.rows_written = 0
         self.writer = csv.DictWriter(
             self.o,
-            fieldnames=[
-                "patient_id",
-                "start",
-                "end",
-                "code",
-                "visit_id",
-                "value",
-                "event_type",
-            ],
+            fieldnames=["patient_id"]
+            + [f.name for f in dataclasses.fields(Event)],
         )
         self.writer.writeheader()
 
