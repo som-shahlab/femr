@@ -21,7 +21,13 @@ git clone https://github.com/som-shahlab/piton.git
 
 cd piton
 
-export DISTDIR=/local-scratch/nigam/distdir
-
 pip install -e .
+```
+
+Special note for NERO users:
+
+As Nero does not have internet access, you must run the following before pip install -e .
+
+```
+export DISTDIR=/local-scratch/nigam/distdir
 ```
