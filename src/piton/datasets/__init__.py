@@ -12,19 +12,18 @@ from typing import (
     Any,
     Callable,
     ContextManager,
-    Iterable,
     Dict,
+    Iterable,
     Iterator,
+    List,
     Optional,
     Sequence,
-    List,
     Tuple,
 )
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from . import fileio, utils
-
 
 USE_PYTHON_JOIN = False
 

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import abc
+import collections
 import contextlib
 import csv
 import io
-import collections
 import multiprocessing
 import os
 import sys
-from typing import Mapping, Sequence, Tuple, Optional, Dict
+from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import zstandard
 
