@@ -85,7 +85,6 @@ class MortalityLF(CodeLF):
 ##########################################################
 
 class IsMaleLF(LabelingFunction):
-    # TODO - Untested
     """
         This labeler tries to predict whether or not a patient is male or not.
         The prediction time is on admission.
