@@ -11,11 +11,9 @@ import os
 
 target_directory = "dataset_tutorial_target"
 
-if os.path.exists(target_directory):
-    print("This demo expects an empty target directory")
-    exit(-1)
-else:
-    os.mkdir(target_directory)
+import shutil
+shutil.rmtree(target_directory)
+os.makedirs(target_directory)
 
 
 #####################################
