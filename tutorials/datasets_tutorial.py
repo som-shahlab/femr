@@ -5,14 +5,15 @@ import piton.datasets
 import contextlib
 import datetime
 import os
+import shutil
 
 # This tutorial covers the two major dataset types in piton, EventCollection
 # PatientCollection
 
 target_directory = "dataset_tutorial_target"
 
-import shutil
-shutil.rmtree(target_directory)
+if os.path.exists(target_directory):
+    shutil.rmtree(target_directory)
 os.makedirs(target_directory)
 
 
@@ -46,11 +47,16 @@ events = piton.datasets.EventCollection(
 )
 
 # Once we create an events object we can just start writing
+# Create_writer() creates a writer object that allows you to add events to the EventCollection
+# It automatically creates a new file for events
 with contextlib.closing(events.create_writer()) as writer:
     for event in dummy_events:
+        # Note that these are getting written to disk as part of the EventCollection
         writer.add_event(patient_id=30, event=event)
 
+
 # We can also iterate over events
+# Note that we need to create a reader object as thees are natively stored on disk
 
 with events.reader() as reader:
     for event in reader:
@@ -79,14 +85,14 @@ with patients.reader() as reader:
 ##### Part 3: Apply a transformation to the  patients #######
 #############################################################
 
-# Piton allows you to perform transformations on patients in a straightforward manner
+# Piton allows you to perform modifications on patients in a straightforward manner
 
 
 def transform(input: piton.Patient) -> piton.Patient:
     return piton.Patient(
         patient_id=input.patient_id,
         events=[
-            a for a in input.events if a.value != b"test_value"
+            a for a in input.events if a.value != b"test_value" # Note that text values are stored as bytes
         ],  # Remove test_value for some reason
     )
 
