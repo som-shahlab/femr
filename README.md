@@ -21,5 +21,7 @@ git clone https://github.com/som-shahlab/piton.git
 
 cd piton
 
+export DISTDIR=/local-scratch/nigam/distdir
+
 pip install -e .
 ```
