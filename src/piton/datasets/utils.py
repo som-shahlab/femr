@@ -7,6 +7,7 @@ import multiprocessing
 from typing import (
     Any,
     Callable,
+    Collection,
     ContextManager,
     Generic,
     Iterable,
@@ -16,7 +17,6 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    Collection,
 )
 
 T = TypeVar("T")
