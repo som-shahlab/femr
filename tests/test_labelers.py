@@ -58,7 +58,7 @@ for patient_id in range(5):
         dummy_events,
     ))
 
-# 2. Create a CodeLF for ICDXXX
+# 2. Create a CodeLF for Code #2
 time_horizon_6_months = TimeHorizon(datetime.timedelta(days=0),
                                     datetime.timedelta(days=180))
 labeler = CodeLF(2, time_horizon_6_months)

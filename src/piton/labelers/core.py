@@ -103,9 +103,11 @@ class LabelingFunction(ABC):
         [(patient ID, datetime_1, label_1), (patient ID, datetime_2, label_2), ... ]
     
     Usage:
+    ```
         labeling_function: LabelingFunction = LF(...)
         patients: Sequence[Patient] = ...
         labels: LabeledPatient = labeling_function.apply(patients)
+    ```
     """
 
     @abstractmethod
@@ -160,7 +162,12 @@ class LabelingFunction(ABC):
 
 class LabeledPatients(MutableMapping):
     """Responsible for mapping patients to labels
-        Wrapper class around the output of an LF's `apply()` function
+        Wrapper class around the output of an LF's `apply()` function.
+        
+        Contains a few helper methods to convert this mapping into different representations:
+            - as a set of numpy arrays
+            - as a list of (patient ID, label) tuples
+            - as a dictionary mapping patient IDs -> Labels
     """
     def __init__(self, 
                  patients_to_labels: Dict[int, List[Label]],
