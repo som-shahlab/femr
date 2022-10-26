@@ -45,8 +45,7 @@ LabelType = Union[
 
 VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
-
-# Make sure this is pickleable
+@dataclass
 class Label:
     """
         An individual label for a particular patient at a particular time.
@@ -57,8 +56,6 @@ class Label:
         "label_type",
         "value",
     ]
-
-    label_type: LabelType
 
     def __init__(
         self,
@@ -74,25 +71,17 @@ class Label:
             label_type (LabelType): Type of label. Must be an element in `VALID_LABEL_TYPES`.
         """
         assert label_type in VALID_LABEL_TYPES
+        if label_type == "boolean":
+            assert isinstance(self.value, bool)
+        elif label_type == "numeric":
+            assert isinstance(self.value, float)
+        elif label_type == "categorical":
+            assert isinstance(self.value, int)
+        elif label_type == "survival":
+            assert isinstance(self.value, SurvivalValue)
         self.time = time
         self.label_type = label_type
         self.value = value
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Label):
-            return NotImplemented
-        return (
-            self.time,
-            self.label_type,
-            self.value,
-        ) == (
-            other.time,
-            other.label_type,
-            other.value,
-        )
-
-    def __repr__(self) -> str:
-        return f"Label(time={self.time}, value={self.value}, type={self.label_type})"
 
 class LabelingFunction(ABC):
     """
@@ -133,6 +122,8 @@ class LabelingFunction(ABC):
 
     def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Returns the (start, end) of the patient timeline
+        
+        TODO: Evaluate whether this can be removed
 
         Returns:
             Tuple[datetime.datetime, datetime.datetime]: (start, end)
@@ -158,8 +149,8 @@ class LabelingFunction(ABC):
             patients_to_labels[patient.patient_id] = self.label(patient)
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
-class LabeledPatients(MutableMapping):
-    """Responsible for mapping patients to labels
+class LabeledPatients(MutableMapping[int, List[Label]]):
+    """Maps patients to labels
         Wrapper class around the output of an LF's `apply()` function
     """
     def __init__(self, 
@@ -185,8 +176,6 @@ class LabeledPatients(MutableMapping):
                     patient_ids.append(patient_id)
                     label_values.append(label.value)
                     label_times.append(label.time)
-        elif self.labeler_type == "survival":
-            raise
         else:
             raise ValueError(
                 "Other label types are not implemented yet for this method"
@@ -241,7 +230,7 @@ class LabeledPatients(MutableMapping):
         return LabeledPatients(dict(patients_to_labels))
     
     def __str__(self):
-        return pprint.pformat(self.patients_to_labels)
+        return 'LabeledPatients:\n' + pprint.pformat(self.patients_to_labels)
 
     def __getitem__(self, key):
         return self.patients_to_labels[key]
@@ -352,9 +341,10 @@ class FixedTimeHorizonEventLF(LabelingFunction):
         for time in self.get_prediction_times(patient):
             while (
                 curr_outcome_idx < len(outcome_times)
-                and outcome_times[curr_outcome_idx] <= time
+                and outcome_times[curr_outcome_idx] <= time + time_horizon.start
             ):
-                # This is the idx in `outcome_times` that corresponds to the first outcome EQUAL or AFTER the prediction time (if one exists)
+                # This is the idx in `outcome_times` that corresponds to the first outcome EQUAL or AFTER 
+                # the time horizon for this prediction time starts (if one exists)
                 curr_outcome_idx += 1
 
             # TRUE if an event occurs within the time horizon

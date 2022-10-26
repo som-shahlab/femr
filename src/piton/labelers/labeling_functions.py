@@ -27,11 +27,12 @@ import numpy as np
 
 
 ##########################################################
-# FixedTimeHorizonEventLF
+# Labeling functions derived from FixedTimeHorizonEventLF
 ##########################################################
 
 class CodeLF(FixedTimeHorizonEventLF):
     """
+        TODO - Test on real data
         Applies a label based on a single code's occurrence over a fixed time horizon
     """
 
@@ -56,6 +57,7 @@ class CodeLF(FixedTimeHorizonEventLF):
 
 class MortalityLF(CodeLF):
     """
+        TODO - Test on real data
         The mortality task is defined as predicting whether or not a
         patient will die within the next `time_horizon` time.
     """
@@ -85,8 +87,8 @@ class MortalityLF(CodeLF):
 ##########################################################
 
 class IsMaleLF(LabelingFunction):
-    # TODO - Untested
     """
+        TODO - Test on real data
         This labeler tries to predict whether or not a patient is male or not.
         The prediction time is on admission.
 
