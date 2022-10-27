@@ -1,6 +1,6 @@
+import collections.abc
 from typing import List, Optional
 
-import collections.abc
 import piton.extension
 
 class Dictionary(collections.abc.Sequence):

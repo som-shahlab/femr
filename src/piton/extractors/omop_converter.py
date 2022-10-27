@@ -1,31 +1,22 @@
+"""A class and program for converting OMOP v5 sources to piton."""
+
 from __future__ import annotations
 
 import argparse
-import collections
-import contextlib
+import dataclasses
 import datetime
-import functools
 import json
 import logging
-from locale import normalize
 import os
-import random
-import resource
-import tempfile
-from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Set, Tuple
-import dataclasses
-from typing import Any, Callable, Mapping, Optional, Sequence, Dict, Tuple, Set
-import logging
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Set, Tuple
 
+from piton import Event, Patient
 from piton.datasets import EventCollection, PatientCollection
-
-from .. import Event, Patient
-from .csv_converter import CSVConverter, run_csv_converters
+from piton.extractors.csv_converter import CSVConverter, run_csv_converters
 
 
 class _DemographicsConverter(CSVConverter):
-    """Convert the OMOP demographics table to events"""
+    """Convert the OMOP demographics table to events."""
 
     def get_patient_id_field(self) -> str:
         return "person_id"
@@ -85,7 +76,7 @@ def _try_numeric(val: str) -> float | memoryview | None:
 
 @dataclasses.dataclass
 class _ConceptTableConverter(CSVConverter):
-    """A generic OMOP converter for handling tables that contain a single concept"""
+    """A generic OMOP converter for handling tables that contain a single concept."""
 
     prefix: str
 
@@ -106,8 +97,7 @@ class _ConceptTableConverter(CSVConverter):
     def _get_date(
         self, date_field: str, row: Mapping[str, str]
     ) -> Optional[datetime.datetime]:
-        """Helper function for pulling the highest resolution date"""
-
+        """Extract the highest resolution date from the raw data."""
         for attempt in (date_field + "time", date_field):
             if attempt in row and row[attempt] != "":
                 return datetime.datetime.fromisoformat(row[attempt])
@@ -173,7 +163,7 @@ class _ConceptTableConverter(CSVConverter):
 
 
 def _get_omop_csv_converters() -> Sequence[CSVConverter]:
-    """Get the list of OMOP Converters"""
+    """Get the list of OMOP Converters."""
     converters = [
         _DemographicsConverter(),
         _ConceptTableConverter(
@@ -219,7 +209,7 @@ def _get_omop_csv_converters() -> Sequence[CSVConverter]:
 
 
 def _remove_pre_birth(patient: Patient) -> Optional[Patient]:
-    """Remove all events before the birth of a patient"""
+    """Remove all events before the birth of a patient."""
     birth_date = None
     for event in patient.events:
         # 4216316 is the SNOMED Concept ID for Birth
@@ -240,7 +230,7 @@ def _remove_pre_birth(patient: Patient) -> Optional[Patient]:
 def _remove_short_patients(
     patient: Patient, min_num_dates: int = 3
 ) -> Optional[Patient]:
-    """Remove patients with too few timepoints"""
+    """Remove patients with too few timepoints."""
     if (
         len(set(event.start.date() for event in patient.events))
         <= min_num_dates
@@ -256,7 +246,6 @@ def _move_billing_codes(patient: Patient) -> Patient:
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
     This class fixes that by assigning them to the end of the visit.
     """
-
     end_visits: Dict[int, datetime.datetime] = {}
 
     for event in patient.events:
@@ -295,7 +284,7 @@ def _move_billing_codes(patient: Patient) -> Patient:
 
 
 def _remove_nones(patient: Patient) -> Patient:
-    """Remove duplicate codes w/in same day if duplicate code has None value
+    """Remove duplicate codes w/in same day if duplicate code has None value.
 
     There is no point having a NONE value in a timeline when we have an actual value within the same day.
 
@@ -320,7 +309,7 @@ def _remove_nones(patient: Patient) -> Patient:
 
 
 def _move_to_day_end(patient: Patient) -> Patient:
-    """We assume that everything coded at midnight should actually be moved to the end of the day"""
+    """We assume that everything coded at midnight should actually be moved to the end of the day."""
     new_events = []
     for event in patient.events:
         if (
@@ -343,14 +332,13 @@ def _move_to_day_end(patient: Patient) -> Patient:
 
 
 def _delta_encode(patient: Patient) -> Patient:
-    """A transformer that delta encodes the patient.
+    """Delta encodes the patient.
 
     The idea behind delta encoding is that if we get duplicate values within a short amount of time
     (1 day for this code), there is not much point retaining the duplicate.
 
     This code removes all *sequential* duplicates within the same day.
     """
-
     last_value: Dict[Tuple[int, datetime.date], Any] = {}
 
     new_events = []
@@ -367,7 +355,7 @@ def _delta_encode(patient: Patient) -> Patient:
 def _get_omop_transformations() -> Sequence[
     Callable[[Patient], Optional[Patient]]
 ]:
-    """Get the list of current OMOP transformations"""
+    """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
     transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
         _remove_pre_birth,
@@ -382,6 +370,7 @@ def _get_omop_transformations() -> Sequence[
 
 
 def extract_omop_program() -> None:
+    """Extract data from an OMOP v5 source to create a piton PatientDatabase."""
     parser = argparse.ArgumentParser(
         description="An extraction tool for OMOP v5 sources"
     )

@@ -1,3 +1,4 @@
+"""FileIO utilities for reading and writing data."""
 from __future__ import annotations
 
 import csv
@@ -13,15 +14,10 @@ from .. import Event, Patient
 
 
 class EventWriter:
-    """
-    Writes events into a file.
-    """
+    """Writes events into a file."""
 
     def __init__(self, path: str):
-        """
-        Open a file for writing.
-        """
-
+        """Open a file for writing."""
         self.file = tempfile.NamedTemporaryFile(
             dir=path, suffix=".csv.zst", delete=False
         )
@@ -38,9 +34,7 @@ class EventWriter:
         self.writer.writeheader()
 
     def add_event(self, patient_id: int, event: Event) -> None:
-        """
-        Add an event to the record.
-        """
+        """Add an event to the record."""
         self.rows_written += 1
         data: Dict[str, Any] = {}
         data["patient_id"] = patient_id
@@ -61,13 +55,17 @@ class EventWriter:
         self.writer.writerow(data)
 
     def close(self) -> None:
+        """Close the event writer."""
         if self.rows_written == 0:
             raise RuntimeError("Event writer with zero rows?")
         self.o.close()
 
 
 class EventReader:
+    """Read events from an event file."""
+
     def __init__(self, filename: str):
+        """Open the event file."""
         self.filename = filename
         decompressor = zstandard.ZstdDecompressor()
         self.o = io.TextIOWrapper(
@@ -76,6 +74,7 @@ class EventReader:
         self.reader = csv.DictReader(self.o)
 
     def __iter__(self) -> Iterator[Tuple[int, Event]]:
+        """Iterate over each event."""
         for row in self.reader:
             id = int(row["patient_id"])
             del row["patient_id"]
@@ -107,14 +106,19 @@ class EventReader:
             yield (id, Event(**cast(Any, row)))
 
     def close(self) -> None:
+        """Close the event file."""
         self.o.close()
 
 
 class PatientReader:
+    """Read patients from a patient file."""
+
     def __init__(self, filename: str):
+        """Open the file with the given filename."""
         self.reader = EventReader(filename)
 
     def __iter__(self) -> Iterator[Patient]:
+        """Iterate over each patient."""
         last_id: Optional[int] = None
         current_events: List[Event] = []
         for id, event in self.reader:
@@ -132,28 +136,26 @@ class PatientReader:
             yield patient
 
     def close(self) -> None:
+        """Close the patient reader."""
         self.reader.close()
 
 
 class PatientWriter:
     """
-    Writes events into a file for later use in ehr_ml extraction.
+    Writes events into a file for later use in piton extraction.
 
     Note: this must be used in a context manager in order to close the file properly.
     """
 
     def __init__(self, path: str):
-        """
-        Open a file for writing.
-        """
+        """Open a file for writing."""
         self.writer = EventWriter(path)
 
     def add_patient(self, patient: Patient) -> None:
-        """
-        Add a patient to the record.
-        """
+        """Add a patient to the record."""
         for event in patient.events:
             self.writer.add_event(patient.patient_id, event)
 
     def close(self) -> None:
+        """Close the patient writer."""
         self.writer.close()

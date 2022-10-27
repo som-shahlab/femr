@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import datetime
-import pytest
 
 import extension.datasets as m
+import pytest
 
 import piton
 
@@ -66,6 +68,4 @@ def test_helper(tmp_path):
 
 
 if __name__ == "__main__":
-    import pytest
-
     raise SystemExit(pytest.main([__file__]))

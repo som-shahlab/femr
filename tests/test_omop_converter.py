@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import piton.extractors.omop_converter
-import piton
 import datetime
+
+import piton
+import piton.extractors.omop_converter
 
 OMOP_BIRTH = 4216316
 
