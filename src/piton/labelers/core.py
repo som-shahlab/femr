@@ -3,7 +3,6 @@ from __future__ import annotations
 import pprint
 import collections
 import datetime
-import json
 import pickle
 import os
 from collections.abc import MutableMapping
@@ -15,14 +14,11 @@ from typing import (
     Dict,
     List,
     Literal,
-    Optional,
-    Set,
     Tuple,
     Union,
 )
 
 from .. import Event, Patient
-from ..extension import datasets as extension_datasets
 
 import numpy as np
 
@@ -159,12 +155,12 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         self.patients_to_labels: Dict[int, List[Label]] = patients_to_labels
         self.labeler_type: LabelType = labeler_type
 
-    def as_numpy_arrays(self) -> Tuple[np.array, np.array, np.array]:
-        """Convert `patients_to_labels` to a tuple of np.array's, one for each of:
+    def as_numpy_arrays(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Convert `patients_to_labels` to a tuple of np.ndarray's, one for each of:
             Patient ID, Label value, Label time
         
         Returns:
-            Tuple[np.array, np.array, np.array]: (Patient IDs, Label values, Label time)
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: (Patient IDs, Label values, Label time)
         """
         patient_ids: List[int] = []
         label_values: List[Any] = []
@@ -209,17 +205,17 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
 
     @classmethod
     def load_from_numpy(cls,
-                        patient_ids: np.array,
-                        label_values: np.array,
-                        label_times: np.array,
+                        patient_ids: np.ndarray,
+                        label_values: np.ndarray,
+                        label_times: np.ndarray,
                         labeler_type: LabelType) -> LabeledPatients:
-        """Create a :class:`LabeledPatients` from np.array labels
+        """Create a :class:`LabeledPatients` from np.ndarray labels
             Inverse of `as_numpy_arrays()`
 
         Args:
-            patient_ids (np.array): Patient IDs for the corresponding label.
-            label_values (np.array): Values for the corresponding label.
-            label_times (np.array): Times that the corresponding label occurs.
+            patient_ids (np.ndarray): Patient IDs for the corresponding label.
+            label_values (np.ndarray): Values for the corresponding label.
+            label_times (np.ndarray): Times that the corresponding label occurs.
             labeler_type (LabelType): LabelType of the corresponding labels.
         """
         patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)

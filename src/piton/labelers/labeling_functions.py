@@ -1,30 +1,15 @@
 from __future__ import annotations
 
-import collections
 import datetime
-import json
-import io
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import (
-    Any,
-    DefaultDict,
-    Dict,
     List,
-    Literal,
-    Optional,
     Set,
-    TextIO,
     Tuple,
-    Union,
 )
 
-from .core import TimeHorizon, LabelingFunction, FixedTimeHorizonEventLF
+from .core import TimeHorizon, LabelingFunction, FixedTimeHorizonEventLF, Label, LabelType
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-
-import numpy as np
-
 
 ##########################################################
 # Labeling functions derived from FixedTimeHorizonEventLF
@@ -98,7 +83,7 @@ class IsMaleLF(LabelingFunction):
     def __init__(self, ontology: extension_datasets.Ontology):
         INPATIENT_VISIT_CODE = "Visit/IP"
         self.male_code: int = ontology.get_dictionary().index("demographics/gender/Male")
-        admission_code = dictionary.map(INPATIENT_VISIT_CODE)
+        admission_code = ontology.get_dictionary().map(INPATIENT_VISIT_CODE)
         if admission_code is None:
             raise ValueError(
                 f"Could not find inpatient visit code for: {INPATIENT_VISIT_CODE}"
