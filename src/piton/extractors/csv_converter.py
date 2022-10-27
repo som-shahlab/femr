@@ -1,3 +1,4 @@
+"""Helper utilties for converting CSV files into Event files."""
 from __future__ import annotations
 
 import abc
@@ -15,35 +16,29 @@ import zstandard
 from .. import Event
 from ..datasets import EventCollection
 
+# Note that we want to support huge CSV records
 csv.field_size_limit(sys.maxsize)
 
 
 class CSVConverter(abc.ABC):
-    """
-    An interface for converting a csv into events.
-    """
+    """An interface for converting a csv into events."""
 
     def __init__(self) -> None:
+        """Create the CSVConverter."""
         super().__init__()
 
     @abc.abstractmethod
     def get_patient_id_field(self) -> str:
-        """
-        Return the field that contains the patient_id
-        """
+        """Return the field that contains the patient_id."""
 
     @abc.abstractmethod
     def get_file_prefix(self) -> str:
-        """
-        Return the prefix for files this converter will trigger on.
-        """
+        """Return the prefix for files this converter will trigger on."""
         ...
 
     @abc.abstractmethod
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        """
-        Return the events generated for a particular row.
-        """
+        """Return the events generated for a particular row."""
         ...
 
 
@@ -52,6 +47,7 @@ def _run_csv_converter(
 ) -> Tuple[str, Dict[str, int]]:
     """
     Run a single csv converter, returns the prefix and the count dicts.
+
     This function is supposed to run with a multiprocess pool.
     """
     source, target, converter, debug_file = args
@@ -121,7 +117,7 @@ def run_csv_converters(
     debug_folder: Optional[str] = None,
     stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
 ) -> EventCollection:
-    """Run a collection of CSV converters over a directory, producing an EventCollection
+    """Run a collection of CSV converters over a directory, producing an EventCollection.
 
     Args:
         source_csvs: A path to the directory containing the source csvs.
@@ -135,7 +131,6 @@ def run_csv_converters(
     Returns:
         An EventCollection storing the resulting events
     """
-
     stats: Dict[str, Dict[str, int]] = collections.defaultdict(
         lambda: collections.defaultdict(int)
     )
