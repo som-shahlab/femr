@@ -1,4 +1,5 @@
 import datetime
+import pytest
 
 import extension.datasets as m
 
@@ -26,18 +27,17 @@ def test_helper(tmp_path):
     patient_id = database.get_patient_id_from_original(30)
     assert database.get_original_patient_id(patient_id) == 30
 
-    assert database.get_code_dictionary().find("bar/foo") is not None
-    assert database.get_shared_text_dictionary().find("Short Text") is not None
+    with pytest.raises(ValueError):
+        database.get_code_dictionary().index("not in there")
+
+    assert database.get_code_dictionary().index("bar/foo") is not None
     assert (
-        database.get_code_count(database.get_code_dictionary().find("bar/foo"))
+        database.get_code_count(database.get_code_dictionary().index("bar/foo"))
         == 4
     )
-    assert (
-        database.get_shared_text_count(
-            database.get_shared_text_dictionary().find("Short Text")
-        )
-        == 2
-    )
+    assert database.get_text_count("Short Text") == 2
+    assert database.get_text_count("Long Text") == 1
+    assert database.get_text_count("Missing Text") == 0
 
     patient = database[patient_id]
 
@@ -58,6 +58,11 @@ def test_helper(tmp_path):
         piton.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0),
         piton.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5),
     )
+
+    total = 0
+    for patient in database:
+        total += len(patient.events)
+    assert total == 9
 
 
 if __name__ == "__main__":
