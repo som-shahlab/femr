@@ -1,57 +1,55 @@
+"""Helper utilties for converting CSV files into Event files."""
 from __future__ import annotations
 
 import abc
+import collections
 import contextlib
 import csv
 import io
-import collections
 import multiprocessing
 import os
 import sys
-from typing import Mapping, Sequence, Tuple, Optional, Dict
+from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import zstandard
 
 from .. import Event
 from ..datasets import EventCollection
 
+# Note that we want to support huge CSV records
 csv.field_size_limit(sys.maxsize)
-
-StatsDictType = Optional[Dict[str, Dict[str, int]]]
 
 
 class CSVConverter(abc.ABC):
-    """
-    An interface for converting a csv into events.
-    """
+    """An interface for converting a csv into events."""
 
     def __init__(self) -> None:
+        """Create the CSVConverter."""
         super().__init__()
 
     @abc.abstractmethod
     def get_patient_id_field(self) -> str:
-        """
-        Return the field that contains the patient_id
-        """
+        """Return the field that contains the patient_id."""
 
     @abc.abstractmethod
     def get_file_prefix(self) -> str:
-        """
-        Return the prefix for files this converter will trigger on.
-        """
+        """Return the prefix for files this converter will trigger on."""
         ...
 
     @abc.abstractmethod
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        """
-        Return the events generated for a particular row.
-        """
+        """Return the events generated for a particular row."""
         ...
 
 
-def run_csv_converter(
+def _run_csv_converter(
     args: Tuple[str, EventCollection, CSVConverter, Optional[str]]
 ) -> Tuple[str, Dict[str, int]]:
+    """
+    Run a single csv converter, returns the prefix and the count dicts.
+
+    This function is supposed to run with a multiprocess pool.
+    """
     source, target, converter, debug_file = args
     stats: Dict[str, int] = collections.defaultdict(int)
     try:
@@ -117,8 +115,22 @@ def run_csv_converters(
     converters: Sequence[CSVConverter],
     num_threads: int = 1,
     debug_folder: Optional[str] = None,
-    stats_dict: StatsDictType = None,
+    stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
 ) -> EventCollection:
+    """Run a collection of CSV converters over a directory, producing an EventCollection.
+
+    Args:
+        source_csvs: A path to the directory containing the source csvs.
+        target_location: A path where you want to store the EventCollection.
+        converters: A series of classes that implement the CSVConverter API.
+        num_threads: The number of threads to use when converting.
+        debug_folder: An optional directory where the unmapped rows should be stored for debuggin
+        stats_dict: An optional dictionary to store statistics about the conversion process.
+
+
+    Returns:
+        An EventCollection storing the resulting events
+    """
     stats: Dict[str, Dict[str, int]] = collections.defaultdict(
         lambda: collections.defaultdict(int)
     )
@@ -169,7 +181,7 @@ def run_csv_converters(
             print("Could not find any files for", c)
 
     with multiprocessing.Pool(num_threads) as pool:
-        for (prefix, s) in pool.imap_unordered(run_csv_converter, to_process):
+        for (prefix, s) in pool.imap_unordered(_run_csv_converter, to_process):
             for k, v in s.items():
                 stats[prefix][k] += v
 

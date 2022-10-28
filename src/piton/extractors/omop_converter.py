@@ -1,27 +1,23 @@
+"""A class and program for converting OMOP v5 sources to piton."""
+
 from __future__ import annotations
 
-import json
 import argparse
-import numbers
-import random
-import collections
-import functools
-import contextlib
+import dataclasses
 import datetime
-import os
-import resource
-import tempfile
-from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence, Dict, Tuple, Set
+import json
 import logging
+import os
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Set, Tuple
 
+from piton import Event, Patient
 from piton.datasets import EventCollection, PatientCollection
-
-from .. import Event, Patient
-from .csv_converter import CSVConverter, run_csv_converters
+from piton.extractors.csv_converter import CSVConverter, run_csv_converters
 
 
-class DemographicsConverter(CSVConverter):
+class _DemographicsConverter(CSVConverter):
+    """Convert the OMOP demographics table to events."""
+
     def get_patient_id_field(self) -> str:
         return "person_id"
 
@@ -52,6 +48,7 @@ class DemographicsConverter(CSVConverter):
             birth = datetime.datetime(year=year, month=month, day=day)
 
         return [
+            # 4216316 is the OMOP birth code
             Event(start=birth, code=4216316, event_type=row["load_table_id"])
         ] + [
             Event(
@@ -68,7 +65,7 @@ class DemographicsConverter(CSVConverter):
         ]
 
 
-def try_numeric(val: str) -> float | memoryview | None:
+def _try_numeric(val: str) -> float | memoryview | None:
     if val == "":
         return None
     try:
@@ -77,8 +74,10 @@ def try_numeric(val: str) -> float | memoryview | None:
         return memoryview(val.encode("utf8"))
 
 
-@dataclass
-class ConceptTableConverter(CSVConverter):
+@dataclasses.dataclass
+class _ConceptTableConverter(CSVConverter):
+    """A generic OMOP converter for handling tables that contain a single concept."""
+
     prefix: str
 
     file_suffix: str = ""
@@ -95,9 +94,10 @@ class ConceptTableConverter(CSVConverter):
         else:
             return self.prefix
 
-    def get_date(
+    def _get_date(
         self, date_field: str, row: Mapping[str, str]
     ) -> Optional[datetime.datetime]:
+        """Extract the highest resolution date from the raw data."""
         for attempt in (date_field + "time", date_field):
             if attempt in row and row[attempt] != "":
                 return datetime.datetime.fromisoformat(row[attempt])
@@ -105,17 +105,17 @@ class ConceptTableConverter(CSVConverter):
         return None
 
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        def helper(
+        def normalize_to_float_if_possible(
             field_name: Optional[str], value: memoryview | float | None
         ) -> memoryview | float | None:
             if field_name is not None:
-                val = try_numeric(row[field_name])
+                val = _try_numeric(row[field_name])
                 if val is not None:
                     return val
             return value
 
-        value = helper(self.string_value_field, None)
-        value = helper(self.numeric_value_field, value)
+        value = normalize_to_float_if_possible(self.string_value_field, None)
+        value = normalize_to_float_if_possible(self.numeric_value_field, value)
 
         concept_id_field = self.concept_id_field or (
             self.prefix + "_concept_id"
@@ -131,10 +131,10 @@ class ConceptTableConverter(CSVConverter):
                 return []
 
         if (self.prefix + "_start_date") in row:
-            start = self.get_date(self.prefix + "_start_date", row)
-            end = self.get_date(self.prefix + "_end_date", row)
+            start = self._get_date(self.prefix + "_start_date", row)
+            end = self._get_date(self.prefix + "_end_date", row)
         else:
-            start = self.get_date(self.prefix + "_date", row)
+            start = self._get_date(self.prefix + "_date", row)
             end = None
 
         if start is None:
@@ -145,8 +145,8 @@ class ConceptTableConverter(CSVConverter):
                 + repr(row)
             )
 
-        if (self.prefix + "_visit_id") in row:
-            visit_id = int(row[self.prefix + "_visit_id"])
+        if "visit_occurrence_id" in row and row["visit_occurrence_id"]:
+            visit_id = int(row["visit_occurrence_id"])
         else:
             visit_id = None
 
@@ -162,42 +162,43 @@ class ConceptTableConverter(CSVConverter):
         ]
 
 
-def get_omop_csv_converters() -> Sequence[CSVConverter]:
+def _get_omop_csv_converters() -> Sequence[CSVConverter]:
+    """Get the list of OMOP Converters."""
     converters = [
-        DemographicsConverter(),
-        ConceptTableConverter(
+        _DemographicsConverter(),
+        _ConceptTableConverter(
             "drug_exposure",
             concept_id_field="drug_concept_id",
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "visit",
             file_suffix="occurrence",
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "condition",
             file_suffix="occurrence",
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "death", concept_id_field="death_type_concept_id"
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "procedure",
             file_suffix="occurrence",
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "device_exposure", concept_id_field="device_concept_id"
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "measurement",
             string_value_field="value_source_value",
             numeric_value_field="value_as_number",
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "observation",
             string_value_field="value_as_string",
             numeric_value_field="value_as_number",
         ),
-        ConceptTableConverter(
+        _ConceptTableConverter(
             "note",
             concept_id_field="note_class_concept_id",
             string_value_field="note_text",
@@ -207,9 +208,11 @@ def get_omop_csv_converters() -> Sequence[CSVConverter]:
     return converters
 
 
-def remove_pre_birth(patient: Patient) -> Optional[Patient]:
+def _remove_pre_birth(patient: Patient) -> Optional[Patient]:
+    """Remove all events before the birth of a patient."""
     birth_date = None
     for event in patient.events:
+        # 4216316 is the SNOMED Concept ID for Birth
         if event.code == 4216316:
             birth_date = event.start
 
@@ -224,57 +227,69 @@ def remove_pre_birth(patient: Patient) -> Optional[Patient]:
     return Patient(patient_id=patient.patient_id, events=new_events)
 
 
-# There is no point holding onto patients with just a single time point
-def remove_small_patients(patient: Patient) -> Optional[Patient]:
-    if len(set(event.start for event in patient.events)) <= 2:
+def _remove_short_patients(
+    patient: Patient, min_num_dates: int = 3
+) -> Optional[Patient]:
+    """Remove patients with too few timepoints."""
+    if (
+        len(set(event.start.date() for event in patient.events))
+        <= min_num_dates
+    ):
         return None
     else:
         return patient
 
 
-# One big flaw in our setup is that billing codes are assigned to the wrong date
-def move_billing_codes(patient: Patient) -> Patient:
+def _move_billing_codes(patient: Patient) -> Patient:
+    """Move billing codes to the end of each visit.
+
+    One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
+    This class fixes that by assigning them to the end of the visit.
+    """
+    end_visits: Dict[int, datetime.datetime] = {}
+
+    for event in patient.events:
+        if event.event_type in ("lpch_pat_enc", "shc_pat_enc"):
+            if event.end is not None:
+                if event.visit_id is None:
+                    raise RuntimeError(
+                        f"Expected visit id for visit? {patient.patient_id} {event}"
+                    )
+                if end_visits.get(event.visit_id, event.end) != event.end:
+                    raise RuntimeError(
+                        f"Multiple end visits? {end_visits.get(event.visit_id)} {event}"
+                    )
+                end_visits[event.visit_id] = event.end
+
     new_events = []
 
     for event in patient.events:
-        match event.event_type:
-            case _:
-                new_events.append(event)
+        if event.event_type in ("lpch_pat_enc_dx", "shc_pat_enc_dx"):
+            if event.visit_id is None:
+                raise RuntimeError(
+                    f"Expected visit id for code {patient.patient_id} {event}"
+                )
+            end_visit = end_visits.get(event.visit_id)
+            if end_visit is None:
+                raise RuntimeError(
+                    f"Expected visit end for code {patient.patient_id} {event}"
+                )
+            new_events.append(dataclasses.replace(event, start=end_visit))
+        else:
+            new_events.append(event)
 
-    new_events.sort(key=lambda a: a.start)
+    new_events.sort(key=lambda a: (a.start, a.code))
 
     return Patient(patient_id=patient.patient_id, events=new_events)
 
 
-# Remove redunant rows
-def remove_redundant_rows(patient: Patient) -> Patient:
-    value_count: Dict[
-        Tuple[int, datetime.datetime],
-        Dict[Any, int],
-    ] = collections.defaultdict(lambda: collections.defaultdict(int))
+def _remove_nones(patient: Patient) -> Patient:
+    """Remove duplicate codes w/in same day if duplicate code has None value.
 
-    for event in patient.events:
-        value_count[(event.code, event.start)][event.value] += 1
+    There is no point having a NONE value in a timeline when we have an actual value within the same day.
 
-    new_events = []
-
-    for event in patient.events:
-        counts = value_count[(event.code, event.start)]
-        if event.value is None:
-            # Remove if any of another type
-            if any(v is not None for v in counts.keys()):
-                continue
-
-        if counts[event.value] >= 2:
-            counts[event.value] -= 1
-        else:
-            new_events.append(event)
-
-    return Patient(patient.patient_id, new_events)
-
-
-# Remove unneeeded none values
-def remove_nones(patient: Patient) -> Patient:
+    This removes those unnecessary NONE values.
+    """
     has_value: Set[Tuple[int, datetime.date]] = set()
 
     for event in patient.events:
@@ -293,8 +308,37 @@ def remove_nones(patient: Patient) -> Patient:
     return Patient(patient.patient_id, new_events)
 
 
-# Delta encode rows
-def delta_encode(patient: Patient) -> Patient:
+def _move_to_day_end(patient: Patient) -> Patient:
+    """We assume that everything coded at midnight should actually be moved to the end of the day."""
+    new_events = []
+    for event in patient.events:
+        if (
+            event.start.hour == 0
+            and event.start.minute == 0
+            and event.start.second == 0
+        ):
+            new_time = (
+                event.start
+                + datetime.timedelta(days=1)
+                - datetime.timedelta(seconds=1)
+            )
+            new_events.append(dataclasses.replace(event, start=new_time))
+        else:
+            new_events.append(event)
+
+    new_events.sort(key=lambda a: (a.start, a.code))
+
+    return Patient(patient.patient_id, new_events)
+
+
+def _delta_encode(patient: Patient) -> Patient:
+    """Delta encodes the patient.
+
+    The idea behind delta encoding is that if we get duplicate values within a short amount of time
+    (1 day for this code), there is not much point retaining the duplicate.
+
+    This code removes all *sequential* duplicates within the same day.
+    """
     last_value: Dict[Tuple[int, datetime.date], Any] = {}
 
     new_events = []
@@ -308,55 +352,25 @@ def delta_encode(patient: Patient) -> Patient:
     return Patient(patient.patient_id, new_events)
 
 
-# Too many measurements overwhelms our analysis
-# This does some dumb subsampling to try to keep things sane
-def subsample_same_day(max_per_day: int, patient: Patient) -> Optional[Patient]:
-    code_counts_per_day: Dict[
-        Tuple[int, datetime.date], int
-    ] = collections.defaultdict(int)
-    for event in patient.events:
-        code_counts_per_day[(event.code, event.start.date())] += 1
+def _get_omop_transformations() -> Sequence[
+    Callable[[Patient], Optional[Patient]]
+]:
+    """Get the list of current OMOP transformations."""
+    # All of these transformations are information preserving
+    transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
+        _remove_pre_birth,
+        _move_to_day_end,
+        _move_billing_codes,
+        _remove_nones,
+        _delta_encode,
+        _remove_short_patients,
+    ]
 
-    new_events = []
-
-    for event in patient.events:
-        count = code_counts_per_day[(event.code, event.start.date())]
-        prob = max_per_day / count
-        if random.random() < prob:
-            new_events.append(event)
-
-    return Patient(patient.patient_id, new_events)
-
-
-def mkdtemp_persistent(
-    *args: Any,
-    persistent: bool = True,
-    force: Optional[str] = None,
-    **kwargs: Any,
-) -> Any:
-    if force is not None:
-
-        @contextlib.contextmanager
-        def foo() -> Any:
-            yield force
-
-        return foo()
-
-    if persistent:
-
-        @contextlib.contextmanager
-        def normal_mkdtemp() -> Any:
-            yield tempfile.mkdtemp(*args, **kwargs)
-
-        return normal_mkdtemp()
-    else:
-        return tempfile.TemporaryDirectory(*args, **kwargs)
+    return transforms
 
 
 def extract_omop_program() -> None:
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-
+    """Extract data from an OMOP v5 source to create a piton PatientDatabase."""
     parser = argparse.ArgumentParser(
         description="An extraction tool for OMOP v5 sources"
     )
@@ -428,7 +442,7 @@ def extract_omop_program() -> None:
             event_collection = run_csv_converters(
                 args.omop_source,
                 event_dir,
-                get_omop_csv_converters(),
+                _get_omop_csv_converters(),
                 num_threads=args.num_threads,
                 debug_folder=os.path.join(args.temp_location, "lost_csv_rows"),
                 stats_dict=stats_dict,
@@ -452,29 +466,12 @@ def extract_omop_program() -> None:
             rootLogger.info("Already converted to patients, skipping")
             patient_collection = PatientCollection(raw_patients_dir)
 
-        # All of these transformations are information preserving
-        transforms = [
-            remove_pre_birth,
-            remove_nones,
-            delta_encode,
-            move_billing_codes,
-            remove_small_patients,
-        ]
-
-        # These transformations lose data and are disabled for now
-        # Probably a good idea for the future though
-        _disabled_transforms = [
-            remove_redundant_rows,
-            functools.partial(subsample_same_day, 10),
-        ]
-        _ = _disabled_transforms
-
         if not os.path.exists(cleaned_patients_dir):
             stats_dict = {}
             rootLogger.info("Appling transformations")
             patient_collection = patient_collection.transform(
                 cleaned_patients_dir,
-                transforms,
+                _get_omop_transformations(),
                 num_threads=args.num_threads,
                 stats_dict=stats_dict,
             )

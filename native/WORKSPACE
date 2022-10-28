@@ -30,7 +30,7 @@ cc_library(
 )
 
 http_archive(
-    name = "readerwriterqueue", 
+    name = "readerwriterqueue",
     url = "https://github.com/cameron314/readerwriterqueue/archive/refs/tags/v1.0.6.tar.gz",
     strip_prefix = "readerwriterqueue-1.0.6",
     sha256 = "fc68f55bbd49a8b646462695e1777fb8f2c0b4f342d5e6574135211312ba56c1",
