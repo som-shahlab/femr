@@ -182,7 +182,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             np.array(label_times),
         )
 
-    def as_list_of_label_tuples(self) -> List[Tuple[int, List[Label]]]:
+    def as_list_of_label_tuples(self) -> List[Tuple[int, Label]]:
         """Convert `patients_to_labels` to a list of (patient_id, Label) tuples
         """        
         result: List[Tuple[int, Label]] = []
@@ -219,11 +219,11 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             labeler_type (LabelType): LabelType of the corresponding labels.
         """
         patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)
-        for pid, l_value, l_time, l_type in zip(patient_ids, label_values, label_times, label_types):
+        for patient_id, l_value, l_time in zip(patient_ids, label_values, label_times):
             patients_to_labels[patient_id].append(
-                Label(time=int(l_time), value=l_value, label_type=labeler_type)
+                Label(time=l_time, value=l_value, label_type=labeler_type)
             )
-        return LabeledPatients(dict(patients_to_labels))
+        return LabeledPatients(dict(patients_to_labels), labeler_type)
     
     def __str__(self):
         return 'LabeledPatients:\n' + pprint.pformat(self.patients_to_labels)
