@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import piton
-import piton.datasets
 import contextlib
 import datetime
 import os
 import shutil
+
+import piton
+import piton.datasets
 
 # This tutorial covers the two major dataset types in piton, EventCollection
 # PatientCollection
@@ -92,7 +93,10 @@ def transform(input: piton.Patient) -> piton.Patient:
     return piton.Patient(
         patient_id=input.patient_id,
         events=[
-            a for a in input.events if a.value != b"test_value" # Note that text values are stored as bytes
+            a
+            for a in input.events
+            if a.value
+            != b"test_value"  # Note that text values are stored as bytes
         ],  # Remove test_value for some reason
     )
 
