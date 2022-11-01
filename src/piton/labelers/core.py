@@ -14,6 +14,8 @@ from typing import (
     Dict,
     List,
     Literal,
+    Optional,
+    Sequence,
     Tuple,
     Union,
 )
@@ -56,25 +58,26 @@ class Label:
     def __init__(
         self,
         time: datetime.datetime,
-        value: Union[bool, int, float, SurvivalValue],
+        value: Optional[Union[bool, int, float, SurvivalValue]],
         label_type: LabelType,
     ):
         """Construct a label for datetime `time` and value `value`. 
 
         Args:
             time (datetime.datetime): Time in this patient's timeline that corresponds to this label
-            value (Union[bool, int, float, SurvivalValue]): Value of label. Defaults to None.
+            value (Optional[Union[bool, int, float, SurvivalValue]]): Value of label. Defaults to None.
             label_type (LabelType): Type of label. Must be an element in `VALID_LABEL_TYPES`.
         """
-        assert label_type in VALID_LABEL_TYPES
-        if label_type == "boolean":
-            assert isinstance(self.value, bool)
-        elif label_type == "numeric":
-            assert isinstance(self.value, float)
-        elif label_type == "categorical":
-            assert isinstance(self.value, int)
-        elif label_type == "survival":
-            assert isinstance(self.value, SurvivalValue)
+        assert label_type in VALID_LABEL_TYPES, f"{label_type} not in {VALID_LABEL_TYPES}"
+        if value is not None:
+            if label_type == "boolean":
+                assert isinstance(value, bool)
+            elif label_type == "numeric":
+                assert isinstance(value, float)
+            elif label_type == "categorical":
+                assert isinstance(value, int)
+            elif label_type == "survival":
+                assert isinstance(value, SurvivalValue)
         self.time = time
         self.label_type = label_type
         self.value = value
@@ -181,6 +184,19 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             np.array(label_values),
             np.array(label_times),
         )
+    
+    def get_num_patients(self) -> int:
+        """Returns the total number of patients
+        """
+        return len(self)
+
+    def get_num_labels(self) -> int:
+        """Returns the total number of labels across all patients
+        """
+        total: int = 0
+        for labels in self.patients_to_labels.values():
+            total += len(labels)
+        return total
 
     def as_list_of_label_tuples(self) -> List[Tuple[int, Label]]:
         """Convert `patients_to_labels` to a list of (patient_id, Label) tuples
@@ -255,14 +271,15 @@ class FixedTimeHorizonEventLF(LabelingFunction):
 
     No labels are generated if the patient record is "censored" before the end of the horizon
 
-    You are required to implement two methods:
-        get_event_times() for defining the datetimes of the events
+    You are required to implement three methods:
+        get_outcome_times() for defining the datetimes of the event of interset
+        get_prediction_times() for defining the datetimes at which we make our predictions
         get_time_horizon() for defining the length of time (i.e. timedelta) to use for the time horizon
     """
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a sorted list containing the datetimes that each event "occurs".
+        """Return a sorted list containing the datetimes that the event of interest "occurs".
         
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
 
@@ -305,13 +322,14 @@ class FixedTimeHorizonEventLF(LabelingFunction):
         """
         pass
 
+    @abstractmethod
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """
-        Return a sorted list containing the datetimes for which it's valid to make a prediction,
+        Return a sorted list containing the datetimes at which we'll make a prediction,
         
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
         """
-        return [ e.start for e in patient.events ]
+        pass
 
     def label(self, patient: Patient) -> List[Label]:
         """
@@ -337,7 +355,7 @@ class FixedTimeHorizonEventLF(LabelingFunction):
         for time in self.get_prediction_times(patient):
             while (
                 curr_outcome_idx < len(outcome_times)
-                and outcome_times[curr_outcome_idx] <= time + time_horizon.start
+                and outcome_times[curr_outcome_idx] < time + time_horizon.start
             ):
                 # This is the idx in `outcome_times` that corresponds to the first outcome EQUAL or AFTER 
                 # the time horizon for this prediction time starts (if one exists)
@@ -357,7 +375,11 @@ class FixedTimeHorizonEventLF(LabelingFunction):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False, label_type="boolean"))
+            else:
+                results.append(Label(time=time, value=None, label_type="boolean"))
 
+        # checks that we have a label for each prediction time (even if `None``)
+        assert len(results) == len(self.get_prediction_times(patient))
         return results
 
     def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
