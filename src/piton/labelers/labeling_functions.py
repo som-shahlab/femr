@@ -27,6 +27,9 @@ class CodeLF(FixedTimeHorizonEventLF):
         self.code = code
         self.time_horizon = time_horizon
     
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        return [ e.start for e in patient.events ]
+    
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
