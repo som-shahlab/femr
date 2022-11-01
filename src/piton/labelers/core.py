@@ -24,12 +24,12 @@ from .. import Event, Patient
 
 import numpy as np
 
-@dataclass
+@dataclass(frozen=True)
 class TimeHorizon:
     start: datetime.timedelta
     end: datetime.timedelta
 
-@dataclass
+@dataclass(frozen=True)
 class SurvivalValue:
     event_time: int # TODO - rename
     is_censored: bool # TRUE if this patient was censored
@@ -43,7 +43,7 @@ LabelType = Union[
 
 VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
-@dataclass
+@dataclass(frozen=True)
 class Label:
     """
         An individual label for a particular patient at a particular time.
