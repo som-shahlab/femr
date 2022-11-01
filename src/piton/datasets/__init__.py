@@ -20,6 +20,8 @@ from typing import (
     Tuple,
 )
 
+import numpy as np
+
 from piton import Event, Patient
 from piton.datasets import fileio
 from piton.extension import datasets as extension_datasets
@@ -126,7 +128,13 @@ class EventCollection:
         extension_datasets.sort_and_join_csvs(
             self.path,
             target_path,
-            ["patient_id", "start", "code"],
+            np.dtype(
+                [
+                    ("patient_id", np.uint64),
+                    ("start", np.datetime64),
+                    ("code", np.uint64),
+                ]
+            ),
             ",",
             num_threads,
         )

@@ -7,6 +7,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "blockingconcurrentqueue.h"
 #include "csv.hh"
+#include "join_csvs.hh"
 #include "parse_utils.hh"
 #include "picosha2.h"
 #include "readerwritercircularbuffer.h"
@@ -41,100 +42,63 @@ convert_to_vector(const T& container) {
     return result;
 }
 
-void reader_thread(CodeCounter& code_counts,
-                   moodycamel::BlockingReaderWriterCircularBuffer<
-                       boost::optional<std::pair<size_t, std::string>>>& queue,
-                   const boost::filesystem::path& source) {
-    CSVReader reader(source.string(), {"value", "code"}, ',');
+void clean_thread(const boost::filesystem::path& in_path,
+                  CodeCounter& code_counts,
+                  const boost::filesystem::path& out_path) {
+    CSVReader reader(in_path, {"value", "code"}, ',');
+    CSVWriter writer(out_path, {"value"}, ',');
 
     while (reader.next_row()) {
         uint64_t code;
         attempt_parse_or_die(reader.get_row()[1], code);
         code_counts[code] += 1;
 
-        if (reader.get_row()[0].empty()) {
+        auto& text_value = reader.get_row()[0];
+
+        if (text_value.empty()) {
             continue;
         }
 
         float value;
-        if (!absl::SimpleAtof(reader.get_row()[0], &value)) {
-            size_t string_hash = std::hash<std::string>()(reader.get_row()[0]);
-            queue.wait_enqueue(
-                std::make_pair(string_hash, std::move(reader.get_row()[0])));
+        if (absl::SimpleAtof(text_value, &value)) {
+            continue;
         }
-    }
 
-    queue.wait_enqueue(boost::none);
-}
-
-void multiplex_thread(
-    std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-        boost::optional<std::pair<size_t, std::string>>>>& in_queues,
-    std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-        boost::optional<std::string>>>& out_queues) {
-    dequeue_many_loop(
-        in_queues, [&out_queues](std::pair<size_t, std::string>& next_entry) {
-            out_queues[next_entry.first % out_queues.size()].wait_enqueue(
-                std::move(next_entry.second));
-        });
-
-    for (auto& out_queue : out_queues) {
-        out_queue.wait_enqueue(boost::none);
-    }
-}
-
-void writer_thread(moodycamel::BlockingReaderWriterCircularBuffer<
-                       boost::optional<std::string>>& queue,
-                   const boost::filesystem::path& target) {
-    CSVWriter writer(target.string(), {"value"}, ',');
-
-    boost::optional<std::string> next_item;
-    std::vector<std::string> next_row(1);
-
-    while (true) {
-        queue.wait_dequeue(next_item);
-        if (!next_item) {
-            break;
-        } else {
-            next_row[0] = std::move(*next_item);
-            writer.add_row(next_row);
-        }
+        reader.get_row().resize(1);
+        writer.add_row(reader.get_row());
     }
 }
 
 void process_thread(
-    moodycamel::BlockingConcurrentQueue<
-        boost::optional<boost::filesystem::path>>& in_queue,
+    boost::filesystem::path& in_path,
     moodycamel::BlockingReaderWriterCircularBuffer<
         boost::optional<std::pair<std::string, size_t>>>& out_queue) {
-    boost::optional<boost::filesystem::path> next_item;
-    std::vector<std::string> rows;
-    while (true) {
-        in_queue.wait_dequeue(next_item);
-        if (!next_item) {
-            break;
+    CSVReader reader(in_path, {"value"}, ',');
+
+    std::string current_value = "";
+    size_t current_count = 0;
+
+    auto flush = [&]() {
+        if (current_count > 1) {
+            out_queue.wait_enqueue(
+                std::make_pair(std::move(current_value), current_count));
+        }
+    };
+
+    while (reader.next_row()) {
+        auto& text_value = reader.get_row()[0];
+
+        if (text_value != current_value) {
+            flush();
+            current_count = 1;
+            current_value = std::move(text_value);
         } else {
-            CSVReader reader(next_item->string(), {"value"}, ',');
-            rows.clear();
-            while (reader.next_row()) {
-                rows.push_back(std::move(reader.get_row()[0]));
-            }
-
-            std::sort(std::begin(rows), std::end(rows));
-
-            size_t start_index = 0;
-            for (size_t index = 0; index <= rows.size(); index++) {
-                if (index == rows.size() || rows[index] != rows[start_index]) {
-                    size_t count = index - start_index;
-                    if (count > 1) {
-                        out_queue.wait_enqueue(std::make_pair(
-                            std::move(rows[start_index]), count));
-                    }
-                    start_index = index;
-                }
-            }
+            current_count += 1;
         }
     }
+
+    flush();
+
     out_queue.wait_enqueue(boost::none);
 }
 
@@ -143,60 +107,29 @@ std::pair<std::vector<std::pair<uint64_t, size_t>>,
 count_codes_and_values(const boost::filesystem::path& path,
                        const boost::filesystem::path& temp_path,
                        size_t num_threads) {
-    std::vector<boost::filesystem::path> files;
-    for (auto& entry : boost::make_iterator_range(
-             boost::filesystem::directory_iterator(path), {})) {
-        files.push_back(entry.path());
-    }
+    boost::filesystem::path only_values = temp_path / "only_values";
 
-    // Assume a worst case 10x blowup
-    size_t data_size =
-        boost::filesystem::file_size(files[0]) * files.size() * 10;
-
-    size_t desired_data_size = 100000000;  // 100 megabytes
-
-    size_t num_pieces = (data_size + desired_data_size - 1) / desired_data_size;
-
-    boost::filesystem::create_directory(temp_path);
+    boost::filesystem::create_directory(only_values);
 
     std::vector<std::pair<uint64_t, size_t>> code_result;
 
-    std::vector<boost::filesystem::path> sort_files;
-    sort_files.reserve(num_pieces);
-    std::cout << "Starting phase 1 " << absl::Now() << std::endl;
-
     {
-        std::vector<CodeCounter> code_counts(files.size());
-        std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-            boost::optional<std::string>>>
-            write_queues;
-        write_queues.reserve(num_pieces);
-        std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
-            boost::optional<std::pair<size_t, std::string>>>>
-            read_queues;
-        read_queues.reserve(files.size());
+        std::vector<boost::filesystem::path> source_files;
+        for (auto& entry : boost::make_iterator_range(
+                 boost::filesystem::directory_iterator(path), {})) {
+            source_files.push_back(entry.path());
+        }
 
+        std::vector<CodeCounter> code_counts(source_files.size());
         std::vector<std::thread> threads;
 
-        for (size_t i = 0; i < num_pieces; i++) {
-            write_queues.emplace_back(1000);
-            sort_files.emplace_back(temp_path /
-                                    boost::filesystem::unique_path());
-            threads.emplace_back([i, &write_queues, &sort_files]() {
-                writer_thread(write_queues[i], sort_files[i]);
-            });
+        for (size_t i = 0; i < source_files.size(); i++) {
+            threads.emplace_back(
+                [i, &only_values, &source_files, &code_counts]() {
+                    auto target = only_values / absl::StrCat(i, ".csv.zst");
+                    clean_thread(source_files[i], code_counts[i], target);
+                });
         }
-
-        for (size_t i = 0; i < files.size(); i++) {
-            read_queues.emplace_back(1000);
-            threads.emplace_back([i, &code_counts, &read_queues, &files]() {
-                reader_thread(code_counts[i], read_queues[i], files[i]);
-            });
-        }
-
-        threads.emplace_back([&read_queues, &write_queues]() {
-            multiplex_thread(read_queues, write_queues);
-        });
 
         for (auto& thread : threads) {
             thread.join();
@@ -204,31 +137,34 @@ count_codes_and_values(const boost::filesystem::path& path,
 
         code_result = convert_to_vector(code_counts);
     }
-    std::cout << "Starting phase 2 " << absl::Now() << std::endl;
+
+    boost::filesystem::path joined = temp_path / "joined";
+
+    sort_and_join_csvs(only_values, joined,
+                       {std::make_pair("value", ColumnValueType::STRING)}, ',',
+                       num_threads);
 
     std::vector<std::pair<std::string, size_t>> string_result;
+
     {
+        std::vector<boost::filesystem::path> source_files;
+        for (auto& entry : boost::make_iterator_range(
+                 boost::filesystem::directory_iterator(joined), {})) {
+            source_files.push_back(entry.path());
+        }
+
         std::vector<moodycamel::BlockingReaderWriterCircularBuffer<
             boost::optional<std::pair<std::string, size_t>>>>
             out_queues;
-        out_queues.reserve(num_threads);
-
-        moodycamel::BlockingConcurrentQueue<
-            boost::optional<boost::filesystem::path>>
-            in_queue;
-
-        for (size_t i = 0; i < num_pieces; i++) {
-            in_queue.enqueue({sort_files[i]});
-        }
+        out_queues.reserve(source_files.size());
 
         std::vector<std::thread> threads;
 
-        for (size_t i = 0; i < num_threads; i++) {
+        for (size_t i = 0; i < source_files.size(); i++) {
             out_queues.emplace_back(1000);
-            threads.emplace_back([i, &in_queue, &out_queues]() {
-                process_thread(in_queue, out_queues[i]);
+            threads.emplace_back([i, &source_files, &out_queues]() {
+                process_thread(source_files[i], out_queues[i]);
             });
-            in_queue.enqueue(boost::none);
         }
 
         dequeue_many_loop(
@@ -237,13 +173,12 @@ count_codes_and_values(const boost::filesystem::path& path,
                 string_result.push_back(std::move(next_entry));
             });
 
-        sort_by_count(string_result);
-
         for (auto& thread : threads) {
             thread.join();
         }
+
+        sort_by_count(string_result);
     }
-    std::cout << "Done " << absl::Now() << std::endl;
 
     boost::filesystem::remove_all(temp_path);
 

@@ -1,6 +1,8 @@
 import collections.abc
 from typing import List, Optional
 
+import numpy as np
+
 import piton.extension
 
 class Dictionary(collections.abc.Sequence):
@@ -34,5 +36,5 @@ def convert_patient_collection_to_patient_database(
     arg0, arg1, arg2, arg3: str, arg4: int
 ) -> PatientDatabase: ...
 def sort_and_join_csvs(
-    arg0, arg1, arg2: List[str], arg3: str, arg4: int
+    arg0, arg1, arg2: List[str] | np.dtype, arg3: str, arg4: int
 ) -> None: ...

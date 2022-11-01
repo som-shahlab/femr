@@ -13,14 +13,14 @@ from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import zstandard
 
-from .. import Event
-from ..datasets import EventCollection
+from piton import Event
+from piton.datasets import EventCollection
 
 # Note that we want to support huge CSV records
 csv.field_size_limit(sys.maxsize)
 
 
-class CSVConverter(abc.ABC):
+class CSVExtractor(abc.ABC):
     """An interface for converting a csv into events."""
 
     def __init__(self) -> None:
@@ -42,15 +42,15 @@ class CSVConverter(abc.ABC):
         ...
 
 
-def _run_csv_converter(
-    args: Tuple[str, EventCollection, CSVConverter, Optional[str]]
+def _run_csv_extractor(
+    args: Tuple[str, EventCollection, CSVExtractor, Optional[str]]
 ) -> Tuple[str, Dict[str, int]]:
     """
     Run a single csv converter, returns the prefix and the count dicts.
 
     This function is supposed to run with a multiprocess pool.
     """
-    source, target, converter, debug_file = args
+    source, target, extractor, debug_file = args
     stats: Dict[str, int] = collections.defaultdict(int)
     try:
         with contextlib.ExitStack() as stack:
@@ -68,14 +68,14 @@ def _run_csv_converter(
             with contextlib.closing(target.create_writer()) as o:
                 for row in reader:
                     lower_row = {a.lower(): b for a, b in row.items()}
-                    events = converter.get_events(lower_row)
+                    events = extractor.get_events(lower_row)
                     stats["input_rows"] += 1
                     if events:
                         stats["valid_rows"] += 1
                         for event in events:
                             stats["valid_events"] += 1
                             o.add_event(
-                                int(row[converter.get_patient_id_field()]),
+                                int(row[extractor.get_patient_id_field()]),
                                 event,
                             )
                     else:
@@ -97,22 +97,22 @@ def _run_csv_converter(
                                 debug_writer = csv.DictWriter(
                                     debug_f,
                                     fieldnames=list(reader.fieldnames)
-                                    + ["converter"],
+                                    + ["extractor"],
                                 )
                                 debug_writer.writeheader()
-                            row["converter"] = repr(converter)
+                            row["extractor"] = repr(extractor)
                             debug_writer.writerow(row)
-        return (converter.get_file_prefix(), stats)
+        return (extractor.get_file_prefix(), stats)
 
     except Exception as e:
-        print("Failing on", source, converter)
+        print("Failing on", source, extractor)
         raise e
 
 
-def run_csv_converters(
+def run_csv_extractors(
     source_csvs: str,
     target_location: str,
-    converters: Sequence[CSVConverter],
+    extractors: Sequence[CSVExtractor],
     num_threads: int = 1,
     debug_folder: Optional[str] = None,
     stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
@@ -140,7 +140,7 @@ def run_csv_converters(
 
     target = EventCollection(target_location)
 
-    files_per_converter = [0 for _ in converters]
+    files_per_extractor = [0 for _ in extractors]
 
     to_process = []
 
@@ -148,40 +148,40 @@ def run_csv_converters(
         for name in files:
             full_path = os.path.join(root, name)
             relative_path = os.path.relpath(full_path, source_csvs)
-            matching_converters = [
+            matching_extractors = [
                 (i, a)
-                for i, a in enumerate(converters)
+                for i, a in enumerate(extractors)
                 if (
                     str(relative_path).startswith(a.get_file_prefix() + ".csv")
                     or str(relative_path).startswith(a.get_file_prefix() + "/")
                 )
             ]
-            if len(matching_converters) > 1:
-                print(
-                    "Multiple converters matched?",
-                    full_path,
-                    matching_converters,
+            if len(matching_extractors) > 1:
+                raise RuntimeError(
+                    "Multiple extractors matched "
+                    + full_path
+                    + " "
+                    + str(matching_extractors)
                 )
-                print(1 / 0)
-            elif len(matching_converters) == 0:
+            elif len(matching_extractors) == 0:
                 pass
             else:
-                i, converter = matching_converters[0]
-                files_per_converter[i] += 1
+                i, extractor = matching_extractors[0]
+                files_per_extractor[i] += 1
 
                 if debug_folder is not None:
                     debug_path = os.path.join(debug_folder, relative_path)
                 else:
                     debug_path = None
 
-                to_process.append((full_path, target, converter, debug_path))
+                to_process.append((full_path, target, extractor, debug_path))
 
-    for count, c in zip(files_per_converter, converters):
+    for count, c in zip(files_per_extractor, extractors):
         if count == 0:
-            print("Could not find any files for", c)
+            print("Could not find any files for extractor", c)
 
     with multiprocessing.Pool(num_threads) as pool:
-        for (prefix, s) in pool.imap_unordered(_run_csv_converter, to_process):
+        for (prefix, s) in pool.imap_unordered(_run_csv_extractor, to_process):
             for k, v in s.items():
                 stats[prefix][k] += v
 

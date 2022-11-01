@@ -3,12 +3,26 @@ from __future__ import annotations
 import datetime
 
 import extension.datasets as m
+import numpy as np
 import pytest
 
 import piton
 
 
 def test_helper(tmp_path):
+    print("Starting")
+    m.sort_and_join_csvs("foo", "bar", ["a", "b"], ",", 3)
+    fancy_type = np.dtype(
+        [
+            ("patient_id", np.uint64),
+            ("start", np.datetime64),
+            ("code", np.uint64),
+        ]
+    )
+    m.sort_and_join_csvs("foo_fancy", "bar_fancy", fancy_type, ",", 3)
+
+    print("Done")
+
     concept_root = tmp_path / "concepts"
     m.test.create_ontology_files(str(concept_root))
 
