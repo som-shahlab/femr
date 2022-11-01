@@ -6,7 +6,7 @@ from typing import List
 import piton
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon, Label
-from piton.labelers.labeling_functions import CodeLF, MortalityLF
+from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 
 NUM_PATIENTS = 5
 

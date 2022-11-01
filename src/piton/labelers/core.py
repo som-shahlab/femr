@@ -43,7 +43,7 @@ LabelType = Union[
 
 VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
-@dataclass(frozen=True)
+@dataclass
 class Label:
     """
         An individual label for a particular patient at a particular time.
