@@ -9,11 +9,7 @@ import piton
 import piton.datasets
 
 dummy_events = [
-    piton.Event(
-        start=datetime.datetime(1995, 1, 3),
-        code=0,
-        value=float(34),
-    ),
+    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
         code=1,
@@ -59,9 +55,11 @@ def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
 def test_events(tmp_path: pathlib.Path) -> None:
     events = create_events(tmp_path)
 
+    print(all_events[0])
     with events.reader() as reader:
         read_events = list(reader)
 
+    print(read_events[0])
     assert set(read_events) == set(all_events)
 
 

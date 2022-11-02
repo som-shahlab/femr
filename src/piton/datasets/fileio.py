@@ -33,24 +33,50 @@ class EventWriter:
         )
         self.writer.writeheader()
 
+    def _encode_field(self, field_value: str, field_name: str) -> Any:
+        """Encode a field for serialization.
+
+        Must stay in sync with `EventReader._decode_field()`
+
+        Currently supports fields of the following types:
+            - datetime.datetime
+            - int
+            - float
+            - memoryview
+            - str
+            - None (optional)
+        """
+        if field_value is None:
+            # None => ""
+            return ""
+        elif isinstance(field_value, datetime.datetime):
+            # Datetime => ISO format string
+            return field_value.isoformat()
+        elif isinstance(field_value, int):
+            # Int => String
+            return str(field_value)
+        elif isinstance(field_value, float):
+            # Float => String
+            return str(field_value)
+        elif isinstance(field_value, memoryview):
+            return bytes(field_value).decode("utf8")
+        elif isinstance(field_value, str):
+            return field_value
+        else:
+            raise ValueError(
+                f"EventWriter does not have a method for fields with the type of {field_name}"
+            )
+
     def add_event(self, patient_id: int, event: Event) -> None:
         """Add an event to the record."""
         self.rows_written += 1
         data: Dict[str, Any] = {}
         data["patient_id"] = patient_id
-        for f in dataclasses.fields(event):
-            data[f.name] = getattr(event, f.name)
 
-        data["start"] = data["start"].isoformat()
-        if data["end"]:
-            data["end"] = data["end"].isoformat()
-
-        if data["value"] is None:
-            data["value"] = ""
-        elif isinstance(data["value"], (int, float)):
-            data["value"] = str(data["value"])
-        else:
-            data["value"] = bytes(data["value"]).decode("utf8")
+        for field in dataclasses.fields(event):
+            data[field.name] = self._encode_field(
+                getattr(event, field.name), field.name
+            )
 
         self.writer.writerow(data)
 
@@ -72,37 +98,71 @@ class EventReader:
             decompressor.stream_reader(open(self.filename, "rb"))
         )
         self.reader = csv.DictReader(self.o)
+        self.schema: Dict[str, List[str]] = {
+            field.name: [x.strip() for x in field.type.split("|")]
+            for field in dataclasses.fields(Event)
+        }
+
+    def _decode_field(self, field_value: str, field_name: str) -> Any:
+        """Decode a field for deserialization.
+
+        Must stay in sync with `EventWriter._encode_field()`
+
+        This tries to decode the field in the order that its non-None types
+        are listed in the `Event` class definition.
+        For example, the field:
+            ```
+                value: float | memoryview | None
+            ```
+        will first try to decode `value` into a `None`, then a `float`, finally a `memoryview`
+
+        Currently supports fields of the following types:
+            - datetime.datetime
+            - int
+            - float
+            - memoryview
+            - str
+            - None (optional)
+        """
+        field_types: List = self.schema[field_name]
+        if field_value == "" and "None" in field_types:
+            # Need to check `None` first b/c it's represented by the empty string,
+            # so it will incorrectly trigger casts like `str()` below
+            return None
+        for field_type in field_types:
+            try:
+                if field_type == "datetime.datetime":
+                    return datetime.datetime.fromisoformat(field_value)
+                elif field_type == "int":
+                    return int(field_value)
+                elif field_type == "float":
+                    return float(field_value)
+                elif field_type == "str":
+                    return str(field_value)
+                elif field_type == "memoryview":
+                    return memoryview(field_value.encode("utf8"))
+                else:
+                    raise NotImplementedError(
+                        f"Unrecognized field type {field_type} for {field_name}"
+                    )
+            except ValueError:
+                # An exception occurs when we guess the wrong `field_type` for a specific field.
+                # This is expected to occur for fields with multiple possible non-None
+                # types (e.g. 'value: float | memoryview | None'). We just catch the error,
+                # then proceed to trying to decode this field with the next possible type.
+                continue
+        raise ValueError(f"Could not decode {field_name}")
 
     def __iter__(self) -> Iterator[Tuple[int, Event]]:
         """Iterate over each event."""
         for row in self.reader:
+            # Remove `patient_id` from Event since it's not a property of the `Event` object
             id = int(row["patient_id"])
             del row["patient_id"]
-            row["start"] = datetime.datetime.fromisoformat(row["start"])
-
-            if row["end"]:
-                row["end"] = datetime.datetime.fromisoformat(row["end"])
-            else:
-                del row["end"]
-
-            row["code"] = int(row["code"])
-
-            if row["visit_id"]:
-                row["visit_id"] = int(row["visit_id"])
-            else:
-                del row["visit_id"]
-
-            if row["value"] == "":
-                row["value"] = None
-            else:
-                try:
-                    row["value"] = float(row["value"])
-                except ValueError:
-                    row["value"] = memoryview(row["value"].encode("utf8"))
-
-            if not row["event_type"]:
-                del row["event_type"]
-
+            for field in dataclasses.fields(Event):
+                row[field.name] = self._decode_field(
+                    row[field.name], field.name
+                )
             yield (id, Event(**cast(Any, row)))
 
     def close(self) -> None:
