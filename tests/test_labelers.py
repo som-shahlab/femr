@@ -638,12 +638,12 @@ def test_time_horizons():
             )
 
 
-# `LabeledPatients` class
-test_labeled_patients()
+# # `LabeledPatients` class
+# test_labeled_patients()
 
-# Labeling functions
-test_code_lf()
-test_mortality_lf()
+# # Labeling functions
+# test_code_lf()
+# test_mortality_lf()
 
-# Time Horizons
-test_time_horizons()
+# # Time Horizons
+# test_time_horizons()
