@@ -1,4 +1,13 @@
-from __future__ import annotations
+"""
+A tool for cleaning up incorrectly ETLed flowsheet values in STARR-OMOP.
+
+See the __main__ section for how to run this program.
+
+Note that this assumes that the source data is already in CSVs compressed by zstandard.
+
+The fundamental idea of this program is to do a two pass conversion, first to OMOP rows (with incorrect concept_ids).
+And then a second pass to fix up the concept_ids.
+"""
 
 import argparse
 import csv
@@ -13,6 +22,7 @@ import zstandard
 
 
 def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
+    """Convert an incorrect row into a correct one, splitting out the JSON into the correct OMOP columns."""
     if row["load_table_id"] in ("shc_ip_flwsht_meas", "lpch_ip_flwsht_meas"):
         data = json.loads(row["value_as_string"])
 
@@ -41,6 +51,7 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
         except ValueError:
             value_as_number = ""
 
+        # Note that we set the concept ids to 0 as we don't know what they should be yet
         new_row["observation_concept_id"] = "0"
         new_row["observation_source_value"] = name
         new_row["value_as_number"] = value_as_number
@@ -58,6 +69,7 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
 
 
 def get_new_sources(root: str, child: str) -> Set[str]:
+    """Pull out the new concept_ids that we have to map."""
     new_concepts = set()
 
     source_path = os.path.join(root, "observation", child)
@@ -80,6 +92,7 @@ def get_new_sources(root: str, child: str) -> Set[str]:
 def correct_rows(
     root: str, target: str, mapping: Mapping[str, str], child: str
 ) -> None:
+    """Using a concept_id map, fix incorrect mappings."""
     source_path = os.path.join(root, "observation", child)
     out_path = os.path.join(target, "observation", child)
     with io.TextIOWrapper(
