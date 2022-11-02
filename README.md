@@ -31,3 +31,21 @@ As Nero does not have internet access, you must run the following before pip ins
 ```
 export DISTDIR=/local-scratch/nigam/distdir
 ```
+
+# Precommit checks
+
+## Installation
+```
+conda install pre-commit
+pre-commit install
+```
+
+## To run
+
+This will run automatically on every commit.
+
+You can also run it manually with:
+
+```
+pre-commit run --all-files
+```
