@@ -37,10 +37,17 @@ export DISTDIR=/local-scratch/nigam/distdir
 ## Installation
 ```
 conda install pre-commit
+conda install pytest
 pre-commit install
 ```
 
-## To run
+## Pytest test
+
+```
+pytest tests
+```
+
+## Pre-commit test
 
 This will run automatically on every commit.
 
