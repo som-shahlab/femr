@@ -1,3 +1,4 @@
+# type: ignore
 from __future__ import annotations
 
 import contextlib
@@ -19,7 +20,7 @@ os.makedirs(target_directory)
 
 
 #####################################
-##### Part 1: Create events #########
+# Part 1: Create events             #
 #####################################
 
 # Piton stores events within EventCollections, which are an unordered series of events
@@ -65,7 +66,7 @@ with events.reader() as reader:
 
 
 #####################################
-##### Part 2: Create patients #######
+# Part 2: Create patients           #
 #####################################
 
 # Piton stores patients within PatientCollections
@@ -83,7 +84,7 @@ with patients.reader() as reader:
 
 
 #############################################################
-##### Part 3: Apply a transformation to the  patients #######
+# Part 3: Apply a transformation to the patients            #
 #############################################################
 
 # Piton allows you to perform modifications on patients in a straightforward manner
@@ -101,7 +102,7 @@ def transform(input: piton.Patient) -> piton.Patient:
     )
 
 
-transformed_patients = patients.transform(
+transformed_patients: piton.datasets.PatientCollection = patients.transform(
     os.path.join(target_directory, "transformed_patients"), transform
 )
 
