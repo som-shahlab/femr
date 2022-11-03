@@ -4,9 +4,6 @@ import os
 import pathlib
 import shutil
 import subprocess
-import sys
-import sysconfig
-from typing import Any, Dict
 
 import setuptools
 from setuptools.command.build_ext import build_ext
@@ -27,9 +24,7 @@ class cmake_build_ext(build_ext):
 
         if bazel_extensions:
             try:
-                bazel_version = subprocess.check_output(
-                    ["bazel", "version"]
-                ).decode("utf8")
+                subprocess.check_output(["bazel", "version"]).decode("utf8")
             except OSError:
                 raise RuntimeError("Cannot find bazel executable")
 
@@ -41,8 +36,8 @@ class cmake_build_ext(build_ext):
 
             extra_args = []
 
-            if source_env.get('DISTDIR'):
-                extra_args.extend(['--distdir', source_env['DISTDIR']])
+            if source_env.get("DISTDIR"):
+                extra_args.extend(["--distdir", source_env["DISTDIR"]])
 
             subprocess.run(
                 args=["bazel", "build", "-c", "opt", ext.target] + extra_args,

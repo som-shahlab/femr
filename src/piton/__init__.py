@@ -1,20 +1,26 @@
+"""The fundamental underlying Patient and Event datatypes for piton."""
+
 from __future__ import annotations
 
 import datetime
-import enum
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from typing import Sequence
-import numbers
+
 
 @dataclass(frozen=True)
 class Patient:
+    """A patient."""
+
     patient_id: int
     events: Sequence[Event]
 
+
 @dataclass(frozen=True)
 class Event:
+    """An event with a patient record."""
+
     start: datetime.datetime
-    code: int # Is this an OMOP code (or is it an index into your Piton Ontology object?)
+    code: int  # Is this an OMOP code (or is it an index into your Piton Ontology object?)
 
     end: datetime.datetime | None = None
     value: memoryview | float | None = None
@@ -23,12 +29,13 @@ class Event:
     visit_id: int | None = None
 
     # TODO - add the below property
-    omop_table: str = None # OMOP table where this event comes from
+    omop_table: str | None = None  # OMOP table where this event comes from
 
     # TODO - rename or make __private (confusing)
-    event_type: str | None = None # Clarity table name where this event comes from (for ETL purposes only)
+    event_type: str | None = None  # Clarity table name where this event comes from (for ETL purposes only)
 
     def __post_init__(self) -> None:
+        """Verify that the event is constructed correctly."""
         if not (
             (self.value is None)
             or isinstance(self.value, (int, float, memoryview))
@@ -36,6 +43,7 @@ class Event:
             raise TypeError("Invalid type of value passed to event", self.value)
 
     def __repr__(self) -> str:
+        """Convert an event to a string."""
         items = []
         for f in fields(self):
             value = getattr(self, f.name)

@@ -42,3 +42,6 @@ line_length = 80
 [tool.black]
 line_length = 80
 target_version = ['py310']
+
+[tool.pydocstyle]
+match = "src/.*\\.py"

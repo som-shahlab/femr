@@ -32,6 +32,9 @@ void keep_alive(py::handle nurse, py::handle patient) {
 }
 
 void register_datasets_extension(py::module& root) {
+    py::module abc = py::module::import("collections.abc");
+    py::object abc_sequence = abc.attr("Sequence");
+
     register_iterable<absl::Span<const uint32_t>>(root, "IntSpan");
 
     py::module m = root.def_submodule("datasets");
@@ -60,7 +63,9 @@ void register_datasets_extension(py::module& root) {
           convert_patient_collection_to_patient_database,
           py::return_value_policy::move);
 
-    py::class_<PatientDatabase>(m, "PatientDatabase")
+    py::class_<PatientDatabase> database_binding(m, "PatientDatabase");
+
+    database_binding
         .def(py::init<const char*, bool>(), py::arg("filename"),
              py::arg("read_all") = false)
         .def("__len__", [](PatientDatabase& self) { return self.size(); })
@@ -71,6 +76,9 @@ void register_datasets_extension(py::module& root) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
+                if (index >= self.size()) {
+                    throw py::index_error();
+                }
 
                 Patient p = self.get_patient(index);
                 py::tuple events(p.events.size());
@@ -124,28 +132,33 @@ void register_datasets_extension(py::module& root) {
 
         .def("get_code_dictionary", &PatientDatabase::get_code_dictionary,
              py::return_value_policy::reference_internal)
-
-        .def("get_shared_text_dictionary",
-             &PatientDatabase::get_shared_text_dictionary,
-             py::return_value_policy::reference_internal)
-
-        .def("get_unique_text_dictionary",
-             &PatientDatabase::get_unique_text_dictionary,
-             py::return_value_policy::reference_internal)
-
         .def("get_ontology", &PatientDatabase::get_ontology,
              py::return_value_policy::reference_internal)
-
         .def("get_patient_id_from_original",
              &PatientDatabase::get_patient_id_from_original)
         .def("get_original_patient_id",
              &PatientDatabase::get_original_patient_id)
-
         .def("get_code_count", &PatientDatabase::get_code_count)
-        .def("get_shared_text_count", &PatientDatabase::get_shared_text_count)
-        .def("close", [](const PatientDatabase& self) {
-            // TODO: Implement this to save memory and file pointers
-        });
+        .def("get_text_count",
+             [](PatientDatabase& self, std::string data) -> uint32_t {
+                 auto iter = self.get_shared_text_dictionary().find(data);
+                 if (iter) {
+                     return self.get_shared_text_count(*iter);
+                 }
+
+                 iter = self.get_unique_text_dictionary().find(data);
+                 if (iter) {
+                     return 1;
+                 } else {
+                     return 0;
+                 }
+             })
+        .def("close",
+             [](const PatientDatabase& self) {
+                 // TODO: Implement this to save memory and file pointers
+             })
+        .attr("__bases__") =
+        py::make_tuple(abc_sequence) + database_binding.attr("__bases__");
 
     py::class_<Ontology>(m, "Ontology")
         .def("get_parents", &Ontology::get_parents,
@@ -157,18 +170,28 @@ void register_datasets_extension(py::module& root) {
         .def("get_dictionary", &Ontology::get_dictionary,
              py::return_value_policy::reference_internal);
 
-    py::class_<Dictionary>(m, "Dictionary")
+    py::class_<Dictionary> dictionary_binding(m, "Dictionary");
+    dictionary_binding
         .def("__len__", [](Dictionary& self) { return self.size(); })
         .def(
             "__getitem__",
             [](Dictionary& self, uint32_t index) {
+                if (index >= self.size()) {
+                    throw py::index_error();
+                }
                 auto data = self[index];
                 return py::memoryview::from_memory((void*)data.data(),
                                                    data.size(), true);
             },
             py::return_value_policy::reference_internal)
-        .def("find", &Dictionary::find,
-             py::return_value_policy::reference_internal)
-        .def("values", &Dictionary::values,
-             py::return_value_policy::reference_internal);
+        .def("index",
+             [](Dictionary& self, std::string data) {
+                 auto iter = self.find(data);
+                 if (!iter) {
+                     throw py::value_error();
+                 }
+                 return *iter;
+             })
+        .attr("__bases__") =
+        py::make_tuple(abc_sequence) + dictionary_binding.attr("__bases__");
 }

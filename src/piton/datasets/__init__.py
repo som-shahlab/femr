@@ -1,44 +1,42 @@
+"""piton.datasets provides the main tools for doing raw data manipulation."""
 from __future__ import annotations
 
 import collections.abc
 import contextlib
-import datetime
 import functools
 import itertools
 import multiprocessing.pool
 import os
-import tempfile
 from typing import (
     Any,
     Callable,
     ContextManager,
-    Iterable,
     Dict,
+    Iterable,
     Iterator,
+    List,
     Optional,
     Sequence,
-    List,
     Tuple,
 )
 
-from .. import Event, Patient
-from ..extension import datasets as extension_datasets
-from . import fileio, utils
-
-
-USE_PYTHON_JOIN = False
+from piton import Event, Patient
+from piton.datasets import fileio
+from piton.extension import datasets as extension_datasets
 
 
 def _get_sort_key(pid_and_event: Tuple[int, Event]) -> Any:
+    """Get the sort key for an event."""
     return (pid_and_event[0], pid_and_event[1].start)
 
 
-def _sort_helper(
+def _sort_readers(
     events: EventCollection,
     reader_funcs: Sequence[
         Callable[[], ContextManager[Iterable[Tuple[int, Event]]]]
     ],
 ) -> None:
+    """Sort the provided reader_funcs and write out to the provided events."""
     items: List[Tuple[int, Event]] = []
     for reader_func in reader_funcs:
         with reader_func() as reader:
@@ -50,47 +48,18 @@ def _sort_helper(
             writer.add_event(i, e)
 
 
-def _get_patient_shard(num_shards: int, item: Tuple[int, Event]) -> int:
-    return item[0] % num_shards
-
-
-def _convert_to_patient_helper(
-    target_path: str, events: Iterable[Tuple[int, Event]]
-) -> None:
-    current_patient_id: Optional[int] = None
-    current_events: Optional[List[Event]] = None
-    with contextlib.closing(fileio.PatientWriter(target_path)) as f:
-        for (patient_id, event) in events:
-            if current_patient_id != patient_id:
-                if current_patient_id is not None:
-                    assert current_events is not None
-                    f.add_patient(
-                        Patient(
-                            patient_id=current_patient_id,
-                            events=current_events,
-                        )
-                    )
-                current_patient_id = patient_id
-                current_events = []
-
-            assert current_events is not None
-            current_events.append(event)
-
-        if current_patient_id is not None:
-            assert current_events is not None
-            f.add_patient(
-                Patient(patient_id=current_patient_id, events=current_events)
-            )
-
-
-def _sharded_event_helper(
+def _create_event_reader(
     path: str,
 ) -> ContextManager[Iterable[Tuple[int, Event]]]:
+    """Create an event writer with a contextmanger."""
     return contextlib.closing(fileio.EventReader(path))
 
 
 class EventCollection:
+    """A datatype that represents an unordered collection of Events."""
+
     def __init__(self, path: str):
+        """Create or open an EventCollection at the given path."""
         self.path = path
         if not os.path.exists(path):
             os.mkdir(self.path)
@@ -98,15 +67,20 @@ class EventCollection:
     def sharded_readers(
         self,
     ) -> Sequence[Callable[[], ContextManager[Iterable[Tuple[int, Event]]]]]:
+        """Return a list of reader functions.
+
+        Each resulting reader can be used in a multiprocessing.Pool to enable multiprocessing.
+        """
         return [
             functools.partial(
-                _sharded_event_helper, os.path.join(self.path, child)
+                _create_event_reader, os.path.join(self.path, child)
             )
             for child in os.listdir(self.path)
         ]
 
     @contextlib.contextmanager
     def reader(self) -> Iterator[Iterable[Tuple[int, Event]]]:
+        """Return a contextmanager that allows iteration over all of the events."""
         with contextlib.ExitStack() as stack:
             sub_readers = [
                 stack.enter_context(reader())
@@ -115,9 +89,11 @@ class EventCollection:
             yield itertools.chain.from_iterable(sub_readers)
 
     def create_writer(self) -> fileio.EventWriter:
+        """Create an EventWriter."""
         return fileio.EventWriter(self.path)
 
     def sort(self, target_path: str, num_threads: int = 1) -> EventCollection:
+        """Sort the collection and store the resulting output in the target_path."""
         result = EventCollection(target_path)
 
         current_shards = self.sharded_readers()
@@ -137,7 +113,7 @@ class EventCollection:
 
         with multiprocessing.pool.Pool(num_threads) as pool:
             for _ in pool.imap_unordered(
-                functools.partial(_sort_helper, result), chunks
+                functools.partial(_sort_readers, result), chunks
             ):
                 pass
 
@@ -146,48 +122,30 @@ class EventCollection:
     def to_patient_collection(
         self, target_path: str, num_threads: int = 1
     ) -> PatientCollection:
-
-        if USE_PYTHON_JOIN:
-            os.mkdir(target_path)
-
-            with tempfile.TemporaryDirectory() as tmp:
-                sorted_self = self.sort(tmp, num_threads)
-                print("Sorted", datetime.datetime.now())
-
-                with contextlib.closing(
-                    utils.MultiplexStreamingMerge(
-                        sorted_self.sharded_readers(),
-                        functools.partial(_get_patient_shard, num_threads),
-                        num_threads,
-                        functools.partial(
-                            _convert_to_patient_helper, target_path
-                        ),
-                        _get_sort_key,
-                    )
-                ) as _:
-                    pass
-        else:
-            extension_datasets.sort_and_join_csvs(
-                self.path,
-                target_path,
-                ["patient_id", "start", "code"],
-                ",",
-                num_threads,
-            )
+        """Convert the EventCollection to a PatientCollection, which is stored in target_path."""
+        extension_datasets.sort_and_join_csvs(
+            self.path,
+            target_path,
+            ["patient_id", "start", "code"],
+            ",",
+            num_threads,
+        )
 
         return PatientCollection(target_path)
 
 
-def _sharded_patient_helper(path: str) -> ContextManager[Iterable[Patient]]:
+def _sharded_patient_reader(path: str) -> ContextManager[Iterable[Patient]]:
+    """Get a contextmanager for reading patients from a particular path."""
     return contextlib.closing(fileio.PatientReader(path))
 
 
-def _transform_helper(
+def _transform_single_reader(
     target_path: str,
     transforms: Sequence[Callable[[Patient], Optional[Patient]]],
     capture_statistics: bool,
     reader_func: Callable[[], ContextManager[Iterable[Patient]]],
 ) -> Optional[Dict[str, Dict[str, int]]]:
+    """Transform a single PatientReader, writing to a particular target_path."""
     if capture_statistics:
         information: Dict[str, Dict[str, int]] = collections.defaultdict(
             lambda: collections.defaultdict(int)
@@ -226,21 +184,26 @@ def _transform_helper(
 
 
 class PatientCollection:
+    """A PatientCollection is an unordered sequence of Patients."""
+
     def __init__(self, path: str):
+        """Open a PatientCollection at a particular path."""
         self.path = path
 
     def sharded_readers(
         self,
     ) -> Sequence[Callable[[], ContextManager[Iterable[Patient]]]]:
+        """Return a list of contextmanagers that allow sharded iteration of Patients."""
         return [
             functools.partial(
-                _sharded_patient_helper, os.path.join(self.path, child)
+                _sharded_patient_reader, os.path.join(self.path, child)
             )
             for child in os.listdir(self.path)
         ]
 
     @contextlib.contextmanager
     def reader(self) -> Iterator[Iterable[Patient]]:
+        """Return a single contextmanager that allows iteration over Patients."""
         with contextlib.ExitStack() as stack:
             sub_readers = [
                 stack.enter_context(reader())
@@ -256,11 +219,7 @@ class PatientCollection:
         num_threads: int = 1,
         stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> PatientCollection:
-        """
-        Applies a transformation to the patient files in a folder to generate a modified output folder.
-        Optionally supports multithreading.
-        """
-
+        """Apply a transformation to the patient files in a folder to generate a modified output folder."""
         os.mkdir(target_path)
 
         if not isinstance(transform, collections.abc.Sequence):
@@ -273,7 +232,7 @@ class PatientCollection:
         with multiprocessing.pool.Pool(num_threads) as pool:
             for stats in pool.imap_unordered(
                 functools.partial(
-                    _transform_helper,
+                    _transform_single_reader,
                     target_path,
                     transform,
                     stats_dict is not None,
@@ -292,6 +251,7 @@ class PatientCollection:
     def to_patient_database(
         self, target_path: str, concept_path: str, num_threads: int = 1
     ) -> PatientDatabase:
+        """Convert a PatientCollection to a PatientDatabase."""
         extension_datasets.convert_patient_collection_to_patient_database(
             self.path, concept_path, target_path, ",", num_threads
         )

@@ -1,5 +1,6 @@
-import piton
 import datetime
+
+import piton
 
 
 def test_event_to_string():
