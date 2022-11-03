@@ -17,22 +17,32 @@ class Patient:
 
 @dataclass(frozen=True)
 class Event:
-    """An event with a patient record."""
+    """An event with a patient record.
+
+    NOTE: Non-None field types must be specified in the order you want them decoded.
+
+    For example,
+        ```
+            value: float | memoryview | None
+        ```
+    Will attempt to decode the `.value` property as a `None` first, then `float`, then `memoryview`.
+    """
 
     start: datetime.datetime
-    code: int
+    code: int  # Is this an OMOP code (or is it an index into your Piton Ontology object?)
 
     end: datetime.datetime | None = None
+    value: float | memoryview | None = None
+
+    # TODO - Seems like `visit_id` should be separated from the Event class as it creates a weird
+    # interdependency between Events (since visits are Events)
     visit_id: int | None = None
-    value: memoryview | float | None = None
 
-    event_type: str | None = None
+    # TODO - add the below property
+    omop_table: str | None = None  # OMOP table where this event comes from
 
-    # TODO: Implement the following
-    # event_type: str | None = None
-
-    # id: int | None = None
-    # parent_id: int | None = None
+    # TODO - rename or make __private (confusing)
+    event_type: str | None = None  # Clarity table name where this event comes from (for ETL purposes only)
 
     def __post_init__(self) -> None:
         """Verify that the event is constructed correctly."""
