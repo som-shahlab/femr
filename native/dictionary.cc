@@ -33,7 +33,7 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
     {
         uintmax_t file_size = boost::filesystem::file_size(path);
 
-        if (file_size > std::numeric_limits<ssize_t>::max()) {
+        if (file_size > static_cast<uintmax_t>(std::numeric_limits<ssize_t>::max())) {
             throw std::runtime_error(absl::StrCat(
                 "Cannot map file larger than ssize_t::max ", path.string()));
         }

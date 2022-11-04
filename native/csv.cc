@@ -66,7 +66,8 @@ inline size_t line_iter(std::string_view line, char delimiter, F f) {
 
 void ZSTDCFree::operator()(ZSTD_CStream* ptr) { ZSTD_freeCStream(ptr); }
 
-ZstdWriter::ZstdWriter(const boost::filesystem::path& filename) {
+ZstdWriter::ZstdWriter(const boost::filesystem::path& filename)
+    : fname(filename) {
     f.rdbuf()->pubsetbuf(nullptr, 0);
     f.open(filename.c_str());
 
@@ -123,7 +124,13 @@ ZstdWriter::~ZstdWriter() { flush(true); }
 
 void ZSTDDFree::operator()(ZSTD_DStream* ptr) { ZSTD_freeDStream(ptr); }
 
-ZstdReader::ZstdReader(const boost::filesystem::path& filename) {
+ZstdReader::ZstdReader(const boost::filesystem::path& filename)
+    : fname(filename) {
+    if (!boost::filesystem::is_regular_file(filename)) {
+        throw std::runtime_error(
+            absl::StrCat(filename.string(), " is not a regular file"));
+    }
+
     f.rdbuf()->pubsetbuf(nullptr, 0);
     f.open(filename.c_str());
 
@@ -151,7 +158,7 @@ void ZstdReader::seek(size_t seek_amount) {
 
     out_buffer_end -= seek_amount;
 
-    if (((in_buffer_end - in_buffer_start) < BUFFER_SIZE) && !f.eof()) {
+    while (((in_buffer_end - in_buffer_start) < BUFFER_SIZE) && !f.eof()) {
         std::memmove(in_buffer_data.data(),
                      in_buffer_data.data() + in_buffer_start,
                      in_buffer_end - in_buffer_start);
@@ -250,17 +257,29 @@ std::vector<std::string> get_csv_columns(ZstdReader& reader, char delimiter) {
         return &result[index];
     });
     if (increment == 0) {
-        throw std::runtime_error("Could not even load the header?");
+        throw std::runtime_error("Could not even load the header? " +
+                                 reader.fname.string());
     }
     reader.seek(increment);
 
     return result;
 }
 
-CSVReader::CSVReader(const boost::filesystem::path& filename,
-                     const std::vector<std::string>& columns, char _delimiter)
+CSVReader::CSVReader(const boost::filesystem::path& filename, char _delimiter)
     : reader(filename), delimiter(_delimiter) {
     std::vector<std::string> file_columns = get_csv_columns(reader, delimiter);
+    columns = file_columns;
+    init_helper(file_columns);
+}
+
+CSVReader::CSVReader(const boost::filesystem::path& filename,
+                     const std::vector<std::string>& _columns, char _delimiter)
+    : columns(_columns), reader(filename), delimiter(_delimiter) {
+    std::vector<std::string> file_columns = get_csv_columns(reader, delimiter);
+    init_helper(file_columns);
+}
+
+void CSVReader::init_helper(const std::vector<std::string>& file_columns) {
     current_row.resize(columns.size());
     current_row_set.resize(columns.size());
     column_map.reserve(file_columns.size());
@@ -307,6 +326,8 @@ std::vector<std::string>& CSVReader::get_row() {
 
 bool CSVReader::next_row() {
     std::string_view line = reader.get_data().substr(current_offset);
+
+    current_row.resize(current_row_set.size());
 
     for (auto& column : current_row) {
         column.clear();

@@ -5,6 +5,7 @@ http_archive(
   name = "com_google_absl",
   urls = ["https://github.com/abseil/abseil-cpp/archive/a59b4daa07a14326d2ceb28cc6d0e079feea3338.zip"],
   strip_prefix = "abseil-cpp-a59b4daa07a14326d2ceb28cc6d0e079feea3338",
+  sha256 = "5bb0b7cd556e68ddedb0d9f13fcb79ac13e7a880f3728559836f62a699c75a79",
 )
 
 http_archive(

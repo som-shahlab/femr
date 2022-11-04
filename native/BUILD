@@ -42,6 +42,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name="flatmap",
+    hdrs=[
+        "flatmap.hh",
+    ],
+    deps=[
+        "@boost//:optional",
+    ],
+)
+
 
 cc_library(
     name="dictionary",
@@ -105,8 +115,10 @@ cc_library(
         "join_csvs.cc",
     ],
     deps=[
+        ":parse_utils",
         ":csv",
         "@readerwriterqueue",
+        ":thread_utils",
         "@concurrentqueue",
         "@com_google_absl//absl/strings",
         "@boost//:filesystem",
@@ -145,6 +157,7 @@ cc_library(
         "@picosha2",
         ":csv",
         ":parse_utils",
+        ":join_csvs",
         ":thread_utils",
         "@com_google_absl//absl/strings",
         "@readerwriterqueue",
@@ -186,7 +199,7 @@ cc_library(
         "@readerwriterqueue",
         "@concurrentqueue",
         "@boost//:filesystem",
-        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
     ],
 )
 
@@ -200,6 +213,34 @@ cc_test(
         "@gtest//:gtest_main",
     ],
 )
+
+
+cc_library(
+    name="dataloader",
+    hdrs=[
+        "dataloader.hh",
+    ],
+    srcs=[
+    ],
+    deps=[
+        "@concurrentqueue",
+    ],
+)
+
+cc_test(
+    name="dataloader_test",
+    srcs=[
+        "dataloader_test.cc",
+    ],
+    deps=[
+        ":dataloader",
+        "@boost//:optional",
+        "@boost//:callable_traits",
+        "@gtest//:gtest_main",
+    ],
+)
+
+
 
 cc_library(
     name="civil_day_caster",
@@ -255,5 +296,29 @@ cc_binary(
     deps=[
         "@json",
         ":database",
+    ],
+)
+
+cc_binary(
+    name="clmbr",
+    srcs=[
+        "clmbr.cc",
+    ],
+    deps=[
+        "@json",
+        ":database",
+        ":flatmap",
+    ],
+)
+
+cc_binary(
+    name="detect_duplicates",
+    srcs=[
+        "detect_duplicates.cc",
+    ],
+    deps=[
+        "@json",
+        ":database",
+        ":flatmap",
     ],
 )

@@ -22,6 +22,8 @@ class ZstdWriter {
 
     ~ZstdWriter();
 
+    boost::filesystem::path fname;
+
    private:
     void flush(bool final = false);
 
@@ -47,6 +49,7 @@ class ZstdReader {
     void seek(size_t seek_amount);
 
     bool eof() const;
+    boost::filesystem::path fname;
 
    private:
     std::ifstream f;
@@ -81,12 +84,19 @@ std::vector<std::string> get_csv_columns(
 class CSVReader {
    public:
     CSVReader(const boost::filesystem::path& filename,
-              const std::vector<std::string>& columns, char _delimiter);
+              const std::vector<std::string>& _columns, char _delimiter);
+
+    CSVReader(const boost::filesystem::path& filename, char _delimiter);
+
     std::vector<std::string>& get_row();
 
     bool next_row();
 
+    std::vector<std::string> columns;
+
    private:
+    void init_helper(const std::vector<std::string>& file_columns);
+
     size_t current_offset;
     ZstdReader reader;
     std::vector<ssize_t> column_map;

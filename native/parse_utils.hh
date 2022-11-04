@@ -12,6 +12,11 @@ void attempt_parse_or_die(std::string_view text, T& value) {
     }
 }
 
-absl::CivilDay parse_date(std::string_view datestr);
+template <typename T>
+void attempt_parse_time_or_die(std::string_view text, T& value) {
+    if (!absl::ParseCivilTime(text, &value)) {
+        throw std::runtime_error("Could not parse " + std::string(text));
+    }
+}
 
 #endif

@@ -31,7 +31,7 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
     entries.push_back({"999", "darn", "1e9"});
 
     entries.push_back({"100", "darn", "please don't waste this"});
-    entries.push_back({"100", "darn", "please don't waste this"});
+    entries.push_back({"101", "darn", "please don't waste this"});
 
     entries.push_back({"100", "darn", "please don't waste this 2"});
 
@@ -54,21 +54,29 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
         }
         if (i == 0) {
             writer.add_row({"100", "darn", "edge case"});
-            writer.add_row({"100", "darn", "edge case"});
-            writer.add_row({"100", "darn", "edge case"});
+            writer.add_row({"101", "darn", "edge case"});
+            writer.add_row({"102", "darn", "edge case"});
         }
     }
 
     boost::filesystem::path tmp_path = root / boost::filesystem::unique_path();
+    boost::filesystem::create_directories(tmp_path);
 
     auto result = count_codes_and_values(data_path, tmp_path, 3);
 
     for (const auto& entry : result.first) {
-        if (entry.first == 100) {
-            EXPECT_EQ(entry.second, 9);
+        switch (entry.first) {
+            case 100:
+                EXPECT_EQ(entry.second, 6);
+                break;
 
-        } else {
-            EXPECT_EQ(entry.second, 3);
+            case 101:
+                EXPECT_EQ(entry.second, 2);
+                break;
+
+            case 102:
+                EXPECT_EQ(entry.second, 1);
+                break;
         }
     }
 
