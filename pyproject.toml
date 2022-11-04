@@ -16,7 +16,7 @@ requires-python=">3.10"
 version = "0.1.0"
 
 [project.scripts]
-extract_omop = "piton.extractors.omop_converter:extract_omop_program"
+etl_stanford_omop = "piton.etl_pipelines.stanford:etl_starr_omop_program"
 
 [project.optional-dependencies]
 build = [

@@ -8,13 +8,26 @@ void create_ontology_files(const boost::filesystem::path& concept_root) {
     boost::filesystem::path concept = concept_root / "concept";
     boost::filesystem::create_directory(concept);
     {
-        CSVWriter writer((concept / boost::filesystem::unique_path()).string(),
-                         {"concept_id", "concept_code", "vocabulary_id"}, ',');
+        CSVWriter writer(
+            (concept / boost::filesystem::unique_path()).string(),
+            {"concept_id", "concept_code", "vocabulary_id", "standard_concept"},
+            ',');
 
-        writer.add_row({"32", "foo", "bar"});
-        writer.add_row({"323", "parent of foo", "bar"});
-        writer.add_row({"3235", "grandparent of foo", "bar"});
-        writer.add_row({"326", "lmao", "lol"});
+        writer.add_row({"32", "foo", "bar", ""});
+        writer.add_row({"323", "parent of foo", "bar", ""});
+        writer.add_row({"3235", "grandparent of foo", "bar", "S"});
+        writer.add_row({"32356", "bad grandparent of foo", "bar", ""});
+        writer.add_row({"326", "lmao", "lol", ""});
+    }
+
+    boost::filesystem::path relationship = concept_root / "relationship";
+    boost::filesystem::create_directory(relationship);
+    {
+        CSVWriter writer(
+            (relationship / boost::filesystem::unique_path()).string(),
+            {"reverse_relationship_id", "defines_ancestry"}, ',');
+
+        writer.add_row({"Is a", "1"});
     }
 
     boost::filesystem::path concept_relationship =
@@ -27,6 +40,7 @@ void create_ontology_files(const boost::filesystem::path& concept_root) {
 
         writer.add_row({"32", "323", "Is a"});
         writer.add_row({"323", "3235", "Is a"});
+        writer.add_row({"323", "32356", "Is a"});
     }
 }
 

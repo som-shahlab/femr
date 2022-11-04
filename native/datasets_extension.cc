@@ -1,5 +1,6 @@
 #include "datasets_extension.hh"
 
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -57,7 +58,50 @@ void register_datasets_extension(py::module& root) {
         test_module.def("create_database_files", create_database_files);
     }
 
-    m.def("sort_and_join_csvs", sort_and_join_csvs);
+    m.def("sort_and_join_csvs", [](std::string source_path,
+                                   std::string target_path, py::object fields,
+                                   char delimiter, int num_threads) {
+        std::vector<std::pair<std::string, ColumnValueType>> column_types;
+
+        if (py::isinstance<py::list>(fields)) {
+            // Assume all string fields
+            py::list list = py::reinterpret_borrow<py::list>(fields);
+            for (auto item : list) {
+                column_types.emplace_back(item.cast<std::string>(),
+                                          ColumnValueType::STRING);
+            }
+        } else if (py::isinstance<py::dtype>(fields)) {
+            py::dict fields_dict = fields.attr("fields");
+            for (const auto& entry : fields_dict) {
+                std::string name = entry.first.cast<std::string>();
+                py::tuple type_and_offset = entry.second.cast<py::tuple>();
+                py::dtype type = type_and_offset[0].cast<py::dtype>();
+                ColumnValueType our_type;
+                switch (type.kind()) {
+                    case 'M':
+                        our_type = ColumnValueType::DATETIME;
+                        break;
+
+                    case 'S':
+                        our_type = ColumnValueType::STRING;
+                        break;
+
+                    case 'u':
+                        our_type = ColumnValueType::UINT64_T;
+                        break;
+                    default:
+                        throw std::runtime_error(absl::StrCat(
+                            "Invalid kind ", std::to_string(type.kind())));
+                }
+                column_types.emplace_back(name, our_type);
+            }
+        } else {
+            throw std::runtime_error(
+                "Invalid type passed as fields to sort_and_join_csvs");
+        }
+        sort_and_join_csvs(source_path, target_path, column_types, delimiter,
+                           num_threads);
+    });
 
     m.def("convert_patient_collection_to_patient_database",
           convert_patient_collection_to_patient_database,

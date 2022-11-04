@@ -7,6 +7,7 @@
 #include <queue>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
 #include "blockingconcurrentqueue.h"
 #include "count_codes_and_values.hh"
@@ -242,11 +243,7 @@ void reader_thread(
         uint64_t code;
         attempt_parse_or_die(reader.get_row()[1], code);
         absl::CivilSecond time;
-        bool parsed_time = absl::ParseCivilTime(reader.get_row()[2], &time);
-        if (!parsed_time) {
-            throw std::runtime_error("Could not parse time " +
-                                     reader.get_row()[2]);
-        }
+        attempt_parse_time_or_die(reader.get_row()[2], time);
 
         if (patient_id != current_entry.original_patient_id) {
             output_patient();
@@ -307,6 +304,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
 
     boost::filesystem::path temp_path =
         target / boost::filesystem::unique_path();
+    boost::filesystem::create_directory(temp_path);
     auto codes_and_values =
         count_codes_and_values(patient_root, temp_path, num_threads);
 
@@ -433,6 +431,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
 
         add_counts(codes_and_values.first);
         add_counts(codes_and_values.second);
+        meta.add_value(container_to_view(codes));
     }
     std::cout << "Done with meta " << absl::Now() << std::endl;
 
@@ -597,12 +596,58 @@ std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
     }
 }
 
+absl::flat_hash_set<uint64_t> get_standard_codes(
+    const boost::filesystem::path& concept, char delimiter,
+    size_t num_threads) {
+    auto valid = process_nested(
+        concept, "concept", num_threads,
+        [&](const boost::filesystem::path& path) {
+            std::vector<uint64_t> result;
+
+            CSVReader reader(path, {"concept_id", "standard_concept"},
+                             delimiter);
+
+            while (reader.next_row()) {
+                uint64_t concept_id;
+                attempt_parse_or_die(reader.get_row()[0], concept_id);
+
+                if (reader.get_row()[1] != "") {
+                    result.push_back(concept_id);
+                }
+            }
+
+            return result;
+        });
+
+    absl::flat_hash_set<uint64_t> result;
+    for (const auto& entry : valid) {
+        for (const auto& val : entry) {
+            result.insert(val);
+        }
+    }
+
+    return result;
+}
+
 std::pair<absl::flat_hash_map<uint64_t, uint32_t>,
           std::vector<std::vector<uint32_t>>>
 get_parents(const std::vector<uint64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
-    using ParentMap = absl::flat_hash_map<uint64_t, std::vector<uint64_t>>;
+    auto standard_code_map =
+        get_standard_codes(concept, delimiter, num_threads);
+
+    using ParentMap =
+        absl::flat_hash_map<uint64_t,
+                            std::vector<std::tuple<bool, size_t, uint64_t>>>;
+
+    std::vector<std::string> valid_rels = {"Has precise ingredient",
+                                           "RxNorm has ing",
+                                           "Quantified form of",
+                                           "Has ingredient",
+                                           "Form of",
+                                           "Consists of",
+                                           "Is a"};
 
     auto parents = process_nested(
         concept, "concept_relationship", num_threads,
@@ -614,12 +659,26 @@ get_parents(const std::vector<uint64_t>& raw_codes,
                 delimiter);
 
             while (reader.next_row()) {
-                if (reader.get_row()[2] == "Is a") {
-                    uint64_t concept_id_1;
-                    attempt_parse_or_die(reader.get_row()[0], concept_id_1);
-                    uint64_t concept_id_2;
-                    attempt_parse_or_die(reader.get_row()[1], concept_id_2);
-                    result[concept_id_1].push_back(concept_id_2);
+                const auto& rel_id = reader.get_row()[2];
+                uint64_t concept_id_1;
+                attempt_parse_or_die(reader.get_row()[0], concept_id_1);
+                uint64_t concept_id_2;
+                attempt_parse_or_die(reader.get_row()[1], concept_id_2);
+
+                bool is_non_standard =
+                    standard_code_map.count(concept_id_2) == 0;
+
+                size_t valid_rel_index;
+                for (valid_rel_index = 0; valid_rel_index < valid_rels.size();
+                     valid_rel_index++) {
+                    if (valid_rels[valid_rel_index] == rel_id) {
+                        break;
+                    }
+                }
+
+                if (valid_rel_index < valid_rels.size()) {
+                    result[concept_id_1].push_back(std::make_tuple(
+                        is_non_standard, valid_rel_index, concept_id_2));
                 }
             }
 
@@ -635,6 +694,24 @@ get_parents(const std::vector<uint64_t>& raw_codes,
                                 std::begin(entry.second),
                                 std::end(entry.second));
         }
+    }
+
+    for (auto& entry : merged) {
+        // Only use the ideal mappings
+        std::sort(std::begin(entry.second), std::end(entry.second));
+
+        auto first = entry.second[0];
+
+        auto desired = std::make_pair(std::get<0>(first), std::get<1>(first));
+
+        auto invalid = std::remove_if(
+            std::begin(entry.second), std::end(entry.second),
+            [&](const auto& tup) {
+                return std::make_pair(std::get<0>(tup), std::get<1>(tup)) !=
+                       desired;
+            });
+
+        entry.second.erase(invalid, std::end(entry.second));
     }
 
     absl::flat_hash_map<uint64_t, uint32_t> index_map;
@@ -671,8 +748,8 @@ get_parents(const std::vector<uint64_t>& raw_codes,
 
         std::vector<uint32_t> indices;
         indices.reserve(merged.size());
-        for (uint64_t parent : ps) {
-            indices.push_back(get_index(parent));
+        for (auto parent : ps) {
+            indices.push_back(get_index(std::get<2>(parent)));
         }
 
         std::sort(std::begin(indices), std::end(indices));

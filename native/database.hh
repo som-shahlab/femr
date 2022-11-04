@@ -156,6 +156,7 @@ class PatientDatabase {
     // 1 sorted_original_patient_ids
     // 2 code counts
     // 3 text value counts
+    // 4 original_code_ids
     LazyDictionary meta_dictionary;
 };
 

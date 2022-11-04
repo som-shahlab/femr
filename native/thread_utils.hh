@@ -19,7 +19,7 @@ void dequeue_many_loop(T& in_queues, F f) {
                 bool found = in_queues[index].try_dequeue(next_entry);
 
                 if (!found) {
-                    in_queues[index].wait_dequeue(next_entry);
+                    break;
                 }
 
                 if (!next_entry) {
@@ -29,10 +29,6 @@ void dequeue_many_loop(T& in_queues, F f) {
                     break;
                 } else {
                     f(*next_entry);
-                }
-
-                if (!found) {
-                    break;
                 }
             }
         }
