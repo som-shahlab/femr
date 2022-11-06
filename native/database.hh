@@ -65,7 +65,7 @@ struct Event {
     uint16_t age_in_days;
     uint16_t minutes_offset;
 
-    uint32_t code;
+    uint32_t concept_id;
     ValueType value_type;
 
     union {
@@ -75,7 +75,7 @@ struct Event {
 
     bool operator==(const Event& other) const {
         return (age_in_days == other.age_in_days &&
-                minutes_offset == other.minutes_offset && code == other.concept_id &&
+                minutes_offset == other.minutes_offset && concept_id == other.concept_id &&
                 value_type == other.value_type &&
                 text_value == other.text_value);
     }
