@@ -16,7 +16,7 @@ def move_to_day_end(patient: Patient) -> Patient:
             event.start.hour == 0
             and event.start.minute == 0
             and event.start.second == 0
-            and event.code != OMOP_BIRTH
+            and event.concept_id != OMOP_BIRTH
         ):
             new_time = (
                 event.start
@@ -27,7 +27,7 @@ def move_to_day_end(patient: Patient) -> Patient:
         else:
             new_events.append(event)
 
-    new_events.sort(key=lambda a: (a.start, a.code))
+    new_events.sort(key=lambda a: (a.start, a.concept_id))
 
     return Patient(patient.patient_id, new_events)
 
@@ -36,7 +36,7 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
     """Move all events to after the birth of a patient."""
     birth_date = None
     for event in patient.events:
-        if event.code == OMOP_BIRTH:
+        if event.concept_id == OMOP_BIRTH:
             birth_date = event.start
 
     if birth_date is None:
@@ -87,39 +87,47 @@ def move_billing_codes(patient: Patient) -> Patient:
     }
 
     for event in patient.events:
-        if event.event_type in all_billing_codes and event.visit_id is not None:
-            key = (event.start, event.code)
+        event_type = (
+            event.metadata.get("event_type") if event.metadata else None
+        )
+        visit_id = event.metadata.get("visit_id") if event.metadata else None
+        if event_type in all_billing_codes and visit_id is not None:
+            key = (event.start, event.concept_id)
             if key not in lowest_visit:
-                lowest_visit[key] = event.visit_id
+                lowest_visit[key] = visit_id
             else:
-                lowest_visit[key] = min(lowest_visit[key], event.visit_id)
+                lowest_visit[key] = min(lowest_visit[key], visit_id)
 
-        if event.event_type in ("lpch_pat_enc", "shc_pat_enc"):
+        if event_type in ("lpch_pat_enc", "shc_pat_enc"):
             if event.end is not None:
-                if event.visit_id is None:
+                if visit_id is None:
                     raise RuntimeError(
                         f"Expected visit id for visit? {patient.patient_id} {event}"
                     )
-                if end_visits.get(event.visit_id, event.end) != event.end:
+                if end_visits.get(visit_id, event.end) != event.end:
                     raise RuntimeError(
-                        f"Multiple end visits? {end_visits.get(event.visit_id)} {event}"
+                        f"Multiple end visits? {end_visits.get(visit_id)} {event}"
                     )
-                end_visits[event.visit_id] = event.end
+                end_visits[visit_id] = event.end
 
     new_events = []
 
     for event in patient.events:
-        if event.event_type in all_billing_codes:
-            key = (event.start, event.code)
-            if event.visit_id != lowest_visit.get(key, None):
+        event_type = (
+            event.metadata.get("event_type") if event.metadata else None
+        )
+        visit_id = event.metadata.get("visit_id") if event.metadata else None
+        if event_type in all_billing_codes:
+            key = (event.start, event.concept_id)
+            if visit_id != lowest_visit.get(key, None):
                 continue
 
-            if event.visit_id is None:
+            if visit_id is None:
                 # This is a bad code, but would rather keep it than get rid of it
                 new_events.append(event)
                 continue
 
-            end_visit = end_visits.get(event.visit_id)
+            end_visit = end_visits.get(visit_id)
             if end_visit is None:
                 raise RuntimeError(
                     f"Expected visit end for code {patient.patient_id} {event} {patient}"
@@ -128,6 +136,6 @@ def move_billing_codes(patient: Patient) -> Patient:
         else:
             new_events.append(event)
 
-    new_events.sort(key=lambda a: (a.start, a.code))
+    new_events.sort(key=lambda a: (a.start, a.concept_id))
 
     return Patient(patient_id=patient.patient_id, events=new_events)

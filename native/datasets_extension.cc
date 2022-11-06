@@ -166,7 +166,7 @@ void register_datasets_extension(py::module& root) {
                     }
                     events[i] =
                         python_event("start"_a = event_time,
-                                     "code"_a = event.code, "value"_a = value);
+                                     "code"_a = event.concept_id, "value"_a = value);
                 }
 
                 return python_patient("patient_id"_a = p.patient_id,

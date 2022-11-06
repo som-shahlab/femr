@@ -5,6 +5,7 @@ import csv
 import dataclasses
 import datetime
 import io
+import json
 import tempfile
 from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 
@@ -44,6 +45,7 @@ class EventWriter:
             - float
             - memoryview
             - str
+            - dict
             - None (optional)
         """
         if field_value is None:
@@ -62,6 +64,8 @@ class EventWriter:
             return bytes(field_value).decode("utf8")
         elif isinstance(field_value, str):
             return field_value
+        elif isinstance(field_value, dict):
+            return json.dumps(field_value)
         else:
             raise ValueError(
                 f"EventWriter does not have a method for fields with the type of {field_name}"
@@ -122,6 +126,7 @@ class EventReader:
             - float
             - memoryview
             - str
+            - dict
             - None (optional)
         """
         field_types: List = self.schema[field_name]
@@ -134,11 +139,21 @@ class EventReader:
                 if field_type == "datetime.datetime":
                     return datetime.datetime.fromisoformat(field_value)
                 elif field_type == "int":
+                    if not field_value.isdigit():
+                        # If this field is truly an integer, then it will only contain
+                        # a string of numbers. However, that is not the case if `isdigit()` is FALSE.
+                        # Thus, this field is not a string of numbers (i.e. contains a '.'),
+                        # which means we may erroneously try to cast a float to an int.
+                        # To avoid that mis-cast, we continue so that the `float` type can try
+                        # parsing this field's value.
+                        continue
                     return int(field_value)
                 elif field_type == "float":
                     return float(field_value)
                 elif field_type == "str":
                     return str(field_value)
+                elif field_type == "dict":
+                    return json.loads(field_value)
                 elif field_type == "memoryview":
                     return memoryview(field_value.encode("utf8"))
                 else:

@@ -17,35 +17,41 @@ class Patient:
 
 @dataclass(frozen=True)
 class Event:
-    """An event with a patient record.
+    """An event within a patient timeline."""
 
-    NOTE: Non-None field types must be specified in the order you want them decoded.
+    ########
+    # Required fields
+    ########
 
-    For example,
-        ```
-            value: float | memoryview | None
-        ```
-    Will attempt to decode the `.value` property as a `None` first, then `float`, then `memoryview`.
-    """
+    # Shared ID across all Events of the same type
+    concept_id: int
 
+    # Time interval over which this event occurred.
+    # Only specify `start` if it's a single moment in time
     start: datetime.datetime
-    code: int  # Is this an OMOP code (or is it an index into your Piton Ontology object?)
 
+    ########
+    # Optional fields
+    ########
+
+    # Time interval over which this event occurred.
     end: datetime.datetime | None = None
-    value: float | memoryview | None = None
 
-    # TODO - Seems like `visit_id` should be separated from the Event class as it creates a weird
-    # interdependency between Events (since visits are Events)
-    visit_id: int | None = None
+    # Value associated with Event.
+    # If text, then use `memoryview` (e.g. clinical note)
+    # If numeric, then use `float` (e.g. lab value)
+    value: int | float | memoryview | None = None
 
-    # TODO - add the below property
-    omop_table: str | None = None  # OMOP table where this event comes from
-
-    # TODO - rename or make __private (confusing)
-    event_type: str | None = None  # Clarity table name where this event comes from (for ETL purposes only)
+    # Any data associated with this Event that we need to carry
+    # through the ETL in order to apply transformations to the Event
+    # Examples of fields within `metadata`:
+    #   - visit_id
+    #   - load_table_etl
+    metadata: dict | None = None  # type: ignore
 
     def __post_init__(self) -> None:
         """Verify that the event is constructed correctly."""
+        # Check `value`
         if not (
             (self.value is None)
             or isinstance(self.value, (int, float, memoryview))
@@ -63,3 +69,15 @@ class Event:
                 value = "'" + value.tobytes().decode("utf-8") + "'"
             items.append(f"{f.name}={value}")
         return "Event(" + ", ".join(items) + ")"
+
+    def __hash__(self) -> int:
+        """Need to explicitly define for `self.metadata` since dicts() are unhashable by default."""
+        return hash(
+            (
+                self.concept_id,
+                self.start,
+                self.end,
+                self.value,
+                str(self.metadata),
+            )
+        )

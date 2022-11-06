@@ -103,7 +103,7 @@ TEST(Database, CreateDatabase) {
     Event a = {
         .age_in_days = 3,
         .minutes_offset = 14 * 60 + 30,
-        .code = *database.get_code_dictionary().find("bar/parent of foo"),
+        .concept_id = *database.get_code_dictionary().find("bar/parent of foo"),
         .value_type = ValueType::UNIQUE_TEXT};
     EXPECT_EQ(
         database.get_unique_text_dictionary().find("Long Text").has_value(),
@@ -114,19 +114,19 @@ TEST(Database, CreateDatabase) {
 
     Event b = {.age_in_days = 3,
                .minutes_offset = 14 * 60 + 30,
-               .code = *database.get_code_dictionary().find("lol/lmao"),
+               .concept_id = *database.get_code_dictionary().find("lol/lmao"),
                .value_type = ValueType::SHARED_TEXT};
     b.text_value = *database.get_shared_text_dictionary().find("Short Text");
 
     Event c = {.age_in_days = 6,
                .minutes_offset = 14 * 60 + 30,
-               .code = *database.get_code_dictionary().find("lol/lmao"),
+               .concept_id = *database.get_code_dictionary().find("lol/lmao"),
                .value_type = ValueType::NUMERIC};
     c.numeric_value = 34;
 
     Event d = {.age_in_days = 7,
                .minutes_offset = 14 * 60 + 30,
-               .code = *database.get_code_dictionary().find("lol/lmao"),
+               .concept_id = *database.get_code_dictionary().find("lol/lmao"),
                .value_type = ValueType::NUMERIC};
     d.numeric_value = 34.5;
 
@@ -135,11 +135,11 @@ TEST(Database, CreateDatabase) {
         ElementsAre(
             Event{.age_in_days = 0,
                   .minutes_offset = 9 * 60 + 30,
-                  .code = *database.get_code_dictionary().find("bar/foo"),
+                  .concept_id = *database.get_code_dictionary().find("bar/foo"),
                   .value_type = ValueType::NONE},
             Event{.age_in_days = 0,
                   .minutes_offset = 10 * 60 + 30,
-                  .code = *database.get_code_dictionary().find("bar/foo"),
+                  .concept_id = *database.get_code_dictionary().find("bar/foo"),
                   .value_type = ValueType::NONE},
             a, b, c, d));
 

@@ -75,7 +75,7 @@ struct Event {
 
     bool operator==(const Event& other) const {
         return (age_in_days == other.age_in_days &&
-                minutes_offset == other.minutes_offset && code == other.code &&
+                minutes_offset == other.minutes_offset && code == other.concept_id &&
                 value_type == other.value_type &&
                 text_value == other.text_value);
     }

@@ -29,13 +29,13 @@ def remove_nones(patient: Patient) -> Patient:
 
     for event in patient.events:
         if event.value is not None:
-            has_value.add((event.code, event.start.date()))
+            has_value.add((event.concept_id, event.start.date()))
 
     new_events = []
     for event in patient.events:
         if (
             event.value is None
-            and (event.code, event.start.date()) in has_value
+            and (event.concept_id, event.start.date()) in has_value
         ):
             continue
         new_events.append(event)
@@ -55,7 +55,7 @@ def delta_encode(patient: Patient) -> Patient:
 
     new_events = []
     for event in patient.events:
-        key = (event.code, event.start.date())
+        key = (event.concept_id, event.start.date())
         if key in last_value and last_value[key] == event.value:
             continue
         last_value[key] = event.value

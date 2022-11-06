@@ -132,7 +132,7 @@ class EventCollection:
                 [
                     ("patient_id", np.uint64),
                     ("start", np.datetime64),
-                    ("code", np.uint64),
+                    ("concept_id", np.uint64),
                 ]
             ),
             ",",

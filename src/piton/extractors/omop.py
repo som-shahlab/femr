@@ -46,12 +46,20 @@ class _DemographicsConverter(CSVExtractor):
 
         return [
             # 4216316 is the OMOP birth code
-            Event(start=birth, code=4216316, event_type=row["load_table_id"])
+            Event(
+                start=birth,
+                concept_id=4216316,
+                metadata={
+                    "event_type": row["load_table_id"],
+                },
+            )
         ] + [
             Event(
                 start=birth,
-                code=int(row[target]),
-                event_type=row["load_table_id"],
+                concept_id=int(row[target]),
+                metadata={
+                    "event_type": row["load_table_id"],
+                },
             )
             for target in [
                 "gender_concept_id",
@@ -150,11 +158,13 @@ class _ConceptTableConverter(CSVExtractor):
         return [
             Event(
                 start=start,
-                code=code,
+                concept_id=code,
                 value=value,
                 end=end,
-                visit_id=visit_id,
-                event_type=row["load_table_id"],
+                metadata={
+                    "event_type": row["load_table_id"],
+                    "visit_id": visit_id,
+                },
             )
         ]
 

@@ -12,25 +12,31 @@ from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 NUM_PATIENTS = 5
 
 SHARED_EVENTS = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
+    piton.Event(start=datetime.datetime(1995, 1, 3), concept_id=0, value=34.5),
     piton.Event(
         start=datetime.datetime(2010, 1, 1),
-        code=1,
+        concept_id=1,
         value=memoryview(b"test_value"),
     ),
-    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
-    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
-    piton.Event(start=datetime.datetime(2011, 2, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
+    piton.Event(start=datetime.datetime(2010, 1, 5), concept_id=2, value=1.0),
+    piton.Event(start=datetime.datetime(2010, 6, 5), concept_id=3, value=1.0),
+    piton.Event(start=datetime.datetime(2011, 2, 5), concept_id=2, value=None),
+    piton.Event(start=datetime.datetime(2011, 7, 5), concept_id=2, value=None),
+    piton.Event(start=datetime.datetime(2012, 10, 5), concept_id=3, value=None),
     piton.Event(
-        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
+        start=datetime.datetime(2015, 6, 5, 0), concept_id=2, value=None
     ),
-    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
-    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
     piton.Event(
-        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=None
+        start=datetime.datetime(2015, 6, 5, 10, 10), concept_id=2, value=None
+    ),
+    piton.Event(
+        start=datetime.datetime(2015, 6, 15, 11), concept_id=3, value=None
+    ),
+    piton.Event(start=datetime.datetime(2016, 1, 1), concept_id=2, value=None),
+    piton.Event(
+        start=datetime.datetime(2016, 3, 1, 10, 10, 10),
+        concept_id=2,
+        value=None,
     ),
 ]
 
@@ -200,7 +206,7 @@ def test_mortality_lf():
     labeled_patients = labeler.apply(patients)
 
     # Selected the right code
-    assert labeler.code == 3
+    assert labeler.concept_id == 3
     # All label values are correct -- assumes all patients have same events
     for patient_id in labeled_patients.keys():
         assert_labels_are_accurate(labeled_patients, patient_id, true_labels)
@@ -235,7 +241,7 @@ def test_code_lf():
     assert labeler.get_time_horizon() == time_horizon_6_months
     for p in patients:
         assert labeler.get_outcome_times(p) == [
-            event.start for event in p.events if event.code == 2
+            event.start for event in p.events if event.concept_id == 2
         ]
 
     # Label patients and check that they're correct
@@ -257,33 +263,49 @@ def test_time_horizons():
             create_patients(
                 [
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 10, 5), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 3, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 3, 11),
-                        code=1,
+                        start=datetime.datetime(2015, 1, 3),
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 5, 4), code=1, value=None
+                        start=datetime.datetime(2015, 1, 3),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 12, 4), code=1, value=None
+                        start=datetime.datetime(2015, 10, 5),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 1, 3),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 3, 3),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 5, 3),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 5, 3, 11),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 5, 4),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 12, 4),
+                        concept_id=1,
+                        value=None,
                     ),
                 ]
             ),
@@ -308,33 +330,49 @@ def test_time_horizons():
             create_patients(
                 [
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 10, 5), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 1, 3), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 3, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 3, 11),
-                        code=2,
+                        start=datetime.datetime(2015, 1, 3),
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 5, 4), code=1, value=None
+                        start=datetime.datetime(2015, 1, 3),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 12, 4), code=1, value=None
+                        start=datetime.datetime(2015, 10, 5),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 1, 3),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 3, 3),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 5, 3),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 5, 3, 11),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 5, 4),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2018, 12, 4),
+                        concept_id=1,
+                        value=None,
                     ),
                 ]
             ),
@@ -359,27 +397,39 @@ def test_time_horizons():
             create_patients(
                 [
                     piton.Event(
-                        start=datetime.datetime(2000, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2000, 10, 5), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2002, 1, 5), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2002, 4, 5), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2002, 12, 5), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2002, 12, 10),
-                        code=1,
+                        start=datetime.datetime(2000, 1, 3),
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2004, 1, 10), code=2, value=None
+                        start=datetime.datetime(2000, 10, 5),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2002, 1, 5),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2002, 4, 5),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2002, 12, 5),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2002, 12, 10),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2004, 1, 10),
+                        concept_id=2,
+                        value=None,
                     ),
                 ]
             ),
@@ -400,21 +450,29 @@ def test_time_horizons():
             create_patients(
                 [
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 4), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 5), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 5, 10),
-                        code=1,
+                        start=datetime.datetime(2015, 1, 3),
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 6), code=2, value=None
+                        start=datetime.datetime(2015, 1, 4),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2015, 1, 5),
+                        concept_id=2,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2015, 1, 5, 10),
+                        concept_id=1,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2015, 1, 6),
+                        concept_id=2,
+                        value=None,
                     ),
                 ]
             ),
@@ -429,28 +487,44 @@ def test_time_horizons():
             create_patients(
                 [
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
+                        start=datetime.datetime(2015, 1, 3),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 13), code=1, value=None
+                        start=datetime.datetime(2015, 1, 13),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 23), code=2, value=None
+                        start=datetime.datetime(2015, 1, 23),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 2, 2), code=2, value=None
+                        start=datetime.datetime(2015, 2, 2),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 3, 10), code=1, value=None
+                        start=datetime.datetime(2015, 3, 10),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 3, 20), code=2, value=None
+                        start=datetime.datetime(2015, 3, 20),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 3, 29), code=2, value=None
+                        start=datetime.datetime(2015, 3, 29),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 3, 30), code=1, value=None
+                        start=datetime.datetime(2015, 3, 30),
+                        concept_id=1,
+                        value=None,
                     ),
                 ]
             ),
@@ -465,25 +539,39 @@ def test_time_horizons():
             create_patients(
                 [
                     piton.Event(
-                        start=datetime.datetime(2000, 1, 3), code=2, value=None
+                        start=datetime.datetime(2000, 1, 3),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2001, 10, 5), code=1, value=None
+                        start=datetime.datetime(2001, 10, 5),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2020, 10, 5), code=2, value=None
+                        start=datetime.datetime(2020, 10, 5),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2021, 10, 5), code=1, value=None
+                        start=datetime.datetime(2021, 10, 5),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2050, 1, 10), code=2, value=None
+                        start=datetime.datetime(2050, 1, 10),
+                        concept_id=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2051, 1, 10), code=1, value=None
+                        start=datetime.datetime(2051, 1, 10),
+                        concept_id=1,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(5000, 1, 10), code=1, value=None
+                        start=datetime.datetime(5000, 1, 10),
+                        concept_id=1,
+                        value=None,
                     ),
                 ]
             ),
@@ -508,96 +596,96 @@ def test_time_horizons():
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 0, 0),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 10, 29),
-                        code=2,
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 10, 30),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 10, 31),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     #
                     piton.Event(
                         start=datetime.datetime(2016, 1, 1, 0, 0),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2016, 1, 1, 10, 29),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2016, 1, 1, 10, 30),
-                        code=2,
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2016, 1, 1, 10, 31),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     #
                     piton.Event(
                         start=datetime.datetime(2017, 1, 1, 0, 0),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2017, 1, 1, 10, 29),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2017, 1, 1, 10, 30),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2017, 1, 1, 10, 31),
-                        code=2,
+                        concept_id=2,
                         value=None,
                     ),
                     #
                     piton.Event(
                         start=datetime.datetime(2018, 1, 1, 0, 0),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2018, 1, 1, 4, 59, 59),
-                        code=2,
+                        concept_id=2,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2018, 1, 1, 5),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     #
                     piton.Event(
                         start=datetime.datetime(2019, 1, 1, 0, 0),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2019, 1, 1, 4, 59, 59),
-                        code=1,
+                        concept_id=1,
                         value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2019, 1, 1, 5),
-                        code=2,
+                        concept_id=2,
                         value=None,
                     ),
                 ]
@@ -636,14 +724,3 @@ def test_time_horizons():
                 true_labels,
                 help_text=f" | test #{test_idx}",
             )
-
-
-# # `LabeledPatients` class
-# test_labeled_patients()
-
-# # Labeling functions
-# test_code_lf()
-# test_mortality_lf()
-
-# # Time Horizons
-# test_time_horizons()

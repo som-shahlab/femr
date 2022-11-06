@@ -29,17 +29,17 @@ os.makedirs(target_directory)
 dummy_events = [
     piton.Event(
         start=datetime.datetime(1995, 1, 3),
-        code=0,
+        concept_id=0,
         value=float(34),
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
-        code=1,
+        concept_id=1,
         value=memoryview(b"test_value"),
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 5),
-        code=2,
+        concept_id=2,
         value=None,
     ),
 ]

@@ -59,20 +59,20 @@ def test_helper(tmp_path):
 
     assert patient.patient_id == patient_id
     assert patient.events == (
-        piton.Event(start=f("1990-03-08 09:30:00"), code=0, value=None),
-        piton.Event(start=f("1990-03-08 10:30:00"), code=0, value=None),
+        piton.Event(start=f("1990-03-08 09:30:00"), concept_id=0, value=None),
+        piton.Event(start=f("1990-03-08 10:30:00"), concept_id=0, value=None),
         piton.Event(
             start=f("1990-03-11 14:30:00"),
-            code=2,
+            concept_id=2,
             value=memoryview(b"Long Text"),
         ),
         piton.Event(
             start=f("1990-03-11 14:30:00"),
-            code=1,
+            concept_id=1,
             value=memoryview(b"Short Text"),
         ),
-        piton.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0),
-        piton.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5),
+        piton.Event(start=f("1990-03-14 14:30:00"), concept_id=1, value=34.0),
+        piton.Event(start=f("1990-03-15 14:30:00"), concept_id=1, value=34.5),
     )
 
     total = 0

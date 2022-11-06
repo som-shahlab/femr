@@ -25,9 +25,9 @@ class CodeLF(FixedTimeHorizonEventLF):
     TODO - Test on real data
     """
 
-    def __init__(self, code: int, time_horizon: TimeHorizon):
-        """Label the code whose index in your Ontology is equal to `code`."""
-        self.code = code
+    def __init__(self, concept_id: int, time_horizon: TimeHorizon):
+        """Label the concept_id whose index in your Ontology is equal to `concept_id`."""
+        self.concept_id = concept_id
         self.time_horizon = time_horizon
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -39,10 +39,10 @@ class CodeLF(FixedTimeHorizonEventLF):
         return self.time_horizon
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events which have the exact same `code` as `self.code`."""
+        """Return the start times of this patient's events with the same `concept_id` as `self.concept_id`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.code == self.code:
+            if event.concept_id == self.concept_id:
                 times.append(event.start)
         return times
 
@@ -79,7 +79,7 @@ class MortalityLF(CodeLF):
             )
         else:
             death_code: int = list(death_codes)[0][1]
-            super().__init__(code=death_code, time_horizon=time_horizon)
+            super().__init__(concept_id=death_code, time_horizon=time_horizon)
 
 
 ##########################################################
@@ -120,7 +120,7 @@ class IsMaleLF(LabelingFunction):
 
     def is_inpatient_admission(self, event: Event) -> bool:
         """Return TRUE if this event is an admission."""
-        return event.code == self.admission_code
+        return event.concept_id == self.admission_code
 
     def label(self, patient: Patient) -> List[Label]:
         """Label this patient as Male (TRUE) or not (FALSE)."""
@@ -129,7 +129,7 @@ class IsMaleLF(LabelingFunction):
 
         labels: List[Label] = []
         is_male: bool = self.male_code in [
-            event.code for event in patient.events
+            event.concept_id for event in patient.events
         ]
 
         for event in patient.events:

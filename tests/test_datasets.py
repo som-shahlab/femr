@@ -9,15 +9,17 @@ import piton
 import piton.datasets
 
 dummy_events = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
+    piton.Event(
+        start=datetime.datetime(1995, 1, 3), concept_id=0, value=float(34)
+    ),
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
-        code=1,
+        concept_id=1,
         value=memoryview(b"test_value"),
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 5),
-        code=2,
+        concept_id=2,
         value=None,
     ),
 ]
@@ -103,7 +105,7 @@ def transform_func(a: piton.Patient) -> Optional[piton.Patient]:
         events=[
             piton.Event(
                 start=event.start,
-                code=event.code,
+                concept_id=event.concept_id,
                 value=memoryview(b"foo"),
             )
             for event in a.events
@@ -127,7 +129,7 @@ def test_transform_patients(tmp_path: pathlib.Path) -> None:
         better_dummy_events = [
             piton.Event(
                 start=event.start,
-                code=event.code,
+                concept_id=event.concept_id,
                 value=memoryview(b"foo"),
             )
             for event in dummy_events

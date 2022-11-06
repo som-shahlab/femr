@@ -93,12 +93,12 @@ void write_patient_to_buffer(uint64_t original_patient_id,
 
         switch (event.value_type) {
             case ValueType::NONE:
-                buffer.push_back((event.code << 2));
+                buffer.push_back((event.concept_id << 2));
                 break;
 
             case ValueType::UNIQUE_TEXT:
             case ValueType::SHARED_TEXT: {
-                buffer.push_back((event.code << 2) | 1);
+                buffer.push_back((event.concept_id << 2) | 1);
                 bool is_shared = event.value_type == ValueType::SHARED_TEXT;
                 buffer.push_back((event.text_value << 1) |
                                  static_cast<uint32_t>(is_shared));
@@ -108,10 +108,10 @@ void write_patient_to_buffer(uint64_t original_patient_id,
             case ValueType::NUMERIC:
                 if (static_cast<uint32_t>(event.numeric_value) ==
                     event.numeric_value) {
-                    buffer.push_back((event.code << 2) | 2);
+                    buffer.push_back((event.concept_id << 2) | 2);
                     buffer.push_back(event.numeric_value);
                 } else {
-                    buffer.push_back((event.code << 2) | 3);
+                    buffer.push_back((event.concept_id << 2) | 3);
                     buffer.push_back(event.text_value);
                 }
                 break;
@@ -146,7 +146,7 @@ void read_patient_from_buffer(Patient& current_patient,
         event.minutes_offset = last_minutes;
 
         uint32_t code_and_type = buffer[index++];
-        event.code = code_and_type >> 2;
+        event.concept_id = code_and_type >> 2;
         uint32_t type = code_and_type & 3;
 
         switch (type) {
@@ -264,7 +264,7 @@ void reader_thread(
         next_event.minutes_offset =
             (age_in_seconds / seconds_per_minute) -
             (next_event.age_in_days * hours_per_day * minutes_per_hour);
-        next_event.code = code_to_index.find(code)->second;
+        next_event.concept_id = code_to_index.find(code)->second;
 
         if (reader.get_row()[3].empty()) {
             next_event.value_type = ValueType::NONE;
