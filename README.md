@@ -8,9 +8,6 @@
 3. Apply featurization schemes to obtain feature matrices for each patient
 4. Perform other common tasks necessary for research with EHR data
 
-https://ehr-ml.readthedocs.io/en/latest/ has the full documentation, including setup instructions and a tutorial using SynPuf data.
-
-
 # Documentation
 
 https://ehr-ml.readthedocs.io/en/latest/ has (outdated) documentation, including setup instructions and a tutorial using SynPuf data.
@@ -33,4 +30,29 @@ As Nero does not have internet access, you must run the following before pip ins
 
 ```
 export DISTDIR=/local-scratch/nigam/distdir
+```
+
+# Precommit checks
+
+## Installation
+```
+conda install pre-commit
+conda install pytest
+pre-commit install
+```
+
+## Pytest test
+
+```
+pytest tests
+```
+
+## Pre-commit test
+
+This will run automatically on every commit.
+
+You can also run it manually with:
+
+```
+pre-commit run --all-files
 ```
