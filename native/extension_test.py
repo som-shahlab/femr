@@ -16,7 +16,7 @@ def test_helper(tmp_path):
         [
             ("patient_id", np.uint64),
             ("start", np.datetime64),
-            ("code", np.uint64),
+            ("concept_id", np.uint64),
         ]
     )
     m.sort_and_join_csvs("foo_fancy", "bar_fancy", fancy_type, ",", 3)

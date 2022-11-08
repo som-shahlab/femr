@@ -193,8 +193,8 @@ void reader_thread(
     std::atomic<uint32_t>& unique_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
-    CSVReader reader(patient_file, {"patient_id", "code", "start", "value"},
-                     ',');
+    CSVReader reader(patient_file,
+                     {"patient_id", "concept_id", "start", "value"}, ',');
 
     Entry current_entry;
     current_entry.original_patient_id = 0;

@@ -45,7 +45,7 @@ convert_to_vector(const T& container) {
 void clean_thread(const boost::filesystem::path& in_path,
                   CodeCounter& code_counts,
                   const boost::filesystem::path& out_path) {
-    CSVReader reader(in_path, {"value", "code"}, ',');
+    CSVReader reader(in_path, {"value", "concept_id"}, ',');
     CSVWriter writer(out_path, {"value"}, ',');
 
     while (reader.next_row()) {
