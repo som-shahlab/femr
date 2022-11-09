@@ -66,12 +66,16 @@ class MortalityLF(CodeLF):
         Raises:
             ValueError: Raised if there are multiple unique codes that map to the death code
         """
-        CODE_DEATH_PREFIX = "Death Type/"
+        # CODE_DEATH_PREFIX = "Death Type/"
+        CODE_DEATH_PREFIX = "SNOMED/419620001"
 
         death_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
-            if code_str.startswith(CODE_DEATH_PREFIX):
+            code_str = bytes(code_str).decode('utf-8')
+            if code_str == CODE_DEATH_PREFIX:
                 death_codes.add((code_str, code))
+            # if code_str.startswith(CODE_DEATH_PREFIX):
+            #     death_codes.add((code_str, code))
 
         if len(death_codes) != 1:
             raise ValueError(

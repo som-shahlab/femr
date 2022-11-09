@@ -91,6 +91,8 @@ class Label:
         self.label_type = label_type
         self.value = value
 
+        assert value is not None
+
 
 class LabelingFunction(ABC):
     """An interface for labeling functions.
@@ -424,13 +426,9 @@ class FixedTimeHorizonEventLF(LabelingFunction):
                 results.append(
                     Label(time=time, value=False, label_type="boolean")
                 )
-            else:
-                results.append(
-                    Label(time=time, value=None, label_type="boolean")
-                )
 
-        # checks that we have a label for each prediction time (even if `None``)
-        assert len(results) == len(self.get_prediction_times(patient))
+        # # checks that we have a label for each prediction time (even if `None``)
+        # assert len(results) == len(self.get_prediction_times(patient))
         return results
 
     def get_patient_start_end_times(

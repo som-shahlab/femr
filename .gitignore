@@ -5,3 +5,5 @@ bazel-*
 *.egg-info
 ignore/*
 tutorials/.ipynb_checkpoints/
+.ipynb_checkpoints/*
+*.ipynb
