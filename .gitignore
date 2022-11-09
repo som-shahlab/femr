@@ -11,3 +11,5 @@ native/result
 native/params
 native/result_clmbr
 native/trash
+.ipynb_checkpoints/*
+*.ipynb
