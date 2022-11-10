@@ -82,6 +82,41 @@ class MortalityLF(CodeLF):
             death_code: int = list(death_codes)[0][1]
             super().__init__(code=death_code, time_horizon=time_horizon)
 
+
+class DiabetesLF(CodeLF):
+    """Apply a label for whether or not a patient has diabetes within the `time_horizon`.
+
+    """
+
+    def __init__(
+        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
+    ):
+        """Create a Diabetes labeler.
+
+        Args:
+            ontology (extension_datasets.Ontology): Maps code IDs to concept names
+            time_horizon (TimeHorizon): An interval of time. If the event occurs during this time horizon, then
+                the label is TRUE. Otherwise, FALSE.
+
+        Raises:
+            ValueError: Raised if there are multiple unique codes that map to the death code
+        """
+        DIABETES_CODE = "SNOMED/44054006"
+
+        diabetes_codes: Set[Tuple[str, int]] = set()
+        for code, code_str in enumerate(ontology.get_dictionary()):
+            code_str = bytes(code_str).decode('utf-8')
+            if code_str == DIABETES_CODE:
+                diabetes_codes.add((code_str, code))
+
+        if len(diabetes_codes) != 1:
+            raise ValueError(
+                f"Could not find exactly one death code -- instead found {len(diabetes_codes)} codes: {str(diabetes_codes)}"
+            )
+        else:
+            diabetes_code: int = list(diabetes_codes)[0][1]
+            super().__init__(code=diabetes_code, time_horizon=time_horizon)
+
 ##########################################################
 # Other
 ##########################################################
