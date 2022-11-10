@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from collections import defaultdict, deque, namedtuple
 from collections.abc import MutableMapping
-from typing import Any, Dict, List, Optional, Set, Tuple, Iterator, Mapping
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -78,7 +78,9 @@ class CountFeaturizer(Featurizer):
         ontology: extension_datasets.Ontology,
         rollup: bool = False,
         exclusion_codes: List[int] = [],
-        time_bins: Optional[List[Optional[int]]] = None,  # [90, 180] refers to [0-90, 90-180]; [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
+        time_bins: Optional[
+            List[Optional[int]]
+        ] = None,  # [90, 180] refers to [0-90, 90-180]; [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
     ):
         self.patient_codes: Dictionary = Dictionary()
         self.exclusion_codes = set(exclusion_codes)
@@ -152,7 +154,7 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 code = event.code
-                if (event.start > labels[label_idx].time):
+                if event.start > labels[label_idx].time:
                     label_idx += 1
                     all_columns.append(
                         [
