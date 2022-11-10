@@ -1,6 +1,6 @@
 # piton
 
-**piton** is a python package for building models using EHR data. 
+**piton** is a python package for building models using EHR data.
 
 **piton** offers the following four main types of functionality. In order, they are the ability to:
 1. Convert EHR and claims data into a common schema, where each patient is associated with a timeline of events extracted from the EHR
@@ -13,7 +13,7 @@ As part of the model building process, it offers the ability to learn clinical l
 
 # Documentation
 
-https://ehr-ml.readthedocs.io/en/latest/ has (outdated) documentation, including setup instructions and a tutorial using SynPuf data. 
+https://ehr-ml.readthedocs.io/en/latest/ has (outdated) documentation, including setup instructions and a tutorial using SynPuf data.
 
 # Installation
 

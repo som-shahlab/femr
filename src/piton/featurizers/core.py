@@ -1,26 +1,19 @@
 from __future__ import annotations
 
+import collections
 import datetime
 import json
 import os
-import collections
-from collections import namedtuple
 from abc import ABC, abstractmethod
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-)
+from collections import namedtuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+import numpy as np
+import scipy.sparse
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from ..labelers.core import LabelingFunction
-
-import numpy as np
-import scipy.sparse
 
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
@@ -30,15 +23,16 @@ ColumnValue = namedtuple("ColumnValue", ["column", "value"])
     The value for that column
 """
 
+
 class FeaturizerList:
     """
-        Featurizer list consists of a list of featurizers that will be used (in sequence) to featurize data.
-        It enables preprocessing of featurizers, featurization, and column name extraction.
+    Featurizer list consists of a list of featurizers that will be used (in sequence) to featurize data.
+    It enables preprocessing of featurizers, featurization, and column name extraction.
     """
 
     def __init__(self, featurizers: List[Featurizer]):
         """Create a :class:`FeaturizerList` from a sequence of featurizers.
-        
+
         Args:
             featurizers (List[Featurizer]): The featurizers to use for featurizeing patients.
         """
@@ -50,7 +44,7 @@ class FeaturizerList:
         labeling_function: LabelingFunction,
     ) -> None:
         """preprocess a list of featurizers on the provided patients using the given labeler.
-        
+
         Args:
             patients (List[Patient]): Sequence of patients.
             labeling_function (:class:`labelers.core.LabelingFunction`): The labeler to preprocess with.
@@ -62,7 +56,7 @@ class FeaturizerList:
 
         if not any_needs_preprocessing:
             return
-        
+
         for patient in patients:
             labels = labeling_function.label(patient)
 
@@ -111,9 +105,9 @@ class FeaturizerList:
 
             for featurizer in self.featurizers:
                 columns = featurizer.featurize(patient, labels)
-                assert len(columns) == len(labels), (
-                    f"The featurizer {featurizer} didn't provide enough rows for {labeling_function} on patient {patient.patient_id} ({len(columns)} != {len(labels)})"
-                )
+                assert len(columns) == len(
+                    labels
+                ), f"The featurizer {featurizer} didn't provide enough rows for {labeling_function} on patient {patient.patient_id} ({len(columns)} != {len(labels)})"
                 columns_by_featurizer.append(columns)
 
             for i, label in enumerate(labels):
@@ -156,7 +150,7 @@ class FeaturizerList:
             data_matrix,
             np.array(result_labels, dtype=np.float32),
             np.array(patient_ids, dtype=np.int32),
-            np.array(labeling_time, dtype=np.datetime64)
+            np.array(labeling_time, dtype=np.datetime64),
         )
 
     def get_column_name(self, column_index: int) -> str:
@@ -172,15 +166,15 @@ class FeaturizerList:
 
 
 class Featurizer(ABC):
-    """A Featurizer takes a Patient and a list of Labels, then returns a row for each timepoint. 
-    Featurizers must be preprocessed before they are used to compute normalization statistics. 
+    """A Featurizer takes a Patient and a list of Labels, then returns a row for each timepoint.
+    Featurizers must be preprocessed before they are used to compute normalization statistics.
     A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
     """
-    
+
     def preprocess(self, patient: Patient, labels: List[Label]) -> None:
         """preprocess the featurizer on the given patient and label indices.
         This should do nothing if `needs_preprocessing()` returns FALSE, i.e. the featurizer doesn't need preprocessing.
-        
+
         Args:
             patient (Patient): A patient to preprocess on.
             labels (List[Label]): The list of labels of this patient to preprocess on.
@@ -195,14 +189,15 @@ class Featurizer(ABC):
 
     @abstractmethod
     def num_columns(self) -> int:
-        """Returns the number of columns that this featurizer creates.
-        """
+        """Returns the number of columns that this featurizer creates."""
         pass
 
     @abstractmethod
-    def featurize(self, patient: Patient, labels: List[Label]) -> List[List[ColumnValue]]:
+    def featurize(
+        self, patient: Patient, labels: List[Label]
+    ) -> List[List[ColumnValue]]:
         """Featurizes the patient into a series of rows using the specified timepoints.
-        
+
         Args:
             patient (Patient): A patient to featurize.
             labels (List[Label]): We will generate features for each Label in `labels`.
@@ -214,16 +209,14 @@ class Featurizer(ABC):
                     [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features for this label
         """
 
-
     def get_column_name(self, column_index: int) -> str:
         """An optional method that enables the user to get the name of a column by its index
-        
+
         Args:
             column_index (int): The index of the column
         """
         return "no name"
 
     def needs_preprocessing(self) -> bool:
-        """Returns TRUE if you must run `preprocess()`. If FALSE, then `preprocess()` should do nothing.
-        """        
+        """Returns TRUE if you must run `preprocess()`. If FALSE, then `preprocess()` should do nothing."""
         return False

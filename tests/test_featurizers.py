@@ -1,7 +1,8 @@
-import numpy as np
 import datetime
 import os
 from typing import List
+
+import numpy as np
 
 import piton
 import piton.datasets
