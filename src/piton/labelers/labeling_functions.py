@@ -120,3 +120,4 @@ class IsMaleLF(LabelingFunction):
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
+

@@ -6,4 +6,4 @@ bazel-*
 ignore/*
 tutorials/.ipynb_checkpoints/
 .ipynb_checkpoints/*
-*.ipynb
+scratch*

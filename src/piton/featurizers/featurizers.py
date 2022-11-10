@@ -50,7 +50,7 @@ class AgeFeaturizer(Featurizer):
         for label in labels:
             if self.normalize:
                 age = (patient_birth_date - label.time).days/365
-                standardized_age = (age - self.age_statistics.mean()) / (self.age_statistics.standard_deviation() + 0.0001)
+                standardized_age = (age - self.age_statistics.mean()) / (self.age_statistics.standard_deviation())
                 all_columns.append([ColumnValue(0, standardized_age)])
             else:
                 all_columns.append([ColumnValue(0, age)])

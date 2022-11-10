@@ -139,6 +139,9 @@ class OnlineStatistics:
         """
             Return the current standard devation.
         """
+        if self.count == 1:
+            return math.sqrt(self.variance)
+
         return math.sqrt(self.variance / (self.count - 1))
 
     def to_dict(self) -> Dict[str, Any]:
