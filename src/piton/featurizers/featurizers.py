@@ -78,7 +78,7 @@ class CountFeaturizer(Featurizer):
         ontology: extension_datasets.Ontology,
         rollup: bool = False,
         exclusion_codes: List[int] = [],
-        time_bins: Optional[List[Optional[int]]] = None,
+        time_bins: Optional[List[Optional[int]]] = None,  # [90, 180] refers to [0-90, 90-180]; [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
     ):
         self.patient_codes: Dictionary = Dictionary()
         self.exclusion_codes = set(exclusion_codes)
@@ -142,20 +142,17 @@ class CountFeaturizer(Featurizer):
 
         else:
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.date]]] = {
-                i: deque() for i in range(len(self.time_bins))
+                i: deque() for i in range(len(self.time_bins) + 1)
             }
 
             code_counts_per_bin: Dict[int, Dict[int, int]] = {
-                i: defaultdict(int) for i in range(len(self.time_bins))
+                i: defaultdict(int) for i in range(len(self.time_bins) + 1)
             }
 
             label_idx = 0
             for event in patient.events:
                 code = event.code
-                if (
-                    label_idx < len(labels)
-                    and event.start > labels[label_idx].time
-                ):
+                if (event.start > labels[label_idx].time):
                     label_idx += 1
                     all_columns.append(
                         [
@@ -174,8 +171,8 @@ class CountFeaturizer(Featurizer):
                         code_counts_per_bin[0][code] += 1
 
                 for i, max_time in enumerate(self.time_bins):
-                    if i + 1 == len(self.time_bins):
-                        continue
+                    # if i + 1 == len(self.time_bins):
+                    #     continue
 
                     if max_time is None:
                         # This means that this bin accepts everything
@@ -197,11 +194,18 @@ class CountFeaturizer(Featurizer):
 
                             code_counts_per_bin[i + 1][next_code] += 1
 
+                # print(codes_per_bin, " | ", code_counts_per_bin)
+                # print()
                 if label_idx == len(labels) - 1:
                     all_columns.append(
                         [
-                            ColumnValue(column, count)
-                            for column, count in current_codes.items()
+                            ColumnValue(
+                                self.patient_codes.transform(code)
+                                + i * len(self.patient_codes),
+                                count,
+                            )
+                            for i in range(len(self.time_bins) - 1)
+                            for code, count in code_counts_per_bin[i].items()
                         ]
                     )
                     break
