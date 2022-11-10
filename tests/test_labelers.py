@@ -185,10 +185,11 @@ def test_mortality_lf():
     class DummyOntology:
         def get_dictionary(self):
             return [
-                "zero",
-                "one",
-                "two",
-                "Condition Type/OMOP4822053",
+                memoryview("zero".encode("utf8")),
+                memoryview("one".encode("utf8")),
+                memoryview("two".encode("utf8")),
+                memoryview("Condition Type/OMOP4822053".encode("utf8")),
+                memoryview("four".encode("utf8")),
                 "four",
             ]
 
