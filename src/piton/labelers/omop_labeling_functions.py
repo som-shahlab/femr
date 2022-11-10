@@ -20,9 +20,7 @@ from .core import (
 
 
 class CodeLF(FixedTimeHorizonEventLF):
-    """Apply a label based on a single code's occurrence over a fixed time horizon.
-
-    """
+    """Apply a label based on a single code's occurrence over a fixed time horizon."""
 
     def __init__(self, code: int, time_horizon: TimeHorizon):
         """Label the code whose index in your Ontology is equal to `code`."""
@@ -47,9 +45,7 @@ class CodeLF(FixedTimeHorizonEventLF):
 
 
 class MortalityLF(CodeLF):
-    """Apply a label for whether or not a patient dies within the `time_horizon`.
-
-    """
+    """Apply a label for whether or not a patient dies within the `time_horizon`."""
 
     def __init__(
         self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
@@ -68,7 +64,7 @@ class MortalityLF(CodeLF):
 
         death_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
-            code_str = bytes(code_str).decode('utf-8')
+            code_str = bytes(code_str).decode("utf-8")
             if code_str == CODE_DEATH_PREFIX:
                 death_codes.add((code_str, code))
             # if code_str.startswith(CODE_DEATH_PREFIX):
@@ -84,9 +80,7 @@ class MortalityLF(CodeLF):
 
 
 class DiabetesLF(CodeLF):
-    """Apply a label for whether or not a patient has diabetes within the `time_horizon`.
-
-    """
+    """Apply a label for whether or not a patient has diabetes within the `time_horizon`."""
 
     def __init__(
         self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
@@ -105,7 +99,7 @@ class DiabetesLF(CodeLF):
 
         diabetes_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
-            code_str = bytes(code_str).decode('utf-8')
+            code_str = bytes(code_str).decode("utf-8")
             if code_str == DIABETES_CODE:
                 diabetes_codes.add((code_str, code))
 
@@ -117,9 +111,11 @@ class DiabetesLF(CodeLF):
             diabetes_code: int = list(diabetes_codes)[0][1]
             super().__init__(code=diabetes_code, time_horizon=time_horizon)
 
+
 ##########################################################
 # Other
 ##########################################################
+
 
 class IsMaleLF(LabelingFunction):
     """Apply a label for whether or not a patient is male or not.
@@ -140,9 +136,7 @@ class IsMaleLF(LabelingFunction):
             ValueError: Raised if there is no code corresponding to inpatient visit.
         """
         INPATIENT_VISIT_CODE = "Visit/IP"
-        self.male_code: int = ontology.get_dictionary().index(
-            "Gender/M"
-        )
+        self.male_code: int = ontology.get_dictionary().index("Gender/M")
         admission_code = ontology.get_dictionary().index(INPATIENT_VISIT_CODE)
         if admission_code is None:
             raise ValueError(

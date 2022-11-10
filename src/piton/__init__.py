@@ -6,12 +6,14 @@ import datetime
 from dataclasses import dataclass, fields
 from typing import Sequence
 
+
 @dataclass(frozen=True)
 class Patient:
     """A patient."""
 
     patient_id: int
     events: Sequence[Event]
+
 
 @dataclass(frozen=True)
 class Event:
