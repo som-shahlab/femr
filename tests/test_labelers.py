@@ -188,7 +188,7 @@ def test_mortality_lf():
                 "zero",
                 "one",
                 "two",
-                "Death Type/",
+                "Condition Type/OMOP4822053",
                 "four",
             ]
 

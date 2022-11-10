@@ -22,7 +22,6 @@ from .core import (
 class CodeLF(FixedTimeHorizonEventLF):
     """Apply a label based on a single code's occurrence over a fixed time horizon.
 
-    TODO - Test on real data
     """
 
     def __init__(self, code: int, time_horizon: TimeHorizon):
@@ -50,7 +49,6 @@ class CodeLF(FixedTimeHorizonEventLF):
 class MortalityLF(CodeLF):
     """Apply a label for whether or not a patient dies within the `time_horizon`.
 
-    TODO - Test on real data
     """
 
     def __init__(
@@ -66,8 +64,7 @@ class MortalityLF(CodeLF):
         Raises:
             ValueError: Raised if there are multiple unique codes that map to the death code
         """
-        # CODE_DEATH_PREFIX = "Death Type/"
-        CODE_DEATH_PREFIX = "SNOMED/419620001"
+        CODE_DEATH_PREFIX = "Condition Type/OMOP4822053"
 
         death_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
@@ -85,11 +82,9 @@ class MortalityLF(CodeLF):
             death_code: int = list(death_codes)[0][1]
             super().__init__(code=death_code, time_horizon=time_horizon)
 
-
 ##########################################################
 # Other
 ##########################################################
-
 
 class IsMaleLF(LabelingFunction):
     """Apply a label for whether or not a patient is male or not.
@@ -98,7 +93,6 @@ class IsMaleLF(LabelingFunction):
 
     This is primarily intended as a "debugging" labeler that should be "trivial" and get 1.0 AUROC.
 
-    TODO - Test on real data
     """
 
     def __init__(self, ontology: extension_datasets.Ontology):
@@ -112,7 +106,7 @@ class IsMaleLF(LabelingFunction):
         """
         INPATIENT_VISIT_CODE = "Visit/IP"
         self.male_code: int = ontology.get_dictionary().index(
-            "demographics/gender/Male"
+            "Gender/M"
         )
         admission_code = ontology.get_dictionary().index(INPATIENT_VISIT_CODE)
         if admission_code is None:
@@ -132,6 +126,7 @@ class IsMaleLF(LabelingFunction):
             return []
 
         labels: List[Label] = []
+
         is_male: bool = self.male_code in [
             event.code for event in patient.events
         ]

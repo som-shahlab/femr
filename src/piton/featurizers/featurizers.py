@@ -137,6 +137,19 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 code = event.code
+                if label_idx < len(labels) and event.start >= labels[label_idx].time:
+                    label_idx += 1
+                    all_columns.append(
+                        [
+                            ColumnValue(
+                                self.patient_codes.transform(code)
+                                + i * len(self.patient_codes),
+                                count,
+                            )
+                            for i in range(len(self.time_bins))
+                            for code, count in code_counts_per_bin[i].items()
+                        ]
+                    )
                 for code in self.get_codes(code):
                     if code in self.patient_codes:
                         codes_per_bin[0].append((code, event.start))
@@ -166,19 +179,6 @@ class CountFeaturizer(Featurizer):
 
                             code_counts_per_bin[i + 1][next_code] += 1
 
-                if event.start >= labels[label_idx].time:
-                    label_idx += 1
-                    all_columns.append(
-                        [
-                            ColumnValue(
-                                self.patient_codes.transform(code)
-                                + i * len(self.patient_codes),
-                                count,
-                            )
-                            for i in range(len(self.time_bins))
-                            for code, count in code_counts_per_bin[i].items()
-                        ]
-                    )
         return all_columns
 
     def to_dict(self) -> Dict[str, Any]:
