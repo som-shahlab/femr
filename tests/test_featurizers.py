@@ -5,6 +5,8 @@ from typing import List, Tuple
 import numpy as np
 from tqdm import tqdm
 import math
+import scipy.sparse
+import pickle
 
 import piton
 import piton.datasets
@@ -56,7 +58,6 @@ class DummyOntology:
             memoryview("three".encode("utf8")),
             memoryview("four".encode("utf8")),
         ]
-
 
 def _assert_featurized_patients_structure(featurized_patients, labels_per_patient):
     assert len(featurized_patients) == 4
@@ -171,8 +172,75 @@ def test_count_bins_featurizer():
 
 
 def test_complete_featurization():
-    assert 1 == 1
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    labeler = CodeLF(2, time_horizon)
+
+    age_featurizer = AgeFeaturizer(normalize=True)
+    age_featurizer_list = FeaturizerList([age_featurizer])
+    age_featurizer_list.preprocess_featurizers(PATIENTS, labeler)
+    age_featurized_patients = age_featurizer_list.featurize(PATIENTS, labeler)
+
+    time_bins = [90, 180, math.inf]
+    count_featurizer = CountFeaturizer(DummyOntology, time_bins=time_bins)
+    count_featurizer_list = FeaturizerList([count_featurizer])
+    count_featurizer_list.preprocess_featurizers(PATIENTS, labeler)
+    count_featurized_patients = count_featurizer_list.featurize(PATIENTS, labeler)
+
+    age_featurizer = AgeFeaturizer(normalize=True)
+    time_bins = [90, 180, math.inf]
+    count_featurizer = CountFeaturizer(DummyOntology, time_bins=time_bins)
+    featurizer_list = FeaturizerList([age_featurizer, count_featurizer])
+    featurizer_list.preprocess_featurizers(PATIENTS, labeler)
+    featurized_patients = featurizer_list.featurize(PATIENTS, labeler)
+
+    assert featurized_patients[0].shape == (60, 13)
+
+    the_same = featurized_patients[0].toarray() == scipy.sparse.hstack((age_featurized_patients[0], count_featurized_patients[0])).toarray()
+
+    assert the_same.all()
+
+
+def save_to_file(object_to_save, path_to_file: str):
+    """Save object to Pickle file."""
+    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+    with open(path_to_file, "wb") as fd:
+        pickle.dump(object_to_save, fd)
+
+
+def load_from_file(path_to_file: str):
+    """Load object from Pickle file."""
+    with open(path_to_file, "rb") as fd:
+        result = pickle.load(fd)
+    return result
 
 
 def test_serialization_and_deserialization():
-    assert 1 == 1
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    labeler = CodeLF(2, time_horizon)
+
+    time_bins = [90, 180, math.inf]
+    count_featurizer = CountFeaturizer(DummyOntology, time_bins=time_bins)
+    count_featurizer_list = FeaturizerList([count_featurizer])
+    count_featurizer_list.preprocess_featurizers(PATIENTS, labeler)
+    count_featurized_patient = count_featurizer_list.featurize(PATIENTS, labeler)
+
+    save_to_file(count_featurizer_list, "./count_featurizer_list.pickle")
+    save_to_file(count_featurized_patient, "./count_featurized_patient.pickle")
+
+    count_featurizer_list_loaded = load_from_file( "./count_featurizer_list.pickle")
+    count_featurized_patient_loaded = load_from_file( "./count_featurized_patient.pickle")
+
+    assert (count_featurized_patient_loaded[0].toarray() == count_featurized_patient[0].toarray()).all()
+    assert (count_featurized_patient_loaded[1] == count_featurized_patient[1]).all()
+    assert (count_featurized_patient_loaded[2] == count_featurized_patient[2]).all()
+    assert (count_featurized_patient_loaded[3] == count_featurized_patient[3]).all()
+
+    os.remove("./count_featurizer_list.pickle")
+    os.remove("./count_featurized_patient.pickle")
+
+
+
+
+
+
+
