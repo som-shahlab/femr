@@ -1,26 +1,21 @@
 from __future__ import annotations
 
 import datetime
-from collections.abc import MutableMapping
 from collections import defaultdict, deque, namedtuple
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-)
+from collections.abc import MutableMapping
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .core import ColumnValue, Featurizer
 from .. import Patient
 from ..extension import datasets as extension_datasets
 from . import Dictionary, OnlineStatistics
+from .core import ColumnValue, Featurizer
 
-# TODO - replace this with a more flexible/less hacky way to allow the user to 
+
+# TODO - replace this with a more flexible/less hacky way to allow the user to
 # manage patient attributes (like age)
 def get_patient_birthdate(patient: Patient) -> datetime.datetime:
     return patient.events[0].start if len(patient.events) > 0 else None
+
 
 class AgeFeaturizer(Featurizer):
     """
@@ -32,25 +27,29 @@ class AgeFeaturizer(Featurizer):
         self.age_statistics = OnlineStatistics()
 
     def preprocess(self, patient: Patient, labels: List[Label]) -> None:
-        if not self.needs_preprocessing(): 
+        if not self.needs_preprocessing():
             return
-        
+
         patient_birth_date: datetime = get_patient_birthdate(patient)
         for label in labels:
-            age = (label.time - patient_birth_date).days/365
+            age = (label.time - patient_birth_date).days / 365
             self.age_statistics.add(age)
 
     def num_columns(self) -> int:
         return 1
 
-    def featurize(self, patient: Patient, labels: List[Label]) -> List[List[ColumnValue]]:
+    def featurize(
+        self, patient: Patient, labels: List[Label]
+    ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
         patient_birth_date: datetime = get_patient_birthdate(patient)
         for label in labels:
             if self.normalize:
-                age = (patient_birth_date - label.time).days/365
-                standardized_age = (age - self.age_statistics.mean()) / (self.age_statistics.standard_deviation())
+                age = (patient_birth_date - label.time).days / 365
+                standardized_age = (age - self.age_statistics.mean()) / (
+                    self.age_statistics.standard_deviation()
+                )
                 all_columns.append([ColumnValue(0, standardized_age)])
             else:
                 all_columns.append([ColumnValue(0, age)])
@@ -66,6 +65,7 @@ class AgeFeaturizer(Featurizer):
     def needs_preprocessing(self) -> bool:
         return self.normalize
 
+
 class CountFeaturizer(Featurizer):
     """
     Produces one column per each diagnosis code, procedure code, and prescription code.
@@ -78,7 +78,7 @@ class CountFeaturizer(Featurizer):
         ontology: extension_datasets.Ontology,
         rollup: bool = False,
         exclusion_codes: List[int] = [],
-        time_bins: Optional[List[Optional[int]]] = None
+        time_bins: Optional[List[Optional[int]]] = None,
     ):
         self.patient_codes: Dictionary = Dictionary()
         self.exclusion_codes = set(exclusion_codes)
@@ -93,10 +93,9 @@ class CountFeaturizer(Featurizer):
                     yield subcode
             else:
                 yield code
-                    
+
     def preprocess(self, patient: Patient, labels: List[Label]):
-        """Adds every event code in this patient's timeline to `patient_codes`
-        """        
+        """Adds every event code in this patient's timeline to `patient_codes`"""
         for event in patient.events:
             self.patient_codes.add(event.code)
 
@@ -106,7 +105,9 @@ class CountFeaturizer(Featurizer):
         else:
             return len(self.time_bins) * len(self.patient_codes)
 
-    def featurize(self, patient: Patient, labels: List[Label]) -> List[List[ColumnValue]]:
+    def featurize(
+        self, patient: Patient, labels: List[Label]
+    ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
         if self.time_bins is None:
@@ -114,7 +115,10 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                if label_idx < len(labels) and event.start >= labels[label_idx].time:
+                if (
+                    label_idx < len(labels)
+                    and event.start >= labels[label_idx].time
+                ):
                     label_idx += 1
                     all_columns.append(
                         [
@@ -137,7 +141,10 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 code = event.code
-                if label_idx < len(labels) and event.start >= labels[label_idx].time:
+                if (
+                    label_idx < len(labels)
+                    and event.start >= labels[label_idx].time
+                ):
                     label_idx += 1
                     all_columns.append(
                         [
@@ -154,7 +161,7 @@ class CountFeaturizer(Featurizer):
                     if code in self.patient_codes:
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1
-                
+
                 for i, max_time in enumerate(self.time_bins):
                     if i + 1 == len(self.time_bins):
                         continue
