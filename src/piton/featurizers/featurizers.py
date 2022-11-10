@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from collections import defaultdict, deque, namedtuple
 from collections.abc import MutableMapping
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Iterator, Mapping
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -45,8 +45,8 @@ class AgeFeaturizer(Featurizer):
 
         patient_birth_date: datetime = get_patient_birthdate(patient)
         for label in labels:
+            age = (label.time - patient_birth_date).days / 365
             if self.normalize:
-                age = (patient_birth_date - label.time).days / 365
                 standardized_age = (age - self.age_statistics.mean()) / (
                     self.age_statistics.standard_deviation()
                 )
@@ -117,7 +117,7 @@ class CountFeaturizer(Featurizer):
             for event in patient.events:
                 if (
                     label_idx < len(labels)
-                    and event.start >= labels[label_idx].time
+                    and event.start > labels[label_idx].time
                 ):
                     label_idx += 1
                     all_columns.append(
@@ -126,9 +126,20 @@ class CountFeaturizer(Featurizer):
                             for column, count in current_codes.items()
                         ]
                     )
+
                 for code in self.get_codes(event.code):
                     if code in self.patient_codes:
                         current_codes[self.patient_codes.transform(code)] += 1
+
+                if label_idx == len(labels) - 1:
+                    all_columns.append(
+                        [
+                            ColumnValue(column, count)
+                            for column, count in current_codes.items()
+                        ]
+                    )
+                    break
+
         else:
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.date]]] = {
                 i: deque() for i in range(len(self.time_bins))
@@ -143,7 +154,7 @@ class CountFeaturizer(Featurizer):
                 code = event.code
                 if (
                     label_idx < len(labels)
-                    and event.start >= labels[label_idx].time
+                    and event.start > labels[label_idx].time
                 ):
                     label_idx += 1
                     all_columns.append(
@@ -185,6 +196,15 @@ class CountFeaturizer(Featurizer):
                                 del code_counts_per_bin[i][next_code]
 
                             code_counts_per_bin[i + 1][next_code] += 1
+
+                if label_idx == len(labels) - 1:
+                    all_columns.append(
+                        [
+                            ColumnValue(column, count)
+                            for column, count in current_codes.items()
+                        ]
+                    )
+                    break
 
         return all_columns
 
