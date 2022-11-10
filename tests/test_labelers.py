@@ -177,8 +177,6 @@ def test_mortality_lf():
         True,
         True,
         True,
-        None,
-        None,
     ]
 
     # 6. Create `Ontology` stub and run `MortalityPredictor`
@@ -190,7 +188,6 @@ def test_mortality_lf():
                 memoryview("two".encode("utf8")),
                 memoryview("Condition Type/OMOP4822053".encode("utf8")),
                 memoryview("four".encode("utf8")),
-                "four",
             ]
 
     ontology = DummyOntology()
@@ -297,7 +294,6 @@ def test_time_horizons():
                 True,
                 False,
                 False,
-                None,
             ],
         ],
         [
@@ -348,7 +344,6 @@ def test_time_horizons():
                 False,
                 False,
                 False,
-                None,
             ],
         ],
         [
@@ -391,7 +386,6 @@ def test_time_horizons():
                 True,
                 False,
                 False,
-                None,
             ],
         ],
         [
@@ -455,7 +449,7 @@ def test_time_horizons():
                     ),
                 ]
             ),
-            [False, True, True, False, True, False, None, None],
+            [False, True, True, False, True, False],
         ],
         [
             # Test #5
@@ -495,7 +489,6 @@ def test_time_horizons():
                 True,
                 True,
                 False,
-                None,
             ],
         ],
         [
@@ -620,8 +613,6 @@ def test_time_horizons():
                 False,
                 False,
                 True,
-                None,
-                None,
             ],
         ],
     ]
