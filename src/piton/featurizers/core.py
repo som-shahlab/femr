@@ -33,7 +33,7 @@ ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 class FeaturizerList:
     """
         Featurizer list consists of a list of featurizers that will be used (in sequence) to featurize data.
-        It enables preprocessing of featurizers, featurization, column name extraction, and serialization/deserialization.
+        It enables preprocessing of featurizers, featurization, and column name extraction.
     """
 
     def __init__(self, featurizers: List[Featurizer]):
@@ -52,9 +52,8 @@ class FeaturizerList:
         """preprocess a list of featurizers on the provided patients using the given labeler.
         
         Args:
-            timelines (:class:`stride_ml.timeline.TimelineReader`): The timelines to read from.
-            labeler (:class:`stride_ml.labeler.Labeler`): The labeler to preprocess with.
-            end_date (datetime.date): An optional date used to filter data off the end of the timeline.
+            patients (List[Patient]): Sequence of patients.
+            labeling_function (:class:`labelers.core.LabelingFunction`): The labeler to preprocess with.
         """
 
         any_needs_preprocessing = any(
@@ -85,15 +84,14 @@ class FeaturizerList:
         """
         Apply a list of featurizers to obtain a feature matrix and label vector for the given patients.
         Args:
-            timelines (:class:`stride_ml.timeline.TimelineReader`): The timelines to read from.
-            labeler (:class:`stride_ml.labeler.Labeler`): The labeler to compute labels with.
-            end_date (datetime.date): An optional date used to filter data off the end of the timeline.
+            patients (List[Patient]): Sequence of patients
+            labeling_function (:class:`labelers.core.LabelingFunction`): The labeler to preprocess with.
         Returns:
-            This returns a tuple (data_matrix, labels, patient_ids, patient_day_indices).
+            This returns a tuple (data_matrix, labels, patient_ids, labeling_time).
             data_matrix is a sparse matrix of all the features of all the featurizers.
             labels is a list of boolean values representing the labels for each row in the matrix.
             patient_ids is a list of the patient ids for each row.
-            patient_day_indices is a list of the day indices for each row.
+            labeling_time is a list of labeling/prediction time for each row.
         """
         data = []
         indices: List[int] = []
@@ -105,7 +103,7 @@ class FeaturizerList:
 
         for patient in patients:
             labels = labeling_function.label(patient)
-            
+
             if len(labels) == 0:
                 continue
 
