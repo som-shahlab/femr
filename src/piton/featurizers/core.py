@@ -105,9 +105,7 @@ class FeaturizerList:
 
         for patient in patients:
             labels = labeling_function.label(patient)
-
-
-
+            
             if len(labels) == 0:
                 continue
 
