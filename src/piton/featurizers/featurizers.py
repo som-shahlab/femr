@@ -155,10 +155,14 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 code = event.code
+<<<<<<< HEAD
                 while (
                     label_idx < len(labels)
                     and event.start > labels[label_idx].time
                 ):
+=======
+                if event.start > labels[label_idx].time:
+>>>>>>> [pre-commit.ci] auto fixes from pre-commit.com hooks
                     label_idx += 1
                     all_columns.append(
                         [
