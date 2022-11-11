@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import collections
-import datetime
-import json
-import os
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 import scipy.sparse
 
-from .. import Event, Patient
-from ..extension import datasets as extension_datasets
+from .. import Patient
 from ..labelers.core import LabelingFunction
+
+from typing import Sequence
 
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
@@ -107,7 +104,8 @@ class FeaturizerList:
                 columns = featurizer.featurize(patient, labels)
                 assert len(columns) == len(
                     labels
-                ), f"The featurizer {featurizer} didn't provide enough rows for {labeling_function} on patient {patient.patient_id} ({len(columns)} != {len(labels)})"
+                ), f"The featurizer {featurizer} didn't provide enough rows for "\
+                    "{labeling_function} on patient {patient.patient_id} ({len(columns)} != {len(labels)})"
                 columns_by_featurizer.append(columns)
 
             for i, label in enumerate(labels):
