@@ -2,18 +2,17 @@ import datetime
 import math
 import os
 import pickle
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import scipy.sparse
-from tqdm import tqdm
 
 import piton
 import piton.datasets
-from piton.featurizers.core import ColumnValue, Featurizer, FeaturizerList
+from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
-from piton.labelers.omop_labeling_functions import CodeLF, IsMaleLF, MortalityLF
+from piton.labelers.core import TimeHorizon
+from piton.labelers.omop_labeling_functions import CodeLF
 
 SHARED_EVENTS = [
     piton.Event(start=datetime.datetime(1995, 1, 3), code=0),
@@ -285,9 +284,9 @@ def test_serialization_and_deserialization():
     save_to_file(count_featurizer_list, "./count_featurizer_list.pickle")
     save_to_file(count_featurized_patient, "./count_featurized_patient.pickle")
 
-    count_featurizer_list_loaded = load_from_file(
-        "./count_featurizer_list.pickle"
-    )
+    # count_featurizer_list_loaded = load_from_file(
+    #     "./count_featurizer_list.pickle"
+    # )
     count_featurized_patient_loaded = load_from_file(
         "./count_featurized_patient.pickle"
     )

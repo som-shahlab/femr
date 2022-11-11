@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import datetime
-from collections import defaultdict, deque, namedtuple
-from collections.abc import MutableMapping
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple
+from collections import defaultdict, deque
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, Deque
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
 from . import Dictionary, OnlineStatistics
 from .core import ColumnValue, Featurizer
+from ..labelers.core import Label
 
 
 # TODO - replace this with a more flexible/less hacky way to allow the user to
@@ -218,7 +218,7 @@ class CountFeaturizer(Featurizer):
         return {"patient_codes": self.patient_codes.to_dict()}
 
     def from_dict(self, data: Mapping[str, Any]) -> None:
-        self.patient_codes = utils.Dictionary(data["patient_codes"])
+        self.patient_codes = Dictionary(data["patient_codes"])
 
     def needs_preprocessing(self) -> bool:
         return True

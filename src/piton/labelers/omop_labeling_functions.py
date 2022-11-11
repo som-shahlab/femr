@@ -105,7 +105,8 @@ class DiabetesLF(CodeLF):
 
         if len(diabetes_codes) != 1:
             raise ValueError(
-                f"Could not find exactly one death code -- instead found {len(diabetes_codes)} codes: {str(diabetes_codes)}"
+                f"Could not find exactly one death code -- instead found "\
+                "{len(diabetes_codes)} codes: {str(diabetes_codes)}"
             )
         else:
             diabetes_code: int = list(diabetes_codes)[0][1]
