@@ -22,7 +22,9 @@ from .core import (
 class CodeLF(FixedTimeHorizonEventLF):
     """Apply a label based on a single code's occurrence over a fixed time horizon."""
 
-    def __init__(self, admission_code: int, code: int, time_horizon: TimeHorizon):
+    def __init__(
+        self, admission_code: int, code: int, time_horizon: TimeHorizon
+    ):
         """Label the code whose index in your Ontology is equal to `code`."""
         self.admission_code = admission_code
         self.code = code
@@ -30,8 +32,13 @@ class CodeLF(FixedTimeHorizonEventLF):
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time as the time to make a prediction."""
-        return [datetime.datetime.strptime(str(e.start)[:10] + " 11:59:00", "%Y-%m-%d %H:%M:%S") 
-                for e in patient.events if e.code == self.admission_code ]
+        return [
+            datetime.datetime.strptime(
+                str(e.start)[:10] + " 11:59:00", "%Y-%m-%d %H:%M:%S"
+            )
+            for e in patient.events
+            if e.code == self.admission_code
+        ]
 
     def get_time_horizon(self) -> TimeHorizon:
         """Return time horizon."""
@@ -80,7 +87,11 @@ class MortalityLF(CodeLF):
             )
         else:
             death_code: int = list(death_codes)[0][1]
-            super().__init__(admission_code=admission_code, code=death_code, time_horizon=time_horizon)
+            super().__init__(
+                admission_code=admission_code,
+                code=death_code,
+                time_horizon=time_horizon,
+            )
 
 
 class DiabetesLF(CodeLF):
@@ -116,7 +127,12 @@ class DiabetesLF(CodeLF):
             )
         else:
             diabetes_code: int = list(diabetes_codes)[0][1]
-            super().__init__(admission_code=admission_code, code=diabetes_code, time_horizon=time_horizon)
+            super().__init__(
+                admission_code=admission_code,
+                code=diabetes_code,
+                time_horizon=time_horizon,
+            )
+
 
 # @dataclass
 # class InpatientAdmission:
@@ -190,6 +206,7 @@ class DiabetesLF(CodeLF):
 #     def get_all_patient_ids(self, ind: index.Index) -> Set[int]:
 #         return set(ind.get_patient_ids(self.admission_code))
 
+
 class LongAdmissionLabeler(LabelingFunction):
     """
     The inpatient labeler predicts whether or not a patient will be admitted for a long time (defined
@@ -234,6 +251,7 @@ class LongAdmissionLabeler(LabelingFunction):
 
     def get_labeler_type(self) -> LabelType:
         return "binary"
+
 
 # ##########################################################
 # # Other
@@ -293,6 +311,3 @@ class IsMaleLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
-
-
-
