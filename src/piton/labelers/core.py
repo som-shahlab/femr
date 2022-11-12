@@ -21,9 +21,10 @@ from typing import (
     Union,
 )
 
+from ..datasets import PatientDatabase
 import numpy as np
-
 from .. import Patient
+import multiprocessing
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,18 @@ class Label:
 
         assert value is not None
 
+def _apply_labeling_function(args: Tuple(str, List[int])) -> List[Dict[int, List[Label]]]:
+
+    self, database_path, patient_ids = args
+    database = PatientDatabase(database_path)
+
+    patients_to_labels: Dict[int, List[Label]] = {}
+    for patient_id in patient_ids:
+        patient = database[patient_id]
+        patients_to_labels[patient.patient_id] = self.label(patient)
+    
+    return patients_to_labels
+        
 
 class LabelingFunction(ABC):
     """An interface for labeling functions.
@@ -150,7 +163,12 @@ class LabelingFunction(ABC):
         """Return what type of labels this labeler returns. See the Label class."""
         pass
 
-    def apply(self, patients: Sequence[Patient]) -> LabeledPatients:
+    def apply(
+        self, 
+        patients: Sequence[Patient], 
+        database_path: str,
+        num_threads: int = 1, 
+    ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
@@ -160,8 +178,15 @@ class LabelingFunction(ABC):
             LabeledPatients: Maps patients to labels
         """
         patients_to_labels: Dict[int, List[Label]] = {}
-        for patient in patients:
-            patients_to_labels[patient.patient_id] = self.label(patient)
+
+        pids = [i for i in range(len(patients))]
+        pids_parts = np.array_split(pids, num_threads)
+
+        tasks = [(self, database_path, pid_part) for pid_part in pids_parts]
+
+        with multiprocessing.Pool(num_threads) as pool:
+            results = list(pool.imap_unordered(_apply_labeling_function, tasks))
+            patients_to_labels = dict(collections.ChainMap(*results))
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 

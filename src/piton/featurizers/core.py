@@ -127,8 +127,8 @@ class FeaturizerList:
         self,
         patients: Sequence[Patient],
         labeled_patients: LabeledPatients,
-        num_threads: int,
         database_path: str,
+        num_threads: int = 1,
     ) -> Tuple[Any, Any, Any, Any]:
         """
         Apply a list of featurizers to obtain a feature matrix and label vector for the given patients.
