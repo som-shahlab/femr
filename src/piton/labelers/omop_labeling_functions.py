@@ -22,14 +22,16 @@ from .core import (
 class CodeLF(FixedTimeHorizonEventLF):
     """Apply a label based on a single code's occurrence over a fixed time horizon."""
 
-    def __init__(self, code: int, time_horizon: TimeHorizon):
+    def __init__(self, admission_code: int, code: int, time_horizon: TimeHorizon):
         """Label the code whose index in your Ontology is equal to `code`."""
+        self.admission_code = admission_code
         self.code = code
         self.time_horizon = time_horizon
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time as the time to make a prediction."""
-        return [e.start for e in patient.events]
+        return [datetime.datetime.strptime(str(e.start)[:10] + " 11:59:00", "%Y-%m-%d %H:%M:%S") 
+                for e in patient.events if e.code == self.admission_code ]
 
     def get_time_horizon(self) -> TimeHorizon:
         """Return time horizon."""
@@ -61,6 +63,8 @@ class MortalityLF(CodeLF):
             ValueError: Raised if there are multiple unique codes that map to the death code
         """
         CODE_DEATH_PREFIX = "Condition Type/OMOP4822053"
+        INPATIENT_VISIT_CODE = "Visit/IP"
+        admission_code = ontology.get_dictionary().index(INPATIENT_VISIT_CODE)
 
         death_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
@@ -76,7 +80,7 @@ class MortalityLF(CodeLF):
             )
         else:
             death_code: int = list(death_codes)[0][1]
-            super().__init__(code=death_code, time_horizon=time_horizon)
+            super().__init__(admission_code=admission_code, code=death_code, time_horizon=time_horizon)
 
 
 class DiabetesLF(CodeLF):
@@ -96,6 +100,8 @@ class DiabetesLF(CodeLF):
             ValueError: Raised if there are multiple unique codes that map to the death code
         """
         DIABETES_CODE = "SNOMED/44054006"
+        INPATIENT_VISIT_CODE = "Visit/IP"
+        admission_code = ontology.get_dictionary().index(INPATIENT_VISIT_CODE)
 
         diabetes_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
@@ -105,17 +111,133 @@ class DiabetesLF(CodeLF):
 
         if len(diabetes_codes) != 1:
             raise ValueError(
-                f"Could not find exactly one death code -- instead found "\
-                "{len(diabetes_codes)} codes: {str(diabetes_codes)}"
+                "Could not find exactly one death code -- instead found "
+                f"{len(diabetes_codes)} codes: {str(diabetes_codes)}"
             )
         else:
             diabetes_code: int = list(diabetes_codes)[0][1]
-            super().__init__(code=diabetes_code, time_horizon=time_horizon)
+            super().__init__(admission_code=admission_code, code=diabetes_code, time_horizon=time_horizon)
+
+# @dataclass
+# class InpatientAdmission:
+#     start_age: int
+#     end_age: int
 
 
-##########################################################
-# Other
-##########################################################
+# class InpatientAdmissionHelper:
+#     """The inpatient admission helper enables users to gather all of the inpatient
+#     admissions for a particular patient.
+#     See the extractor for a percise query for what an inpatient admission is. Do note
+#     that if you want a more sophisticated definition, please use the ADT data directly.
+#     Do note that this does one further step of processing on the that query by merging overlapping
+#     "admissions".
+#     """
+
+#     def __init__(self, timelines: timeline.TimelineReader):
+#         dictionary = timelines.get_dictionary()
+
+#         inpatient_visit_code = "Visit/IP"
+#         admission_code = dictionary.map(inpatient_visit_code)
+#         if admission_code is None:
+#             raise ValueError(
+#                 f"Could not find inpatient visit code? {inpatient_visit_code}"
+#             )
+#         else:
+#             self.admission_code = admission_code
+
+#     def get_inpatient_admissions(
+#         self, patient: timeline.Patient
+#     ) -> List[InpatientAdmission]:
+#         results = []
+#         current_admission: Optional[InpatientAdmission] = None
+#         for i, day in enumerate(patient.days):
+#             admission_values = []
+
+#             for obs_value in day.observations_with_values:
+#                 if obs_value.code == self.admission_code:
+#                     if obs_value.is_text:
+#                         raise ValueError(
+#                             f"Got a text admission code? {patient.patient_id} {day.date} {obs_value.code}"
+#                         )
+#                     else:
+#                         admission_values.append(int(obs_value.numeric_value))
+
+#             if (
+#                 current_admission is not None
+#                 and day.age > current_admission.end_age
+#             ):
+#                 # We can close out the current admission
+#                 results.append(current_admission)
+#                 current_admission = None
+
+#             if len(admission_values) > 0:
+#                 max_discharge = max(admission_values)
+#                 if current_admission is None:
+#                     current_admission = InpatientAdmission(
+#                         day.age, day.age + max_discharge
+#                     )
+#                 else:
+#                     current_admission = InpatientAdmission(
+#                         current_admission.start_age,
+#                         max(day.age + max_discharge, current_admission.end_age),
+#                     )
+
+#         if current_admission is not None:
+#             results.append(current_admission)
+
+#         return results
+
+#     def get_all_patient_ids(self, ind: index.Index) -> Set[int]:
+#         return set(ind.get_patient_ids(self.admission_code))
+
+class LongAdmissionLabeler(LabelingFunction):
+    """
+    The inpatient labeler predicts whether or not a patient will be admitted for a long time (defined
+    as greater than 7 days).
+    The prediction time is before they get admitted
+    """
+
+    def __init__(self, ontology: extension_datasets.Ontology):
+        self.admission_helper = InpatientAdmissionHelper(ontology)
+        self.all_patient_ids = self.admission_helper.get_all_patient_ids(ind)
+
+    def label(self, patient: timeline.Patient) -> List[Label]:
+        admissions = self.admission_helper.get_inpatient_admissions(patient)
+
+        labels = []
+
+        current_admission_index = 0
+
+        for i, day in enumerate(patient.days):
+            if current_admission_index >= len(admissions):
+                continue
+            current_admission = admissions[current_admission_index]
+
+            assert day.age <= current_admission.start_age
+
+            if day.age == current_admission.start_age:
+                current_admission_index += 1
+
+                long_admission = (
+                    current_admission.end_age - current_admission.start_age >= 7
+                )
+
+                if i != 0:
+                    labels.append(
+                        Label(day_index=i - 1, is_positive=long_admission)
+                    )
+
+        return labels
+
+    def get_all_patient_ids(self) -> Optional[Set[int]]:
+        return self.all_patient_ids
+
+    def get_labeler_type(self) -> LabelType:
+        return "binary"
+
+# ##########################################################
+# # Other
+# ##########################################################
 
 
 class IsMaleLF(LabelingFunction):
@@ -171,3 +293,6 @@ class IsMaleLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
+
+
+

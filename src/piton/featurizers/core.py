@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Any, List, Tuple
+from typing import Any, List, Sequence, Tuple
 
 import numpy as np
 import scipy.sparse
+from tqdm import tqdm
 
 from .. import Patient
-from ..labelers.core import LabelingFunction
-
-from typing import Sequence
+from ..labelers.core import Label, LabelingFunction
 
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
@@ -19,7 +18,6 @@ ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 .. py:attribute:: value
     The value for that column
 """
-
 
 class FeaturizerList:
     """
@@ -34,6 +32,19 @@ class FeaturizerList:
             featurizers (List[Featurizer]): The featurizers to use for featurizeing patients.
         """
         self.featurizers = featurizers
+
+    @ray.remote
+    def _helper_preprocess_featurizers(patient, labeling_function):
+        labels = labeling_function.label(patient)
+
+        if len(labels) == 0:
+            pass
+            
+        for featurizer in self.featurizers:
+            if featurizer.needs_preprocessing():
+                featurizer.preprocess(patient, labels)
+
+
 
     def preprocess_featurizers(
         self,
@@ -54,7 +65,7 @@ class FeaturizerList:
         if not any_needs_preprocessing:
             return
 
-        for patient in patients:
+        for patient in tqdm(patients):
             labels = labeling_function.label(patient)
 
             if len(labels) == 0:
@@ -92,7 +103,7 @@ class FeaturizerList:
         patient_ids = []
         labeling_time = []
 
-        for patient in patients:
+        for patient in tqdm(patients):
             labels = labeling_function.label(patient)
 
             if len(labels) == 0:
@@ -102,10 +113,10 @@ class FeaturizerList:
 
             for featurizer in self.featurizers:
                 columns = featurizer.featurize(patient, labels)
-                assert len(columns) == len(
-                    labels
-                ), f"The featurizer {featurizer} didn't provide enough rows for "\
-                    "{labeling_function} on patient {patient.patient_id} ({len(columns)} != {len(labels)})"
+                assert len(columns) == len(labels), (
+                    f"The featurizer {featurizer} didn't provide enough rows for "
+                    f"{labeling_function} on patient {patient.patient_id} ({len(columns)} != {len(labels)})"
+                )
                 columns_by_featurizer.append(columns)
 
             for i, label in enumerate(labels):
