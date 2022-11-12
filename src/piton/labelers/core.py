@@ -94,7 +94,7 @@ class Label:
 
         assert value is not None
 
-def _apply_labeling_function(args: Tuple(str, List[int])) -> List[Dict[int, List[Label]]]:
+def _apply_labeling_function(args: Tuple(LabelingFunction, str, List[int])) -> List[Dict[int, List[Label]]]:
 
     self, database_path, patient_ids = args
     database = PatientDatabase(database_path)
