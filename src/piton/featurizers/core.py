@@ -19,6 +19,7 @@ ColumnValue = namedtuple("ColumnValue", ["column", "value"])
     The value for that column
 """
 
+
 class FeaturizerList:
     """
     Featurizer list consists of a list of featurizers that will be used (in sequence) to featurize data.
@@ -39,12 +40,10 @@ class FeaturizerList:
 
         if len(labels) == 0:
             pass
-            
+
         for featurizer in self.featurizers:
             if featurizer.needs_preprocessing():
                 featurizer.preprocess(patient, labels)
-
-
 
     def preprocess_featurizers(
         self,
