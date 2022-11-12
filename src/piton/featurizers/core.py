@@ -77,6 +77,26 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
     return data, indices, indptr, result_labels, patient_ids, labeling_time
 
 
+def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients)) -> None:
+
+    self, database_path, patient_ids, labeled_patients = args
+    database = PatientDatabase(database_path)
+
+    new_featurizers = []
+
+    for patient_id in patient_ids: 
+        patient = database[patient_id]
+        labels = labeled_patients.pat_idx_to_label(patient_id)
+
+        if len(labels) == 0:
+            continue
+
+        for featurizer in self.featurizers:
+            if featurizer.needs_preprocessing():
+                featurizer.preprocess(patient, labels)
+            new_featurizers.append(featurizer)
+
+
 class FeaturizerList:
     """
     Featurizer list consists of a list of featurizers that will be used (in sequence) to featurize data.
@@ -95,6 +115,8 @@ class FeaturizerList:
         self,
         patients: Sequence[Patient],
         labeled_patients: LabeledPatients,
+        database_path: str,
+        num_threads: int = 1,
     ) -> None:
         """preprocess a list of featurizers on the provided patients using the given labeler.
 
@@ -109,6 +131,14 @@ class FeaturizerList:
 
         if not any_needs_preprocessing:
             return
+
+        # pids = [i for i in range(len(patients))]
+        # pids_parts = np.array_split(pids, num_threads)
+
+        # tasks = [(self, database_path, pid_part, labeled_patients) for pid_part in pids_parts]
+
+        # with multiprocessing.Pool(num_threads) as pool:
+        #     pool.imap_unordered(_run_featurizer, tasks)
 
         for patient in tqdm(patients):
             labels = labeled_patients.pat_idx_to_label(patient.patient_id)
@@ -149,8 +179,6 @@ class FeaturizerList:
         result_labels = []
         patient_ids = []
         labeling_time = []
-
-        to_process = []
 
         pids = [i for i in range(len(patients))]
         pids_parts = np.array_split(pids, num_threads)
