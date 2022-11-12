@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, Deque
+from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
+from ..labelers.core import Label
 from . import Dictionary, OnlineStatistics
 from .core import ColumnValue, Featurizer
-from ..labelers.core import Label
 
 
 # TODO - replace this with a more flexible/less hacky way to allow the user to
@@ -30,7 +30,7 @@ class AgeFeaturizer(Featurizer):
         if not self.needs_preprocessing():
             return
 
-        patient_birth_date: datetime = get_patient_birthdate(patient)
+        patient_birth_date = get_patient_birthdate(patient)
         for label in labels:
             age = (label.time - patient_birth_date).days / 365
             self.age_statistics.add(age)
@@ -43,7 +43,7 @@ class AgeFeaturizer(Featurizer):
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
-        patient_birth_date: datetime = get_patient_birthdate(patient)
+        patient_birth_date = get_patient_birthdate(patient)
         for label in labels:
             age = (label.time - patient_birth_date).days / 365
             if self.normalize:
@@ -99,7 +99,8 @@ class CountFeaturizer(Featurizer):
     def preprocess(self, patient: Patient, labels: List[Label]):
         """Adds every event code in this patient's timeline to `patient_codes`"""
         for event in patient.events:
-            self.patient_codes.add(event.code)
+            if event.value == None:
+                self.patient_codes.add(event.code)
 
     def num_columns(self) -> int:
         if self.time_bins is None:
@@ -117,7 +118,7 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                if (
+                while (
                     label_idx < len(labels)
                     and event.start > labels[label_idx].time
                 ):
@@ -154,7 +155,10 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 code = event.code
-                if event.start > labels[label_idx].time:
+                while (
+                    label_idx < len(labels)
+                    and event.start > labels[label_idx].time
+                ):
                     label_idx += 1
                     all_columns.append(
                         [
