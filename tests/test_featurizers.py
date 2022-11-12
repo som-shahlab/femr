@@ -284,9 +284,15 @@ def test_serialization_and_deserialization():
     save_to_file(count_featurizer_list, "./count_featurizer_list.pickle")
     save_to_file(count_featurized_patient, "./count_featurized_patient.pickle")
 
+<<<<<<< HEAD
     # count_featurizer_list_loaded = load_from_file(
     #     "./count_featurizer_list.pickle"
     # )
+=======
+    count_featurizer_list_loaded = load_from_file(
+        "./count_featurizer_list.pickle"
+    )
+>>>>>>> ed4caeb3fcc1965f7f3f297ed5fe975fdf41f14f
     count_featurized_patient_loaded = load_from_file(
         "./count_featurized_patient.pickle"
     )
