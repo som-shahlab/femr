@@ -11,6 +11,7 @@ from . import Dictionary, OnlineStatistics
 from .core import ColumnValue, Featurizer
 
 
+
 # TODO - replace this with a more flexible/less hacky way to allow the user to
 # manage patient attributes (like age)
 def get_patient_birthdate(patient: Patient) -> datetime.datetime:
@@ -39,7 +40,7 @@ class AgeFeaturizer(Featurizer):
         return 1
 
     def featurize(
-        self, patient: Patient, labels: List[Label]
+        self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology,
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
@@ -75,7 +76,7 @@ class CountFeaturizer(Featurizer):
 
     def __init__(
         self,
-        ontology: extension_datasets.Ontology,
+        # ontology: extension_datasets.Ontology,
         rollup: bool = False,
         exclusion_codes: List[int] = [],
         time_bins: Optional[
@@ -85,13 +86,13 @@ class CountFeaturizer(Featurizer):
         self.patient_codes: Dictionary = Dictionary()
         self.exclusion_codes = set(exclusion_codes)
         self.time_bins = time_bins
-        self.ontology = ontology
+        # self.ontology = ontology
         self.rollup = rollup
 
-    def get_codes(self, code: int) -> Iterator[int]:
+    def get_codes(self, code: int, ontology: extension_datasets.Ontology) -> Iterator[int]:
         if code not in self.exclusion_codes:
             if self.rollup:
-                for subcode in self.ontology.get_all_parents(code):
+                for subcode in ontology.get_all_parents(code):
                     yield subcode
             else:
                 yield code
@@ -109,7 +110,7 @@ class CountFeaturizer(Featurizer):
             return len(self.time_bins) * len(self.patient_codes)
 
     def featurize(
-        self, patient: Patient, labels: List[Label]
+        self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology,
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
@@ -130,7 +131,7 @@ class CountFeaturizer(Featurizer):
                         ]
                     )
 
-                for code in self.get_codes(event.code):
+                for code in self.get_codes(event.code, ontology):
                     if code in self.patient_codes:
                         current_codes[self.patient_codes.transform(code)] += 1
 
@@ -175,7 +176,7 @@ class CountFeaturizer(Featurizer):
                             for code, count in code_counts_per_bin[i].items()
                         ]
                     )
-                for code in self.get_codes(code):
+                for code in self.get_codes(code, ontology):
                     if code in self.patient_codes:
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1

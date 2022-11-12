@@ -185,6 +185,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         self.patients_to_labels: Dict[int, List[Label]] = patients_to_labels
         self.labeler_type: LabelType = labeler_type
 
+    def pat_idx_to_label(self, idx: int):
+        return self.patients_to_labels[idx]
+
     def as_numpy_arrays(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Convert `patients_to_labels` to a tuple of np.ndarray's.
 
