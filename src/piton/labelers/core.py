@@ -26,6 +26,7 @@ import numpy as np
 from .. import Patient
 import multiprocessing
 
+# multiprocessing.set_start_method('spawn')
 
 @dataclass(frozen=True)
 class TimeHorizon:

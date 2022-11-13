@@ -12,6 +12,7 @@ from tqdm import tqdm
 from .. import Patient
 from ..labelers.core import Label, LabelingFunction, LabeledPatients
 from ..datasets import PatientDatabase
+import itertools
 
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
@@ -77,12 +78,12 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
     return data, indices, indptr, result_labels, patient_ids, labeling_time
 
 
-def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients)) -> None:
+def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients, List[Featurizer])) -> None:
 
-    self, database_path, patient_ids, labeled_patients = args
+    database_path, patient_ids, labeled_patients, featurizers = args
     database = PatientDatabase(database_path)
 
-    new_featurizers = []
+    trained_featurizers = []
 
     for patient_id in patient_ids: 
         patient = database[patient_id]
@@ -91,11 +92,11 @@ def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients)) ->
         if len(labels) == 0:
             continue
 
-        for featurizer in self.featurizers:
+        for featurizer in featurizers:
             if featurizer.needs_preprocessing():
                 featurizer.preprocess(patient, labels)
-            new_featurizers.append(featurizer)
-
+        
+    return featurizers
 
 class FeaturizerList:
     """
@@ -132,23 +133,42 @@ class FeaturizerList:
         if not any_needs_preprocessing:
             return
 
-        # pids = [i for i in range(len(patients))]
-        # pids_parts = np.array_split(pids, num_threads)
+        pids = [i for i in range(len(patients))]
+        pids_parts = np.array_split(pids, num_threads)
 
-        # tasks = [(self, database_path, pid_part, labeled_patients) for pid_part in pids_parts]
+        tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
-        # with multiprocessing.Pool(num_threads) as pool:
-        #     pool.imap_unordered(_run_featurizer, tasks)
+        multiprocessing.set_start_method('spawn', force=True)
+        with multiprocessing.Pool(num_threads) as pool:
+            trained_featurizers_tuple_list = list(pool.imap_unordered(_run_preprocess_featurizers, tasks))
 
-        for patient in tqdm(patients):
-            labels = labeled_patients.pat_idx_to_label(patient.patient_id)
+        age_featurizers = []
+        count_featurizers = []
 
-            if len(labels) == 0:
-                continue
+        for trained_featurizers_tuple in trained_featurizers_tuple_list:
+            age_featurizers.append(trained_featurizers_tuple[0])
+            count_featurizers.append(trained_featurizers_tuple[1])
 
-            for featurizer in self.featurizers:
-                if featurizer.needs_preprocessing():
-                    featurizer.preprocess(patient, labels)
+        # Aggregating age featurizers
+        for age_featurizer in age_featurizers:
+            if age_featurizer.to_dict()["age_statistics"]["count"] != 0:
+                self.featurizers[0].from_dict(age_featurizer.to_dict())
+                break
+
+        # Aggregating count featurizers
+        patient_codes_dict_list = [count_featurizer.to_dict()["patient_codes"]["values"] for count_featurizer in count_featurizers]
+        patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
+        self.featurizers[1].from_dict({"patient_codes": {"values": patient_codes}})
+
+        # for patient in tqdm(patients):
+        #     labels = labeled_patients.pat_idx_to_label(patient.patient_id)
+
+        #     if len(labels) == 0:
+        #         continue
+
+        #     for featurizer in self.featurizers:
+        #         if featurizer.needs_preprocessing():
+        #             featurizer.preprocess(patient, labels)
 
         for featurizer in self.featurizers:
             featurizer.finalize_preprocessing()
@@ -185,6 +205,7 @@ class FeaturizerList:
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
+        multiprocessing.set_start_method('spawn', force=True)
         with multiprocessing.Pool(num_threads) as pool:
             results = list(pool.imap_unordered(_run_featurizer, tasks))
 
