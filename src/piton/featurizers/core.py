@@ -138,7 +138,7 @@ class FeaturizerList:
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
-        multiprocessing.set_start_method('spawn', force=True)
+        # multiprocessing.set_start_method('spawn', force=True)
         with multiprocessing.Pool(num_threads) as pool:
             trained_featurizers_tuple_list = list(pool.imap_unordered(_run_preprocess_featurizers, tasks))
 
@@ -205,7 +205,7 @@ class FeaturizerList:
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
-        multiprocessing.set_start_method('spawn', force=True)
+        # multiprocessing.set_start_method('spawn', force=True)
         with multiprocessing.Pool(num_threads) as pool:
             results = list(pool.imap_unordered(_run_featurizer, tasks))
 
