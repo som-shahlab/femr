@@ -30,11 +30,13 @@ def save_to_file(object_to_save, path_to_file: str):
 
 
 # Please update this path with your extract of piton as noted in previous notebook. 
-# PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract'
-# PATH_TO_SAVE_MATRIX = "/home/rthapa84/data"
+PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
+PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
+LABELED_PATIENTS = "diabetes_labeled_patients_v1.pickle"
+FEATURIZED_DATA = "diabetes_featurized_data.pickle"
 
-PATH_TO_PITON_DB = '/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/'
-PATH_TO_SAVE_MATRIX = "./"
+#PATH_TO_PITON_DB = '/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/'
+#PATH_TO_SAVE_MATRIX = "./"
 
 # Patient database
 data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
@@ -47,7 +49,7 @@ patients = data
 # Define time horizon for labeling purpose based on your use case. 
 # Note: Some labeling function may not take any time_horizon
 
-num_threads = 10
+num_threads = 20
 
 time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=365)
@@ -58,6 +60,8 @@ time_horizon = TimeHorizon(
 labeler = DiabetesLF(ontology, time_horizon)
 
 labeled_patients = labeler.apply(patients, PATH_TO_PITON_DB, num_threads)
+save_to_file(delta, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
+
 
 # Lets use both age and count featurizer 
 age = AgeFeaturizer()
@@ -69,12 +73,11 @@ featurizer_age_count.preprocess_featurizers(patients, labeled_patients, PATH_TO_
 
 results = featurizer_age_count.featurize(patients, labeled_patients, PATH_TO_PITON_DB, num_threads)
 
-save_to_file(results, os.path.join(PATH_TO_SAVE_MATRIX, "test_diabetes_matrix.pickle"))
+save_to_file(results, os.path.join(PATH_TO_SAVE_MATRIX, FEATURIZED_DATA))
 
 end_time = datetime.datetime.now()
 delta = (end_time - start_time)
 print(delta)
-save_to_file(delta, os.path.join(PATH_TO_SAVE_MATRIX, "total_time.pickle"))
 
 
 
