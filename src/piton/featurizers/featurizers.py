@@ -131,7 +131,7 @@ class CountFeaturizer(Featurizer):
                         ]
                     )
 
-                if event.value is None:
+                if event.value is not None:
                     continue
 
                 for code in self.get_codes(event.code, ontology):

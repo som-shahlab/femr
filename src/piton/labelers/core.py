@@ -25,8 +25,6 @@ import numpy as np
 from .. import Patient
 import multiprocessing
 
-# multiprocessing.set_start_method('spawn')
-
 @dataclass(frozen=True)
 class TimeHorizon:
     """An interval of time."""
@@ -168,7 +166,6 @@ class LabelingFunction(ABC):
 
     def apply(
         self, 
-        # patients: Sequence[Patient], 
         database_path: str,
         num_threads: int = 1, 
         num_patients: Optional[int] = None
@@ -192,9 +189,10 @@ class LabelingFunction(ABC):
 
         tasks = [(self, database_path, pid_part) for pid_part in pids_parts]
 
-        with multiprocessing.Pool(num_threads) as pool:
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
             results = list(pool.imap(_apply_labeling_function, tasks))
-            patients_to_labels = dict(collections.ChainMap(*results))
+        patients_to_labels = dict(collections.ChainMap(*results))
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 

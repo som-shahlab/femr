@@ -38,61 +38,68 @@ def load_from_file(path_to_file: str):
 # Please update this path with your extract of piton as noted in previous notebook. 
 PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
-LABELED_PATIENTS = "test_diabetes_labeled_patients.pickle"
-FEATURIZED_DATA = "test_diabetes_featurized_patients.pickle"
-NUM_PATIENTS = 5000
-NUM_THREADS = 10
+LABELED_PATIENTS = "diabetes_labeled_patients_v4.pickle"
+PREPROCESSED_FEATURIZERS_DATA = "diabetes_preprocessed_featurizers_v4.pickle"
+FEATURIZED_DATA = "diabetes_featurized_patients_v4.pickle"
 
-#PATH_TO_PITON_DB = '/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/'
-#PATH_TO_SAVE_MATRIX = "./"
+NUM_PATIENTS = None
+NUM_THREADS = 20
 
-# Patient database
-data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
-print(len(data))
+if __name__ == '__main__':
 
-# Ontology 
-ontology = data.get_ontology()
+    #PATH_TO_PITON_DB = '/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/'
+    #PATH_TO_SAVE_MATRIX = "./"
 
-# patients = data
-# print("Finished creating patient database")
-# patients = [data[idx] for idx in range(500)]
-# Define time horizon for labeling purpose based on your use case. 
-# Note: Some labeling function may not take any time_horizon
+    # Patient database
+    data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
 
-time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=365)
-    )
+    # Ontology 
+    ontology = data.get_ontology()
 
-# Define the mortality labeling function. 
-# labeler = MortalityLF(ontology, time_horizon)
-labeler = DiabetesLF(ontology, time_horizon)
-print("Instantiated Labelers")
+    # patients = data
+    # print("Finished creating patient database")
+    # patients = [data[idx] for idx in range(500)]
+    # Define time horizon for labeling purpose based on your use case. 
+    # Note: Some labeling function may not take any time_horizon
 
-# labeled_patients = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
+    time_horizon = TimeHorizon(
+            datetime.timedelta(days=0), datetime.timedelta(days=365)
+        )
 
-labeled_patients = labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=NUM_PATIENTS)
-print("Finished Labeling Patients: ", datetime.datetime.now() - start_time)
-save_to_file(labeled_patients, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
+    # Define the mortality labeling function. 
+    # labeler = MortalityLF(ontology, time_horizon)
+    labeler = DiabetesLF(ontology, time_horizon)
+    print("Instantiated Labelers")
 
-# Lets use both age and count featurizer 
-age = AgeFeaturizer()
-count = CountFeaturizer(rollup=True)
-featurizer_age_count = FeaturizerList([age, count])
+    labeled_patients = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
 
-# Preprocessing the featurizers, which includes processes such as normalizing age. 
-featurizer_age_count.preprocess_featurizers(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
-print("Finished Preprocessing Featurizers: ", datetime.datetime.now() - start_time)
+    # labeled_patients = labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=NUM_PATIENTS)
+    # save_to_file(labeled_patients, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
 
-results = featurizer_age_count.featurize(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
-print("Finished Training Featurizers: ", datetime.datetime.now() - start_time)
+    print("Finished Labeling Patients: ", datetime.datetime.now() - start_time)
 
-# print(results[0].toarray(), results[1])
+    # Lets use both age and count featurizer 
+    age = AgeFeaturizer()
+    count = CountFeaturizer(rollup=True)
+    featurizer_age_count = FeaturizerList([age, count])
 
-save_to_file(results, os.path.join(PATH_TO_SAVE_MATRIX, FEATURIZED_DATA))
+    # Preprocessing the featurizers, which includes processes such as normalizing age. 
 
-end_time = datetime.datetime.now()
-delta = (end_time - start_time)
-print(delta)
+    # featurizer_age_count = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, PREPROCESSED_FEATURIZERS_DATA))
+    
+    featurizer_age_count.preprocess_featurizers(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
+    save_to_file(featurizer_age_count, os.path.join(PATH_TO_SAVE_MATRIX, PREPROCESSED_FEATURIZERS_DATA))
+
+    print("Finished Preprocessing Featurizers: ", datetime.datetime.now() - start_time)
+
+    results = featurizer_age_count.featurize(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
+    print("Finished Training Featurizers: ", datetime.datetime.now() - start_time)
+    # print(results[0].toarray(), results[1])
+    save_to_file(results, os.path.join(PATH_TO_SAVE_MATRIX, FEATURIZED_DATA))
+
+    end_time = datetime.datetime.now()
+    delta = (end_time - start_time)
+    print(delta)
 
 
 

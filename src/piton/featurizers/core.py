@@ -15,6 +15,8 @@ from ..labelers.core import Label, LabelingFunction, LabeledPatients
 from ..datasets import PatientDatabase
 import itertools
 
+# multiprocessing.set_start_method('spawn', force=True)
+
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
 .. py:attribute:: column
@@ -92,11 +94,11 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
         (data, indices, indptr), shape=(len(result_labels), total_columns)
     )
 
-    data_matrix.check_format()
+    # data_matrix.check_format() # remove when we think its works
 
     # print(data_matrix.shape, result_labels.shape, patient_ids.shape, labeling_time.shape)
 
-    return data_matrix, result_labels, patient_ids, labeling_time
+    return data_matrix, patient_ids, result_labels, labeling_time
 
 
 def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients, List[Featurizer])) -> None:
@@ -161,8 +163,8 @@ class FeaturizerList:
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
-        # multiprocessing.set_start_method('spawn', force=True)
-        with multiprocessing.Pool(num_threads) as pool:
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
             trained_featurizers_tuple_list = list(pool.imap(_run_preprocess_featurizers, tasks))
 
         age_featurizers = []
@@ -230,7 +232,8 @@ class FeaturizerList:
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
         # multiprocessing.set_start_method('spawn', force=True)
-        with multiprocessing.Pool(num_threads) as pool:
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
             results = list(pool.imap(_run_featurizer, tasks))
 
         data_matrix_list = []
@@ -245,7 +248,7 @@ class FeaturizerList:
             patient_ids_list.append(result[2])
             labeling_time_list.append(result[3])
         
-        data_matrix = vstack(data_matrix_list)
+        data_matrix = scipy.sparse.vstack(data_matrix_list)
         result_labels = np.concatenate(result_labels_list, axis=None)
         patient_ids = np.concatenate(patient_ids_list, axis=None)
         labeling_time = np.concatenate(labeling_time_list, axis=None)
