@@ -215,47 +215,49 @@ class LongAdmissionLabeler(LabelingFunction):
     """
 
     def __init__(self, ontology: extension_datasets.Ontology):
-        self.admission_helper = InpatientAdmissionHelper(ontology)
-        self.all_patient_ids = self.admission_helper.get_all_patient_ids(ind)
 
-    def label(self, patient: timeline.Patient) -> List[Label]:
-        admissions = self.admission_helper.get_inpatient_admissions(patient)
+        INPATIENT_VISIT_CODE = "Visit/IP"
+        admission_code = ontology.get_dictionary().index(INPATIENT_VISIT_CODE)
+        if admission_code is None:
+            raise ValueError(
+                f"Could not find inpatient visit code for: {INPATIENT_VISIT_CODE}"
+            )
+        else:
+            self.admission_code = admission_code
 
-        labels = []
+    def is_inpatient_admission(self, event: Event) -> bool:
+        """Return TRUE if this event is an admission."""
+        return event.code == self.admission_code
 
-        current_admission_index = 0
+    def label(self, patient: Patient) -> List[Label]:
+        """Label this patient as Male (TRUE) or not (FALSE)."""
+        if len(patient.events) == 0:
+            return []
 
-        for i, day in enumerate(patient.days):
-            if current_admission_index >= len(admissions):
+        labels: List[Label] = []
+        admin_starts = []
+        cur_admin_index = 1
+        for event in patient.events:
+            if event.code != self.admission_code:
                 continue
-            current_admission = admissions[current_admission_index]
 
-            assert day.age <= current_admission.start_age
+            admin_starts.append(event.start)
 
-            if day.age == current_admission.start_age:
-                current_admission_index += 1
+            if len(admin_starts) < 2:
+                continue
+            
+            long_admin_bool = (admin_starts[cur_admin_index] - 
+                               admin_starts[cur_admin_index-1]).days > 7
+            label = Label(time=admin_starts[cur_admin_index-1], value=long_admin_bool, label_type="boolean")
+            labels.append(label)
 
-                long_admission = (
-                    current_admission.end_age - current_admission.start_age >= 7
-                )
-
-                if i != 0:
-                    labels.append(
-                        Label(day_index=i - 1, is_positive=long_admission)
-                    )
-
+            cur_admin_index += 1
+        
         return labels
 
-    def get_all_patient_ids(self) -> Optional[Set[int]]:
-        return self.all_patient_ids
-
     def get_labeler_type(self) -> LabelType:
-        return "binary"
-
-
-# ##########################################################
-# # Other
-# ##########################################################
+        """Return that these labels are booleans."""
+        return "boolean"
 
 
 class IsMaleLF(LabelingFunction):

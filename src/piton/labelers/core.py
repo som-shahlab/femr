@@ -4,7 +4,6 @@ from __future__ import annotations
 import collections
 import datetime
 import os
-import pickle
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -103,7 +102,10 @@ def _apply_labeling_function(args: Tuple(LabelingFunction, str, List[int])) -> L
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
         patient = database[patient_id]
-        patients_to_labels[patient.patient_id] = self.label(patient)
+        labels = self.label(patient)
+
+        if len(labels) > 0:
+            patients_to_labels[patient.patient_id] = labels
     
     return patients_to_labels
         
@@ -166,9 +168,10 @@ class LabelingFunction(ABC):
 
     def apply(
         self, 
-        patients: Sequence[Patient], 
+        # patients: Sequence[Patient], 
         database_path: str,
         num_threads: int = 1, 
+        num_patients: Optional[int] = None
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -180,13 +183,17 @@ class LabelingFunction(ABC):
         """
         patients_to_labels: Dict[int, List[Label]] = {}
 
-        pids = [i for i in range(len(patients))]
+        if num_patients == None:
+            database = PatientDatabase(database_path)
+            num_patients = len(database)
+
+        pids = [i for i in range(num_patients)]
         pids_parts = np.array_split(pids, num_threads)
 
         tasks = [(self, database_path, pid_part) for pid_part in pids_parts]
 
         with multiprocessing.Pool(num_threads) as pool:
-            results = list(pool.imap_unordered(_apply_labeling_function, tasks))
+            results = list(pool.imap(_apply_labeling_function, tasks))
             patients_to_labels = dict(collections.ChainMap(*results))
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
@@ -213,6 +220,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
 
     def pat_idx_to_label(self, idx: int):
         return self.patients_to_labels[idx]
+    
+    def get_all_patient_ids(self):
+        return list(self.patients_to_labels.keys())
 
     def as_numpy_arrays(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Convert `patients_to_labels` to a tuple of np.ndarray's.
@@ -261,18 +271,6 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                 result.append((int(patient_id), label))
         return result
 
-    def save_to_file(self, path_to_file: str):
-        """Save `LabeledPatients` object to Pickle file."""
-        os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-        with open(path_to_file, "wb") as fd:
-            pickle.dump(self, fd)
-
-    @classmethod
-    def load_from_file(cls, path_to_file: str) -> LabeledPatients:
-        """Load `LabeledPatients` object from Pickle file."""
-        with open(path_to_file, "rb") as fd:
-            result = pickle.load(fd)
-        return result
 
     @classmethod
     def load_from_numpy(

@@ -100,7 +100,7 @@ class CountFeaturizer(Featurizer):
     def preprocess(self, patient: Patient, labels: List[Label]):
         """Adds every event code in this patient's timeline to `patient_codes`"""
         for event in patient.events:
-            if event.value == None:
+            if event.value is None:
                 self.patient_codes.add(event.code)
 
     def num_columns(self) -> int:
@@ -131,18 +131,31 @@ class CountFeaturizer(Featurizer):
                         ]
                     )
 
+                if event.value is None:
+                    continue
+
                 for code in self.get_codes(event.code, ontology):
                     if code in self.patient_codes:
                         current_codes[self.patient_codes.transform(code)] += 1
 
-                if label_idx == len(labels) - 1:
+            if label_idx < len(labels):
+                for label in labels[label_idx]:
                     all_columns.append(
                         [
                             ColumnValue(column, count)
                             for column, count in current_codes.items()
                         ]
                     )
-                    break
+                
+
+                # if label_idx == len(labels) - 1:
+                #     all_columns.append(
+                #         [
+                #             ColumnValue(column, count)
+                #             for column, count in current_codes.items()
+                #         ]
+                #     )
+                #     break
 
         else:
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.date]]] = {
@@ -156,14 +169,10 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 code = event.code
-<<<<<<< HEAD
                 while (
                     label_idx < len(labels)
                     and event.start > labels[label_idx].time
                 ):
-=======
-                if event.start > labels[label_idx].time:
->>>>>>> [pre-commit.ci] auto fixes from pre-commit.com hooks
                     label_idx += 1
                     all_columns.append(
                         [

@@ -7,6 +7,7 @@ import multiprocessing
 
 import numpy as np
 import scipy.sparse
+from scipy.sparse import vstack
 from tqdm import tqdm
 
 from .. import Patient
@@ -22,7 +23,7 @@ ColumnValue = namedtuple("ColumnValue", ["column", "value"])
     The value for that column
 """
 
-def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurizer]]) -> Tuple[Any, Any, Any, Any, Any, Any]:
+def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurizer]]) -> Tuple[Any, Any, Any, Any]:
 
     data = []
     indices: List[int] = []
@@ -74,8 +75,28 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
                     data.append(value)
 
                 column_offset += featurizers[j].num_columns()
-    
-    return data, indices, indptr, result_labels, patient_ids, labeling_time
+    indptr.append(len(indices))
+
+    data = np.array(data, dtype=np.float32)
+    indices = np.array(indices, dtype=np.int32)
+    indptr = np.array(indptr, dtype=np.int32)
+    result_labels = np.array(result_labels)
+    patient_ids = np.array(patient_ids, dtype=np.int32)
+    labeling_time = np.array(patient_ids, dtype=np.datetime64)
+
+    total_columns = sum(
+        featurizer.num_columns() for featurizer in featurizers
+    )
+
+    data_matrix = scipy.sparse.csr_matrix(
+        (data, indices, indptr), shape=(len(result_labels), total_columns)
+    )
+
+    data_matrix.check_format()
+
+    # print(data_matrix.shape, result_labels.shape, patient_ids.shape, labeling_time.shape)
+
+    return data_matrix, result_labels, patient_ids, labeling_time
 
 
 def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients, List[Featurizer])) -> None:
@@ -114,7 +135,7 @@ class FeaturizerList:
 
     def preprocess_featurizers(
         self,
-        patients: Sequence[Patient],
+        # patients: Sequence[Patient],
         labeled_patients: LabeledPatients,
         database_path: str,
         num_threads: int = 1,
@@ -133,14 +154,16 @@ class FeaturizerList:
         if not any_needs_preprocessing:
             return
 
-        pids = [i for i in range(len(patients))]
+        pids = sorted(labeled_patients.get_all_patient_ids())
+
+        # pids = [i for i in range(len(patients))]
         pids_parts = np.array_split(pids, num_threads)
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
         # multiprocessing.set_start_method('spawn', force=True)
         with multiprocessing.Pool(num_threads) as pool:
-            trained_featurizers_tuple_list = list(pool.imap_unordered(_run_preprocess_featurizers, tasks))
+            trained_featurizers_tuple_list = list(pool.imap(_run_preprocess_featurizers, tasks))
 
         age_featurizers = []
         count_featurizers = []
@@ -151,7 +174,7 @@ class FeaturizerList:
 
         # Aggregating age featurizers
         for age_featurizer in age_featurizers:
-            if age_featurizer.to_dict()["age_statistics"]["count"] != 0:
+            if age_featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
                 self.featurizers[0].from_dict(age_featurizer.to_dict())
                 break
 
@@ -175,7 +198,6 @@ class FeaturizerList:
 
     def featurize(
         self,
-        patients: Sequence[Patient],
         labeled_patients: LabeledPatients,
         database_path: str,
         num_threads: int = 1,
@@ -200,42 +222,41 @@ class FeaturizerList:
         patient_ids = []
         labeling_time = []
 
-        pids = [i for i in range(len(patients))]
+        pids = sorted(labeled_patients.get_all_patient_ids())
+
+        # pids = [i for i in range(len(patients))]
         pids_parts = np.array_split(pids, num_threads)
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
         # multiprocessing.set_start_method('spawn', force=True)
         with multiprocessing.Pool(num_threads) as pool:
-            results = list(pool.imap_unordered(_run_featurizer, tasks))
+            results = list(pool.imap(_run_featurizer, tasks))
 
-            for result in results:
-                data += result[0]
-                indices += result[1]
-                indptr += result[2]
-                result_labels += result[3]
-                patient_ids += result[4]
-                labeling_time += result[5]
+        data_matrix_list = []
+        result_labels_list = []
+        patient_ids_list = []
+        labeling_time_list = []
+        for result in results:
+            # if result[0].shape[0] != 0:
+            data_matrix_list.append(result[0])
+            # if result[1].shape[1] != 0:
+            result_labels_list.append(result[1])
+            patient_ids_list.append(result[2])
+            labeling_time_list.append(result[3])
         
-        total_columns = sum(
-            featurizer.num_columns() for featurizer in self.featurizers
-        )
+        data_matrix = vstack(data_matrix_list)
+        result_labels = np.concatenate(result_labels_list, axis=None)
+        patient_ids = np.concatenate(patient_ids_list, axis=None)
+        labeling_time = np.concatenate(labeling_time_list, axis=None)
 
-        indptr.append(len(indices))
-
-        data = np.array(data, dtype=np.float32)
-        indices = np.array(indices, dtype=np.int32)
-        indptr = np.array(indptr, dtype=np.int32)
-
-        data_matrix = scipy.sparse.csr_matrix(
-            (data, indices, indptr), shape=(len(result_labels), total_columns)
-        )
+        data_matrix.check_format()
 
         return (
             data_matrix,
-            np.array(result_labels, dtype=np.float32),
-            np.array(patient_ids, dtype=np.int32),
-            np.array(labeling_time, dtype=np.datetime64),
+            result_labels,
+            patient_ids,
+            labeling_time,
         )
 
     def get_column_name(self, column_index: int) -> str:
