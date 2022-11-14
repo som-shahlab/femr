@@ -28,28 +28,36 @@ def save_to_file(object_to_save, path_to_file: str):
     with open(path_to_file, "wb") as fd:
         pickle.dump(object_to_save, fd)
 
+def load_from_file(path_to_file: str):
+    """Load object from Pickle file."""
+    with open(path_to_file, "rb") as fd:
+        result = pickle.load(fd)
+    return result
+
 
 # Please update this path with your extract of piton as noted in previous notebook. 
 PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
-LABELED_PATIENTS = "diabetes_labeled_patients_v1.pickle"
-FEATURIZED_DATA = "diabetes_featurized_data.pickle"
+LABELED_PATIENTS = "test_diabetes_labeled_patients.pickle"
+FEATURIZED_DATA = "test_diabetes_featurized_patients.pickle"
+NUM_PATIENTS = 5000
+NUM_THREADS = 10
 
 #PATH_TO_PITON_DB = '/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/'
 #PATH_TO_SAVE_MATRIX = "./"
 
 # Patient database
 data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
+print(len(data))
 
 # Ontology 
 ontology = data.get_ontology()
 
-patients = data
-
+# patients = data
+# print("Finished creating patient database")
+# patients = [data[idx] for idx in range(500)]
 # Define time horizon for labeling purpose based on your use case. 
 # Note: Some labeling function may not take any time_horizon
-
-num_threads = 20
 
 time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=365)
@@ -58,10 +66,13 @@ time_horizon = TimeHorizon(
 # Define the mortality labeling function. 
 # labeler = MortalityLF(ontology, time_horizon)
 labeler = DiabetesLF(ontology, time_horizon)
+print("Instantiated Labelers")
 
-labeled_patients = labeler.apply(patients, PATH_TO_PITON_DB, num_threads)
-save_to_file(delta, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
+# labeled_patients = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
 
+labeled_patients = labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=NUM_PATIENTS)
+print("Finished Labeling Patients: ", datetime.datetime.now() - start_time)
+save_to_file(labeled_patients, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
 
 # Lets use both age and count featurizer 
 age = AgeFeaturizer()
@@ -69,9 +80,13 @@ count = CountFeaturizer(rollup=True)
 featurizer_age_count = FeaturizerList([age, count])
 
 # Preprocessing the featurizers, which includes processes such as normalizing age. 
-featurizer_age_count.preprocess_featurizers(patients, labeled_patients, PATH_TO_PITON_DB, num_threads)
+featurizer_age_count.preprocess_featurizers(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
+print("Finished Preprocessing Featurizers: ", datetime.datetime.now() - start_time)
 
-results = featurizer_age_count.featurize(patients, labeled_patients, PATH_TO_PITON_DB, num_threads)
+results = featurizer_age_count.featurize(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
+print("Finished Training Featurizers: ", datetime.datetime.now() - start_time)
+
+# print(results[0].toarray(), results[1])
 
 save_to_file(results, os.path.join(PATH_TO_SAVE_MATRIX, FEATURIZED_DATA))
 
