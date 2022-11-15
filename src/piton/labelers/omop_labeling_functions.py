@@ -157,6 +157,8 @@ class HighHbA1cLF(LabelingFunction):
         for subcode in ontology.get_children(diabetes_code):
             self.diabetes_codes.add(subcode)
 
+        self.last_trigger_days = last_trigger_days
+
         # diabetes_codes: Set[Tuple[str, int]] = set()
         # for code, code_str in enumerate(ontology.get_dictionary()):
         #     code_str = bytes(code_str).decode("utf-8")
@@ -191,7 +193,7 @@ class HighHbA1cLF(LabelingFunction):
 
                 is_diabetes = event.value > 6.5
 
-                if last_trigger is None or (event.start - last_trigger).days > last_trigger_days:
+                if last_trigger is None or (event.start - last_trigger).days > self.last_trigger_days:
                     labels.append(Label(time=event.start, value=is_diabetes, label_type="boolean"))
                     last_trigger = event.start
                 
