@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import datetime
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Deque, Dict
+from collections import deque
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -133,6 +134,19 @@ class DiabetesLF(CodeLF):
                 time_horizon=time_horizon,
             )
 
+def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[int]:
+
+    children_code_set = set([code])
+    parent_deque = deque([code])
+
+    while len(children_deque) == 0:
+        temp_parent_code = parent_deque.popleft()
+        for temp_child_code in ontology.get_children(temp_parent_code):
+            children_code_set.add(temp_child_code)
+            parent_deque.append(temp_child_code)
+        
+    return children_code_set
+
 
 class HighHbA1cLF(LabelingFunction):
     """
@@ -144,34 +158,17 @@ class HighHbA1cLF(LabelingFunction):
         self, 
         ontology: extension_datasets.Ontology, 
         time_horizon: TimeHorizon, 
-        last_trigger_days: int = 180
+        last_trigger_days: int = 180,
     ):
 
         DIABETES_STR = "SNOMED/44054006"
         HbA1c_STR = "LOINC/4548-4"
 
-        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_STR)
-        diabetes_code = ontology.get_dictionary().index(DIABETES_STR)
-
-        self.diabetes_codes = set()
-        for subcode in ontology.get_children(diabetes_code):
-            self.diabetes_codes.add(subcode)
-
         self.last_trigger_days = last_trigger_days
+        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_STR)
 
-        # diabetes_codes: Set[Tuple[str, int]] = set()
-        # for code, code_str in enumerate(ontology.get_dictionary()):
-        #     code_str = bytes(code_str).decode("utf-8")
-        #     if code_str == DIABETES_STR:
-        #         diabetes_codes.add((code_str, code))
-
-        # if len(diabetes_codes) != 1:
-        #     raise ValueError(
-        #         "Could not find exactly one death code -- instead found "
-        #         f"{len(diabetes_codes)} codes: {str(diabetes_codes)}"
-        #     )
-
-        # diabetes_code = list(diabetes_codes)[0][1]
+        diabetes_code = ontology.get_dictionary().index(DIABETES_STR)
+        self.diabetes_codes = _get_all_children(ontology, diabetes_code)
 
     def label(self, patient: Patient) -> List[Label]:
 
@@ -181,9 +178,15 @@ class HighHbA1cLF(LabelingFunction):
         labels: List[Label] = []
         last_trigger: Optional[int] = None
 
+        first_diabetes_code_date = None
+
+        for event in patient.codes:
+            if event.code in self.diabetes_code:
+                first_diabetes_code_date = event.start
+
         for event in patient.events:
 
-            if event.code in self.diabetes_code:
+            if event.start > first_diabetes_code_date:
                 break
             
             if event.value is None or type(event.value) is memoryview:
@@ -199,6 +202,7 @@ class HighHbA1cLF(LabelingFunction):
                 
                 if is_diabetes:
                     break
+        
         
         return labels
                 
