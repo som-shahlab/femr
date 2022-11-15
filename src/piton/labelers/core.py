@@ -221,6 +221,12 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     
     def get_all_patient_ids(self):
         return list(self.patients_to_labels.keys())
+    
+    def get_patients_to_labels(self):
+        return self.patients_to_labels
+    
+    def get_labeler_type(self):
+        return self.labeler_type
 
     def as_numpy_arrays(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Convert `patients_to_labels` to a tuple of np.ndarray's.

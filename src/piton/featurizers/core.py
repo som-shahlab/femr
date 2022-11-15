@@ -27,6 +27,7 @@ ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 
 def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurizer]]) -> Tuple[Any, Any, Any, Any]:
 
+    # print("launched")
     data = []
     indices: List[int] = []
     indptr = []
@@ -41,6 +42,7 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
     ontology = database.get_ontology()
 
     for patient_id in pids:
+        # print("launched", patient_id)
         patient = database[patient_id]
         labels = labeled_patients.pat_idx_to_label(patient_id)
 
@@ -94,11 +96,13 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
         (data, indices, indptr), shape=(len(result_labels), total_columns)
     )
 
+    # print("Done", data_matrix.shape)
+
     # data_matrix.check_format() # remove when we think its works
 
     # print(data_matrix.shape, result_labels.shape, patient_ids.shape, labeling_time.shape)
 
-    return data_matrix, patient_ids, result_labels, labeling_time
+    return data_matrix, result_labels, patient_ids, labeling_time
 
 
 def _run_preprocess_featurizers(args: Tuple(str, List[int], LabeledPatients, List[Featurizer])) -> None:
@@ -158,7 +162,6 @@ class FeaturizerList:
 
         pids = sorted(labeled_patients.get_all_patient_ids())
 
-        # pids = [i for i in range(len(patients))]
         pids_parts = np.array_split(pids, num_threads)
 
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
@@ -185,16 +188,6 @@ class FeaturizerList:
         patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
         self.featurizers[1].from_dict({"patient_codes": {"values": patient_codes}})
 
-        # for patient in tqdm(patients):
-        #     labels = labeled_patients.pat_idx_to_label(patient.patient_id)
-
-        #     if len(labels) == 0:
-        #         continue
-
-        #     for featurizer in self.featurizers:
-        #         if featurizer.needs_preprocessing():
-        #             featurizer.preprocess(patient, labels)
-
         for featurizer in self.featurizers:
             featurizer.finalize_preprocessing()
 
@@ -216,15 +209,11 @@ class FeaturizerList:
             patient_ids is a list of the patient ids for each row.
             labeling_time is a list of labeling/prediction time for each row.
         """
-        data = []
-        indices: List[int] = []
-        indptr = []
 
-        result_labels = []
-        patient_ids = []
-        labeling_time = []
-
+        # TODO check what is happening here
+        # print(len(labeled_patients.get_all_patient_ids()))
         pids = sorted(labeled_patients.get_all_patient_ids())
+        # print(pids)
 
         # pids = [i for i in range(len(patients))]
         pids_parts = np.array_split(pids, num_threads)
@@ -232,9 +221,11 @@ class FeaturizerList:
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
         # multiprocessing.set_start_method('spawn', force=True)
+        # print("This is before lunch", len(tasks))
         ctx = multiprocessing.get_context('forkserver')
         with ctx.Pool(num_threads) as pool:
             results = list(pool.imap(_run_featurizer, tasks))
+        # print("Finished multiprocessing")
 
         data_matrix_list = []
         result_labels_list = []
@@ -252,8 +243,6 @@ class FeaturizerList:
         result_labels = np.concatenate(result_labels_list, axis=None)
         patient_ids = np.concatenate(patient_ids_list, axis=None)
         labeling_time = np.concatenate(labeling_time_list, axis=None)
-
-        data_matrix.check_format()
 
         return (
             data_matrix,

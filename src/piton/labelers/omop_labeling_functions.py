@@ -34,7 +34,7 @@ class CodeLF(FixedTimeHorizonEventLF):
         """Return each event's start time as the time to make a prediction."""
         return [
             datetime.datetime.strptime(
-                str(e.start)[:10] + " 11:59:00", "%Y-%m-%d %H:%M:%S"
+                str(e.start)[:10] + " 23:59:00", "%Y-%m-%d %H:%M:%S"
             )
             for e in patient.events
             if e.code == self.admission_code

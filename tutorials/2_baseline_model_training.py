@@ -38,9 +38,9 @@ def load_from_file(path_to_file: str):
 # Please update this path with your extract of piton as noted in previous notebook. 
 PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
-LABELED_PATIENTS = "diabetes_labeled_patients_v4.pickle"
-PREPROCESSED_FEATURIZERS_DATA = "diabetes_preprocessed_featurizers_v4.pickle"
-FEATURIZED_DATA = "diabetes_featurized_patients_v4.pickle"
+LABELED_PATIENTS = "mortality_labeled_patients_v1.pickle"
+PREPROCESSED_FEATURIZERS_DATA = "mortality_preprocessed_featurizers_v1.pickle"
+FEATURIZED_DATA = "mortality_featurized_patients_v1.pickle"
 
 NUM_PATIENTS = None
 NUM_THREADS = 20
@@ -67,14 +67,14 @@ if __name__ == '__main__':
         )
 
     # Define the mortality labeling function. 
-    # labeler = MortalityLF(ontology, time_horizon)
-    labeler = DiabetesLF(ontology, time_horizon)
+    labeler = MortalityLF(ontology, time_horizon)
+    # labeler = DiabetesLF(ontology, time_horizon)
     print("Instantiated Labelers")
 
-    labeled_patients = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
+    # labeled_patients = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
 
-    # labeled_patients = labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=NUM_PATIENTS)
-    # save_to_file(labeled_patients, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
+    labeled_patients = labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=NUM_PATIENTS)
+    save_to_file(labeled_patients, os.path.join(PATH_TO_SAVE_MATRIX, LABELED_PATIENTS))
 
     print("Finished Labeling Patients: ", datetime.datetime.now() - start_time)
 

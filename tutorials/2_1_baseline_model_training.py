@@ -68,16 +68,28 @@ new_patient_ids = np.array([database.compute_split(SEED, pid) for pid in patient
 X_train, X_test, y_train, y_test = train_test_split(feature_matrix, labels, train_size = 0.8)
 
 # train_bool_mask = (new_patient_ids < 70)
-# # validation_patient_ids = (new_patient_ids >= 70 and new_patient_ids < 85)
+# validation_patient_ids = (new_patient_ids >= 70 and new_patient_ids < 85)
 # test_bool_mask = (new_patient_ids >= 85)
 
 # X_train = feature_matrix[train_bool_mask]
 # y_train = labels[train_bool_mask]
+
+# print("Finished Training data split")
+
 # X_test = feature_matrix[test_bool_mask]
 # y_test = labels[test_bool_mask]
 
+print("Finished Data split")
+
+
 # Logistic Regresion
-model = LogisticRegression().fit(X_train, y_train)
+# model = LogisticRegression().fit(X_train, y_train)
+# y_pred_proba = model.predict_proba(X_test)[::,1]
+# auc = metrics.roc_auc_score(y_test, y_pred_proba)
+# print(auc)
+
+model = xgb.XGBClassifier()
+model.fit(X_train, y_train)
 y_pred_proba = model.predict_proba(X_test)[::,1]
 auc = metrics.roc_auc_score(y_test, y_pred_proba)
 print(auc)

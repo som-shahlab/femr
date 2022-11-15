@@ -119,10 +119,7 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                while (
-                    label_idx < len(labels)
-                    and event.start > labels[label_idx].time
-                ):
+                while event.start > labels[label_idx].time:
                     label_idx += 1
                     all_columns.append(
                         [
@@ -130,6 +127,9 @@ class CountFeaturizer(Featurizer):
                             for column, count in current_codes.items()
                         ]
                     )
+
+                    if label_idx >= len(labels):
+                        return all_columns
 
                 if event.value is not None:
                     continue
@@ -139,7 +139,7 @@ class CountFeaturizer(Featurizer):
                         current_codes[self.patient_codes.transform(code)] += 1
 
             if label_idx < len(labels):
-                for label in labels[label_idx]:
+                for label in labels[label_idx:]:
                     all_columns.append(
                         [
                             ColumnValue(column, count)
