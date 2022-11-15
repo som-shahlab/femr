@@ -134,6 +134,97 @@ class DiabetesLF(CodeLF):
             )
 
 
+class HighHbA1cLF(LabelingFunction):
+    """
+    The high HbA1c labeler tries to predict whether a non-diabetic patient will test as diabetic.
+    Note: This labeler will only trigger at most once every 6 months.
+    """
+
+    def __init__(
+        self, 
+        ontology: extension_datasets.Ontology, 
+        time_horizon: TimeHorizon, 
+        last_trigger_days: int = 180
+    ):
+
+        DIABETES_STR = "SNOMED/44054006"
+        HbA1c_STR = "LOINC/4548-4"
+
+        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_STR)
+        diabetes_code = ontology.get_dictionary().index(DIABETES_STR)
+
+        self.diabetes_codes = set()
+        for subcode in ontology.get_children(diabetes_code):
+            self.diabetes_codes.add(subcode)
+
+        # diabetes_codes: Set[Tuple[str, int]] = set()
+        # for code, code_str in enumerate(ontology.get_dictionary()):
+        #     code_str = bytes(code_str).decode("utf-8")
+        #     if code_str == DIABETES_STR:
+        #         diabetes_codes.add((code_str, code))
+
+        # if len(diabetes_codes) != 1:
+        #     raise ValueError(
+        #         "Could not find exactly one death code -- instead found "
+        #         f"{len(diabetes_codes)} codes: {str(diabetes_codes)}"
+        #     )
+
+        # diabetes_code = list(diabetes_codes)[0][1]
+
+    def label(self, patient: Patient) -> List[Label]:
+
+        if len(patient.events) == 0:
+            return []
+
+        labels: List[Label] = []
+        last_trigger: Optional[int] = None
+
+        for event in patient.events:
+
+            if event.code in self.diabetes_code:
+                break
+            
+            if event.value is None or type(event.value) is memoryview:
+                continue
+
+            if event.code == self.hba1c_lab_code:
+
+                is_diabetes = event.value > 6.5
+
+                if last_trigger is None or (event.start - last_trigger).days > last_trigger_days:
+                    labels.append(Label(time=event.start, value=is_diabetes, label_type="boolean"))
+                    last_trigger = event.start
+                
+                if is_diabetes:
+                    break
+        
+        return labels
+                
+                    
+            
+
+            
+
+            
+
+            
+            
+            
+
+            
+
+
+
+
+
+
+        
+
+    
+
+
+
+
 # @dataclass
 # class InpatientAdmission:
 #     start_age: int
@@ -313,3 +404,5 @@ class IsMaleLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
+
+
