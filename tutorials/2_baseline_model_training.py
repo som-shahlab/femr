@@ -38,9 +38,9 @@ def load_from_file(path_to_file: str):
 # Please update this path with your extract of piton as noted in previous notebook. 
 PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
-LABELED_PATIENTS = "HighHbA1c_labeled_patients_v1.pickle"
-PREPROCESSED_FEATURIZERS_DATA = "HighHbA1c_preprocessed_featurizers_v1.pickle"
-FEATURIZED_DATA = "HighHbA1c_featurized_patients_v1.pickle"
+LABELED_PATIENTS = "HighHbA1c_labeled_patients_v2.pickle"
+PREPROCESSED_FEATURIZERS_DATA = "HighHbA1c_preprocessed_featurizers_v2.pickle"
+FEATURIZED_DATA = "HighHbA1c_featurized_patients_v2.pickle"
 
 NUM_PATIENTS = None
 NUM_THREADS = 20

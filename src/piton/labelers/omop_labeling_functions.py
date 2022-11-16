@@ -182,6 +182,7 @@ class HighHbA1cLF(LabelingFunction):
         for event in patient.events:
             if event.code in self.diabetes_codes:
                 first_diabetes_code_date = event.start
+                break
 
         for event in patient.events:
 
@@ -197,7 +198,9 @@ class HighHbA1cLF(LabelingFunction):
                 is_diabetes = event.value > 6.5
 
                 if last_trigger is None or (event.start - last_trigger).days > self.last_trigger_days:
-                    labels.append(Label(time=event.start - datetime.timedelta(minutes=1), value=is_diabetes, label_type="boolean"))
+                    labels.append(Label(time=event.start - datetime.timedelta(minutes=1), 
+                                        value=is_diabetes, 
+                                        label_type="boolean"))
                     last_trigger = event.start 
                 
                 if is_diabetes:
