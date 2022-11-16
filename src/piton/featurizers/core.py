@@ -86,7 +86,7 @@ def _run_featurizer(args: Tuple[str, List[int], labeled_patients, List[Featurize
     indptr = np.array(indptr, dtype=np.int32)
     result_labels = np.array(result_labels)
     patient_ids = np.array(patient_ids, dtype=np.int32)
-    labeling_time = np.array(patient_ids, dtype=np.datetime64)
+    labeling_time = np.array(labeling_time, dtype='datetime64')
 
     total_columns = sum(
         featurizer.num_columns() for featurizer in featurizers
@@ -141,7 +141,6 @@ class FeaturizerList:
 
     def preprocess_featurizers(
         self,
-        # patients: Sequence[Patient],
         labeled_patients: LabeledPatients,
         database_path: str,
         num_threads: int = 1,

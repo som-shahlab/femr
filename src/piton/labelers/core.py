@@ -37,7 +37,7 @@ class TimeHorizon:
 class SurvivalValue:
     """Used for survival tasks."""
 
-    event_time: int  # TODO - rename
+    event_time: datetime.datetime  # TODO - rename
     is_censored: bool  # TRUE if this patient was censored
 
 
@@ -55,11 +55,8 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 class Label:
     """An individual label for a particular patient at a particular time."""
 
-    __slots__ = [
-        "time",  # Arbitrary timestamp (datetime.datetime)
-        "label_type",
-        "value",
-    ]
+    time: datetime.datetime
+    value: Optional[Union[bool, int, float, SurvivalValue]]
 
     def __init__(
         self,
@@ -87,7 +84,6 @@ class Label:
             elif label_type == "survival":
                 assert isinstance(value, SurvivalValue)
         self.time = time
-        self.label_type = label_type
         self.value = value
 
         assert value is not None
