@@ -8,7 +8,7 @@ from sklearn import metrics
 import piton
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
-from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF, IsMaleLF, DiabetesLF
+from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF, IsMaleLF, DiabetesLF, HighHbA1cLF
 from piton.featurizers.core import Featurizer, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.extension import datasets as extension_datasets
@@ -38,9 +38,9 @@ def load_from_file(path_to_file: str):
 # Please update this path with your extract of piton as noted in previous notebook. 
 PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
-LABELED_PATIENTS = "mortality_labeled_patients_v1.pickle"
-PREPROCESSED_FEATURIZERS_DATA = "mortality_preprocessed_featurizers_v1.pickle"
-FEATURIZED_DATA = "mortality_featurized_patients_v1.pickle"
+LABELED_PATIENTS = "HighHbA1c_labeled_patients_v1.pickle"
+PREPROCESSED_FEATURIZERS_DATA = "HighHbA1c_preprocessed_featurizers_v1.pickle"
+FEATURIZED_DATA = "HighHbA1c_featurized_patients_v1.pickle"
 
 NUM_PATIENTS = None
 NUM_THREADS = 20
@@ -67,7 +67,8 @@ if __name__ == '__main__':
         )
 
     # Define the mortality labeling function. 
-    labeler = MortalityLF(ontology, time_horizon)
+    labeler = HighHbA1cLF(ontology)
+    # labeler = MortalityLF(ontology, time_horizon)
     # labeler = DiabetesLF(ontology, time_horizon)
     print("Instantiated Labelers")
 

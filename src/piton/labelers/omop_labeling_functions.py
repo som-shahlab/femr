@@ -139,7 +139,7 @@ def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[in
     children_code_set = set([code])
     parent_deque = deque([code])
 
-    while len(children_deque) == 0:
+    while len(parent_deque) == 0:
         temp_parent_code = parent_deque.popleft()
         for temp_child_code in ontology.get_children(temp_parent_code):
             children_code_set.add(temp_child_code)
@@ -157,7 +157,6 @@ class HighHbA1cLF(LabelingFunction):
     def __init__(
         self, 
         ontology: extension_datasets.Ontology, 
-        time_horizon: TimeHorizon, 
         last_trigger_days: int = 180,
     ):
 
@@ -180,13 +179,14 @@ class HighHbA1cLF(LabelingFunction):
 
         first_diabetes_code_date = None
 
-        for event in patient.codes:
-            if event.code in self.diabetes_code:
+        for event in patient.events:
+            if event.code in self.diabetes_codes:
                 first_diabetes_code_date = event.start
 
         for event in patient.events:
 
-            if event.start > first_diabetes_code_date:
+            if (first_diabetes_code_date is not None and 
+                event.start > first_diabetes_code_date):
                 break
             
             if event.value is None or type(event.value) is memoryview:
@@ -197,86 +197,17 @@ class HighHbA1cLF(LabelingFunction):
                 is_diabetes = event.value > 6.5
 
                 if last_trigger is None or (event.start - last_trigger).days > self.last_trigger_days:
-                    labels.append(Label(time=event.start - datetime.timedelta(minutes=1)), value=is_diabetes, label_type="boolean"))
+                    labels.append(Label(time=event.start - datetime.timedelta(minutes=1), value=is_diabetes, label_type="boolean"))
                     last_trigger = event.start 
                 
                 if is_diabetes:
                     break
         
         return labels
-        
-
-# @dataclass
-# class InpatientAdmission:
-#     start_age: int
-#     end_age: int
-
-
-# class InpatientAdmissionHelper:
-#     """The inpatient admission helper enables users to gather all of the inpatient
-#     admissions for a particular patient.
-#     See the extractor for a percise query for what an inpatient admission is. Do note
-#     that if you want a more sophisticated definition, please use the ADT data directly.
-#     Do note that this does one further step of processing on the that query by merging overlapping
-#     "admissions".
-#     """
-
-#     def __init__(self, timelines: timeline.TimelineReader):
-#         dictionary = timelines.get_dictionary()
-
-#         inpatient_visit_code = "Visit/IP"
-#         admission_code = dictionary.map(inpatient_visit_code)
-#         if admission_code is None:
-#             raise ValueError(
-#                 f"Could not find inpatient visit code? {inpatient_visit_code}"
-#             )
-#         else:
-#             self.admission_code = admission_code
-
-#     def get_inpatient_admissions(
-#         self, patient: timeline.Patient
-#     ) -> List[InpatientAdmission]:
-#         results = []
-#         current_admission: Optional[InpatientAdmission] = None
-#         for i, day in enumerate(patient.days):
-#             admission_values = []
-
-#             for obs_value in day.observations_with_values:
-#                 if obs_value.code == self.admission_code:
-#                     if obs_value.is_text:
-#                         raise ValueError(
-#                             f"Got a text admission code? {patient.patient_id} {day.date} {obs_value.code}"
-#                         )
-#                     else:
-#                         admission_values.append(int(obs_value.numeric_value))
-
-#             if (
-#                 current_admission is not None
-#                 and day.age > current_admission.end_age
-#             ):
-#                 # We can close out the current admission
-#                 results.append(current_admission)
-#                 current_admission = None
-
-#             if len(admission_values) > 0:
-#                 max_discharge = max(admission_values)
-#                 if current_admission is None:
-#                     current_admission = InpatientAdmission(
-#                         day.age, day.age + max_discharge
-#                     )
-#                 else:
-#                     current_admission = InpatientAdmission(
-#                         current_admission.start_age,
-#                         max(day.age + max_discharge, current_admission.end_age),
-#                     )
-
-#         if current_admission is not None:
-#             results.append(current_admission)
-
-#         return results
-
-#     def get_all_patient_ids(self, ind: index.Index) -> Set[int]:
-#         return set(ind.get_patient_ids(self.admission_code))
+    
+    def get_labeler_type(self) -> LabelType:
+        """Return that these labels are booleans."""
+        return "boolean"
 
 
 class LongAdmissionLabeler(LabelingFunction):
@@ -330,6 +261,63 @@ class LongAdmissionLabeler(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
+
+
+class InpatientReadmissionLabeler(FixedTimeHorizonEventLF):
+    """
+    This labeler is designed to predict whether a patient will be readmitted within 30 days.
+    It explicitly does not try to deal with categorizing admissions as "unexpected" or not and is thus
+    not comparable to other work.
+    It predicts at the end of the admission.
+    """
+
+    def __init__(self, timelines: timeline.TimelineReader, ind: index.Index):
+        self.admission_helper = InpatientAdmissionHelper(timelines)
+
+        self.all_patient_ids = self.admission_helper.get_all_patient_ids(ind)
+
+    def get_event_ages(self, patient: timeline.Patient) -> List[int]:
+        """
+        Return a sorted list containing the ages at which the event occurs
+        """
+        admissions = self.admission_helper.get_inpatient_admissions(patient)
+
+        return [admission.start_age for admission in admissions]
+
+    def get_time_horizon(self) -> int:
+        """
+        Return an integer which represents the length of the time horizon in days
+        """
+        return 30
+
+    def get_prediction_days(self, patient: timeline.Patient) -> List[int]:
+        """
+        Return a sorted list containing the indices in which it's valid to make a prediction.
+        """
+        admissions = self.admission_helper.get_inpatient_admissions(patient)
+
+        result = []
+
+        current_admission_index = 0
+
+        for i, day in enumerate(patient.days):
+            if current_admission_index >= len(admissions):
+                continue
+            current_admission = admissions[current_admission_index]
+
+            if day.age < current_admission.end_age:
+                continue
+            else:
+                result.append(i)
+                current_admission_index += 1
+
+        return result
+
+    def get_all_patient_ids(self) -> Optional[Set[int]]:
+        return self.all_patient_ids
+
+    def get_labeler_type(self) -> LabelType:
+        return "binary"
 
 
 class IsMaleLF(LabelingFunction):
