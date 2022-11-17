@@ -20,6 +20,7 @@ from typing import (
     Union,
 )
 
+import random
 from ..datasets import PatientDatabase
 import numpy as np
 from .. import Patient
@@ -55,42 +56,8 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 class Label:
     """An individual label for a particular patient at a particular time."""
 
-    __slots__ = [
-        "time",  # Arbitrary timestamp (datetime.datetime)
-        "label_type",
-        "value",
-    ]
-
-    def __init__(
-        self,
-        time: datetime.datetime,
-        value: Optional[Union[bool, int, float, SurvivalValue]],
-        label_type: LabelType,
-    ):
-        """Construct a label for datetime `time` and value `value`.
-
-        Args:
-            time (datetime.datetime): Time in this patient's timeline that corresponds to this label
-            value (Optional[Union[bool, int, float, SurvivalValue]]): Value of label. Defaults to None.
-            label_type (LabelType): Type of label. Must be an element in `VALID_LABEL_TYPES`.
-        """
-        assert (
-            label_type in VALID_LABEL_TYPES
-        ), f"{label_type} not in {VALID_LABEL_TYPES}"
-        if value is not None:
-            if label_type == "boolean":
-                assert isinstance(value, bool)
-            elif label_type == "numeric":
-                assert isinstance(value, float)
-            elif label_type == "categorical":
-                assert isinstance(value, int)
-            elif label_type == "survival":
-                assert isinstance(value, SurvivalValue)
-        self.time = time
-        self.label_type = label_type
-        self.value = value
-
-        assert value is not None
+    time: datetime.datetime
+    value: Union[bool, int, float, SurvivalValue]
 
 def _apply_labeling_function(args: Tuple(LabelingFunction, str, List[int])) -> List[Dict[int, List[Label]]]:
 
@@ -450,12 +417,12 @@ class FixedTimeHorizonEventLF(LabelingFunction):
 
             if is_outcome_occurs_in_time_horizon:
                 results.append(
-                    Label(time=time, value=True, label_type="boolean")
+                    Label(time=time, value=True)
                 )
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(
-                    Label(time=time, value=False, label_type="boolean")
+                    Label(time=time, value=False)
                 )
 
         # # checks that we have a label for each prediction time (even if `None``)
@@ -471,3 +438,28 @@ class FixedTimeHorizonEventLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return "boolean"
+
+
+class OneLabelPerPatient(LabelingFunction):
+
+    def __init__(self, labeling_function, seed=10):
+        self.labeling_function = labeling_function
+        self.seed = seed
+    
+    def label(self, patient: Patient) -> List[Label]:
+        labels = self.labeling_function.label(patient)
+
+        if len(labels) == 0:
+            return labels
+        return [random.choice(labels)]
+
+
+    def get_labeler_type(self) -> LabelType:
+        """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
+        return self.labeling_function.get_labeler_type()
+
+
+    
+
+
+
