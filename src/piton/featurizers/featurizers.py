@@ -250,64 +250,6 @@ class CountFeaturizer(Featurizer):
         return True
 
 
-
-# def _run_text_featurizer(args):
-    
-#     database_path, pids, labeled_patients, path_to_model, params_dict = args
-    
-#     # database_path, pids, labeled_patients, path_to_model = args
-#     database = PatientDatabase(database_path)
-#     tokenizer = AutoTokenizer.from_pretrained(path_to_model)
-#     model = AutoModel.from_pretrained(path_to_model)
-    
-#     data = []
-#     patient_ids = []
-#     result_labels = []
-#     labeling_time = []
-    
-#     for patient_id in pids:
-#         patient = database[patient_id]
-#         labels = labeled_patients.pat_idx_to_label(patient_id)
-
-#         assert len(labels) == 1  # for now since we are only doing 1 label per patient
-
-#         # if len(labels) == 0:
-#         #     continue
-        
-#         patient_text_data = _get_patient_text_data(patient, labels, params_dict["min_char"])
-
-#         assert len(labels) == len(patient_text_data)
-        
-#         for i, label in enumerate(labels):
-#             data.append(patient_text_data[i])
-#             result_labels.append(label.value)
-#             patient_ids.append(patient.patient_id)
-#             labeling_time.append(label.time)
-    
-#     embeddings = []
-#     for chunk in range(0, len(data), params_dict["chunk_size"]):
-#         notes_tokenized = tokenizer(
-#                                 data[chunk:chunk+params_dict["chunk_size"]],
-#                                 padding=params_dict["padding"],
-#                                 truncation=params_dict["truncation"],
-#                                 max_length=params_dict["max_length"],
-#                                 return_tensors="pt",
-#                             )
-#         outputs = model(**notes_tokenized)
-#         batch_embedding_tensor = outputs.last_hidden_state[:, 0, :].squeeze()
-#         batch_embedding_numpy = batch_embedding_tensor.cpu().detach().numpy()
-#         embeddings.append(batch_embedding_numpy)
-    
-#     embeddings = np.concatenate(embeddings)
-
-#     return (
-#         embeddings,
-#         result_labels,
-#         patient_ids,
-#         labeling_time,
-#     )
-
-
 def _get_one_patient_text_data(patient, labels, min_char, max_char):
     text_for_all_label = []
 
@@ -347,6 +289,7 @@ def _get_one_patient_text_data(patient, labels, min_char, max_char):
             text_for_all_label.append(combined_text[-max_char:])
 
     return text_for_all_label
+
 
 def _get_all_patient_text_data(args):
     
@@ -391,8 +334,6 @@ def _get_tokenized_text(args):
     text_data, path_to_model, params_dict = args
     tokenizer = AutoTokenizer.from_pretrained(path_to_model)
 
-    # notes_tokenized_list = []
-
     notes_tokenized = tokenizer(
                             list(text_data),
                             padding=params_dict["padding"],
@@ -400,38 +341,25 @@ def _get_tokenized_text(args):
                             max_length=params_dict["max_length"],
                             return_tensors="pt",
                         )
-
-
-    # for text_data_part in text_data:
-    # for chunk in range(0, len(text_data), params_dict["chunk_size"]):
-    #     notes_tokenized = tokenizer(
-    #                             text_data[chunk:chunk+params_dict["chunk_size"]],
-    #                             padding=params_dict["padding"],
-    #                             truncation=params_dict["truncation"],
-    #                             max_length=params_dict["max_length"],
-    #                             return_tensors="pt",
-    #                         )
-    #     notes_tokenized_list.append(notes_tokenized)
     return notes_tokenized
 
 
 def _get_text_embeddings(args):
 
-    tokenized_text_data, path_to_model = args
+    tokenized_text_data, path_to_model, params_dict = args
     model = AutoModel.from_pretrained(path_to_model)
 
-    gpu_device_ids: List[int] = get_gpus_with_minimum_free_memory(5)
+    # gpu_device_ids: List[int] = get_gpus_with_minimum_free_memory(params_dict['min_gpu_size'])
 
-    if len(gpu_device_ids) == 0:
-        raise Exception("No GPUs available that meet the minimum free mem (GB) requirements")
+    # if len(gpu_device_ids) == 0:
+    #     raise Exception("No GPUs available that meet the minimum free mem (GB) requirements")
 
-    device = gpu_device_ids[0]
-    model = torch.nn.DataParallel(model, device_ids=gpu_device_ids)
-    model = model.to(device)
-    print(f"embed | using devices {gpu_device_ids}")
+    # device = gpu_device_ids[1]
+    # # model = torch.nn.DataParallel(model, device_ids=gpu_device_ids)
+    # model = model.to(device)
+    # print(f"embed | using devices {gpu_device_ids}")
 
-    batch_size: int = 4096 * 4
-
+    batch_size: int = params_dict["batch_size"]
     train_loader = [
         {
             "input_ids": tokenized_text_data["input_ids"][x : x + batch_size],
@@ -441,34 +369,35 @@ def _get_text_embeddings(args):
         for x in range(0, tokenized_text_data["input_ids"].shape[0], batch_size)
     ]
 
-    print(device, f"# of batches of size {batch_size}:", len(train_loader))
+    # print(device, f"# of batches of size {batch_size}:", len(train_loader))
 
     outputs = []
-
-    with torch.no_grad():
-        for batch in tqdm(train_loader):
-            output = model(
-                input_ids=batch["input_ids"].to(device),
+    for batch in tqdm(train_loader):
+        output = model(
+                input_ids=batch["input_ids"],
                 # token_type_ids=batch["token_type_ids"].to(device),
-                attention_mask=batch["attention_mask"].to(device),
+                attention_mask=batch["attention_mask"],
             )
-            outputs.append(output.last_hidden_state.detach().cpu())
-
+        outputs.append(output.last_hidden_state.detach().cpu())
+    
     token_embeddings = torch.cat(outputs)
     embedding_tensor = token_embeddings[:, 0, :].squeeze()
     embedding_numpy = embedding_tensor.cpu().detach().numpy()
 
+    # with torch.no_grad():
+    #     for batch in tqdm(train_loader):
+    #         output = model(
+    #             input_ids=batch["input_ids"].to(device),
+    #             # token_type_ids=batch["token_type_ids"].to(device),
+    #             attention_mask=batch["attention_mask"].to(device),
+    #         )
+    #         outputs.append(output.last_hidden_state.detach().cpu())
+
+    # token_embeddings = torch.cat(outputs)
+    # embedding_tensor = token_embeddings[:, 0, :].squeeze()
+    # embedding_numpy = embedding_tensor.cpu().detach().numpy()
+
     return embedding_numpy
-    # embeddings = []
-    # for tokenized_data in tokenized_text_data:
-    #     model = model.cuda()
-    #     outputs = model(**tokenized_data)
-    #     batch_embedding_tensor = outputs.last_hidden_state[:, 0, :].squeeze()
-    #     batch_embedding_numpy = batch_embedding_tensor.cpu().detach().numpy()
-    #     embeddings.append(batch_embedding_numpy)
-    
-    # embeddings = np.concatenate(embeddings)
-    # return embeddings
 
 
 class TextFeaturizer:
@@ -492,12 +421,14 @@ class TextFeaturizer:
         prefix: str = "temp",
         num_threads: int = 1,
         num_threads_gpu: int = 1, 
+        min_gpu_size: int = 20,
         min_char: int = 100, 
         max_char: int = 10000, 
         max_length: int = 512, 
         padding: bool = True, 
         truncation: bool = True, 
-        chunk_size: int = 1000, 
+        chunk_size: int = 1000,
+        batch_size: int = 4096,
         num_patients: int = None
     ):
 
@@ -511,7 +442,9 @@ class TextFeaturizer:
             "max_length": max_length, 
             "padding": padding, 
             "truncation": truncation, 
-            "chunk_size": chunk_size
+            "chunk_size": chunk_size, 
+            "min_gpu_size": min_gpu_size, 
+            "batch_size": batch_size
         }
 
         # Text Acculumation
@@ -551,12 +484,12 @@ class TextFeaturizer:
         print("Starting Generating Embedding")
         embeddings_list = []
         for tokenized_text in tokenized_text_list:
-            embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model)))
+            embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
         
         print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
 
         # Generate Embeddings
-        # tasks = [(tokenized_text, path_to_model) for tokenized_text in tokenized_text_list]
+        # tasks = [(tokenized_text, path_to_model, params_dict) for tokenized_text in tokenized_text_list]
         # ctx = multiprocessing.get_context('forkserver')
         # with ctx.Pool(num_threads_gpu) as pool:
         #     embeddings_list = list(pool.imap(_get_text_embeddings, tasks))

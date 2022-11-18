@@ -4,7 +4,8 @@ import pickle
 import numpy as np
 
 from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM
-from piton.featurizers.featurizers import TextFeaturizer
+from piton.featurizers import save_to_file, load_from_file
+from piton.featurizers.featurizers import TextFeaturizer, _get_text_embeddings
 from typing import Tuple, List
 import multiprocessing
 import datetime
@@ -47,5 +48,39 @@ num_patients = None
 
 if __name__ == '__main__':
 
-    tokenized_text = load_from_file(os.path.join(path_to_save, "temp_tokenized_text.pickle"))
-    print(len(tokenized_text))
+    tokenized_text_list = load_from_file(os.path.join(path_to_save, "temp_tokenized_text.pickle"))
+    print(len(tokenized_text_list))
+
+    num_threads: int = 1
+    num_threads_gpu: int = 1
+    min_gpu_size: int = 20
+    min_char: int = 100
+    max_char: int = 10000
+    max_length: int = 512 
+    padding: bool = True 
+    truncation: bool = True
+    chunk_size: int = 1000
+    batch_size: int = 4096
+    num_patients: int = None
+
+    params_dict = {
+        "min_char": min_char, 
+        "max_char": max_char,
+        "max_length": max_length, 
+        "padding": padding, 
+        "truncation": truncation, 
+        "chunk_size": chunk_size, 
+        "min_gpu_size": min_gpu_size, 
+        "batch_size": batch_size
+    }
+
+    start_time = datetime.datetime.now()
+    print("Starting Generating Embedding")
+    embeddings_list = []
+    for tokenized_text in tokenized_text_list:
+        embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
+    
+    print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
+    embeddings = np.concatenate(embeddings_list)
+    save_to_file(embeddings, os.path.join(path_to_save, f"temp_embeddings.pickle"))
+

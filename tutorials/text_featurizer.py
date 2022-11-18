@@ -5,23 +5,24 @@ import numpy as np
 
 from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM
 from piton.featurizers.featurizers import TextFeaturizer
+from piton.featurizers import save_to_file, load_from_file
 from typing import Tuple, List
 import multiprocessing
 import datetime
 import os
 
 
-def save_to_file(object_to_save, path_to_file: str):
-    """Save object to Pickle file."""
-    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-    with open(path_to_file, "wb") as fd:
-        pickle.dump(object_to_save, fd)
+# def save_to_file(object_to_save, path_to_file: str):
+#     """Save object to Pickle file."""
+#     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+#     with open(path_to_file, "wb") as fd:
+#         pickle.dump(object_to_save, fd)
 
-def load_from_file(path_to_file: str):
-    """Load object from Pickle file."""
-    with open(path_to_file, "rb") as fd:
-        result = pickle.load(fd)
-    return result
+# def load_from_file(path_to_file: str):
+#     """Load object from Pickle file."""
+#     with open(path_to_file, "rb") as fd:
+#         result = pickle.load(fd)
+#     return result
 
 
 # Please update this path with your extract of piton as noted in previous notebook. 
