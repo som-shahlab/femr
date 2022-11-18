@@ -34,11 +34,12 @@ path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical
 path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
 database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
 num_threads = 10
-MAX_CHAR = 100
+max_char = 100
 max_length = 1024
 padding = True
 truncation = True
-CHUNK_SIZE = 10
+chunk_size = 10
+num_patients = 1000
 
 
 if __name__ == '__main__':
@@ -47,10 +48,13 @@ if __name__ == '__main__':
     labeled_patients = load_from_file(path_to_labeled_patients)
     print("Labeled Patients Loaded")
 
+    # print(len(labeled_patients))
+    # exit()
+
     text_featurizer = TextFeaturizer(labeled_patients, database_path)
 
     print("Starting text featurization")
-    result_tuple = text_featurizer.featurize(path_to_model, num_threads=5, num_patients=100)
+    result_tuple = text_featurizer.featurize(path_to_model, num_threads=num_threads, num_patients=num_patients)
     print("Text Featurization Finished")
 
     print(result_tuple[0].shape)

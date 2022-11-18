@@ -321,45 +321,107 @@ class Featurizer(ABC):
         return False
 
 
-def _get_patient_text_data(patient, labels, max_char):
-    text_for_each_label = []
+# def _run_text_featurizer(args):
+    
+#     database_path, pids, labeled_patients, path_to_model, params_dict = args
+    
+#     # database_path, pids, labeled_patients, path_to_model = args
+#     database = PatientDatabase(database_path)
+#     tokenizer = AutoTokenizer.from_pretrained(path_to_model)
+#     model = AutoModel.from_pretrained(path_to_model)
+    
+#     data = []
+#     patient_ids = []
+#     result_labels = []
+#     labeling_time = []
+    
+#     for patient_id in pids:
+#         patient = database[patient_id]
+#         labels = labeled_patients.pat_idx_to_label(patient_id)
+
+#         assert len(labels) == 1  # for now since we are only doing 1 label per patient
+
+#         # if len(labels) == 0:
+#         #     continue
+        
+#         patient_text_data = _get_patient_text_data(patient, labels, params_dict["min_char"])
+
+#         assert len(labels) == len(patient_text_data)
+        
+#         for i, label in enumerate(labels):
+#             data.append(patient_text_data[i])
+#             result_labels.append(label.value)
+#             patient_ids.append(patient.patient_id)
+#             labeling_time.append(label.time)
+    
+#     embeddings = []
+#     for chunk in range(0, len(data), params_dict["chunk_size"]):
+#         notes_tokenized = tokenizer(
+#                                 data[chunk:chunk+params_dict["chunk_size"]],
+#                                 padding=params_dict["padding"],
+#                                 truncation=params_dict["truncation"],
+#                                 max_length=params_dict["max_length"],
+#                                 return_tensors="pt",
+#                             )
+#         outputs = model(**notes_tokenized)
+#         batch_embedding_tensor = outputs.last_hidden_state[:, 0, :].squeeze()
+#         batch_embedding_numpy = batch_embedding_tensor.cpu().detach().numpy()
+#         embeddings.append(batch_embedding_numpy)
+    
+#     embeddings = np.concatenate(embeddings)
+
+#     return (
+#         embeddings,
+#         result_labels,
+#         patient_ids,
+#         labeling_time,
+#     )
+
+
+def _get_one_patient_text_data(patient, labels, min_char):
+    text_for_all_label = []
 
     label_idx = 0
     current_text = []
     for event in patient.events:
         while event.start > labels[label_idx].time:
             label_idx += 1
-            text_for_each_label.append(" ".join(current_text))
+
+            combined_text = " ".join(current_text)
+            # if len(combined_text) == 0:
+            #     combined_text = " "
+            # else:
+            #     text_for_all_label.append(combined_text)
+            text_for_all_label.append(combined_text)
 
             if label_idx >= len(labels):
-                return text_for_each_label
+                return text_for_all_label
 
         if type(event.value) is not memoryview:
             continue
 
         text_data = bytes(event.value).decode("utf-8")
 
-        if len(text_data) < max_char:
+        if len(text_data) < min_char:
             continue
 
         current_text.append(text_data)
 
     if label_idx < len(labels):
         for label in labels[label_idx:]:
-            text_for_each_label.append(" ".join(current_text))
+            combined_text = " ".join(current_text)
+            # if len(combined_text) == 0:
+            #     combined_text = " "
+            # else:
+            #     text_for_all_label.append(combined_text)
+            text_for_all_label.append(combined_text)
 
-    return text_for_each_label
+    return text_for_all_label
 
-
-def _run_text_featurizer(args):
-    
+def _get_all_patient_text_data(args):
     database_path, pids, labeled_patients, path_to_model, params_dict = args
-    
-    # database_path, pids, labeled_patients, path_to_model = args
     database = PatientDatabase(database_path)
-    tokenizer = AutoTokenizer.from_pretrained(path_to_model)
-    model = AutoModel.from_pretrained(path_to_model)
-    
+
     data = []
     patient_ids = []
     result_labels = []
@@ -369,18 +431,36 @@ def _run_text_featurizer(args):
         patient = database[patient_id]
         labels = labeled_patients.pat_idx_to_label(patient_id)
 
-        if len(labels) == 0:
-            continue
+        assert len(labels) == 1  # for now since we are only doing 1 label per patient
+
+        # if len(labels) == 0:
+        #     continue
         
-        patient_text_data = _get_patient_text_data(patient, labels, params_dict["max_char"])
+        patient_text_data = _get_one_patient_text_data(patient, labels, params_dict["min_char"])
+
+        assert len(labels) == len(patient_text_data)
         
         for i, label in enumerate(labels):
+
             data.append(patient_text_data[i])
             result_labels.append(label.value)
             patient_ids.append(patient.patient_id)
             labeling_time.append(label.time)
     
-    embeddings = []
+    return (
+        data,
+        result_labels,
+        patient_ids,
+        labeling_time,
+    )
+
+
+def _get_tokenized_text(args):
+
+    text_data, path_to_model = args
+    tokenizer = AutoTokenizer.from_pretrained(path_to_model)
+
+    notes_tokenized_list = []
     for chunk in range(0, len(data), params_dict["chunk_size"]):
         notes_tokenized = tokenizer(
                                 data[chunk:chunk+params_dict["chunk_size"]],
@@ -389,14 +469,24 @@ def _run_text_featurizer(args):
                                 max_length=params_dict["max_length"],
                                 return_tensors="pt",
                             )
+        notes_tokenized_list.append(notes_tokenized)
+    return notes_tokenized_list
+
+
+def _get_text_embeddings(args):
+
+    tokenized_text_data, path_to_model = args
+    model = AutoModel.from_pretrained(path_to_model)
+
+    embeddings = []
+    for tokenized_data in tokenized_text_data:
         outputs = model(**notes_tokenized)
         batch_embedding_tensor = outputs.last_hidden_state[:, 0, :].squeeze()
         batch_embedding_numpy = batch_embedding_tensor.cpu().detach().numpy()
         embeddings.append(batch_embedding_numpy)
     
     embeddings = np.concatenate(embeddings)
-            
-    return embeddings, result_labels, patient_ids, labeling_time
+    return embeddings
 
 
 class TextFeaturizer:
@@ -417,11 +507,11 @@ class TextFeaturizer:
         self, 
         path_to_model: str,
         num_threads: int = 1, 
-        max_char: int = 100, 
+        min_char: int = 100, 
         max_length: int = 512, 
         padding: bool = True, 
         truncation: bool = True, 
-        chunk_size: int = 100, 
+        chunk_size: int = 1000, 
         num_patients: int = None
     ):
 
@@ -430,45 +520,46 @@ class TextFeaturizer:
             pids = pids[:num_patients]
 
         params_dict = {
-            "max_char": max_char, 
+            "min_char": min_char, 
             "max_length": max_length, 
             "padding": padding, 
             "truncation": truncation, 
             "chunk_size": chunk_size
         }
-        
-        pids_parts = np.array_split(pids, num_threads)
-        tasks = [(self.database_path, pid_part, self.labeled_patients, path_to_model, params_dict) for pid_part in pids_parts]
 
+        # Text Acculumation
+        pids_parts = np.array_split(pids, num_threads)
+        tasks = [(self.database_path, pid_part, self.labeled_patients, params_dict) for pid_part in pids_parts]
         ctx = multiprocessing.get_context('forkserver')
         with ctx.Pool(num_threads) as pool:
-            text_featurizers_tuple_list = list(pool.imap(_run_text_featurizer, tasks))
-        
-        embeddings_list = []
-        result_labels_list = []
-        patient_ids_list = []
-        labeling_time_list = []
-        for result in text_featurizers_tuple_list:
-            embeddings_list.append(result[0])
-            result_labels_list.append(result[1])
-            patient_ids_list.append(result[2])
-            labeling_time_list.append(result[3])
-        
+            patient_text_data_list = list(pool.imap(_get_patient_text_data, tasks))
+
+        text_data = np.concatenate([patient_text_data[0] for patient_text_data in patient_text_data_list], axis=None)
+        result_labels = np.concatenate([patient_text_data[1] for patient_text_data in patient_text_data_list], axis=None)
+        patient_ids = np.concatenate([patient_text_data[2] for patient_text_data in patient_text_data_list], axis=None)
+        labeling_time = np.concatenate([patient_text_data[3] for patient_text_data in patient_text_data_list], axis=None)
+
+        # Generate Tokenization
+        text_data_parts = np.array_split(pids, text_data)
+        tasks = [(text_data_part, path_to_model, params_dict) for pid_part in text_data_parts]
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
+            tokenized_text_list = list(pool.imap(_get_tokenized_text, tasks))
+
+        # Generate Embeddings
+        tokenized_text_parts = np.array_split(tokenized_text_list, num_threads)
+        tasks = [(tokenized_text_part, path_to_model, params_dict) for pid_part in tokenized_text_parts]
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
+            embeddings_list = list(pool.imap(_get_text_embeddings, tasks))
         embeddings = np.concatenate(embeddings_list)
-        result_labels = np.concatenate(result_labels_list, axis=None)
-        patient_ids = np.concatenate(patient_ids_list, axis=None)
-        labeling_time = np.concatenate(labeling_time_list, axis=None)
 
-        result_tuple = (
-                embeddings,
-                result_labels,
-                patient_ids,
-                labeling_time,
-            )
-        
-        return result_tuple
-
-
+        return (
+            embeddings,
+            result_labels,
+            patient_ids,
+            labeling_time,
+        )
 
 
 
