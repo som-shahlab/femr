@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 
 from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM
-from piton.featurizers.core import TextFeaturizer
+from piton.featurizers.featurizers import TextFeaturizer
 from typing import Tuple, List
 import multiprocessing
 import datetime
@@ -33,17 +33,20 @@ path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
 path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
 database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
-num_threads = 10
-max_char = 100
+path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
+num_threads = 5
+num_threads_gpu = 2
+min_char = 100
+max_char = 10000
 max_length = 1024
 padding = True
 truncation = True
 chunk_size = 10
-num_patients = 1000
+num_patients = 50
 
 
 if __name__ == '__main__':
-    start_time = datetime.datetime.now()
+    # start_time = datetime.datetime.now()
 
     labeled_patients = load_from_file(path_to_labeled_patients)
     print("Labeled Patients Loaded")
@@ -54,17 +57,23 @@ if __name__ == '__main__':
     text_featurizer = TextFeaturizer(labeled_patients, database_path)
 
     print("Starting text featurization")
-    result_tuple = text_featurizer.featurize(path_to_model, num_threads=num_threads, num_patients=num_patients)
+    result_tuple = text_featurizer.featurize(path_to_model, 
+                                             path_to_save, 
+                                             num_threads=num_threads, 
+                                             max_char=max_char,
+                                             num_threads_gpu=num_threads_gpu, 
+                                             num_patients=num_patients, 
+                                             max_length=max_length)
     print("Text Featurization Finished")
 
     print(result_tuple[0].shape)
-    path_to_save = os.path.join(PATH_TO_SAVE_MATRIX, TEXT_EMBEDDINGS_PATH)
-    save_to_file(result_tuple, path_to_save)
-    print(f"Embeddings Saved at {path_to_save}")
+    # path_to_save = os.path.join(PATH_TO_SAVE_MATRIX, TEXT_EMBEDDINGS_PATH)
+    # save_to_file(result_tuple, path_to_save)
+    # print(f"Embeddings Saved at {path_to_save}")
 
-    end_time = datetime.datetime.now()
-    delta = (end_time - start_time)
-    print("Total Duration of the run: ", delta)
+    # end_time = datetime.datetime.now()
+    # delta = (end_time - start_time)
+    # print("Total Duration of the run: ", delta)
 
 
 
