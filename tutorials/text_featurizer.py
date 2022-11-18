@@ -34,7 +34,7 @@ path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical
 path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
 database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
 path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
-num_threads = 5
+num_threads = 20
 num_threads_gpu = 2
 min_char = 100
 max_char = 10000
@@ -42,7 +42,7 @@ max_length = 1024
 padding = True
 truncation = True
 chunk_size = 10
-num_patients = 50
+num_patients = None
 
 
 if __name__ == '__main__':
