@@ -464,6 +464,7 @@ class TextFeaturizer:
         labeling_time = np.concatenate([patient_text_data[3] for patient_text_data in patient_text_data_list], axis=None)
 
         save_to_file((text_data, result_labels, patient_ids, labeling_time), os.path.join(path_to_save, f"{prefix}_text_data.pickle"))
+        save_to_file((result_labels, patient_ids, labeling_time), os.path.join(path_to_save, f"{prefix}_meta_data.pickle"))
 
         print("Finished text accumulation: ", datetime.datetime.now() - start_time)
 
@@ -482,17 +483,17 @@ class TextFeaturizer:
         # print(tokenized_text_list[0].keys())
         # exit()
         print("Starting Generating Embedding")
-        embeddings_list = []
-        for tokenized_text in tokenized_text_list:
-            embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
+        # embeddings_list = []
+        # for tokenized_text in tokenized_text_list:
+        #     embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
         
-        print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
+        # print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
 
         # Generate Embeddings
-        # tasks = [(tokenized_text, path_to_model, params_dict) for tokenized_text in tokenized_text_list]
-        # ctx = multiprocessing.get_context('forkserver')
-        # with ctx.Pool(num_threads_gpu) as pool:
-        #     embeddings_list = list(pool.imap(_get_text_embeddings, tasks))
+        tasks = [(tokenized_text, path_to_model, params_dict) for tokenized_text in tokenized_text_list]
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
+            embeddings_list = list(pool.imap(_get_text_embeddings, tasks))
         embeddings = np.concatenate(embeddings_list)
 
         result_tuple = (

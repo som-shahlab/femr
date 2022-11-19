@@ -7,9 +7,10 @@ from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM
 from piton.featurizers import save_to_file, load_from_file
 from piton.featurizers.featurizers import TextFeaturizer, _get_text_embeddings
 from typing import Tuple, List
-import multiprocessing
 import datetime
-import os
+import os, sys
+
+
 
 
 def save_to_file(object_to_save, path_to_file: str):
@@ -47,40 +48,80 @@ num_patients = None
 
 
 if __name__ == '__main__':
+    shard_index = int(sys.argv[1])
+    num_shards = sys.argv[2]
 
     tokenized_text_list = load_from_file(os.path.join(path_to_save, "temp_tokenized_text.pickle"))
     print(len(tokenized_text_list))
 
-    num_threads: int = 1
-    num_threads_gpu: int = 1
-    min_gpu_size: int = 20
-    min_char: int = 100
-    max_char: int = 10000
-    max_length: int = 512 
-    padding: bool = True 
-    truncation: bool = True
-    chunk_size: int = 1000
-    batch_size: int = 4096
-    num_patients: int = None
+    num_per_shard = (len(tokenized_text_list) + num_shards - 1) // num_shard
 
-    params_dict = {
-        "min_char": min_char, 
-        "max_char": max_char,
-        "max_length": max_length, 
-        "padding": padding, 
-        "truncation": truncation, 
-        "chunk_size": chunk_size, 
-        "min_gpu_size": min_gpu_size, 
-        "batch_size": batch_size
-    }
-
-    start_time = datetime.datetime.now()
-    print("Starting Generating Embedding")
     embeddings_list = []
-    for tokenized_text in tokenized_text_list:
-        embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
+    for tokenized_text in tokenized_text_list[shard_index * num_per_shard: (shard_index + 1) * num_per_shard]:
+        embeddings_list.append(_get_text_embeddings(tokenized_text, path_to_model, params_dict))
     
-    print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
-    embeddings = np.concatenate(embeddings_list)
-    save_to_file(embeddings, os.path.join(path_to_save, f"temp_embeddings.pickle"))
+    embeddings = np.concatenate(embeddings_list, axis=0)
+    save_to_file(embeddings, os.path.join(path_to_save, f"{shard_index}_embeddings.pickle"))
+
+
+
+
+
+
+
+
+    
+
+    # tokenized_text_list = load_from_file(os.path.join(path_to_save, "temp_tokenized_text.pickle"))
+    # print(len(tokenized_text_list))
+
+    # num_threads: int = 1
+    # num_threads_gpu: int = 1
+    # min_gpu_size: int = 20
+    # min_char: int = 100
+    # max_char: int = 10000
+    # max_length: int = 512 
+    # padding: bool = True 
+    # truncation: bool = True
+    # chunk_size: int = 1000
+    # batch_size: int = 4096
+    # num_patients: int = None
+
+    # params_dict = {
+    #     "min_char": min_char, 
+    #     "max_char": max_char,
+    #     "max_length": max_length, 
+    #     "padding": padding, 
+    #     "truncation": truncation, 
+    #     "chunk_size": chunk_size, 
+    #     "min_gpu_size": min_gpu_size, 
+    #     "batch_size": batch_size
+    # }
+
+    # start_time = datetime.datetime.now()
+    # print("Starting Generating Embedding")
+
+    # model = AutoModel.from_pretrained(path_to_model)
+
+    # embeddings = []
+    # for tokenized_data in tokenized_text_list:
+    #     outputs = model(**tokenized_data)
+    #     batch_embedding_tensor = outputs.last_hidden_state[:, 0, :].squeeze()
+    #     batch_embedding_numpy = batch_embedding_tensor.cpu().detach().numpy()
+    #     embeddings.append(batch_embedding_numpy)
+
+    # embeddings = np.concatenate(embeddings)
+
+    # print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
+    # save_to_file(embeddings, os.path.join(path_to_save, f"temp_embeddings.pickle"))
+    # print("Embedding Saved: ", datetime.datetime.now() - start_time)
+
+
+    # # embeddings_list = []
+    # # for tokenized_text in tokenized_text_list:
+    # #     embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
+    
+    # # print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
+    # # embeddings = np.concatenate(embeddings_list)
+    # # save_to_file(embeddings, os.path.join(path_to_save, f"temp_embeddings.pickle"))
 

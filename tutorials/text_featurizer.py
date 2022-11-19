@@ -32,6 +32,8 @@ TEXT_EMBEDDINGS_PATH = "test_diabetes_text_embeddings.pickle"
 
 path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
+# HighHbA1c_labeled_patients_v3
+# mortality_labeled_patients_v1
 path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
 database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
 path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
@@ -43,7 +45,9 @@ max_length = 1024
 padding = True
 truncation = True
 chunk_size = 10
-num_patients = None
+num_patients = 1000
+batch_size = 1024
+prefix = "diabetes"
 
 
 if __name__ == '__main__':
@@ -64,7 +68,9 @@ if __name__ == '__main__':
                                              max_char=max_char,
                                              num_threads_gpu=num_threads_gpu, 
                                              num_patients=num_patients, 
-                                             max_length=max_length)
+                                             max_length=max_length, 
+                                             prefix=prefix, 
+                                             batch_size=batch_size)
     print("Text Featurization Finished")
 
     print(result_tuple[0].shape)
