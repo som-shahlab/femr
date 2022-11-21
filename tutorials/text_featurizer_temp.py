@@ -1,16 +1,17 @@
-import piton
-import piton.datasets
+# import piton
+# import piton.datasets
 import pickle
 import numpy as np
+import torch
+from tqdm import tqdm
 
 from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM
-from piton.featurizers import save_to_file, load_from_file
-from piton.featurizers.featurizers import TextFeaturizer, _get_text_embeddings
+# from piton.featurizers import save_to_file, load_from_file
+# from piton.featurizers.featurizers import TextFeaturizer, _get_text_embeddings
 from typing import Tuple, List
 import datetime
 import os, sys
-
-
+import logging
 
 
 def save_to_file(object_to_save, path_to_file: str):
@@ -26,41 +27,99 @@ def load_from_file(path_to_file: str):
     return result
 
 
+def _get_text_embeddings(args):
+
+    device = torch.device("cuda")
+
+    file_name, path_to_model, params_dict = args
+    tokenized_text_data = load_from_file(file_name)
+
+    model = AutoModel.from_pretrained(path_to_model)
+    model = model.to(device)
+
+    batch_size: int = params_dict["batch_size"]
+    train_loader = [
+        {
+            "input_ids": tokenized_text_data["input_ids"][x : x + batch_size],
+            # "token_type_ids": tokenized_text_data["token_type_ids"][x : x + batch_size],
+            "attention_mask": tokenized_text_data["attention_mask"][x : x + batch_size],
+        }
+        for x in range(0, tokenized_text_data["input_ids"].shape[0], batch_size)
+    ]
+
+    outputs = []
+    with torch.no_grad():
+        for batch in tqdm(train_loader):
+            output = model(
+                input_ids=batch["input_ids"].to(device),
+                # token_type_ids=batch["token_type_ids"].to(device),
+                attention_mask=batch["attention_mask"].to(device),
+            )
+            outputs.append(output.last_hidden_state.detach().cpu())
+
+    token_embeddings = torch.cat(outputs)
+    embedding_tensor = token_embeddings[:, 0, :].squeeze()
+    embedding_numpy = embedding_tensor.cpu().detach().numpy()
+
+    return embedding_numpy
+
+
 # Please update this path with your extract of piton as noted in previous notebook. 
 # PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
-PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
-TEXT_EMBEDDINGS_PATH = "test_diabetes_text_embeddings.pickle"
+# PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
+path_to_data = "/share/pi/nigam/rthapa84/data/mortality_tokenized_data"
+# TEXT_EMBEDDINGS_PATH = "v1_diabetes_tokenized_text.pickle"
 
-path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
+path_to_model = "/share/pi/nigam/rthapa84/models/Clinical-Longformer"
+path_to_save = "/share/pi/nigam/rthapa84/data/mortality_shards"
+
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
-path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
-database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
-path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
-num_threads = 20
-num_threads_gpu = 2
-min_char = 100
-max_char = 10000
-max_length = 1024
-padding = True
-truncation = True
-chunk_size = 10
-num_patients = None
+# path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
+
+num_threads: int = 20
+num_threads_gpu: int = 1
+min_gpu_size: int = 20
+min_char: int = 100
+max_char: int = 10000
+max_length: int = 1024 
+padding: bool = True 
+truncation: bool = True
+chunk_size: int = 1000
+batch_size: int = 16
+num_patients: int = 100
+
+params_dict = {
+    "min_char": min_char, 
+    "max_char": max_char,
+    "max_length": max_length, 
+    "padding": padding, 
+    "truncation": truncation, 
+    "chunk_size": chunk_size, 
+    "min_gpu_size": min_gpu_size, 
+    "batch_size": batch_size
+}
 
 
 if __name__ == '__main__':
     shard_index = int(sys.argv[1])
-    num_shards = sys.argv[2]
+    num_shards = int(sys.argv[2])
 
-    tokenized_text_list = load_from_file(os.path.join(path_to_save, "temp_tokenized_text.pickle"))
-    print(len(tokenized_text_list))
+    file_names = [os.path.join(path_to_data, f"{i}_tokenized_data.pickle") for i in range(20)]
 
-    num_per_shard = (len(tokenized_text_list) + num_shards - 1) // num_shard
+    # tokenized_text_list = load_from_file(os.path.join(path_to_data, TEXT_EMBEDDINGS_PATH))
+
+    num_per_shard = (len(file_names) + num_shards - 1) // num_shards
+
+    logging.info("Before the Loop")
 
     embeddings_list = []
-    for tokenized_text in tokenized_text_list[shard_index * num_per_shard: (shard_index + 1) * num_per_shard]:
-        embeddings_list.append(_get_text_embeddings(tokenized_text, path_to_model, params_dict))
+    for file_name in file_names[shard_index * num_per_shard: (shard_index + 1) * num_per_shard]:
+        logging.info(f"File Name: {file_name}")
+        embeddings_list.append(_get_text_embeddings((file_name, path_to_model, params_dict)))
+        logging.info(f"Finished: {file_name}")
     
     embeddings = np.concatenate(embeddings_list, axis=0)
+    logging.info("Finished Concatenating")
     save_to_file(embeddings, os.path.join(path_to_save, f"{shard_index}_embeddings.pickle"))
 
 

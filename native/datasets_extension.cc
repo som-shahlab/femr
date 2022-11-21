@@ -202,7 +202,7 @@ void register_datasets_extension(py::module& root) {
                      return 0;
                  }
              })
-        .def("compute_split", &PatientDatabase::compute_split, py::arg("seed"), py::arg("pid"), py::arg("num_splits") = 100)
+        .def("compute_split", &PatientDatabase::compute_split)
         .def("close",
              [](const PatientDatabase& self) {
                  // TODO: Implement this to save memory and file pointers

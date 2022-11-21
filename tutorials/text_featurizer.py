@@ -27,16 +27,19 @@ import os
 
 # Please update this path with your extract of piton as noted in previous notebook. 
 # PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
-PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
+# PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
 TEXT_EMBEDDINGS_PATH = "test_diabetes_text_embeddings.pickle"
 
-path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
+path_to_model = "/share/pi/nigam/rthapa84/models/Clinical-Longformer"
+# path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
 # HighHbA1c_labeled_patients_v3
 # mortality_labeled_patients_v1
-path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
-database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
-path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
+# path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
+path_to_labeled_patients = "/share/pi/nigam/rthapa84/data/mortality_labeled_patients_v1.pickle"
+# database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
+database_path = "/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
+path_to_save = "/share/pi/nigam/rthapa84/data"
 num_threads = 20
 num_threads_gpu = 2
 min_char = 100
@@ -47,7 +50,7 @@ truncation = True
 chunk_size = 10
 num_patients = 1000
 batch_size = 1024
-prefix = "diabetes"
+prefix = "v1_mortality"
 
 
 if __name__ == '__main__':
@@ -73,7 +76,7 @@ if __name__ == '__main__':
                                              batch_size=batch_size)
     print("Text Featurization Finished")
 
-    print(result_tuple[0].shape)
+    # print(result_tuple[0].shape)
     # path_to_save = os.path.join(PATH_TO_SAVE_MATRIX, TEXT_EMBEDDINGS_PATH)
     # save_to_file(result_tuple, path_to_save)
     # print(f"Embeddings Saved at {path_to_save}")
