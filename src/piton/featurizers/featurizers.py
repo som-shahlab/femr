@@ -480,29 +480,31 @@ class TextFeaturizer:
         
         print("Finished Tokenization: ", datetime.datetime.now() - start_time)
 
+        return None
+
         # print(tokenized_text_list[0].keys())
         # exit()
-        print("Starting Generating Embedding")
-        # embeddings_list = []
-        # for tokenized_text in tokenized_text_list:
-        #     embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
+        # print("Starting Generating Embedding")
+        # # embeddings_list = []
+        # # for tokenized_text in tokenized_text_list:
+        # #     embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
         
-        # print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
+        # # print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
 
-        # Generate Embeddings
-        tasks = [(tokenized_text, path_to_model, params_dict) for tokenized_text in tokenized_text_list]
-        ctx = multiprocessing.get_context('forkserver')
-        with ctx.Pool(num_threads) as pool:
-            embeddings_list = list(pool.imap(_get_text_embeddings, tasks))
-        embeddings = np.concatenate(embeddings_list)
+        # # Generate Embeddings
+        # tasks = [(tokenized_text, path_to_model, params_dict) for tokenized_text in tokenized_text_list]
+        # ctx = multiprocessing.get_context('forkserver')
+        # with ctx.Pool(num_threads) as pool:
+        #     embeddings_list = list(pool.imap(_get_text_embeddings, tasks))
+        # embeddings = np.concatenate(embeddings_list)
 
-        result_tuple = (
-            embeddings,
-            result_labels,
-            patient_ids,
-            labeling_time,
-        )
+        # result_tuple = (
+        #     embeddings,
+        #     result_labels,
+        #     patient_ids,
+        #     labeling_time,
+        # )
 
-        save_to_file(result_tuple, os.path.join(path_to_save, f"{prefix}_embeddings.pickle"))
+        # save_to_file(result_tuple, os.path.join(path_to_save, f"{prefix}_embeddings.pickle"))
 
-        return result_tuple
+        # return result_tuple

@@ -18,11 +18,11 @@ import os
 #     with open(path_to_file, "wb") as fd:
 #         pickle.dump(object_to_save, fd)
 
-# def load_from_file(path_to_file: str):
-#     """Load object from Pickle file."""
-#     with open(path_to_file, "rb") as fd:
-#         result = pickle.load(fd)
-#     return result
+def load_from_file(path_to_file: str):
+    """Load object from Pickle file."""
+    with open(path_to_file, "rb") as fd:
+        result = pickle.load(fd)
+    return result
 
 
 # Please update this path with your extract of piton as noted in previous notebook. 
@@ -34,7 +34,7 @@ path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
 # HighHbA1c_labeled_patients_v3
 # mortality_labeled_patients_v1
-path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
+path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_v1.pickle"
 database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
 path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
 num_threads = 20
@@ -45,9 +45,9 @@ max_length = 1024
 padding = True
 truncation = True
 chunk_size = 10
-num_patients = 1000
+num_patients = None
 batch_size = 1024
-prefix = "diabetes"
+prefix = "v1_mortality"
 
 
 if __name__ == '__main__':
@@ -73,7 +73,7 @@ if __name__ == '__main__':
                                              batch_size=batch_size)
     print("Text Featurization Finished")
 
-    print(result_tuple[0].shape)
+    # print(result_tuple[0].shape)
     # path_to_save = os.path.join(PATH_TO_SAVE_MATRIX, TEXT_EMBEDDINGS_PATH)
     # save_to_file(result_tuple, path_to_save)
     # print(f"Embeddings Saved at {path_to_save}")
