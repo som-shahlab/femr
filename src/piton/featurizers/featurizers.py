@@ -463,7 +463,7 @@ class TextFeaturizer:
         patient_ids = np.concatenate([patient_text_data[2] for patient_text_data in patient_text_data_list], axis=None)
         labeling_time = np.concatenate([patient_text_data[3] for patient_text_data in patient_text_data_list], axis=None)
 
-        save_to_file((text_data, result_labels, patient_ids, labeling_time), os.path.join(path_to_save, f"{prefix}_text_data.pickle"))
+        save_to_file(text_data, os.path.join(path_to_save, f"{prefix}_text_data.pickle"))
         save_to_file((result_labels, patient_ids, labeling_time), os.path.join(path_to_save, f"{prefix}_meta_data.pickle"))
 
         print("Finished text accumulation: ", datetime.datetime.now() - start_time)

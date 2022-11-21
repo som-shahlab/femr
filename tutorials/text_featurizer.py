@@ -27,10 +27,11 @@ def load_from_file(path_to_file: str):
 
 # Please update this path with your extract of piton as noted in previous notebook. 
 # PATH_TO_PITON_DB= '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
-PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
+# PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
 TEXT_EMBEDDINGS_PATH = "test_diabetes_text_embeddings.pickle"
 
-path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
+path_to_model = "/share/pi/nigam/rthapa84/models/Clinical-Longformer"
+# path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
 # HighHbA1c_labeled_patients_v3
 # mortality_labeled_patients_v1
