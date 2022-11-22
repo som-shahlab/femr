@@ -145,6 +145,10 @@ void read_patient_from_buffer(Patient& current_patient,
         event.age_in_days = last_age;
         event.minutes_offset = last_minutes;
 
+        event.age = ((double)event.age_in_days +
+                     ((double)event.minutes_offset) /
+                         (minutes_per_hour * hours_per_day));
+
         uint32_t code_and_type = buffer[index++];
         event.code = code_and_type >> 2;
         uint32_t type = code_and_type & 3;
@@ -461,14 +465,17 @@ Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
 }
 
 PatientDatabase::PatientDatabase(boost::filesystem::path const& path,
-                                 bool read_all)
+                                 bool read_all, bool read_all_unique_text)
     : patients(path / "patients", read_all),
       ontology(path / "ontology"),
       shared_text_dictionary(path / "shared_text", read_all),
-      unique_text_dictionary(path / "unique_text", read_all),
+      unique_text_dictionary(path / "unique_text", read_all_unique_text),
       code_index_dictionary(path / "code_index", read_all),
       value_index_dictionary(path / "value_index", read_all),
-      meta_dictionary(path / "meta", read_all) {}
+      meta_dictionary(path / "meta", read_all) {
+    has_unique_text_dictionary =
+        boost::filesystem::exists(path / "unique_text");
+}
 
 uint32_t PatientDatabase::size() { return patients->size(); }
 
@@ -520,8 +527,12 @@ Dictionary& PatientDatabase::get_shared_text_dictionary() {
     return *shared_text_dictionary;
 }
 
-Dictionary& PatientDatabase::get_unique_text_dictionary() {
-    return *unique_text_dictionary;
+Dictionary* PatientDatabase::get_unique_text_dictionary() {
+    if (has_unique_text_dictionary) {
+        return &(*unique_text_dictionary);
+    } else {
+        return nullptr;
+    }
 }
 
 template <typename F>
