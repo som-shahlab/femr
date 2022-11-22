@@ -15,18 +15,19 @@ parser.add_argument("--is_hierarchical", default=False, action="store_true")
 
 args = parser.parse_args()
 
-import pickle
-import piton.extension.dataloader
-import piton.datasets
-import logging
-import msgpack
-import random
-import numpy as np
+import dataclasses
 import datetime
 import json
-import dataclasses
-
+import logging
+import pickle
+import random
 from typing import TypeVar
+
+import msgpack
+import numpy as np
+
+import piton.datasets
+import piton.extension.dataloader
 
 T = TypeVar("T")
 

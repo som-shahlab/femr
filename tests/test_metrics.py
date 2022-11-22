@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import piton.extension.metrics
 import numpy as np
 import sklearn.metrics
+
+import piton.extension.metrics
 
 
 def test_c_statistic():

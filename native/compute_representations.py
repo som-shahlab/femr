@@ -12,25 +12,25 @@ parser.add_argument("--model_dir", type=str, required=True)
 
 args = parser.parse_args()
 
-import pickle
-import piton.extension.dataloader
-import logging
-import queue
-import msgpack
-import piton.models.transformer
+import copy
 import functools
-import piton.datasets
+import logging
+import pickle
+import queue
 import random
+import threading
+from typing import Any, Dict, Mapping, Optional, TypeVar
+
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import optax
-import queue
-import threading
-import copy
 import jmp
+import msgpack
+import optax
 
-from typing import TypeVar, Optional, Any, Mapping, Dict
+import piton.datasets
+import piton.extension.dataloader
+import piton.models.transformer
 
 T = TypeVar("T")
 
@@ -95,9 +95,11 @@ def compute_repr(params, rng, config, batch):
     return model.apply(params, rng, config, batch)
 
 
-from typing import List, Tuple
-import numpy as np
 import datetime
+from typing import List, Tuple
+
+import numpy as np
+
 import piton.datasets
 
 database = piton.datasets.PatientDatabase(args.data_path)

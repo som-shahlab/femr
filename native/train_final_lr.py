@@ -1,9 +1,11 @@
 import pickle
+
+import numpy as np
 import sklearn
-import piton.datasets
 import sklearn.linear_model
 import sklearn.metrics
-import numpy as np
+
+import piton.datasets
 
 features_path = "hba1c_reps"
 labels_path = "/local-scratch/nigam/projects/ethanid/gpu_experiments/mortality_labeled_patients_v1.pickle"

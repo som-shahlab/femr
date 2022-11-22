@@ -11,7 +11,7 @@ import piton
 
 def test_helper(tmp_path):
     print("Starting")
-#    m.sort_and_join_csvs("foo", "bar", ["a", "b"], ",", 3)
+    #    m.sort_and_join_csvs("foo", "bar", ["a", "b"], ",", 3)
     fancy_type = np.dtype(
         [
             ("patient_id", np.uint64),
@@ -19,7 +19,7 @@ def test_helper(tmp_path):
             ("code", np.uint64),
         ]
     )
- #   m.sort_and_join_csvs("foo_fancy", "bar_fancy", fancy_type, ",", 3)
+    #   m.sort_and_join_csvs("foo_fancy", "bar_fancy", fancy_type, ",", 3)
 
     print("Done")
 

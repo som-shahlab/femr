@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import queue
-import threading
 import random
-import piton.extension.dataloader
-
+import threading
 from typing import Optional
+
+import piton.extension.dataloader
 
 
 class Batches:
