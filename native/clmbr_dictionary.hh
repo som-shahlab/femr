@@ -17,6 +17,7 @@ struct DictEntry {
     double weight;
 
     // Only for numeric dictionary entries
+    // A numeric dictionary entry covers from [start_val, end_val)
     double val_start = 0;
     double val_end = 0;
 
