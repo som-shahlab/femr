@@ -66,19 +66,7 @@ with open(args.batch_info_path, "rb") as f:
 
 batch_config = batch_info["config"]
 
-# PLEASE DELETE THIS, LOL
-hacking_it_together = 4155
-magic_number = None
-
 database = piton.datasets.PatientDatabase(args.data_path)
-
-code_str = bytes(database.get_code_dictionary()[hacking_it_together]).decode(
-    "utf8"
-)
-
-parents = set(database.get_ontology().get_all_parents(hacking_it_together))
-
-print("Trying to find", code_str)
 
 batch_task = batch_config["task"]
 task = {}
@@ -92,26 +80,12 @@ elif batch_config["task"]["type"] == "clmbr":
 elif batch_config["task"]["type"] == "labeled_patients":
     task["labeler_type"] = batch_task["labeler_type"]
     if task["labeler_type"] == "survival":
-        print("WAT!!")
         # Currently need a lot of hacks to get this working right ...
         with open(
             "../../gpu_experiments/new_batches/batch_4_fixed_again_hire/batch_info.msgpack",
             "rb",
         ) as f:
             old_batch_task = msgpack.load(f)["config"]["task"]
-            for i, code in enumerate(old_batch_task["survival_dict"]["codes"]):
-                code_str = bytes(database.get_code_dictionary()[code]).decode(
-                    "utf8"
-                )
-                if code in parents:
-                    print(i, code, code_str)
-                if code == hacking_it_together:
-                    print("Found it lol", i)
-                    magic_number = i
-                    break
-            else:
-                print("Never found it?")
-            magic_number = 7796
 
             task["time_bins"] = old_batch_task["survival_dict"]["time_bins"]
 
@@ -227,17 +201,6 @@ if args.start_from_checkpoint is not None:
             checkpointed_weights[
                 "EHRTransformer/~/SurvivalTask/~/linear"
             ] = magic_layer
-            print(magic_layer["w"].shape)
-
-            old_weights = checkpointed_weights[
-                "EHRTransformer/~/SurvivalCLMBRTask"
-            ]["code_weights"]
-            new_weights = params["EHRTransformer/~/SurvivalTask"]["code_weight"]
-            if magic_number is not None:
-                params["EHRTransformer/~/SurvivalTask"][
-                    "code_weight"
-                ] = old_weights[magic_number, :].reshape(1, -1)
-                print("Stubbing them in ..")
 
         for p, v in list(params.items()):
             if p in checkpointed_weights:
@@ -336,7 +299,10 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
             event_times = jnp.concatenate(event_times, axis=0)
 
             c_statistic = piton.extension.metrics.compute_c_statistic(
-                event_times, is_censor, config["task"]["time_bins"], logits
+                event_times,
+                is_censor,
+                jnp.array(config["task"]["time_bins"]) * 60 * 24,
+                logits,
             )
         elif config["task"]["labeler_type"] == "binary":
             logits = jnp.concatenate(logits, axis=0)

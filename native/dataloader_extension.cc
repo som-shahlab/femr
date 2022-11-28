@@ -12,6 +12,7 @@ namespace py = pybind11;
 #include <nlohmann/json.hpp>
 #include <queue>
 #include <random>
+#include <boost/optional/optional_io.hpp>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -33,9 +34,9 @@ class Task {
     virtual void start_patient(const Patient& p) = 0;
     virtual bool needs_exact() const { return false; }
 
-    virtual bool add_event_data(int current_year, double current_age,
+    virtual bool add_event_data(int current_year, uint32_t current_age,
                                 const std::vector<uint32_t>& next_features,
-                                double next_age, bool actually_add,
+                                boost::optional<uint32_t> next_age, bool actually_add,
                                 bool using_dropout = false) = 0;
 
     virtual void prepare_batch_data(uint32_t num_representations) = 0;
@@ -57,9 +58,9 @@ class LabeledPatientsTask : public Task {
         labeler_type = config["labeler_type"];
         for (json label : config["labels"]) {
             uint32_t patient_id = label[0];
-            double age = label[1];
+            uint32_t age_in_minutes = label[1];
             json value = label[2];
-            labels[patient_id].push_back(std::make_pair(age, value));
+            labels[patient_id].push_back(std::make_pair(age_in_minutes, value));
         }
 
         for (auto& entry : labels) {
@@ -83,23 +84,26 @@ class LabeledPatientsTask : public Task {
         current_label_iter = std::begin(current_patient_iter->second);
     }
 
-    bool add_event_data(int current_year, double current_age,
+    bool add_event_data(int current_year, uint32_t current_age,
                         const std::vector<uint32_t>& next_features,
-                        double next_age, bool actually_add,
+                        boost::optional<uint32_t> next_age, bool actually_add,
                         bool using_dropout) override {
-        boost::optional<std::pair<double, json>> label_to_add;
+        boost::optional<std::pair<uint32_t, json>> label_to_add;
 
-        while (current_label_iter != std::end(current_patient_iter->second) &&
-               current_label_iter->first < next_age) {
+        while (current_label_iter != std::end(current_patient_iter->second) && (!next_age || current_label_iter->first < *next_age)) {
             label_to_add = *current_label_iter;
 
             current_label_iter++;
         }
 
         if (actually_add && label_to_add) {
+            if (label_to_add->first < current_age) {
+                throw std::runtime_error(absl::StrCat("This should not be possible ", current_age, " ", label_to_add->first));
+            }
+
             if (labeler_type == "survival") {
-                double invalid_delta = label_to_add->first - current_age;
-                if (!using_dropout && invalid_delta > 1) {
+                uint32_t invalid_delta = label_to_add->first - current_age;
+                if (!using_dropout && invalid_delta > 60 * 24) {
                     std::cout << "This should never happen " << invalid_delta
                               << " " << current_patient_iter->first << " "
                               << label_to_add->first << " " << current_age
@@ -115,14 +119,14 @@ class LabeledPatientsTask : public Task {
         return (bool)label_to_add;
     }
 
-    Eigen::Tensor<double, 1> final_batch_ages;
+    Eigen::Tensor<uint32_t, 1> final_batch_ages;
 
     Eigen::Tensor<float, 1> final_batch_labels;
 
     Eigen::Tensor<bool, 1> final_batch_censor;
     Eigen::Tensor<float, 1> final_batch_event_times;
     virtual void prepare_batch_data(uint32_t num_representations) override {
-        final_batch_ages = Eigen::Tensor<double, 1>(num_representations);
+        final_batch_ages = Eigen::Tensor<uint32_t, 1>(num_representations);
         final_batch_ages.setConstant(0);
 
         for (uint32_t i = 0; i < batch_labels.size(); i++) {
@@ -147,7 +151,7 @@ class LabeledPatientsTask : public Task {
             for (uint32_t i = 0; i < batch_labels.size(); i++) {
                 final_batch_censor(i) = batch_labels[i].second["is_censored"];
                 final_batch_event_times(i) =
-                    batch_labels[i].second["event_time"].get<double>() -
+                    batch_labels[i].second["event_time"].get<uint32_t>() -
                     batch_labels[i].first;
             }
         }
@@ -168,15 +172,15 @@ class LabeledPatientsTask : public Task {
    private:
     std::string labeler_type;
 
-    absl::flat_hash_map<uint32_t, std::vector<std::pair<double, json>>> labels;
+    absl::flat_hash_map<uint32_t, std::vector<std::pair<uint32_t, json>>> labels;
     std::vector<uint32_t> patient_ids;
 
-    std::vector<std::pair<double, json>> batch_labels;
+    std::vector<std::pair<uint32_t, json>> batch_labels;
 
     absl::flat_hash_map<uint32_t,
-                        std::vector<std::pair<double, json>>>::const_iterator
+                        std::vector<std::pair<uint32_t, json>>>::const_iterator
         current_patient_iter;
-    std::vector<std::pair<double, json>>::const_iterator current_label_iter;
+    std::vector<std::pair<uint32_t, json>>::const_iterator current_label_iter;
 };
 
 class CLMBRTask : public Task {
@@ -195,9 +199,9 @@ class CLMBRTask : public Task {
 
     void start_patient(const Patient& p) override {}
 
-    bool add_event_data(int current_year, double current_age,
+    bool add_event_data(int current_year, uint32_t current_age,
                         const std::vector<uint32_t>& next_features,
-                        double next_age, bool actually_add,
+                        boost::optional<uint32_t> next_age, bool actually_add,
                         bool using_dropout) override {
         if (next_features.size() == 0) {
             return false;
@@ -213,8 +217,11 @@ class CLMBRTask : public Task {
             return false;
         }
 
-        if (next_age < 2 || isinf(next_age)) {
-            // Don't try to predict stuff on the day of birth
+        if (!next_age) {
+            return false;
+        }
+
+        if (*next_age < 2 * 60 * 24) {
             return false;
         }
 
@@ -257,7 +264,7 @@ class SurvivalCLMBRTask : public Task {
         json survival_dict = config["survival_dict"];
         survival_dictionary = get_mapping(ontology, survival_dict["codes"]);
         vocab_size = survival_dict["codes"].size();
-        time_bins = survival_dict["time_bins"].get<std::vector<double>>();
+        time_bins = survival_dict["time_bins"].get<std::vector<uint32_t>>();
     }
 
     const std::vector<uint32_t>& get_patient_ids() override {
@@ -274,9 +281,9 @@ class SurvivalCLMBRTask : public Task {
         last_prediction_age = 0;
     }
 
-    bool add_event_data(int current_year, double current_age,
+    bool add_event_data(int current_year, uint32_t current_age,
                         const std::vector<uint32_t>& next_features,
-                        double next_age, bool actually_add,
+                        boost::optional<uint32_t> next_age, bool actually_add,
                         bool using_dropout) override {
         if (!should_make_prediction(last_prediction_age, current_age, next_age,
                                     current_year)) {
@@ -342,16 +349,12 @@ class SurvivalCLMBRTask : public Task {
 
             for (uint32_t time_bin = 0; time_bin < time_bins.size();
                  time_bin++) {
-                double start = time_bins[time_bin];
-                double end;
-                if (time_bin == time_bins.size() - 1) {
-                    end = std::numeric_limits<double>::infinity();
-                } else {
-                    end = time_bins[time_bin + 1];
-                }
+                uint32_t start = time_bins[time_bin];
+                uint32_t time_in_bin = censor - start;
 
-                double time_in_bin = censor - start;
-                time_in_bin = std::min(time_in_bin, end - start);
+                if (time_bin != time_bins.size() - 1) {
+                    time_in_bin = std::min(time_in_bin, time_bins[time_bin + 1] - start);
+                }
 
                 if (time_in_bin > 0) {
                     batch_censor_log_times(rep * time_bins.size() + time_bin) =
@@ -361,10 +364,10 @@ class SurvivalCLMBRTask : public Task {
                 batch_event_offsets(rep * time_bins.size() + time_bin) =
                     event_index;
 
-                std::vector<std::pair<double, uint32_t>> events_for_bin;
+                std::vector<std::pair<uint32_t, uint32_t>> events_for_bin;
 
-                while (event_iter != std::end(events) &&
-                       event_iter->first < end) {
+                while (event_iter != std::end(events) && (
+                    (time_bin == time_bins.size() -1)  || (event_iter->first < time_bins[time_bin + 1]))) {
                     events_for_bin.push_back(*event_iter++);
                 }
                 std::sort(std::begin(events_for_bin), std::end(events_for_bin),
@@ -408,18 +411,18 @@ class SurvivalCLMBRTask : public Task {
     }
 
    private:
-    std::vector<std::pair<double, std::vector<std::pair<double, uint32_t>>>>
+    std::vector<std::pair<uint32_t, std::vector<std::pair<uint32_t, uint32_t>>>>
         events_per_rep;
     size_t total_events;
 
-    double last_prediction_age;
+    uint32_t last_prediction_age;
     SurvivalCalculator calculator;
 
     std::vector<uint32_t> patient_ids;
 
     FlatMap<std::vector<uint32_t>> survival_dictionary;
     uint32_t vocab_size;
-    std::vector<double> time_bins;
+    std::vector<uint32_t> time_bins;
 };
 
 std::unique_ptr<Task> create_task(json config, Ontology& ontology) {
@@ -644,7 +647,7 @@ class BatchCreator {
         offsets(batch_index) = offset;
 
         codes_seen_today.clear();
-        double last_age = -1;
+        uint32_t last_age = 0;
 
         uint32_t total_length = 0;
 
@@ -660,7 +663,7 @@ class BatchCreator {
                 continue;
             }
 
-            if ((int)event.age != (int)last_age) {
+            if (event.start_age_in_minutes / (60 * 24) != last_age / (60 * 24)) {
                 codes_seen_today.clear();
             }
 
@@ -680,14 +683,14 @@ class BatchCreator {
             bool is_valid_event_index =
                 (index - 1) >= 0 && (index - 1) < (int32_t)(max_length);
             if (task->add_event_data((last_age + p.birth_date).year(), last_age,
-                                     features, event.age, is_valid_event_index,
+                                     features, event.start_age_in_minutes, is_valid_event_index,
                                      token_dropout != 0)) {
                 if (total_length == 0) {
                     throw std::runtime_error(
                         "Cannot create labels before birth " +
                         std::to_string(patient_id) + " " +
                         std::to_string(last_age) + " " +
-                        std::to_string(event.age));
+                        std::to_string(event.start_age_in_minutes));
                 }
                 if (is_valid_event_index) {
                     label_indices.push_back(batch_index * max_length + index -
@@ -724,20 +727,19 @@ class BatchCreator {
                     tokens(batch_index * max_length + index) = features[0];
                 }
                 valid_tokens(batch_index * max_length + index) = true;
-                ages(batch_index * max_length + index) = event.age;
+                ages(batch_index * max_length + index) = event.start_age_in_minutes / (60.0 * 24.0);
                 normalized_ages(batch_index * max_length + index) =
-                    (event.age - age_mean) / (age_std);
+                    (event.start_age_in_minutes /(60.0 * 24.0) - age_mean) / (age_std);
             }
 
             total_length += 1;
-            last_age = event.age;
+            last_age = event.start_age_in_minutes;
         }
 
         int32_t index = (int32_t)(total_length) - (int32_t)offset;
         bool is_valid_event_index =
             (index - 1) >= 0 && (index - 1) < (int32_t)(max_length);
-        if (task->add_event_data((last_age + p.birth_date).year(), last_age, {},
-                                 std::numeric_limits<double>::infinity(),
+        if (task->add_event_data((last_age + p.birth_date).year(), last_age, {}, {},
                                  is_valid_event_index, token_dropout != 0)) {
             if (total_length == 0) {
                 throw std::runtime_error(
@@ -882,9 +884,18 @@ void add_patient_to_batch(
     const std::vector<uint32_t>& repr_indices =
         data.creator->get_label_indices();
 
+    
+    if (p.patient_id == 33384) {
+        std::cout<<"FOUND " << p.patient_id << " " << repr_indices.size() << std::endl;
+        for (auto& val : repr_indices) {
+            std::cout<<"What " << val << std::endl;
+        }
+    }
+
     if (repr_indices.size() == 0) {
         return;
     }
+    
 
     // First, try to do a basic prefix
     std::vector<uint32_t> start_indices;

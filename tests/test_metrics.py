@@ -54,26 +54,7 @@ def test_c_statistic():
             auroc = sklearn.metrics.roc_auc_score(
                 current_correct, current_risks
             )
-        if False:
-            print(
-                time,
-                current_risks,
-                current_correct,
-                mask.sum() - current_correct.sum(),
-                current_correct.sum(),
-                auroc * current_correct.sum(),
-            )
-        if False:
-            print(
-                time,
-                auroc,
-                current_correct.sum(),
-                mask.sum() - current_correct.sum(),
-            )
-            if time == 0:
-                print(risks[correct][0])
-                print((current_risks < risks[correct][0]).sum())
-                print((current_risks > risks[correct][0]).sum())
+
         total += current_correct.sum()
         total_auroc += auroc * current_correct.sum()
 

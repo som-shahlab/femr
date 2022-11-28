@@ -64,6 +64,7 @@ class TransformerBlock(hk.Module):
         self.config = config
 
         self.norm = hk.RMSNorm(-1)
+        # self.norm = hk.LayerNorm(-1, True, True)
         self.input_proj = hk.Linear(
             output_size=3 * self.config["hidden_size"]
             + self.config["intermediate_size"],
@@ -162,6 +163,8 @@ class Transformer(hk.Module):
         self.config = config
         self.in_norm = hk.RMSNorm(-1)
         self.out_norm = hk.RMSNorm(-1)
+        # self.in_norm = hk.LayerNorm(-1, True, True)
+        # self.out_norm = hk.LayerNorm(-1, True, True)
         self.embed = hk.Embed(
             vocab_size=self.config["vocab_size"],
             embed_dim=self.config["hidden_size"],
@@ -335,6 +338,7 @@ class SurvivalTask(hk.Module):
         super().__init__(name="SurvivalTask")
         self.config = config
         self.time_bins = jnp.array(tuple(config["time_bins"]) + (float("inf"),))
+        self.time_bins = self.time_bins * 60 * 24
         self.num_time_bins = len(config["time_bins"])
         self.dim = self.config["dim"]
         self.final_layer = hk.Linear(
@@ -411,7 +415,7 @@ class CLMBRTask(hk.Module):
         self.config = config
         self.final_layer = hk.Linear(output_size=config["vocab_size"])
 
-    def __call__(self, features, mask, batch):
+    def __call__(self, features, mask, batch, _is_training):
         logits = self.final_layer(features)
 
         labels = batch["labels"]

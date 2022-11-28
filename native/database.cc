@@ -5,6 +5,7 @@
 #include <boost/range/iterator_range.hpp>
 #include <deque>
 #include <queue>
+#include <random>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -24,6 +25,8 @@ constexpr int seconds_per_minute = 60;
 constexpr int minutes_per_hour = 60;
 constexpr int hours_per_day = 24;
 
+constexpr uint32_t current_version = 1;
+
 template <typename T>
 std::string_view container_to_view(const T& data) {
     return std::string_view(reinterpret_cast<const char*>(data.data()),
@@ -35,6 +38,18 @@ absl::Span<const T> read_span(const Dictionary& dict, uint32_t index) {
     std::string_view mapping = dict[index];
     return {reinterpret_cast<const T*>(mapping.data()),
             mapping.size() / sizeof(T)};
+}
+
+template <typename T>
+std::string_view element_to_view(const T* data) {
+    return absl::string_view(reinterpret_cast<const char*>(data), sizeof(*data));
+}
+
+template <typename T>
+T read_element(const Dictionary& dict, uint32_t index) {
+    absl::Span<const T> span = read_span<T>(dict, index);
+    assert (span.size() == 1);
+    return span[0];
 }
 
 using UniqueValue = std::pair<uint32_t, std::string>;
@@ -60,45 +75,43 @@ void write_patient_to_buffer(uint64_t original_patient_id,
 
     ssize_t count_offset = -1;
 
-    int32_t last_age = 0;
-    int32_t last_minute_offset = 0;
+    int64_t last_age = 0;
 
     for (const Event& event : current_patient.events) {
-        int32_t delta = static_cast<int32_t>(event.age_in_days) - last_age;
+        int64_t delta = static_cast<int64_t>(event.start_age_in_minutes) - last_age;
         if (delta < 0) {
             throw std::runtime_error(absl::StrCat(
                 "Patient days are not sorted in order ", original_patient_id,
-                " with ", event.age_in_days, " ", delta));
+                " with ", event.start_age_in_minutes, " ", delta));
         }
-        int32_t minute_delta =
-            ((minutes_per_hour * hours_per_day) +
-             static_cast<int32_t>(event.minutes_offset) - last_minute_offset) %
-            (minutes_per_hour * hours_per_day);
-
-        if (minute_delta < 0) {
-            throw std::runtime_error(
-                absl::StrCat("Should not have a ngeative minute delta?"));
+        if (delta > std::numeric_limits<uint32_t>::max()) {
+            throw std::runtime_error("Out of bounds error?");
         }
-        last_minute_offset = event.minutes_offset;
-        last_age = event.age_in_days;
+        last_age = event.start_age_in_minutes;
 
-        if (delta == 0 && minute_delta == 0 && count_offset != -1) {
+        if (delta == 0 && count_offset != -1) {
             buffer[count_offset] += 1;
         } else {
             count_offset = buffer.size();
             buffer.push_back(0);
-            buffer.push_back(delta);
-            buffer.push_back(minute_delta);
+            buffer.push_back((uint32_t)delta);
         }
+
+
+        if ((((uint64_t)event.code) << 4) > std::numeric_limits<uint32_t>::max()) {
+            throw std::runtime_error("Numeric limits error");
+        }
+
+        uint32_t mask = (event.code << 4) | (((bool)event.end_age_in_minutes) << 3) | (((bool)event.visit_id) << 2);
 
         switch (event.value_type) {
             case ValueType::NONE:
-                buffer.push_back((event.code << 2));
+                buffer.push_back(mask | 0);
                 break;
 
             case ValueType::UNIQUE_TEXT:
             case ValueType::SHARED_TEXT: {
-                buffer.push_back((event.code << 2) | 1);
+                buffer.push_back(mask | 1);
                 bool is_shared = event.value_type == ValueType::SHARED_TEXT;
                 buffer.push_back((event.text_value << 1) |
                                  static_cast<uint32_t>(is_shared));
@@ -108,10 +121,10 @@ void write_patient_to_buffer(uint64_t original_patient_id,
             case ValueType::NUMERIC:
                 if (static_cast<uint32_t>(event.numeric_value) ==
                     event.numeric_value) {
-                    buffer.push_back((event.code << 2) | 2);
+                    buffer.push_back(mask | 2);
                     buffer.push_back(event.numeric_value);
                 } else {
-                    buffer.push_back((event.code << 2) | 3);
+                    buffer.push_back(mask | 3);
                     buffer.push_back(event.text_value);
                 }
                 break;
@@ -119,75 +132,163 @@ void write_patient_to_buffer(uint64_t original_patient_id,
             default:
                 throw std::runtime_error("Invalid value type?");
         }
+
+        if (event.end_age_in_minutes) {
+            int64_t delta = *event.end_age_in_minutes - event.start_age_in_minutes;
+            if (delta < 0) {
+                throw std::runtime_error(
+                    absl::StrCat("End time is after start time? ", original_patient_id, event.start_age_in_minutes, *event.end_age_in_minutes));
+            }
+            buffer.push_back(delta);
+        }
+
+        if (event.visit_id) {
+            buffer.push_back(*event.visit_id);
+        }
     }
 }
 
 void read_patient_from_buffer(Patient& current_patient,
                               const std::vector<uint32_t>& buffer,
-                              uint32_t count) {
-    size_t index = 0;
-    current_patient.birth_date = epoch + buffer[index++];
-    current_patient.events.resize(buffer[index++]);
+                              uint32_t count, uint32_t version) {
+    if (version == 0) {
+        size_t index = 0;
+        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.events.resize(buffer[index++]);
 
-    uint32_t last_age = 0;
-    uint32_t last_minutes = 0;
+        uint64_t last_age = 0;
+        uint32_t last_minutes = 0;
 
-    uint32_t count_with_same = 0;
-    for (Event& event : current_patient.events) {
-        if (count_with_same == 0) {
-            count_with_same = buffer[index++];
-            last_age += buffer[index++];
-            last_minutes += buffer[index++];
-            last_minutes %= (minutes_per_hour * hours_per_day);
-        } else {
-            count_with_same--;
-        }
-        event.age_in_days = last_age;
-        event.minutes_offset = last_minutes;
-
-        event.age = ((double)event.age_in_days +
-                     ((double)event.minutes_offset) /
-                         (minutes_per_hour * hours_per_day));
-
-        uint32_t code_and_type = buffer[index++];
-        event.code = code_and_type >> 2;
-        uint32_t type = code_and_type & 3;
-
-        switch (type) {
-            case 0:
-                event.value_type = ValueType::NONE;
-                break;
-
-            case 1: {
-                uint32_t text_value = buffer[index++];
-                bool is_shared = (text_value & 1) == 1;
-                event.value_type =
-                    is_shared ? ValueType::SHARED_TEXT : ValueType::UNIQUE_TEXT;
-                event.text_value = text_value >> 1;
-                break;
+        uint32_t count_with_same = 0;
+        for (Event& event : current_patient.events) {
+            if (count_with_same == 0) {
+                count_with_same = buffer[index++];
+                last_age += buffer[index++];
+                last_minutes += buffer[index++];
+                last_minutes %= (minutes_per_hour * hours_per_day);
+            } else {
+                count_with_same--;
             }
+            uint64_t darn = last_age * minutes_per_hour * hours_per_day + last_minutes;
+            if (darn > std::numeric_limits<uint32_t>::max()) {
+                throw std::runtime_error("Invalid range ...");
+            }
+            event.start_age_in_minutes = darn;
+            
+            uint32_t code_and_type = buffer[index++];
+            event.code = code_and_type >> 2;
+            uint32_t type = code_and_type & 3;
 
-            case 2:
-            case 3: {
-                event.value_type = ValueType::NUMERIC;
-                if (type == 2) {
-                    event.numeric_value = buffer[index++];
-                } else {
-                    event.text_value = buffer[index++];
+            switch (type) {
+                case 0:
+                    event.value_type = ValueType::NONE;
+                    break;
+
+                case 1: {
+                    uint32_t text_value = buffer[index++];
+                    bool is_shared = (text_value & 1) == 1;
+                    event.value_type =
+                        is_shared ? ValueType::SHARED_TEXT : ValueType::UNIQUE_TEXT;
+                    event.text_value = text_value >> 1;
+                    break;
                 }
-                break;
+
+                case 2:
+                case 3: {
+                    event.value_type = ValueType::NUMERIC;
+                    if (type == 2) {
+                        event.numeric_value = buffer[index++];
+                    } else {
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value type?");
+            }
+        }
+
+        if (index != count) {
+            throw std::runtime_error(
+                absl::StrCat("Did not read through the entire patient record? ",
+                            index, " ", buffer.size()));
+        }
+    } else if (version == 1) {
+        size_t index = 0;
+        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.events.resize(buffer[index++]);
+
+        uint32_t last_age = 0;
+
+        uint32_t count_with_same = 0;
+        for (Event& event : current_patient.events) {
+            if (count_with_same == 0) {
+                count_with_same = buffer[index++];
+                last_age += buffer[index++];
+            } else {
+                count_with_same--;
+            }
+            event.start_age_in_minutes = last_age;
+
+            
+            uint32_t code_and_type = buffer[index++];
+            event.code = code_and_type >> 4;
+            uint32_t type = code_and_type & 3;
+
+            switch (type) {
+                case 0:
+                    event.value_type = ValueType::NONE;
+                    break;
+
+                case 1: {
+                    uint32_t text_value = buffer[index++];
+                    bool is_shared = (text_value & 1) == 1;
+                    event.value_type =
+                        is_shared ? ValueType::SHARED_TEXT : ValueType::UNIQUE_TEXT;
+                    event.text_value = text_value >> 1;
+                    break;
+                }
+
+                case 2:
+                case 3: {
+                    event.value_type = ValueType::NUMERIC;
+                    if (type == 2) {
+                        event.numeric_value = buffer[index++];
+                    } else {
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value type?");
             }
 
-            default:
-                throw std::runtime_error("Invalid value type?");
-        }
-    }
+            if (code_and_type & (1 << 3)) {
+                event.end_age_in_minutes = buffer[index++] + event.start_age_in_minutes;
+            } else {
+                event.end_age_in_minutes = boost::none;
+            }
 
-    if (index != count) {
+            if (code_and_type & (1 << 2)) {
+                event.visit_id = buffer[index++];
+            } else {
+                event.visit_id = boost::none;
+            }
+        }
+
+        if (index != count) {
+            throw std::runtime_error(
+                absl::StrCat("Did not read through the entire patient record? ",
+                            index, " ", buffer.size()));
+        }
+    } else {
         throw std::runtime_error(
-            absl::StrCat("Did not read through the entire patient record? ",
-                         index, " ", buffer.size()));
+                absl::StrCat("Does not support reading piton databases of version ",
+                            version));
     }
+    
 }
 
 void reader_thread(
@@ -197,7 +298,7 @@ void reader_thread(
     std::atomic<uint32_t>& unique_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
-    CSVReader reader(patient_file, {"patient_id", "code", "start", "value"},
+    CSVReader reader(patient_file, {"patient_id", "code", "start", "end", "value", "visit_id"},
                      ',');
 
     Entry current_entry;
@@ -241,44 +342,62 @@ void reader_thread(
         queue.wait_enqueue({std::move(current_entry)});
     };
 
+    absl::flat_hash_map<uint64_t, uint32_t> visit_id_map;
+
     while (reader.next_row()) {
         uint64_t patient_id;
         attempt_parse_or_die(reader.get_row()[0], patient_id);
         uint64_t code;
         attempt_parse_or_die(reader.get_row()[1], code);
-        absl::CivilSecond time;
-        attempt_parse_time_or_die(reader.get_row()[2], time);
+        absl::CivilSecond start;
+        attempt_parse_time_or_die(reader.get_row()[2], start);
+        boost::optional<absl::CivilSecond> end = boost::make_optional(false, absl::CivilSecond());
+        if (!reader.get_row()[3].empty()) {
+            absl::CivilSecond temp;
+            attempt_parse_time_or_die(reader.get_row()[3], temp);
+            end.emplace(temp);
+        }
+        
+        boost::optional<uint64_t> raw_visit_id = boost::make_optional(false, uint64_t());
+        if (!reader.get_row()[5].empty()) {
+            uint64_t temp;
+            attempt_parse_or_die(reader.get_row()[5], temp);
+            raw_visit_id.emplace(temp);
+        }
 
         if (patient_id != current_entry.original_patient_id) {
             output_patient();
 
-            current_patient.birth_date = absl::CivilDay(time);
+            current_patient.birth_date = absl::CivilDay(start);
             birth_date = absl::CivilSecond(current_patient.birth_date);
             current_patient.events.clear();
 
             current_entry.original_patient_id = patient_id;
             current_entry.unique_values.clear();
+            visit_id_map.clear();
         }
 
         Event next_event;
-        uint64_t age_in_seconds = (time - birth_date);
-        next_event.age_in_days =
-            age_in_seconds /
-            (seconds_per_minute * minutes_per_hour * hours_per_day);
-        next_event.minutes_offset =
-            (age_in_seconds / seconds_per_minute) -
-            (next_event.age_in_days * hours_per_day * minutes_per_hour);
-        next_event.code = code_to_index.find(code)->second;
+        uint64_t start_age_in_seconds = (start - birth_date);
+        next_event.start_age_in_minutes = start_age_in_seconds / seconds_per_minute;
+        
+        if (end) {
+            uint64_t end_age_in_seconds = (*end - birth_date);
+            next_event.end_age_in_minutes = end_age_in_seconds / seconds_per_minute;
+        }
 
-        if (reader.get_row()[3].empty()) {
+        next_event.code = code_to_index.find(code)->second;
+        
+
+        if (reader.get_row()[4].empty()) {
             next_event.value_type = ValueType::NONE;
         } else {
-            bool parse_number = absl::SimpleAtof(reader.get_row()[3],
+            bool parse_number = absl::SimpleAtof(reader.get_row()[4],
                                                  &next_event.numeric_value);
             if (parse_number) {
                 next_event.value_type = ValueType::NUMERIC;
             } else {
-                auto iter = text_value_to_index.find(reader.get_row()[3]);
+                auto iter = text_value_to_index.find(reader.get_row()[4]);
                 if (iter != std::end(text_value_to_index)) {
                     next_event.value_type = ValueType::SHARED_TEXT;
                     next_event.text_value = iter->second;
@@ -286,9 +405,18 @@ void reader_thread(
                     next_event.value_type = ValueType::UNIQUE_TEXT;
                     next_event.text_value = unique_counter.fetch_add(1);
                     current_entry.unique_values.emplace_back(
-                        next_event.text_value, std::move(reader.get_row()[3]));
+                        next_event.text_value, std::move(reader.get_row()[4]));
                 }
             }
+        }
+
+        if (raw_visit_id) {
+            auto iter = visit_id_map.find(*raw_visit_id);
+            if (iter == std::end(visit_id_map)) {
+                uint32_t next_visit_id = visit_id_map.size();
+                iter = visit_id_map.insert(std::make_pair(*raw_visit_id, next_visit_id)).first;
+            }
+            next_event.visit_id = iter->second;
         }
 
         current_patient.events.push_back(next_event);
@@ -436,17 +564,25 @@ PatientDatabase convert_patient_collection_to_patient_database(
         add_counts(codes_and_values.first);
         add_counts(codes_and_values.second);
         meta.add_value(container_to_view(codes));
+
+        meta.add_value(element_to_view(&current_version));
+
+        std::random_device device;
+        uint32_t extract_id = device();
+        meta.add_value(element_to_view(&extract_id));
     }
     std::cout << "Done with meta " << absl::Now() << std::endl;
 
     return PatientDatabase(target, false);
 }
 
-PatientDatabaseIterator::PatientDatabaseIterator(const Dictionary* d)
-    : parent_dictionary(d) {}
+PatientDatabaseIterator::PatientDatabaseIterator(PatientDatabase* d)
+    : parent_database(d) {
+        (void) parent_database->patients->size();
+    }
 
 Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
-    std::string_view data = (*parent_dictionary)[patient_id];
+    std::string_view data = (*(parent_database->patients))[patient_id];
 
     uint32_t count;
     std::memcpy(&count, data.data(), sizeof(count));
@@ -454,12 +590,18 @@ Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
         buffer.resize(count * 2);
     }
 
-    streamvbyte_decode(
-        reinterpret_cast<const uint8_t*>(data.data() + sizeof(count)),
-        buffer.data(), count);
+    if (parent_database->version_id() > 0) {
+        streamvbyte_decode(
+            reinterpret_cast<const uint8_t*>(data.data() + sizeof(count)),
+            buffer.data(), count);
+    } else {
+        streamvbyte_decode(
+            reinterpret_cast<const uint8_t*>(data.data() + sizeof(count)),
+            buffer.data(), count);
+    }
 
     current_patient.patient_id = patient_id;
-    read_patient_from_buffer(current_patient, buffer, count);
+    read_patient_from_buffer(current_patient, buffer, count, parent_database->version_id());
 
     return current_patient;
 }
@@ -475,12 +617,31 @@ PatientDatabase::PatientDatabase(boost::filesystem::path const& path,
       meta_dictionary(path / "meta", read_all) {
     has_unique_text_dictionary =
         boost::filesystem::exists(path / "unique_text");
+    
+    (void) version_id();
 }
 
 uint32_t PatientDatabase::size() { return patients->size(); }
 
+uint32_t PatientDatabase::version_id() { 
+    if (meta_dictionary.size() <= 5) {
+        // Needed to handle very old extracts
+        return 0;
+    } else {
+        return read_element<uint32_t>(meta_dictionary, 5);
+    }
+}
+
+uint32_t PatientDatabase::database_id() {
+    if (version_id() == 0) {
+        return 0;
+    } else {
+        return read_element<uint32_t>(meta_dictionary, 6);
+    }
+}
+
 PatientDatabaseIterator PatientDatabase::iterator() {
-    return PatientDatabaseIterator(&(*patients));
+    return PatientDatabaseIterator(this);
 }
 
 Patient PatientDatabase::get_patient(uint32_t patient_id) {
@@ -489,13 +650,13 @@ Patient PatientDatabase::get_patient(uint32_t patient_id) {
 }
 
 uint64_t PatientDatabase::get_original_patient_id(uint32_t patient_id) {
-    return read_span<uint64_t>(*meta_dictionary, 0)[patient_id];
+    return read_span<uint64_t>(meta_dictionary, 0)[patient_id];
 }
 
 boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
     uint64_t original_patient_id) {
     absl::Span<const uint32_t> sorted_span =
-        read_span<uint32_t>(*meta_dictionary, 1);
+        read_span<uint32_t>(meta_dictionary, 1);
     const auto* iter = std::lower_bound(
         std::begin(sorted_span), std::end(sorted_span), original_patient_id,
         [&](uint32_t index, uint64_t original) {
@@ -510,11 +671,11 @@ boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
 }
 
 uint32_t PatientDatabase::get_code_count(uint32_t code) {
-    return read_span<uint32_t>(*meta_dictionary, 2)[code];
+    return read_span<uint32_t>(meta_dictionary, 2)[code];
 }
 
 uint32_t PatientDatabase::get_shared_text_count(uint32_t value) {
-    return read_span<uint32_t>(*meta_dictionary, 3)[value];
+    return read_span<uint32_t>(meta_dictionary, 3)[value];
 }
 
 Ontology& PatientDatabase::get_ontology() { return ontology; }

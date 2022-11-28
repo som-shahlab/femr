@@ -1,3 +1,5 @@
+// TODO(ethan): Convert this to a Python extension so it can be called more easily
+
 #include <cmath>
 #include <nlohmann/json.hpp>
 #include <queue>
@@ -11,32 +13,56 @@
 
 using json = nlohmann::json;
 
+// The number of samples to use for numeric values
+constexpr int NUM_SAMPLES = 10000;
+
+// The state for doing the dictionary calculation
 struct DictionaryData {
+
+    // The age mean and variance
     OnlineStatistics age_stats;
-    FlatMap<double> hierarchical_code_counts;
+
+    // The count of times a code appears
     FlatMap<double> code_counts;
+
+    // The count of times a code appears with ontology expansion
+    FlatMap<double> hierarchical_code_counts;
+
+    // The count of times each text value appears
     FlatMap<absl::flat_hash_map<uint32_t, double>> text_counts;
+
+    // Random numeric samples for each lab value
     FlatMap<ReservoirSampler> numeric_samples;
+
+    // A random number generator
     std::mt19937 rng;
 };
 
+// Update the DictionaryData with another patient
 void add_patient_to_dictionary(DictionaryData& data, const Patient& p,
                                Ontology& ontology, size_t num_patients,
                                const FlatMap<bool>& banned_codes) {
+
+    // We want each patient to get roughly uniform weight, so scale by number of patients and number of events.
     double weight = 1.0 / (num_patients * p.events.size());
 
     for (const auto& event : p.events) {
+        // Remove banned codes
         if (banned_codes.find(event.code) != nullptr) {
             continue;
         }
+
+        // Remove unique text
         if (event.value_type == ValueType::UNIQUE_TEXT) {
             continue;
         }
 
-        data.age_stats.add_value(weight, event.age);
+        // Add the start age to the age statistics
+        data.age_stats.add_value(weight, event.start_age_in_minutes);
 
         switch (event.value_type) {
             case ValueType::NONE:
+                // Update the counts
                 for (uint32_t parent : ontology.get_all_parents(event.code)) {
                     *data.hierarchical_code_counts.find_or_insert(parent, 0) +=
                         weight;
@@ -45,10 +71,11 @@ void add_patient_to_dictionary(DictionaryData& data, const Patient& p,
                 break;
 
             case ValueType::NUMERIC: {
+                // Add a numeric sample
                 auto iter = data.numeric_samples.find(event.code);
                 if (iter == nullptr) {
                     data.numeric_samples.insert(event.code,
-                                                ReservoirSampler(10000));
+                                                ReservoirSampler(NUM_SAMPLES));
                     iter = data.numeric_samples.find(event.code);
                 }
                 iter->add(event.numeric_value, weight, data.rng);
@@ -56,6 +83,7 @@ void add_patient_to_dictionary(DictionaryData& data, const Patient& p,
             }
 
             case ValueType::SHARED_TEXT:
+                // Add a text sample
                 (*data.text_counts.find_or_insert(
                     event.code, {}))[event.text_value] += weight;
                 break;
@@ -66,19 +94,24 @@ void add_patient_to_dictionary(DictionaryData& data, const Patient& p,
     }
 }
 
+// As part of the map-reduce, merge several dictionary datas
 void merge_dictionary(DictionaryData& result, const DictionaryData& to_merge) {
+    // Merge the age statistics
     result.age_stats.combine(to_merge.age_stats);
 
+    // Accumulate the weights
     for (uint32_t code : to_merge.code_counts.keys()) {
         const double* weight = to_merge.code_counts.find(code);
         *result.code_counts.find_or_insert(code, 0) += *weight;
     }
 
+    // Accumulate other weights
     for (uint32_t code : to_merge.hierarchical_code_counts.keys()) {
         const double* weight = to_merge.hierarchical_code_counts.find(code);
         *result.hierarchical_code_counts.find_or_insert(code, 0) += *weight;
     }
 
+    // Accumulate the text counts
     for (uint32_t code : to_merge.text_counts.keys()) {
         const auto* text_entries = to_merge.text_counts.find(code);
         auto* target_text_entries = result.text_counts.find_or_insert(code, {});
@@ -87,10 +120,11 @@ void merge_dictionary(DictionaryData& result, const DictionaryData& to_merge) {
         }
     }
 
+    // Accumulate the numeric samples
     for (uint32_t code : to_merge.numeric_samples.keys()) {
         const auto* samples = to_merge.numeric_samples.find(code);
         auto* target_samples = result.numeric_samples.find_or_insert(
-            code, ReservoirSampler(10000));
+            code, ReservoirSampler(NUM_SAMPLES));
         target_samples->combine(*samples, result.rng);
     }
 }
@@ -113,10 +147,11 @@ int main() {
     }
     PatientDatabase database(path, true);
 
+    // Prime the pump
     database.get_ontology().get_all_parents(0);
 
+    // Remove all STANFORD_OBS codes for now ...
     FlatMap<bool> banned_codes;
-
     std::string_view banned_prefix = "STANFORD_OBS";
 
     uint32_t num_banned = 0;
@@ -132,6 +167,7 @@ int main() {
     std::cout << "Banned " << num_banned << " out of "
               << database.get_code_dictionary().size() << std::endl;
 
+    // Compute the dictionary using map-reduce
     DictionaryData result = proccess_patients_in_parallel(
         database, 40,
         [&](DictionaryData& res, const Patient& p) {
@@ -140,7 +176,10 @@ int main() {
         },
         merge_dictionary);
 
+    // Regular dictionary entries
     std::vector<DictEntry> r_entries;
+
+    // Hierarchical dictionary entries
     std::vector<DictEntry> h_entries;
 
     for (uint32_t code : result.code_counts.keys()) {
@@ -148,6 +187,7 @@ int main() {
         DictEntry entry;
         entry.type = DictEntryType::CODE;
         entry.code = code;
+        // Weight is the Shanon entropy
         entry.weight = weight * log(weight) + (1 - weight) * log(1 - weight);
 
         r_entries.push_back(entry);
@@ -166,6 +206,7 @@ int main() {
         DictEntry entry;
         entry.type = DictEntryType::CODE;
         entry.code = code;
+        // Make sure to use the hierarchical Shanon entropy formula
         entry.weight =
             baseline * (weight * log(weight) + (1 - weight) * log(1 - weight));
 
@@ -186,7 +227,8 @@ int main() {
             h_entries.push_back(entry);
         }
     }
-
+    
+    // Create percentile bins
     for (uint32_t code : result.numeric_samples.keys()) {
         auto* numeric = result.numeric_samples.find(code);
 

@@ -100,59 +100,62 @@ TEST(Database, CreateDatabase) {
     EXPECT_EQ(patient.patient_id, patient_id);
     EXPECT_EQ(patient.birth_date, absl::CivilDay(1990, 3, 8));
 
-    Event a = {
-        .age_in_days = 3,
-        .minutes_offset = 14 * 60 + 30,
-        .code = *database.get_code_dictionary().find("bar/parent of foo"),
-        .value_type = ValueType::UNIQUE_TEXT};
+
+    Event f{};
+    f.start_age_in_minutes = 9 * 60 + 30;
+    f.end_age_in_minutes = boost::none;
+    f.code = *database.get_code_dictionary().find("bar/foo");
+                  f.value_type = ValueType::NONE;
+                  f.visit_id = boost::none;
+
+    Event g{};
+    g.start_age_in_minutes = 10 * 60 + 30;
+    g.end_age_in_minutes = 10 * 60 * 24 + 10 * 60 + 50;;
+    g.code = *database.get_code_dictionary().find("bar/foo");
+    g.value_type = ValueType::NONE;
+    g.visit_id = boost::none;
+
+    Event a{};
+        a.start_age_in_minutes = 3 * 60 * 24 + 14 * 60 + 30;
+        a.code = *database.get_code_dictionary().find("bar/parent of foo");
+        a.value_type = ValueType::UNIQUE_TEXT;
     EXPECT_EQ(
         database.get_unique_text_dictionary()->find("Long Text").has_value(),
         true);
     a.text_value = *database.get_unique_text_dictionary()->find("Long Text");
+    a.visit_id = 0;
     std::cout << *database.get_unique_text_dictionary()->find("Long Text")
               << std::endl;
 
-    Event b = {.age_in_days = 3,
-               .minutes_offset = 14 * 60 + 30,
-               .code = *database.get_code_dictionary().find("lol/lmao"),
-               .value_type = ValueType::SHARED_TEXT};
+    Event b{};
+    b.start_age_in_minutes = 3 * 60 * 24 + 14 * 60 + 30;
+    b.code = *database.get_code_dictionary().find("lol/lmao");
+    b.value_type = ValueType::SHARED_TEXT;
+    b.visit_id = boost::none;
     b.text_value = *database.get_shared_text_dictionary().find("Short Text");
 
-    Event c = {.age_in_days = 6,
-               .minutes_offset = 14 * 60 + 30,
-               .code = *database.get_code_dictionary().find("lol/lmao"),
-               .value_type = ValueType::NUMERIC};
+    Event c{};
+    c.start_age_in_minutes = 6 * 60 * 24 + 14 * 60 + 30;
+    c.end_age_in_minutes = boost::none;
+    c.code = *database.get_code_dictionary().find("lol/lmao");
+    c.value_type = ValueType::NUMERIC;
     c.numeric_value = 34;
+    c.visit_id = 1;
 
-    Event d = {.age_in_days = 7,
-               .minutes_offset = 14 * 60 + 30,
-               .code = *database.get_code_dictionary().find("lol/lmao"),
-               .value_type = ValueType::NUMERIC};
+    Event d{};
+    d.start_age_in_minutes = 7 * 60 * 24 + 14 * 60 + 30;
+    d.end_age_in_minutes = boost::none;
+    d.code = *database.get_code_dictionary().find("lol/lmao");
+    d.value_type = ValueType::NUMERIC;
     d.numeric_value = 34.5;
+    d.visit_id = 0;
+
+
 
     EXPECT_THAT(
         patient.events,
-        ElementsAre(
-            Event{.age_in_days = 0,
-                  .minutes_offset = 9 * 60 + 30,
-                  .code = *database.get_code_dictionary().find("bar/foo"),
-                  .value_type = ValueType::NONE},
-            Event{.age_in_days = 0,
-                  .minutes_offset = 10 * 60 + 30,
-                  .code = *database.get_code_dictionary().find("bar/foo"),
-                  .value_type = ValueType::NONE},
+        ElementsAre(f, g,
             a, b, c, d));
 
     boost::filesystem::remove_all(root);
-}
-
-TEST(Database, TestSplits) {
-    std::vector<uint32_t> counts(10);
-
-    for (uint32_t i = 0; i < 10000; i++) {
-        counts[compute_split(12534, i, 10)] += 1;
-    }
-
-    EXPECT_THAT(counts, ElementsAre(1009, 967, 1026, 1004, 978, 976, 991, 1065,
-                                    971, 1013));
 }

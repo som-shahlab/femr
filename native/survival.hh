@@ -8,22 +8,27 @@
 #include "flatmap.hh"
 
 struct SurvivalEvent {
-    std::vector<double> times;
+    std::vector<uint32_t> times;
     uint32_t code;
 };
 
-inline bool should_make_prediction(double last_prediction_age,
-                                   double current_age, double next_age,
+inline bool should_make_prediction(uint32_t last_prediction_age,
+                                   uint32_t current_age, boost::optional<uint32_t> next_age,
                                    int current_year) {
     if (current_year < 2010) {
         // Only make predictions when we have OK data
         return false;
     }
-    if (next_age < 2 || std::isinf(next_age)) {
+
+    if (!next_age) {
+        return false;
+    }
+    if (*next_age < 2 * 60 * 24) {
         // Don't try to predict stuff on the day of birth
         return false;
     }
-    if (current_age == next_age) {
+
+    if (current_age == *next_age) {
         // Dont make duplicate predictions
         return false;
     }
@@ -35,9 +40,9 @@ inline bool should_make_prediction(double last_prediction_age,
 }
 
 struct SurvivalCalculator {
-    FlatMap<std::vector<double>> future_times;
+    FlatMap<std::vector<uint32_t>> future_times;
     std::vector<SurvivalEvent> survival_events;
-    double final_age;
+    uint32_t final_age;
 
     void preprocess_patient(
         const Patient& p,
@@ -60,13 +65,13 @@ struct SurvivalCalculator {
         for (const Event& event : p.events) {
             if (event.value_type == ValueType::NONE) {
                 for (const auto& parent : get_all_parents(event.code)) {
-                    std::vector<double>* item = future_times.find_or_insert(
-                        parent, std::vector<double>());
-                    item->push_back(event.age);
+                    std::vector<uint32_t>* item = future_times.find_or_insert(
+                        parent, std::vector<uint32_t>());
+                    item->push_back(event.start_age_in_minutes);
                 }
             }
         }
-        final_age = p.events[p.events.size() - 1].age;
+        final_age = p.events[p.events.size() - 1].start_age_in_minutes;
 
         for (uint32_t code : future_times.keys()) {
             auto* item = future_times.find(code);
@@ -77,10 +82,10 @@ struct SurvivalCalculator {
             assert(event.times.size() > 0);
 
             std::sort(std::begin(event.times), std::end(event.times),
-                      std::greater<double>());
+                      std::greater<uint32_t>());
 
             for (const auto& t : event.times) {
-                if (t > 365 * 120) {
+                if (t > 365 * 120 * 60 * 24) {
                     std::cout << "Should never happen" << std::endl;
                     abort();
                 }
@@ -90,9 +95,9 @@ struct SurvivalCalculator {
         }
     }
 
-    std::pair<double, std::vector<std::pair<double, uint32_t>>>
-    get_times_for_event(double event_age) {
-        std::vector<std::pair<double, uint32_t>> events;
+    std::pair<uint32_t, std::vector<std::pair<uint32_t, uint32_t>>>
+    get_times_for_event(uint32_t event_age) {
+        std::vector<std::pair<uint32_t, uint32_t>> events;
 
         size_t current_index = 0;
         for (size_t i = 0; i < survival_events.size(); i++) {
@@ -102,7 +107,7 @@ struct SurvivalCalculator {
             }
 
             for (const auto& t : entry.times) {
-                if (t > 365 * 120) {
+                if (t > 365 * 120 * 60 * 24) {
                     std::cout << "Should never happen second" << std::endl;
                     abort();
                 }
@@ -116,7 +121,7 @@ struct SurvivalCalculator {
         }
 
         for (const auto& t : events) {
-            if (t.first > 365 * 120) {
+            if (t.first > 365 * 120 * 60 * 24) {
                 std::cout << "Should never happen second" << std::endl;
                 abort();
             }

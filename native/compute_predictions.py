@@ -5,6 +5,7 @@ os.environ["JAX_NUMPY_RANK_PROMOTION"] = "raise"
 import argparse
 
 parser = argparse.ArgumentParser(prog="Compute predictions")
+parser.add_argument("target_path", type=str)
 parser.add_argument("--data_path", type=str, required=True)
 parser.add_argument("--batch_info_path", type=str, required=True)
 parser.add_argument("--model_dir", type=str, required=True)
@@ -142,8 +143,11 @@ with open(args.labeled_patients_path, "rb") as f:
     actual_patients_to_evaluate = {}
     for pid, values in labeled_patients.items():
         if database.compute_split(97, pid) >= 85:
-            actual_patients_to_evaluate[pid] = values
-            num_expected_labels += len(values)
+            actual_values = [v for v in values if v.time != v.value.event_time]
+            if len(actual_values) == 0:
+                continue
+            actual_patients_to_evaluate[pid] = actual_values
+            num_expected_labels += len(actual_values)
 
 print(num_expected_labels)
 
@@ -223,7 +227,7 @@ for dev_index in range(num_dev):
                 database.get_patient_birth_date(pid), datetime.time.min
             )
 
-            prediction_date = birth_date + datetime.timedelta(days=float(age))
+            prediction_date = birth_date + datetime.timedelta(minutes=int(age))
 
             k = (pid, prediction_date)
             v = (
@@ -244,7 +248,7 @@ for dev_index in range(num_dev):
             assert is_censor == target_label.value.is_censored
             assert event_time == (
                 target_label.value.event_time - target_label.time
-            ) / datetime.timedelta(days=1)
+            ) / datetime.timedelta(minutes=1)
 
             if k not in predictions:
                 predictions[k] = v
@@ -253,10 +257,17 @@ for dev_index in range(num_dev):
                 predictions[k] = max(predictions[k], v)
 
 
+found_patients = {k[0] for k in predictions}
+
+for k in actual_patients_to_evaluate:
+    if k not in found_patients:
+        print("Missing!", k)
+
 print(len(predictions), num_expected_labels)
+
 assert len(predictions) == num_expected_labels
 
-# pickle.dump(predictions, open("foo", "wb"))
+pickle.dump(predictions, open(args.target_path, "wb"))
 
 if False:
     labels = []
@@ -288,7 +299,7 @@ event_time = np.array(event_time)
 
 print(logits.shape, is_censor.shape, event_time.shape)
 
-time_bins = config["task"]["time_bins"]
+time_bins = np.array(config["task"]["time_bins"]) * 60 * 24
 
 import piton.extension.metrics
 

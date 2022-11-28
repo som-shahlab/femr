@@ -16,6 +16,7 @@ import io
 import json
 import multiprocessing.pool
 import os
+import traceback
 from typing import Dict, Mapping, Optional, Set, cast
 
 import zstandard
@@ -72,19 +73,23 @@ def get_new_sources(root: str, child: str) -> Set[str]:
     """Pull out the new concept_ids that we have to map."""
     new_concepts = set()
 
-    source_path = os.path.join(root, "observation", child)
-    with io.TextIOWrapper(
-        zstandard.ZstdDecompressor().stream_reader(open(source_path, "rb"))
-    ) as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            new_row = convert_row(row)
-            if new_row is None:
-                continue
-            if new_row["observation_concept_id"] == "0":
-                new_concepts.add(new_row["observation_source_value"])
-            if new_row["unit_concept_id"] == "0":
-                new_concepts.add(new_row["unit_source_value"])
+    try:
+        source_path = os.path.join(root, "observation", child)
+        with io.TextIOWrapper(
+            zstandard.ZstdDecompressor().stream_reader(open(source_path, "rb"))
+        ) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                new_row = convert_row(row)
+                if new_row is None:
+                    continue
+                if new_row["observation_concept_id"] == "0":
+                    new_concepts.add(new_row["observation_source_value"])
+                if new_row["unit_concept_id"] == "0":
+                    new_concepts.add(new_row["unit_source_value"])
+    except:
+        traceback.print_exc()
+        raise RuntimeError("Failed " + root + " , " + child)
 
     return new_concepts
 
@@ -122,6 +127,7 @@ def correct_rows(
 
 
 if __name__ == "__main__":
+    forkserver = multiprocessing.get_context("forkserver")
     parser = argparse.ArgumentParser(
         description="Clean Stanford flowsheet data"
     )
@@ -141,7 +147,7 @@ if __name__ == "__main__":
     os.mkdir(args.target)
 
     new_concepts = set()
-    with multiprocessing.pool.Pool(args.num_threads) as pool:
+    with forkserver.Pool(args.num_threads) as pool:
         for directory in os.listdir(args.source):
             os.mkdir(os.path.join(args.target, directory))
 
@@ -154,14 +160,14 @@ if __name__ == "__main__":
 
         for child_concepts in pool.imap_unordered(
             functools.partial(get_new_sources, args.source),
-            os.listdir(os.path.join(args.source, "observation")),
+            os.listdir(os.path.join(args.source, "observation"))
         ):
             new_concepts |= child_concepts
 
         highest_concept_id = 0
 
         destination_path = os.path.join(
-            args.target, "concept", "flowsheet.csv.gz"
+            args.target, "concept", "flowsheet.csv.zst"
         )
         with io.TextIOWrapper(
             zstandard.ZstdCompressor(1).stream_writer(

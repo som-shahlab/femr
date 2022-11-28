@@ -8,7 +8,7 @@ class Dictionary {
    public:
     Dictionary(const boost::filesystem::path& path, bool read_all);
     Dictionary(const Dictionary&) = delete;
-    Dictionary(Dictionary&&) = default;
+    Dictionary(Dictionary&&);
 
     ~Dictionary() noexcept(false);
 

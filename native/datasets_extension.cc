@@ -128,12 +128,19 @@ void register_datasets_extension(py::module& root) {
                 Patient p = self.get_patient(index);
                 py::tuple events(p.events.size());
 
+                absl::CivilSecond birth_date = p.birth_date;
+
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    absl::CivilSecond event_time = p.birth_date;
-                    uint32_t minutes = event.minutes_offset;
-                    minutes += 24 * 60 * event.age_in_days;
-                    event_time += 60 * minutes;
+                    absl::CivilSecond start_time = birth_date + 60 * event.start_age_in_minutes;
+
+                    boost::optional<absl::CivilSecond> end_time;
+                    if (event.end_age_in_minutes) {
+                        end_time.emplace(birth_date + 60 * *event.end_age_in_minutes);
+                    } else {
+                        end_time = boost::none;
+                    }
+
                     py::object value;
                     py::object value_type;
                     switch (event.value_type) {
@@ -170,8 +177,8 @@ void register_datasets_extension(py::module& root) {
                         }
                     }
                     events[i] =
-                        python_event("start"_a = event_time,
-                                     "code"_a = event.code, "value"_a = value);
+                        python_event("start"_a = start_time, "end"_a = end_time,
+                                     "code"_a = event.code, "value"_a = value, "visit_id"_a = event.visit_id);
                 }
 
                 return python_patient("patient_id"_a = p.patient_id,
@@ -207,6 +214,8 @@ void register_datasets_extension(py::module& root) {
                  }
              })
         .def("compute_split", &PatientDatabase::compute_split)
+        .def("version_id", &PatientDatabase::version_id)
+        .def("database_id", &PatientDatabase::database_id)
         .def("close",
              [](const PatientDatabase& self) {
                  // TODO: Implement this to save memory and file pointers

@@ -12,6 +12,7 @@ parser.add_argument("--task", type=str)
 parser.add_argument("--clmbr_survival_dictionary_path", type=str)
 parser.add_argument("--labeled_patients_path", type=str)
 parser.add_argument("--is_hierarchical", default=False, action="store_true")
+parser.add_argument("--subset_fraction", default=None, type=float)
 
 args = parser.parse_args()
 
@@ -67,14 +68,17 @@ if args.labeled_patients_path is not None:
             )
 
             for label in labels:
-                age = (label.time - birth_date) / datetime.timedelta(days=1)
+                age = (label.time - birth_date) / datetime.timedelta(minutes=1)
                 if labeled_patients.labeler_type == "boolean":
                     value = label.value
                 elif labeled_patients.labeler_type == "survival":
                     event_age = (
                         label.value.event_time - birth_date
-                    ) / datetime.timedelta(days=1)
+                    ) / datetime.timedelta(minutes=1)
                     event_offset = event_age - age
+
+                    if event_offset == 0:
+                        continue
 
                     offsets.append(event_offset)
                     total += 1
@@ -111,6 +115,11 @@ else:
     rootLogger.error("Invalid task?")
     exit()
 
+if args.subset_fraction is None:
+    train_end = 70
+else:
+    train_end = int(args.subset_fraction * 70)
+
 loader_config = {
     "transformer": {
         "vocab_size": 1024 * 64,
@@ -121,7 +130,11 @@ loader_config = {
     },
     "task": task,
     "seed": 97,
-    "splits": [["train", 0, 70], ["dev", 70, 85], ["test", 85, 100]],
+    "splits": [
+        ["train", 0, train_end],
+        ["dev", 70, 85],
+        ["test", 85, 100],
+    ],
 }
 
 random.seed(loader_config["seed"])

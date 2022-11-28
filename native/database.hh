@@ -66,10 +66,8 @@ enum class ValueType {
 };
 
 struct Event {
-    uint16_t age_in_days;
-    uint16_t minutes_offset;
-
-    double age;
+    uint32_t start_age_in_minutes;
+    boost::optional<uint32_t> end_age_in_minutes;
 
     uint32_t code;
     ValueType value_type;
@@ -79,9 +77,10 @@ struct Event {
         uint32_t text_value;
     };
 
+    boost::optional<uint32_t> visit_id;
+
     bool operator==(const Event& other) const {
-        return (age_in_days == other.age_in_days &&
-                minutes_offset == other.minutes_offset && code == other.code &&
+        return (start_age_in_minutes == other.start_age_in_minutes && end_age_in_minutes == other.end_age_in_minutes && visit_id == other.visit_id &&
                 value_type == other.value_type &&
                 text_value == other.text_value);
     }
@@ -100,10 +99,10 @@ class PatientDatabaseIterator {
     Patient& get_patient(uint32_t patient_id);
 
    private:
-    PatientDatabaseIterator(const Dictionary* d);
+    PatientDatabaseIterator(PatientDatabase* d);
     friend PatientDatabase;
 
-    const Dictionary* const parent_dictionary;
+    PatientDatabase* const parent_database;
 
     Patient current_patient;
     std::vector<uint32_t> buffer;
@@ -170,6 +169,10 @@ class PatientDatabase {
         return result;
     }
 
+    // Metadata information
+    uint32_t version_id();
+    uint32_t database_id();
+
    private:
     LazyDictionary patients;
 
@@ -187,7 +190,9 @@ class PatientDatabase {
     // 2 code counts
     // 3 text value counts
     // 4 original_code_ids
-    LazyDictionary meta_dictionary;
+    // 5 version_id
+    // 6 database_id
+    Dictionary meta_dictionary;
 };
 
 PatientDatabase convert_patient_collection_to_patient_database(
