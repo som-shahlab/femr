@@ -13,7 +13,7 @@ dummy_events = [
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
         code=1,
-        value=memoryview(b"test_value"),
+        value="test_value",
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 5),
@@ -60,7 +60,7 @@ def test_events(tmp_path: pathlib.Path) -> None:
         read_events = list(reader)
 
     print(read_events[0])
-    assert set(read_events) == set(all_events)
+    assert sorted(read_events) == sorted(all_events)
 
 
 def test_sort_events(tmp_path: pathlib.Path) -> None:
@@ -73,7 +73,7 @@ def test_sort_events(tmp_path: pathlib.Path) -> None:
     with sorted_events.reader() as reader:
         all_sorted_events = list(reader)
 
-    assert set(all_sorted_events) == set(all_events)
+    assert sorted(all_sorted_events) == sorted(all_events)
 
     for reader_func in sorted_events.sharded_readers():
         with reader_func() as reader:
@@ -89,7 +89,7 @@ def test_patients(tmp_path: pathlib.Path) -> None:
     with patients.reader() as reader:
         all_patients = list(reader)
 
-    assert set(p.patient_id for p in all_patients) == set(range(10, 25))
+    assert sorted(p.patient_id for p in all_patients) == sorted(range(10, 25))
 
     for patient in all_patients:
         assert patient.events == dummy_events
@@ -104,7 +104,7 @@ def transform_func(a: piton.Patient) -> Optional[piton.Patient]:
             piton.Event(
                 start=event.start,
                 code=event.code,
-                value=memoryview(b"foo"),
+                value="foo",
             )
             for event in a.events
         ],
@@ -128,8 +128,8 @@ def test_transform_patients(tmp_path: pathlib.Path) -> None:
             piton.Event(
                 start=event.start,
                 code=event.code,
-                value=memoryview(b"foo"),
+                value="foo",
             )
             for event in dummy_events
         ]
-        assert set(patient.events) == set(better_dummy_events)
+        assert sorted(patient.events) == sorted(better_dummy_events)

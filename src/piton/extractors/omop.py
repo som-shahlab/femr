@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Dict, Any
 
 from piton import Event
 from piton.extractors.csv import CSVExtractor
@@ -46,12 +46,22 @@ class _DemographicsConverter(CSVExtractor):
 
         return [
             # 4216316 is the OMOP birth code
-            Event(start=birth, code=4216316, event_type=row["load_table_id"])
+            Event(
+                start=birth,
+                code=4216316,
+                metadata={
+                    "omop_table": "person",
+                    "clarity_table": row["load_table_id"],
+                },
+            )
         ] + [
             Event(
                 start=birth,
                 code=int(row[target]),
-                event_type=row["load_table_id"],
+                metadata={
+                    "omop_table": "person",
+                    "clarity_table": row["load_table_id"],
+                },
             )
             for target in [
                 "gender_concept_id",
@@ -73,42 +83,13 @@ def _get_date(
     return None
 
 
-class _VisitDetailConverter(CSVExtractor):
-    """Convert the OMOP demographics table to events."""
-
-    def get_patient_id_field(self) -> str:
-        return "person_id"
-
-    def get_file_prefix(self) -> str:
-        return "visit_detail"
-
-    def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        start = _get_date(row, "visit_detail_start_date")
-        end = _get_date(row, "visit_detail_end_date")
-
-        assert start is not None
-        assert end is not None
-
-        visit_id = row["visit_occurrence_id"]
-
-        return [
-            Event(
-                start=start,
-                end=end,
-                visit_id=int(visit_id),
-                code=4030023,
-                event_type=row["load_table_id"],
-            )
-        ]
-
-
-def _try_numeric(val: str) -> float | memoryview | None:
+def _try_numeric(val: str) -> float | str | None:
     if val == "":
         return None
     try:
         return float(val)
     except ValueError:
-        return memoryview(val.encode("utf8"))
+        return val
 
 
 @dataclasses.dataclass
@@ -133,8 +114,8 @@ class _ConceptTableConverter(CSVExtractor):
 
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
         def normalize_to_float_if_possible(
-            field_name: Optional[str], value: memoryview | float | None
-        ) -> memoryview | float | None:
+            field_name: Optional[str], value: str | float | None
+        ) -> str | float | None:
             if field_name is not None:
                 val = _try_numeric(row[field_name])
                 if val is not None:
@@ -179,14 +160,23 @@ class _ConceptTableConverter(CSVExtractor):
         else:
             visit_id = None
 
+        metadata: Dict[str, Any] = {
+            "omop_table": self.prefix,
+            "clarity_table": row["load_table_id"],
+        }
+
+        if visit_id is not None:
+            metadata["visit_id"] = visit_id
+
+        if end is not None:
+            metadata["end"] = end
+
         return [
             Event(
                 start=start,
                 code=code,
                 value=value,
-                end=end,
-                visit_id=visit_id,
-                event_type=row["load_table_id"],
+                metadata=metadata,
             )
         ]
 

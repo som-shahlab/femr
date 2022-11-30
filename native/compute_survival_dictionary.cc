@@ -37,25 +37,25 @@ void process_patient(SurvivalDictionaryData& data, const Patient& p,
 
     double weight = 1.0 / (p.events.size() * num_patients);
 
-    double last_prediction_age = 0;
+    uint32_t last_prediction_age = 0;
     for (size_t event_index = 0; event_index < (p.events.size() - 1);
          event_index++) {
         const Event& event = p.events[event_index];
         const Event& next_event = p.events[event_index + 1];
 
         if (!should_make_prediction(
-                last_prediction_age, event.age, next_event.age,
-                (p.birth_date + event.age_in_days).year())) {
+                last_prediction_age, event.start_age_in_minutes, next_event.start_age_in_minutes,
+                (p.birth_date + event.start_age_in_minutes / (60 * 24)).year())) {
             continue;
         }
 
-        auto entry = data.calculator.get_times_for_event(event.age).second;
+        auto entry = data.calculator.get_times_for_event(event.start_age_in_minutes).second;
 
         if (entry.size() == 0) {
             continue;
         }
 
-        last_prediction_age = event.age;
+        last_prediction_age = event.start_age_in_minutes;
 
         for (const auto& event : entry) {
             *data.true_counts.find_or_insert(event.second, 0) += weight;
@@ -66,7 +66,7 @@ void process_patient(SurvivalDictionaryData& data, const Patient& p,
 struct TimeBinCollectionData {
     SurvivalCalculator calculator;
 
-    FlatMap<ReservoirSampler> sample_per_index;
+    FlatMap<ReservoirSampler<uint32_t>> sample_per_index;
 
     FlatMap<std::tuple<OnlineStatistics, double, double>> times_per_index;
 
@@ -78,7 +78,7 @@ void combine_time_data(TimeBinCollectionData& target,
     for (uint32_t code : source.sample_per_index.keys()) {
         auto source_sampler = source.sample_per_index.find(code);
         auto sampler = target.sample_per_index.find_or_insert(
-            code, ReservoirSampler(10000));
+            code, ReservoirSampler<uint32_t>(10000));
         sampler->combine(*source_sampler, target.rng);
     }
 
@@ -100,7 +100,7 @@ void process_time_patient(TimeBinCollectionData& data, const Patient& p,
 
     double weight = 1.0 / (p.events.size() * num_patients);
 
-    double last_prediction_age = 0;
+    uint32_t last_prediction_age = 0;
 
     for (size_t event_index = 0; event_index < (p.events.size() - 1);
          event_index++) {
@@ -108,20 +108,20 @@ void process_time_patient(TimeBinCollectionData& data, const Patient& p,
         const Event& next_event = p.events[event_index + 1];
 
         if (!should_make_prediction(
-                last_prediction_age, event.age, next_event.age,
-                (p.birth_date + event.age_in_days).year())) {
+                last_prediction_age, event.start_age_in_minutes, next_event.start_age_in_minutes,
+                (p.birth_date + event.start_age_in_minutes / (60 * 24)).year())) {
             continue;
         }
 
-        auto full = data.calculator.get_times_for_event(event.age);
+        auto full = data.calculator.get_times_for_event(event.start_age_in_minutes);
         auto entry = full.second;
         if (entry.size() > 0) {
             for (const auto& event : entry) {
                 data.sample_per_index
-                    .find_or_insert(event.second, ReservoirSampler(10000))
+                    .find_or_insert(event.second, ReservoirSampler<uint32_t>(10000))
                     ->add(event.first, weight, data.rng);
             }
-            last_prediction_age = event.age;
+            last_prediction_age = event.start_age_in_minutes;
         }
         std::sort(
             std::begin(entry), std::end(entry),
@@ -149,10 +149,12 @@ void process_time_patient(TimeBinCollectionData& data, const Patient& p,
 int main() {
     boost::filesystem::path path;
     if (true) {
-        path =
-            "/share/pi/nigam/data/"
-            "som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_09_05_"
-            "extract";
+        path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2";
+        // path =
+        //     "/share/pi/nigam/data/"
+        //     "som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_09_05_"
+        //     "extract";
+        // path = "/local-scratch/nigam/projects/ethanid/piton_1_extract";
     } else {
         path =
             "/share/pi/nigam/data/"
@@ -161,7 +163,7 @@ int main() {
     PatientDatabase database(path, true);
 
     const uint32_t dictionary_size = 8192;
-    const uint32_t num_buckets = 16;
+    const uint32_t num_buckets = 8;
 
     FlatMap<bool> banned_codes;
 
@@ -237,8 +239,8 @@ int main() {
         },
         combine_time_data);
 
-    auto get_buckets = [&](const ReservoirSampler& samples, size_t n_b) {
-        std::vector<double> result(n_b);
+    auto get_buckets = [&](const ReservoirSampler<uint32_t>& samples, size_t n_b) {
+        std::vector<uint32_t> result(n_b);
 
         auto s = samples.get_samples();
         std::sort(std::begin(s), std::end(s));
@@ -251,7 +253,7 @@ int main() {
         return result;
     };
 
-    auto print_buckets = [&](const ReservoirSampler& samples, size_t n_b) {
+    auto print_buckets = [&](const ReservoirSampler<uint32_t>& samples, size_t n_b) {
         auto s = samples.get_samples();
         std::cout << "Got total weight " << samples.get_total_weight()
                   << std::endl;
@@ -265,8 +267,8 @@ int main() {
         std::cout << std::endl;
     };
 
-    ReservoirSampler global_samples(10000);
-    ReservoirSampler reweighted_global_samples(10000);
+    ReservoirSampler<uint32_t> global_samples(10000);
+    ReservoirSampler<uint32_t> reweighted_global_samples(10000);
 
     for (uint32_t i = 0; i < dictionary_size; i++) {
         global_samples.combine(*time_bin_result.sample_per_index.find(i), rng);
@@ -284,17 +286,18 @@ int main() {
 
     for (uint32_t i = 0; i < dictionary_size; i++) {
         auto stats = time_bin_result.times_per_index.find(i);
-        std::cout << i << " Num total "
-                  << (std::get<1>(*stats) + std::get<2>(*stats))
-                  << " Num events " << std::get<1>(*stats) << " num censored"
-                  << std::get<2>(*stats) << std::endl;
-        std::cout << "Mean time " << std::get<0>(*stats).get_mean()
-                  << std::endl;
+       
         double frac_events =
             std::get<1>(*stats) / (std::get<1>(*stats) + std::get<2>(*stats));
         double lambda = frac_events / std::get<0>(*stats).get_mean();
 
-        std::cout << "lambda " << lambda << std::endl;
+        // std::cout << i << " Num total "
+        //           << (std::get<1>(*stats) + std::get<2>(*stats))
+        //           << " Num events " << std::get<1>(*stats) << " num censored"
+        //           << std::get<2>(*stats) << std::endl;
+        // std::cout << "Mean time " << std::get<0>(*stats).get_mean()
+        //           << std::endl;
+        // std::cout << "lambda " << lambda << std::endl;
         lambdas.push_back(lambda);
     }
 
@@ -313,8 +316,9 @@ int main() {
     std::vector<std::uint8_t> v = json::to_msgpack(j);
 
     std::ofstream o(
-        "/share/pi/nigam/ethanid/gpu_experiments/"
-        "1_pct_surv_dict",
+        "/local-scratch/nigam/projects/ethanid/gpu_experiments/new_surv_dict",
+        // "/share/pi/nigam/ethanid/gpu_experiments/"
+        // "new_surv_dict",
         std::ios_base::binary);
 
     o.write((const char*)v.data(), v.size());

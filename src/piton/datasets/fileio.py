@@ -5,6 +5,8 @@ import csv
 import dataclasses
 import datetime
 import io
+import pickle
+import base64
 import tempfile
 from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 
@@ -62,6 +64,8 @@ class EventWriter:
             return bytes(field_value).decode("utf8")
         elif isinstance(field_value, str):
             return field_value
+        elif isinstance(field_value, dict):
+            return base64.b85encode(pickle.dumps(field_value)).decode("utf8")
         else:
             raise ValueError(
                 f"EventWriter does not have a method for fields with the type of {field_name}"
@@ -112,9 +116,9 @@ class EventReader:
         are listed in the `Event` class definition.
         For example, the field:
             ```
-                value: float | memoryview | None
+                value: float | str | None
             ```
-        will first try to decode `value` into a `None`, then a `float`, finally a `memoryview`
+        will first try to decode `value` into a `None`, then a `float`, finally a `str`
 
         Currently supports fields of the following types:
             - datetime.datetime
@@ -141,6 +145,10 @@ class EventReader:
                     return str(field_value)
                 elif field_type == "memoryview":
                     return memoryview(field_value.encode("utf8"))
+                elif field_type == "Mapping[str, Any]":
+                    return pickle.loads(
+                        base64.b85decode(field_value.encode("utf8"))
+                    )
                 else:
                     raise NotImplementedError(
                         f"Unrecognized field type {field_type} for {field_name}"
@@ -148,10 +156,10 @@ class EventReader:
             except ValueError:
                 # An exception occurs when we guess the wrong `field_type` for a specific field.
                 # This is expected to occur for fields with multiple possible non-None
-                # types (e.g. 'value: float | memoryview | None'). We just catch the error,
+                # types (e.g. 'value: float | str | None'). We just catch the error,
                 # then proceed to trying to decode this field with the next possible type.
                 continue
-        raise ValueError(f"Could not decode {field_name}")
+        raise ValueError(f"Could not decode {field_name} with {field_types}")
 
     def __iter__(self) -> Iterator[Tuple[int, Event]]:
         """Iterate over each event."""

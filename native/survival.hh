@@ -32,7 +32,7 @@ inline bool should_make_prediction(uint32_t last_prediction_age,
         // Dont make duplicate predictions
         return false;
     }
-    if (current_age - last_prediction_age < 1) {
+    if (current_age - last_prediction_age < (60 * 24)) {
         return false;
     }
 

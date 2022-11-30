@@ -1,6 +1,5 @@
 targets="pancreatic_cancer celiac_disease lupus heart_attack stroke NAFL"
 
-rm -r "fixed_batches"
 for target in $targets; do
     echo $target
     mkdir -p "fixed_batches"

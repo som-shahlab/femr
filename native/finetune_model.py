@@ -120,7 +120,7 @@ config = {
     "n_epochs": 100,
 }
 
-print(config)
+logging.info("Got config %s", config)
 
 random.seed(config["seed"])
 
@@ -163,13 +163,17 @@ params = jax.jit(model.init, static_argnames=["config", "is_training"])(
 )
 
 if batch_task["type"] == "survival_clmbr":
-    old_weights = params["EHRTransformer/~/SurvivalCLMBRTask"]["code_weights"]
-    manual_weights = jnp.log2(
-        jnp.array(batch_task["survival_dict"]["lambdas"])
-    ).astype(dtype=old_weights.dtype)
+    old_code_weight_bias = params["EHRTransformer/~/SurvivalCLMBRTask"][
+        "code_weight_bias"
+    ]
+    new_code_weight_bias = (
+        jnp.log2(jnp.array(batch_task["survival_dict"]["lambdas"]))
+        .astype(dtype=old_code_weight_bias.dtype)
+        .reshape(old_code_weight_bias.shape)
+    )
     params["EHRTransformer/~/SurvivalCLMBRTask"][
-        "code_weights"
-    ] = old_weights.at[:, -1].set(manual_weights)
+        "code_weight_bias"
+    ] = new_code_weight_bias
 elif batch_task["type"] == "clmbr":
     pass
 elif batch_task["type"] == "labeled_patients":
@@ -243,13 +247,16 @@ logging.info(
 )
 
 
-@functools.partial(jax.jit, static_argnums=(3,))
-def compute_loss(params, non_fit_params, rng, config, batch):
+@functools.partial(jax.jit, static_argnums=(3,5,))
+def compute_loss(params, non_fit_params, rng, config, batch, requires_logits=False):
     total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
     loss, logits = model.apply(
         total_params, rng, config, batch, is_training=False
     )
-    return loss, logits
+    if requires_logits:
+        return loss, logits
+    else:
+        return loss, None
 
 
 def compute_total_loss(split, params, non_fit_params, rng, config):
@@ -274,6 +281,7 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
             rng,
             config,
             batch,
+            requires_logits = config["task"]["type"] == "labeled_patients",
         )
         total_loss += loss * batch["num_indices"]
         total_indices += batch["num_indices"]
@@ -391,6 +399,15 @@ logging.info(
     "total steps %s num train batches %s", total_steps, num_train_batches
 )
 
+
+def should_decay(module_name, name, value):
+    return name not in ("b", "scale", "embeddings", "code_weight_bias")
+
+
+weight_decay_mask = hk.data_structures.map(should_decay, params)
+
+logging.info("Applying decay mask %s", weight_decay_mask)
+
 lr_schedule = make_lr_schedule(warmup_percentage=0.01, total_steps=total_steps)
 weight_decay = args.weight_decay
 logging.info("Using weight decay %s", weight_decay)
@@ -399,6 +416,7 @@ opt = optax.chain(
     optax.adamw(
         learning_rate=config["learning_rate"],
         weight_decay=config["weight_decay"],
+        mask=weight_decay_mask,
     ),
     optax.scale_by_schedule(lr_schedule),
 )

@@ -75,13 +75,13 @@ def test_helper(tmp_path, capsys):
             piton.Event(
                 start=f("1990-03-11 14:30:00"),
                 code=2,
-                value=memoryview(b"Long Text"),
+                value="Long Text",
                 visit_id=0,
             ),
             piton.Event(
                 start=f("1990-03-11 14:30:00"),
                 code=1,
-                value=memoryview(b"Short Text"),
+                value="Short Text",
             ),
             piton.Event(
                 start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1

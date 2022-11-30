@@ -56,7 +56,7 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 class Label:
     """An individual label for a particular patient at a particular time."""
 
-    time: datetime.datatime
+    time: datetime.datetime
     value: Optional[Union[bool, int, float, SurvivalValue]]
 
 
@@ -223,7 +223,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             patient_ids, label_values, label_times
         ):
             patients_to_labels[patient_id].append(
-                Label(time=l_time, value=l_value, label_type=labeler_type)
+                Label(time=l_time, value=l_value)
             )
         return LabeledPatients(dict(patients_to_labels), labeler_type)
 
@@ -371,18 +371,12 @@ class FixedTimeHorizonEventLF(LabelingFunction):
             is_censored: bool = end_time < time + time_horizon.end
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(
-                    Label(time=time, value=True, label_type="boolean")
-                )
+                results.append(Label(time=time, value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(
-                    Label(time=time, value=False, label_type="boolean")
-                )
+                results.append(Label(time=time, value=False))
             else:
-                results.append(
-                    Label(time=time, value=None, label_type="boolean")
-                )
+                results.append(Label(time=time, value=None))
 
         # checks that we have a label for each prediction time (even if `None``)
         assert len(results) == len(self.get_prediction_times(patient))

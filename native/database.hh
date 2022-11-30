@@ -67,8 +67,6 @@ enum class ValueType {
 
 struct Event {
     uint32_t start_age_in_minutes;
-    boost::optional<uint32_t> end_age_in_minutes;
-
     uint32_t code;
     ValueType value_type;
 
@@ -77,10 +75,8 @@ struct Event {
         uint32_t text_value;
     };
 
-    boost::optional<uint32_t> visit_id;
-
     bool operator==(const Event& other) const {
-        return (start_age_in_minutes == other.start_age_in_minutes && end_age_in_minutes == other.end_age_in_minutes && visit_id == other.visit_id &&
+        return (start_age_in_minutes == other.start_age_in_minutes &&
                 value_type == other.value_type &&
                 text_value == other.text_value);
     }
@@ -169,6 +165,10 @@ class PatientDatabase {
         return result;
     }
 
+    // Event metadata
+    std::string_view get_event_metadata(uint32_t patient_id,
+                                        uint32_t event_index);
+
     // Metadata information
     uint32_t version_id();
     uint32_t database_id();
@@ -184,6 +184,8 @@ class PatientDatabase {
 
     LazyDictionary code_index_dictionary;
     LazyDictionary value_index_dictionary;
+
+    LazyDictionary event_metadata_dictionary;
 
     // 0 original_patient_ids
     // 1 sorted_original_patient_ids

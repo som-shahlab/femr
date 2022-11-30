@@ -3,6 +3,7 @@ import os
 from typing import List, Tuple
 
 import numpy as np
+import pickle
 
 import piton
 import piton.datasets
@@ -16,7 +17,7 @@ SHARED_EVENTS = [
     piton.Event(
         start=datetime.datetime(2010, 1, 1),
         code=1,
-        value=memoryview(b"test_value"),
+        value="test_value",
     ),
     piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
     piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
@@ -97,7 +98,6 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
             Label(
                 value=bool(label_numpy[1][i]),
                 time=label_numpy[2][i],
-                label_type="boolean",
             )
             in labeled_patients[patient_id]
         )
@@ -141,13 +141,15 @@ def test_labeled_patients():
     # Saving / Loading
     #   Save labeler results
     path = "../tmp/test_labelers/CodeLF.pkl"
-    labeled_patients.save_to_file(path)
+    with open(path, "wb") as of:
+        pickle.dump(labeled_patients, of)
 
     #   Check that file was created
     assert os.path.exists(path)
 
     #   Read in the output files and check that they're accurate
-    labeled_patients_new = LabeledPatients.load_from_file(path)
+    with open(path, "rb") as f:
+        labeled_patients_new = pickle.load(f)
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients

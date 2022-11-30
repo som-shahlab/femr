@@ -3,13 +3,14 @@
 #include <random>
 #include <vector>
 
+template<typename T>
 class ReservoirSampler {
    public:
     ReservoirSampler(size_t size) : total_size(size), int_dist(0, size - 1) {
         total_weight = 0;
     }
 
-    void add(double sample, double weight, std::mt19937& rng) {
+    void add(T sample, double weight, std::mt19937& rng) {
         total_weight += weight;
         if (samples.size() < total_size) {
             samples.push_back(sample);
@@ -42,14 +43,14 @@ class ReservoirSampler {
         }
     }
 
-    const std::vector<double>& get_samples() const { return samples; }
+    const std::vector<T>& get_samples() const { return samples; }
 
     double get_total_weight() const { return total_weight; }
 
    private:
     size_t total_size;
 
-    std::vector<double> samples;
+    std::vector<T> samples;
     double total_weight;
     double j;
     double p_none;

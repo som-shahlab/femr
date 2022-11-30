@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, fields
-from typing import Sequence
+from dataclasses import dataclass, fields, field
+from typing import Sequence, Mapping, Any, Optional
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class Patient:
     events: Sequence[Event]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Event:
     """An event with a patient record.
 
@@ -23,43 +23,52 @@ class Event:
 
     For example,
         ```
-            value: float | memoryview | None
+            value: float | str | None
         ```
-    Will attempt to decode the `.value` property as a `None` first, then `float`, then `memoryview`.
+    Will attempt to decode the `.value` property as a `None` first, then `float`, then `str`.
     """
 
     start: datetime.datetime
-    code: int  # Is this an OMOP code (or is it an index into your Piton Ontology object?)
+    code: int
+    value: float | str | None = None
 
-    end: datetime.datetime | None = None
-    value: float | memoryview | None = None
+    # Arbitrary metadata storage for piton.
+    # Note that this is saved using pickle, so it must support pickle serialization / deserialization
+    #
+    # A couple of common fields within here are frequently defined:
+    # - end: datetime, the end datetime for this event
+    # - visit_id: int, the visit_id this event is tied to
+    # - omop_table: str, the omop table this event was pulled from
+    # - clarity_table: str, the clarity table where the event comes from
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
-    # TODO - Seems like `visit_id` should be separated from the Event class as it creates a weird
-    # interdependency between Events (since visits are Events)
-    visit_id: int | None = None
+    def get_int(self, name: str) -> Optional[int]:
+        """Get an integer value with the provided name."""
+        value = self.metadata.get(name)
+        if value is None:
+            return value
+        assert isinstance(value, int)
+        return value
 
-    # TODO - add the below property
-    omop_table: str | None = None  # OMOP table where this event comes from
+    def get_str(self, name: str) -> Optional[str]:
+        """Get a string value with the provided name."""
+        value = self.metadata.get(name)
+        if value is None:
+            return value
+        assert isinstance(value, str)
+        return value
 
-    # TODO - rename or make __private (confusing)
-    event_type: str | None = None  # Clarity table name where this event comes from (for ETL purposes only)
+    def get_datetime(self, name: str) -> Optional[datetime.datetime]:
+        """Get a datetime value with the provided name."""
+        value = self.metadata.get(name)
+        if value is None:
+            return value
+        assert isinstance(value, datetime.datetime)
+        return value
 
     def __post_init__(self) -> None:
         """Verify that the event is constructed correctly."""
         if not (
-            (self.value is None)
-            or isinstance(self.value, (int, float, memoryview))
+            (self.value is None) or isinstance(self.value, (int, float, str))
         ):
             raise TypeError("Invalid type of value passed to event", self.value)
-
-    def __repr__(self) -> str:
-        """Convert an event to a string."""
-        items = []
-        for f in fields(self):
-            value = getattr(self, f.name)
-            if value is None:
-                continue
-            if f.name == "value" and isinstance(value, memoryview):
-                value = "'" + value.tobytes().decode("utf-8") + "'"
-            items.append(f"{f.name}={value}")
-        return "Event(" + ", ".join(items) + ")"

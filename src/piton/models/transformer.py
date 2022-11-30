@@ -347,7 +347,15 @@ class SurvivalTask(hk.Module):
 
         self.code_weight = hk.get_parameter(
             "code_weight",
-            (1, config["dim"]),
+            (1, self.dim - 1),
+            init=hk.initializers.TruncatedNormal(
+                stddev=1 / jnp.sqrt(config["dim"])
+            ),
+        )
+
+        self.code_weight_bias = hk.get_parameter(
+            "code_weight_bias",
+            (1, 1),
             init=hk.initializers.TruncatedNormal(
                 stddev=1 / jnp.sqrt(config["dim"])
             ),
@@ -386,7 +394,11 @@ class SurvivalTask(hk.Module):
 
         total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
 
-        hazards = total_reps @ self.code_weight.T
+        total_code_weight = jnp.concatenate(
+            (self.code_weight, self.code_weight_bias), axis=-1
+        )
+
+        hazards = total_reps @ total_code_weight.T
 
         assert hazards.shape[-1] == 1
         hazards = hazards[:, :, 0]
@@ -438,13 +450,20 @@ class SurvivalCLMBRTask(hk.Module):
         self.config = config
         num_codes = config["num_codes"]
 
-        self.code_weights = hk.get_parameter(
-            "code_weights",
-            (num_codes, config["dim"]),
+        self.code_weight = hk.get_parameter(
+            "code_weight",
+            (num_codes, config["dim"] - 1),
             init=hk.initializers.TruncatedNormal(
                 stddev=1 / jnp.sqrt(config["dim"])
             ),
         )
+
+        self.code_weight_bias = hk.get_parameter(
+            "code_weight_bias",
+            (num_codes, 1),
+            init=hk.initializers.TruncatedNormal(stddev=1),
+        )
+
         self.num_time_bins = config["num_time_bins"]
         self.dim = self.config["dim"]
         self.final_layer = hk.Linear(
@@ -461,6 +480,10 @@ class SurvivalCLMBRTask(hk.Module):
 
         total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
 
+        total_code_weight = jnp.concatenate(
+            (self.code_weight, self.code_weight_bias), axis=-1
+        )
+
         num_masked = mask.sum(dtype=jnp.float32)
 
         full_a = total_reps.reshape(-1, self.dim)
@@ -469,17 +492,17 @@ class SurvivalCLMBRTask(hk.Module):
 
         if not hk.running_init():
             survival_loss = piton.jax.exp_mean(
-                full_a, self.code_weights, batch["sparse_time"]
+                full_a, total_code_weight, batch["sparse_time"]
             ) * (full_a.shape[0] / num_masked)
         else:
             survival_loss = 0
 
         event_loss = jnp.log(2) * piton.jax.embedding_dot(
-            full_a, self.code_weights, batch["event_indices"]
+            full_a, total_code_weight, batch["event_indices"]
         ).sum(dtype=jnp.float32)
-        event_loss = -event_loss / (num_masked * self.code_weights.shape[0])
+        event_loss = -event_loss / (num_masked * total_code_weight.shape[0])
 
-        logits = jnp.exp2(full_a @ self.code_weights.T)
+        logits = jnp.exp2(full_a @ total_code_weight.T)
 
         return (event_loss + survival_loss), logits
 

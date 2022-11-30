@@ -21,9 +21,22 @@ def move_to_day_end(patient: Patient) -> Patient:
             new_time = (
                 event.start
                 + datetime.timedelta(days=1)
-                - datetime.timedelta(seconds=1)
+                - datetime.timedelta(minutes=1)
             )
-            new_events.append(dataclasses.replace(event, start=new_time))
+
+            old_end = event.get_datetime("end")
+
+            new_metadata = event.metadata
+
+            if old_end is not None:
+                end = max(new_time, old_end)
+                new_metadata |= {"end": end}
+
+            new_events.append(
+                dataclasses.replace(
+                    event, start=new_time, metadata=new_metadata
+                )
+            )
         else:
             new_events.append(event)
 
@@ -46,9 +59,16 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
     for event in patient.events:
         new_start = None
         new_end = None
+
         if event.start < birth_date:
+            delta = birth_date - event.start
+            if delta > datetime.timedelta(days=30):
+                continue
+
             new_start = birth_date
-        if event.end and event.end < birth_date:
+
+        old_end = event.get_datetime("end")
+        if old_end and old_end < birth_date:
             new_end = birth_date
 
         if new_start or new_end:
@@ -56,7 +76,8 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
                 dataclasses.replace(
                     event,
                     start=new_start or event.start,
-                    end=new_end or event.end,
+                    metadata=event.metadata
+                    | ({"end": new_end} if new_end else {}),
                 )
             )
         else:
@@ -87,44 +108,61 @@ def move_billing_codes(patient: Patient) -> Patient:
     }
 
     for event in patient.events:
-        if event.event_type in all_billing_codes and event.visit_id is not None:
+        event_visit_id = event.get_int("visit_id")
+        if (
+            event.get_str("clarity_table") in all_billing_codes
+            and event_visit_id is not None
+        ):
             key = (event.start, event.code)
             if key not in lowest_visit:
-                lowest_visit[key] = event.visit_id
+                lowest_visit[key] = event_visit_id
             else:
-                lowest_visit[key] = min(lowest_visit[key], event.visit_id)
+                lowest_visit[key] = min(lowest_visit[key], event_visit_id)
 
-        if event.event_type in ("lpch_pat_enc", "shc_pat_enc"):
-            if event.end is not None:
-                if event.visit_id is None:
+        if event.get_str("clarity_table") in ("lpch_pat_enc", "shc_pat_enc"):
+            event_end_date = event.get_datetime("end")
+            if event_end_date is not None:
+                if event_visit_id is None:
                     raise RuntimeError(
                         f"Expected visit id for visit? {patient.patient_id} {event}"
                     )
-                if end_visits.get(event.visit_id, event.end) != event.end:
+                if (
+                    end_visits.get(event_visit_id, event_end_date)
+                    != event_end_date
+                ):
                     raise RuntimeError(
-                        f"Multiple end visits? {end_visits.get(event.visit_id)} {event}"
+                        f"Multiple end visits? {end_visits.get(event_visit_id)} {event}"
                     )
-                end_visits[event.visit_id] = event.end
+                end_visits[event_visit_id] = event_end_date
 
     new_events = []
 
     for event in patient.events:
-        if event.event_type in all_billing_codes:
+        event_visit_id = event.get_int("visit_id")
+        event_end_date = event.get_datetime("end")
+        if event.get_str("clarity_table") in all_billing_codes:
             key = (event.start, event.code)
-            if event.visit_id != lowest_visit.get(key, None):
+            if event_visit_id != lowest_visit.get(key, None):
                 continue
 
-            if event.visit_id is None:
+            if event_visit_id is None:
                 # This is a bad code, but would rather keep it than get rid of it
                 new_events.append(event)
                 continue
 
-            end_visit = end_visits.get(event.visit_id)
+            end_visit = end_visits.get(event_visit_id)
             if end_visit is None:
                 raise RuntimeError(
                     f"Expected visit end for code {patient.patient_id} {event} {patient}"
                 )
-            new_events.append(dataclasses.replace(event, start=end_visit))
+            new_metadata = event.metadata
+            if event_end_date is not None:
+                new_metadata |= {"end": max(end_visit, event_end_date)}
+            new_events.append(
+                dataclasses.replace(
+                    event, start=end_visit, metadata=new_metadata
+                )
+            )
         else:
             new_events.append(event)
 

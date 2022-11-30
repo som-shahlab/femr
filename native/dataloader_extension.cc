@@ -6,13 +6,13 @@ using json = nlohmann::json;
 namespace py = pybind11;
 
 #include <algorithm>
+#include <boost/optional/optional_io.hpp>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <queue>
 #include <random>
-#include <boost/optional/optional_io.hpp>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -36,7 +36,8 @@ class Task {
 
     virtual bool add_event_data(int current_year, uint32_t current_age,
                                 const std::vector<uint32_t>& next_features,
-                                boost::optional<uint32_t> next_age, bool actually_add,
+                                boost::optional<uint32_t> next_age,
+                                bool actually_add,
                                 bool using_dropout = false) = 0;
 
     virtual void prepare_batch_data(uint32_t num_representations) = 0;
@@ -90,7 +91,8 @@ class LabeledPatientsTask : public Task {
                         bool using_dropout) override {
         boost::optional<std::pair<uint32_t, json>> label_to_add;
 
-        while (current_label_iter != std::end(current_patient_iter->second) && (!next_age || current_label_iter->first < *next_age)) {
+        while (current_label_iter != std::end(current_patient_iter->second) &&
+               (!next_age || current_label_iter->first < *next_age)) {
             label_to_add = *current_label_iter;
 
             current_label_iter++;
@@ -98,7 +100,9 @@ class LabeledPatientsTask : public Task {
 
         if (actually_add && label_to_add) {
             if (label_to_add->first < current_age) {
-                throw std::runtime_error(absl::StrCat("This should not be possible ", current_age, " ", label_to_add->first));
+                throw std::runtime_error(
+                    absl::StrCat("This should not be possible ", current_age,
+                                 " ", label_to_add->first));
             }
 
             if (labeler_type == "survival") {
@@ -172,7 +176,8 @@ class LabeledPatientsTask : public Task {
    private:
     std::string labeler_type;
 
-    absl::flat_hash_map<uint32_t, std::vector<std::pair<uint32_t, json>>> labels;
+    absl::flat_hash_map<uint32_t, std::vector<std::pair<uint32_t, json>>>
+        labels;
     std::vector<uint32_t> patient_ids;
 
     std::vector<std::pair<uint32_t, json>> batch_labels;
@@ -339,7 +344,7 @@ class SurvivalCLMBRTask : public Task {
         uint32_t event_index = 0;
         for (uint32_t rep = 0; rep < events_per_rep.size(); rep++) {
             auto& entry = events_per_rep[rep];
-            double censor = entry.first;
+            uint32_t censor = entry.first;
             auto& events = entry.second;
             std::sort(std::begin(events), std::end(events));
 
@@ -350,49 +355,74 @@ class SurvivalCLMBRTask : public Task {
             for (uint32_t time_bin = 0; time_bin < time_bins.size();
                  time_bin++) {
                 uint32_t start = time_bins[time_bin];
-                uint32_t time_in_bin = censor - start;
 
-                if (time_bin != time_bins.size() - 1) {
-                    time_in_bin = std::min(time_in_bin, time_bins[time_bin + 1] - start);
-                }
+                if (censor < start) {
+                    if (event_iter != std::end(events)) {
+                        throw std::runtime_error("Should not be possible");
+                    }
+                    batch_censor_log_times(rep * time_bins.size() + time_bin) =
+                        -std::numeric_limits<float>::infinity();
 
-                if (time_in_bin > 0) {
+                    batch_event_offsets(rep * time_bins.size() + time_bin) =
+                        event_index;
+                } else {
+                    uint32_t time_in_bin = censor - start;
+
+                    uint32_t end;
+                    if (time_bin == time_bins.size() - 1) {
+                        end = std::numeric_limits<uint32_t>::max();
+                    } else {
+                        end = time_bins[time_bin + 1];
+                    }
+
+                    time_in_bin = std::min(time_in_bin, end - start);
+
                     batch_censor_log_times(rep * time_bins.size() + time_bin) =
                         std::log2(time_in_bin);
-                }
 
-                batch_event_offsets(rep * time_bins.size() + time_bin) =
-                    event_index;
+                    batch_event_offsets(rep * time_bins.size() + time_bin) =
+                        event_index;
 
-                std::vector<std::pair<uint32_t, uint32_t>> events_for_bin;
+                    std::vector<std::pair<uint32_t, uint32_t>> events_for_bin;
 
-                while (event_iter != std::end(events) && (
-                    (time_bin == time_bins.size() -1)  || (event_iter->first < time_bins[time_bin + 1]))) {
-                    events_for_bin.push_back(*event_iter++);
-                }
-                std::sort(std::begin(events_for_bin), std::end(events_for_bin),
-                          [&](const auto& a, const auto& b) {
-                              return a.second < b.second;
-                          });
+                    while ((event_iter != std::end(events)) &&
+                           (event_iter->first < end)) {
+                        events_for_bin.push_back(*event_iter++);
+                    }
+                    std::sort(std::begin(events_for_bin),
+                              std::end(events_for_bin),
+                              [&](const auto& a, const auto& b) {
+                                  return a.second < b.second;
+                              });
 
-                for (const auto& event : events_for_bin) {
-                    batch_event_indices(event_index, 0) =
-                        rep * time_bins.size() + time_bin;
-                    batch_event_indices(event_index, 1) = event.second;
+                    for (const auto& event : events_for_bin) {
+                        batch_event_indices(event_index, 0) =
+                            rep * time_bins.size() + time_bin;
+                        batch_event_indices(event_index, 1) = event.second;
 
-                    double log_time = std::log2(event.first - start);
-                    batch_event_codes(event_index) = event.second;
-                    batch_event_log_times(event_index) = log_time;
+                        if (event.first < start) {
+                            throw std::runtime_error(
+                                "This should not be possible");
+                        }
 
-                    event_index++;
-                    found_events_for_bin++;
+                        double log_time = std::log2(event.first - start);
+                        batch_event_codes(event_index) = event.second;
+                        batch_event_log_times(event_index) = log_time;
+
+                        event_index++;
+                        found_events_for_bin++;
+                    }
                 }
             }
 
-            assert(found_events_for_bin == events.size());
+            if (found_events_for_bin != events.size()) {
+                throw std::runtime_error("Failed?");
+            }
         }
 
-        assert(event_index == total_events);
+        if (event_index != total_events) {
+            throw std::runtime_error("Failed overall?");
+        }
     }
 
     py::dict get_batch_data() const override {
@@ -663,7 +693,8 @@ class BatchCreator {
                 continue;
             }
 
-            if (event.start_age_in_minutes / (60 * 24) != last_age / (60 * 24)) {
+            if (event.start_age_in_minutes / (60 * 24) !=
+                last_age / (60 * 24)) {
                 codes_seen_today.clear();
             }
 
@@ -682,9 +713,10 @@ class BatchCreator {
             int32_t index = (int32_t)(total_length) - (int32_t)offset;
             bool is_valid_event_index =
                 (index - 1) >= 0 && (index - 1) < (int32_t)(max_length);
-            if (task->add_event_data((last_age + p.birth_date).year(), last_age,
-                                     features, event.start_age_in_minutes, is_valid_event_index,
-                                     token_dropout != 0)) {
+            if (task->add_event_data(
+                    ((last_age / (60 * 24)) + p.birth_date).year(), last_age,
+                    features, event.start_age_in_minutes, is_valid_event_index,
+                    token_dropout != 0)) {
                 if (total_length == 0) {
                     throw std::runtime_error(
                         "Cannot create labels before birth " +
@@ -727,9 +759,11 @@ class BatchCreator {
                     tokens(batch_index * max_length + index) = features[0];
                 }
                 valid_tokens(batch_index * max_length + index) = true;
-                ages(batch_index * max_length + index) = event.start_age_in_minutes / (60.0 * 24.0);
+                ages(batch_index * max_length + index) =
+                    event.start_age_in_minutes / (60.0 * 24.0);
                 normalized_ages(batch_index * max_length + index) =
-                    (event.start_age_in_minutes /(60.0 * 24.0) - age_mean) / (age_std);
+                    (event.start_age_in_minutes / (60.0 * 24.0) - age_mean) /
+                    (age_std);
             }
 
             total_length += 1;
@@ -739,8 +773,9 @@ class BatchCreator {
         int32_t index = (int32_t)(total_length) - (int32_t)offset;
         bool is_valid_event_index =
             (index - 1) >= 0 && (index - 1) < (int32_t)(max_length);
-        if (task->add_event_data((last_age + p.birth_date).year(), last_age, {}, {},
-                                 is_valid_event_index, token_dropout != 0)) {
+        if (task->add_event_data(((last_age / (60 * 24)) + p.birth_date).year(),
+                                 last_age, {}, {}, is_valid_event_index,
+                                 token_dropout != 0)) {
             if (total_length == 0) {
                 throw std::runtime_error(
                     "Cannot create labels before birth (during "
@@ -884,18 +919,9 @@ void add_patient_to_batch(
     const std::vector<uint32_t>& repr_indices =
         data.creator->get_label_indices();
 
-    
-    if (p.patient_id == 33384) {
-        std::cout<<"FOUND " << p.patient_id << " " << repr_indices.size() << std::endl;
-        for (auto& val : repr_indices) {
-            std::cout<<"What " << val << std::endl;
-        }
-    }
-
     if (repr_indices.size() == 0) {
         return;
     }
-    
 
     // First, try to do a basic prefix
     std::vector<uint32_t> start_indices;

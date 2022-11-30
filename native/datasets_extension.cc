@@ -32,7 +32,88 @@ void keep_alive(py::handle nurse, py::handle patient) {
     (void)wr.release();
 }
 
+namespace {
+class EventWrapper {
+   public:
+    EventWrapper(py::module base64, py::module pickle,
+                 PatientDatabase* database, uint32_t patient_id,
+                 absl::CivilSecond birth_date, uint32_t event_index,
+                 const Event& event)
+        : m_base64(base64),
+          m_pickle(pickle),
+          m_database(database),
+          m_patient_id(patient_id),
+          m_birth_date(birth_date),
+          m_event_index(event_index),
+          m_event(event) {}
+
+    py::object code() const { return py::cast(m_event.code); }
+
+    py::object start() const {
+        absl::CivilSecond start_time =
+            m_birth_date + 60 * m_event.start_age_in_minutes;
+
+        return py::cast(start_time);
+    }
+
+    py::object value() const {
+        py::object value;
+        switch (m_event.value_type) {
+            case ValueType::NONE:
+                return py::none();
+
+            case ValueType::NUMERIC:
+                return py::cast(m_event.numeric_value);
+                break;
+
+            case ValueType::UNIQUE_TEXT:
+            case ValueType::SHARED_TEXT: {
+                std::string_view data;
+
+                if (m_event.value_type == ValueType::UNIQUE_TEXT) {
+                    auto dict = m_database->get_unique_text_dictionary();
+                    if (dict == nullptr) {
+                        data = "";
+                    } else {
+                        data = (*dict)[m_event.text_value];
+                    }
+                } else {
+                    data =
+                        m_database
+                            ->get_shared_text_dictionary()[m_event.text_value];
+                }
+
+                return py::str(data.data(), data.size());
+            }
+        }
+
+        throw std::runtime_error("Invalid value?");
+    }
+
+    py::object metadata() const {
+        std::string_view metadata_str =
+            m_database->get_event_metadata(m_patient_id, m_event_index);
+        py::object bytes = py::bytes(metadata_str.data(), metadata_str.size());
+        py::object decoded = m_base64.attr("b85decode")(bytes);
+        return m_pickle.attr("loads")(decoded);
+    }
+
+   private:
+    py::module m_base64;
+    py::module m_pickle;
+
+    PatientDatabase* m_database;
+    uint32_t m_patient_id;
+    absl::CivilSecond m_birth_date;
+    uint32_t m_event_index;
+    Event m_event;
+};
+}  // namespace
+
 void register_datasets_extension(py::module& root) {
+    py::module base64 = py::module::import("base64");
+    py::module pickle = py::module::import("pickle");
+
     py::module abc = py::module::import("collections.abc");
     py::object abc_sequence = abc.attr("Sequence");
 
@@ -116,8 +197,8 @@ void register_datasets_extension(py::module& root) {
         .def("__len__", [](PatientDatabase& self) { return self.size(); })
         .def(
             "__getitem__",
-            [python_patient, python_event](py::object self_object,
-                                           uint32_t index) {
+            [python_patient, base64, pickle](py::object self_object,
+                                             uint32_t index) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
@@ -132,53 +213,8 @@ void register_datasets_extension(py::module& root) {
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    absl::CivilSecond start_time = birth_date + 60 * event.start_age_in_minutes;
-
-                    boost::optional<absl::CivilSecond> end_time;
-                    if (event.end_age_in_minutes) {
-                        end_time.emplace(birth_date + 60 * *event.end_age_in_minutes);
-                    } else {
-                        end_time = boost::none;
-                    }
-
-                    py::object value;
-                    py::object value_type;
-                    switch (event.value_type) {
-                        case ValueType::NONE:
-                            value = py::none();
-                            break;
-
-                        case ValueType::NUMERIC:
-                            value = py::cast(event.numeric_value);
-                            break;
-
-                        case ValueType::UNIQUE_TEXT:
-                        case ValueType::SHARED_TEXT: {
-                            std::string_view data;
-
-                            if (event.value_type == ValueType::UNIQUE_TEXT) {
-                                auto dict = self.get_unique_text_dictionary();
-                                if (dict == nullptr) {
-                                    data = "";
-                                } else {
-                                    data = (*dict)[event.text_value];
-                                }
-                            } else {
-                                data = self.get_shared_text_dictionary()
-                                           [event.text_value];
-                            }
-
-                            value = py::memoryview::from_memory(
-                                (void*)data.data(), data.size(), true);
-
-                            keep_alive(value, self_object);
-
-                            break;
-                        }
-                    }
-                    events[i] =
-                        python_event("start"_a = start_time, "end"_a = end_time,
-                                     "code"_a = event.code, "value"_a = value, "visit_id"_a = event.visit_id);
+                    events[i] = EventWrapper(base64, pickle, &self, index,
+                                             birth_date, i, event);
                 }
 
                 return python_patient("patient_id"_a = p.patient_id,
@@ -233,20 +269,30 @@ void register_datasets_extension(py::module& root) {
         .def("get_dictionary", &Ontology::get_dictionary,
              py::return_value_policy::reference_internal);
 
+    py::class_<EventWrapper>(m, "EventWrapper")
+        .def_property_readonly("code", &EventWrapper::code)
+        .def_property_readonly("start", &EventWrapper::start)
+        .def_property_readonly("value", &EventWrapper::value)
+        .def_property_readonly("metadata", &EventWrapper::metadata)
+        .def("__repr__", [python_event](const EventWrapper& wrapper) {
+            using namespace pybind11::literals;
+            return py::str(python_event("code"_a = wrapper.code(),
+                                        "start"_a = wrapper.start(),
+                                        "value"_a = wrapper.value(),
+                                        "metadata"_a = wrapper.metadata()));
+        });
+
     py::class_<Dictionary> dictionary_binding(m, "Dictionary");
     dictionary_binding
         .def("__len__", [](Dictionary& self) { return self.size(); })
-        .def(
-            "__getitem__",
-            [](Dictionary& self, uint32_t index) {
-                if (index >= self.size()) {
-                    throw py::index_error();
-                }
-                auto data = self[index];
-                return py::memoryview::from_memory((void*)data.data(),
-                                                   data.size(), true);
-            },
-            py::return_value_policy::reference_internal)
+        .def("__getitem__",
+             [](Dictionary& self, uint32_t index) {
+                 if (index >= self.size()) {
+                     throw py::index_error();
+                 }
+                 auto data = self[index];
+                 return py::str(data.data(), data.size());
+             })
         .def("index",
              [](Dictionary& self, std::string data) {
                  auto iter = self.find(data);
