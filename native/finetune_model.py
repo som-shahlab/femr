@@ -247,8 +247,16 @@ logging.info(
 )
 
 
-@functools.partial(jax.jit, static_argnums=(3,5,))
-def compute_loss(params, non_fit_params, rng, config, batch, requires_logits=False):
+@functools.partial(
+    jax.jit,
+    static_argnums=(
+        3,
+        5,
+    ),
+)
+def compute_loss(
+    params, non_fit_params, rng, config, batch, requires_logits=False
+):
     total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
     loss, logits = model.apply(
         total_params, rng, config, batch, is_training=False
@@ -281,7 +289,7 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
             rng,
             config,
             batch,
-            requires_logits = config["task"]["type"] == "labeled_patients",
+            requires_logits=config["task"]["type"] == "labeled_patients",
         )
         total_loss += loss * batch["num_indices"]
         total_indices += batch["num_indices"]

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, fields, field
-from typing import Sequence, Mapping, Any, Optional
+from dataclasses import dataclass, field, fields
+from typing import Any, Mapping, Optional, Sequence
 
 
 @dataclass(frozen=True)

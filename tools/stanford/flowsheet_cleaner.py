@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
         for child_concepts in pool.imap_unordered(
             functools.partial(get_new_sources, args.source),
-            os.listdir(os.path.join(args.source, "observation"))
+            os.listdir(os.path.join(args.source, "observation")),
         ):
             new_concepts |= child_concepts
 

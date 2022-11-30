@@ -1,9 +1,9 @@
 import datetime
 import os
+import pickle
 from typing import List, Tuple
 
 import numpy as np
-import pickle
 
 import piton
 import piton.datasets

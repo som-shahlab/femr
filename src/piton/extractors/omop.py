@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
-from typing import Mapping, Optional, Sequence, Dict, Any
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from piton import Event
 from piton.extractors.csv import CSVExtractor

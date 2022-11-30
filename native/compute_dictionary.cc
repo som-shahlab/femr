@@ -227,7 +227,7 @@ int main() {
             h_entries.push_back(entry);
         }
     }
-    
+
     // Create percentile bins
     for (uint32_t code : result.numeric_samples.keys()) {
         auto* numeric = result.numeric_samples.find(code);
