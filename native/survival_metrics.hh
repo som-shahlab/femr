@@ -9,6 +9,6 @@ double compute_c_statistic(const Eigen::Tensor<double, 1>& times,
                            const Eigen::Tensor<double, 1>& time_bins,
                            const Eigen::Tensor<double, 2>& hazards);
 
-std::vector<double> compute_calibration(absl::Span<const double> probs,
-                                        absl::Span<const bool> is_censor,
+std::vector<double> compute_calibration(const std::vector<double>& probs,
+                                        const std::vector<bool>& is_censor,
                                         size_t num_intervals);

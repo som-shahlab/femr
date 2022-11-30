@@ -2,6 +2,7 @@
 
 #include <pybind11/eigen/tensor.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
 
 #include <iostream>
 
@@ -13,4 +14,5 @@ void register_metrics_extension(pybind11::module& root) {
     py::module m = root.def_submodule("metrics");
 
     m.def("compute_c_statistic", compute_c_statistic);
+    m.def("compute_calibration", compute_calibration);
 }

@@ -85,8 +85,15 @@ double compute_c_statistic(const Eigen::Tensor<double, 1>& times,
     std::vector<int> prefix_sum(num_elem, 0);
     std::vector<bool> is_still_alive(num_elem, true);
 
-    double total_weight = 0;
+    ssize_t num_events = 0;
+    for (ssize_t i = 0; i < num_elem; i++) {
+        if (!is_censor[i]) {
+            num_events += 1;
+        }
+    }
+
     double total_auroc = 0;
+    double total_weight = 0;
 
     auto order_remaining_by_hazard = [&](uint32_t current_bucket) {
         prefix_sum.clear();
@@ -115,6 +122,11 @@ double compute_c_statistic(const Eigen::Tensor<double, 1>& times,
         init(prefix_sum);
     };
 
+    // std::cout<<"LOL" << std::endl;
+    double surv = 1;
+
+    std::vector<double> weights;
+
     auto resolve = [&]() {
         if (current_dead.size() != 0) {
             size_t num_true = compute_prefix_sum(
@@ -125,21 +137,32 @@ double compute_c_statistic(const Eigen::Tensor<double, 1>& times,
                 num_correct +=
                     compute_prefix_sum(prefix_sum, location_map[dead]);
             }
-            double auroc;
+
+            double frac_died = (double)num_false / (num_true + num_false);
+            double next_surv = surv * (1 - frac_died);
+            double death_rate = surv * frac_died;
+
+            double weight = death_rate * next_surv;
+
             if (num_true == 0) {
-                auroc = 1;
+                assert(weight == 0);
             } else {
-                auroc = (double)num_correct / num_true;
+                double auroc = (double)num_correct / (num_true * num_false);
+                weights.push_back((weight * num_events) / num_false);
+
+                total_weight += weight;
+                total_auroc += weight * auroc;
             }
-            total_weight += num_false;
-            total_auroc += auroc;
+
+            surv = next_surv;
         }
     };
 
     ssize_t current_bucket_index = 0;
     order_remaining_by_hazard(0);
 
-    for (const auto& index : time_indices) {
+    for (size_t i = 0; i < time_indices.size(); i++) {
+        size_t index = time_indices[i];
         double current_time = times[index];
         if (current_time != last_time) {
             resolve();
@@ -166,8 +189,8 @@ double compute_c_statistic(const Eigen::Tensor<double, 1>& times,
     return total_auroc / total_weight;
 }
 
-std::vector<double> compute_calibration(absl::Span<const double> probs,
-                                        absl::Span<const bool> is_censor,
+std::vector<double> compute_calibration(const std::vector<double>& probs,
+                                        const std::vector<bool>& is_censor,
                                         size_t num_intervals) {
     std::vector<double> result(num_intervals);
 
@@ -180,17 +203,16 @@ std::vector<double> compute_calibration(absl::Span<const double> probs,
         double prob = probs[i];
 
         if (censor) {
-            double s = 1 - prob;
-            double density = 1 / prob;
+            double density = 1 / (1 - prob);
             for (size_t bin_index = 0; bin_index < num_intervals; bin_index++) {
                 double start = (double)bin_index / num_intervals;
                 double end = (double)(bin_index + 1) / num_intervals;
 
-                if (s < start) {
-                    result[bin_index] += (end - start) * density;
-                } else if (s >= start && s < end) {
-                    result[bin_index] += (end - s) * density;
-                } else if (s >= end) {
+                if (prob < start) {
+                    result[bin_index] += density * (end - start);
+                } else if (prob >= start && prob < end) {
+                    result[bin_index] += density * (prob - start);
+                } else if (prob >= end) {
                     continue;
                 }
             }
@@ -208,6 +230,10 @@ std::vector<double> compute_calibration(absl::Span<const double> probs,
                 }
             }
         }
+    }
+
+    for (double& element : result) {
+        element /= probs.size();
     }
 
     return result;
