@@ -338,7 +338,7 @@ class SurvivalTask(hk.Module):
         super().__init__(name="SurvivalTask")
         self.config = config
         self.time_bins = jnp.array(tuple(config["time_bins"]) + (float("inf"),))
-        self.time_bins = self.time_bins * 60 * 24
+        self.time_bins = self.time_bins
         self.num_time_bins = len(config["time_bins"])
         self.dim = self.config["dim"]
         self.final_layer = hk.Linear(

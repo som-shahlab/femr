@@ -13,48 +13,68 @@ from typing import Any, Dict, Optional, Sequence, Tuple, cast
 
 import jax
 import numpy as np
-from jax import core, custom_vjp, debug, grad, lax, nn
+from jax import core, custom_vjp, grad, nn
 from jax import numpy as jnp
 from jax import value_and_grad, vmap, xla_computation
-from jax.core import ConcreteArray, ShapedArray
-from jax.interpreters import ad, batching, xla
+from jax.interpreters import xla
 from jax.lib import xla_client
+
+import piton.extension.jax
+
+# Globally register all of our custom operators
+for name, value, platform in piton.extension.jax.get_kernels():
+    jax.lib.xla_client.register_custom_call_target(
+        name, value, platform=platform
+    )
 
 # Per the jax documentation, we currently don't have good typing for arrays
 Array = Any
 
-from piton.extension.jax import (
-    get_kernels,
-    get_local_attention_data,
-    get_local_attention_shape,
-)
 
-# Globally register all of our custom operators
-for name, value, platform in get_kernels():
-    jax.lib.xla_client.register_custom_call_target(
-        name, value, platform=platform
+def _convert_to_xla_shape(
+    a: jax.core.ShapedArray, force_dtype: Optional[Any] = None
+) -> xla_client.Shape:
+    """A helper function for converting between a JAX jax.core.ShapedArray and an xla Shape."""
+    return xla_client.Shape.array_shape(
+        force_dtype or a.dtype, a.shape, list(reversed(range(len(a.shape))))
     )
+
+
+def _assert_and_cast_to_shaped(
+    l: Sequence[jax.core.AbstractValue],
+) -> Sequence[jax.core.ShapedArray]:
+    """Assert that a sequence of abstract tokens are actually shaped arrays."""
+    assert all(isinstance(a, jax.core.ShapedArray) for a in l)
+    return cast(Sequence[jax.core.ShapedArray], l)
 
 
 @partial(
     jax.custom_vjp,
     nondiff_argnums=(2,),
 )
-def gather_scatter(a: Array, indices: Array, output_dim: int) -> Array:
+def gather_scatter_add(a: Array, indices: Array, output_dim: int) -> Array:
     """Perform a combined gather / scatter add operation.
 
-    Indices is an array of shape (N, 2) for N indices.
+    a is the tensor that we perform reads from.
+
+    indices is an array of shape (N, 2) for N indices.
     This operator reads from the index specified in indices[:, 0] and writes them to indices[:, 1].
 
-    output_dim is the size of the ouptupt array.
+    output_dim is the size of the ouptut array.
 
     Note that this operator requires that indices must be sorted in the order of the write indices (indices[:, 1])
+    A secondary note: This operator is non-deterministic. The additionals will be performed in an arbitrary order.
     """
-    return gather_scatter_fwd(a, indices, output_dim)[0]
+    return gather_scatter_add_fwd(a, indices, output_dim)[0]
 
 
-def gather_scatter_fallback(a: Array, indices: Array, output_dim: int) -> Array:
-    """The python fallback implementation of gather scatter."""
+def gather_scatter_add_fallback(
+    a: Array, indices: Array, output_dim: int
+) -> Array:
+    """The python fallback implementation of gather scatter add.
+
+    See gather_scatter for the documentation.
+    """
     a_indices = indices[:, 0]
     b_indices = indices[:, 1]
 
@@ -65,15 +85,15 @@ def gather_scatter_fallback(a: Array, indices: Array, output_dim: int) -> Array:
     return result.at[b_indices, :].add(a_vals, mode="drop")
 
 
-def gather_scatter_fwd(
+def gather_scatter_add_fwd(
     a: Array, indices: Array, output_dim: int
 ) -> Tuple[Array, Tuple[int, Array]]:
     """The forward pass for gather / scatter"""
-    r = gather_scatter_p.bind(a, indices, output_dim=output_dim)
+    r = gather_scatter_add_p.bind(a, indices, output_dim=output_dim)
     return r, (a.shape[0], indices)
 
 
-def gather_scatter_bwd(
+def gather_scatter_add_bwd(
     _output_dim: int, res: Tuple[int, Array], g: Array
 ) -> Tuple[Array, None]:
     """The backward pass for gather / scatter
@@ -92,21 +112,21 @@ def gather_scatter_bwd(
     trans_indices = jnp.stack((indices_b, indices_a), axis=-1)
     trans_indices = trans_indices[sort_indices]
 
-    r = gather_scatter_p.bind(g, trans_indices, output_dim=a_dim)
+    r = gather_scatter_add_p.bind(g, trans_indices, output_dim=a_dim)
 
     return (r, None)
 
 
-gather_scatter.defvjp(gather_scatter_fwd, gather_scatter_bwd)
+gather_scatter_add.defvjp(gather_scatter_add_fwd, gather_scatter_add_bwd)
 
 # The actual primitive used to implement this operation
-gather_scatter_p = jax.core.Primitive("gather_scatter_p")
+gather_scatter_add_p = jax.core.Primitive("gather_scatter_add_p")
 
 
-def gather_scatter_abstract_eval(
+def gather_scatter_add_p_abstract_eval(
     a: Array, indices: Array, output_dim: int
 ) -> jax.core.ShapedArray:
-    """The abstract shape computation for gather_scatter."""
+    """The abstract shape computation for gather_scatter_p primitive."""
     # Our CUDA kernel currently assume that the inner size is a factor of 32.
     # TODO: Remove this requirement
     assert a.shape[1] % 32 == 0
@@ -125,7 +145,7 @@ def gather_scatter_abstract_eval(
     )
 
 
-def gather_scatter_xla_translation(
+def gather_scatter_add_p_xla_translation(
     ctx: jax.interpreters.xla.TranslationContext,
     avals_in: Sequence[jax.core.AbstractValue],
     avals_out: Sequence[jax.core.AbstractValue],
@@ -135,11 +155,20 @@ def gather_scatter_xla_translation(
     output_dim: int,
 ) -> Sequence[jax.interpreters.xla.XlaOp]:
     """Actually compute gather / scatter in hardware."""
+    avals_in = _assert_and_cast_to_shaped(avals_in)
+    avals_out = _assert_and_cast_to_shaped(avals_out)
+
+    (
+        input_shape,
+        indices_shape,
+    ) = avals_in
+
+    (result_shape,) = avals_out
 
     if ctx.platform == "cpu":
         # For our CPU implementation, we simply compile our fallback
         computation = jax.xla_computation(
-            gather_scatter_fallback, static_argnums=(2,)
+            gather_scatter_add_fallback, static_argnums=(2,)
         )(*avals_in, output_dim)
 
         res = xla_client.ops.Call(ctx.builder, computation, [a, indices])
@@ -150,16 +179,6 @@ def gather_scatter_xla_translation(
 
     elif ctx.platform == "cuda":
         # For our GPU implementation, we actually call out to CUDA code
-        (
-            input_shape,
-            indices_shape,
-        ) = avals_in
-
-        (result_shape,) = avals_out
-        assert isinstance(input_shape, ShapedArray)
-        assert isinstance(indices_shape, ShapedArray)
-        assert isinstance(result_shape, ShapedArray)
-
         assert result_shape.shape[0] == output_dim
         assert result_shape.shape[1] == input_shape.shape[1]
 
@@ -177,9 +196,9 @@ def gather_scatter_xla_translation(
                 ctx.builder,
                 name.encode("utf8"),
                 operands=[a, indices],
-                shape_with_layout=convert_to_xla_shape(result_shape),
+                shape_with_layout=_convert_to_xla_shape(result_shape),
                 operand_shapes_with_layout=[
-                    convert_to_xla_shape(val)
+                    _convert_to_xla_shape(val)
                     for val in (input_shape, indices_shape)
                 ],
                 opaque=struct.pack(
@@ -198,12 +217,29 @@ def gather_scatter_xla_translation(
     )
 
 
-gather_scatter_p.def_abstract_eval(gather_scatter_abstract_eval)
-gather_scatter_p.def_impl(gather_scatter_fallback)
-xla.register_translation(gather_scatter_p, gather_scatter_xla_translation)
+gather_scatter_add_p.def_abstract_eval(gather_scatter_add_p_abstract_eval)
+gather_scatter_add_p.def_impl(gather_scatter_add_fallback)
+xla.register_translation(
+    gather_scatter_add_p, gather_scatter_add_p_xla_translation
+)
 
 
-def embedding_dot_fallback(a, b, indices):
+@partial(jax.custom_vjp)
+def embedding_dot(a: Array, b: Array, indices: Array) -> Array:
+    """Perform a dot product between two embedding layers over the provided indices.
+
+    a is a 2-d tensor of shape (A, K)
+    b is a 2-d tensor of shape (B, K)
+
+    indices is a 2-d tensor of shape (N, 2), such that indices[:, 0] are indices into A and indices[:, 1] are indices into B.
+
+    This returns a (N,) shaped tensor that contains the dot products for each row in indices.
+    """
+    return embedding_dot_fwd(a, b, indices)[0]
+
+
+def embedding_dot_fallback(a: Array, b: Array, indices: Array):
+    """The fallback implementation for embedding_dot."""
     a_indices = indices[:, 0]
     b_indices = indices[:, 1]
 
@@ -226,17 +262,18 @@ def embedding_dot_fallback(a, b, indices):
     return jnp.multiply(a_vals, b_vals).sum(axis=1)
 
 
-@partial(jax.custom_vjp)
-def embedding_dot(a, b, indices):
-    return embedding_dot_forward_p.bind(a, b, indices)
-
-
-def embedding_dot_fwd(a, b, indices):
-    r = embedding_dot(a, b, indices)
+def embedding_dot_fwd(
+    a: Array, b: Array, indices: Array
+) -> Tuple[Array, Tuple[Array, Array, Array]]:
+    """The forward pass for embedding dot."""
+    r = embedding_dot_forward_p.bind(a, b, indices)
     return r, (a, b, indices)
 
 
-def embedding_dot_bwd(res, g):
+def embedding_dot_bwd(
+    res: Tuple[Array, Array, Array], g: Array
+) -> Tuple[Array, Array, None]:
+    """The backward pass for embedding dot."""
     a, b, indices = res
     da, db = embedding_dot_backward_p.bind(a, b, indices, g)
     return (da, db, None)
@@ -247,21 +284,18 @@ embedding_dot.defvjp(embedding_dot_fwd, embedding_dot_bwd)
 embedding_dot_forward_p = jax.core.Primitive("embedding_dot_forward")
 
 
-def embedding_dot_forward_abstract_eval(a, b, indices):
+def embedding_dot_forward_p_abstract_eval(
+    a: jax.core.ShapedArray,
+    b: jax.core.ShapedArray,
+    indices: jax.core.ShapedArray,
+):
+    """The abstract shape for the forward primitive."""
     assert a.dtype == b.dtype
     assert indices.dtype == jnp.uint32
-    return ShapedArray((indices.shape[0],), a.dtype)
+    return jax.core.ShapedArray((indices.shape[0],), a.dtype)
 
 
-def convert_to_xla_shape(
-    a: ShapedArray, force_dtype: Optional[Any] = None
-) -> xla_client.Shape:
-    return xla_client.Shape.array_shape(
-        force_dtype or a.dtype, a.shape, list(reversed(range(len(a.shape))))
-    )
-
-
-def embedding_dot_forward_xla_translation(
+def embedding_dot_forward_p_xla_translation(
     ctx: jax.interpreters.xla.TranslationContext,
     avals_in: Sequence[jax.core.AbstractValue],
     avals_out: Sequence[jax.core.AbstractValue],
@@ -269,21 +303,21 @@ def embedding_dot_forward_xla_translation(
     b: jax.interpreters.xla.XlaOp,
     indices: jax.interpreters.xla.XlaOp,
 ) -> Sequence[jax.interpreters.xla.XlaOp]:
-    computation = jax.xla_computation(embedding_dot_fallback)(*avals_in)
+    """The actual hardware implementation of embedding_dot_forward_p."""
+    avals_in = _assert_and_cast_to_shaped(avals_in)
+    avals_out = _assert_and_cast_to_shaped(avals_out)
+
+    a_shape, b_shape, indices_shape = avals_in
+    (result_shape,) = avals_out
 
     if ctx.platform == "cpu":
+        computation = jax.xla_computation(embedding_dot_fallback)(*avals_in)
         res = xla_client.ops.Call(ctx.builder, computation, [a, b, indices])
         return [
             xla_client.ops.GetTupleElement(res, i)
             for i, _ in enumerate(avals_out)
         ]
     elif ctx.platform == "cuda":
-        a_shape, b_shape, indices_shape = avals_in
-        (result_shape,) = avals_out
-        assert isinstance(a_shape, ShapedArray)
-        assert isinstance(b_shape, ShapedArray)
-        assert isinstance(indices_shape, ShapedArray)
-        assert isinstance(result_shape, ShapedArray)
         assert a_shape.dtype == b_shape.dtype
 
         if a_shape.dtype == np.float32:
@@ -298,9 +332,9 @@ def embedding_dot_forward_xla_translation(
                 ctx.builder,
                 name.encode("utf8"),
                 operands=[a, b, indices],
-                shape_with_layout=convert_to_xla_shape(result_shape),
+                shape_with_layout=_convert_to_xla_shape(result_shape),
                 operand_shapes_with_layout=[
-                    convert_to_xla_shape(val)
+                    _convert_to_xla_shape(val)
                     for val in (a_shape, b_shape, indices_shape)
                 ],
                 opaque=struct.pack(
@@ -319,24 +353,33 @@ def embedding_dot_forward_xla_translation(
     )
 
 
-embedding_dot_forward_p.def_abstract_eval(embedding_dot_forward_abstract_eval)
+embedding_dot_forward_p.def_abstract_eval(embedding_dot_forward_p_abstract_eval)
 embedding_dot_forward_p.def_impl(embedding_dot_fallback)
 xla.register_translation(
-    embedding_dot_forward_p, embedding_dot_forward_xla_translation
+    embedding_dot_forward_p, embedding_dot_forward_p_xla_translation
 )
 
 embedding_dot_backward_p = core.Primitive("embedding_dot_backward")
 
 
-def embedding_dot_backward_abstract_eval(a, b, indices, g):
+def embedding_dot_backward_p_abstract_eval(
+    a: jax.core.ShapedArray,
+    b: jax.core.ShapedArray,
+    indices: jax.core.ShapedArray,
+    g: jax.core.ShapedArray,
+):
+    """The abstract shape for embedding_dot_backward_p."""
     assert a.dtype == b.dtype
     assert g.shape == indices.shape[:1]
     assert indices.shape == (g.shape[0], 2)
     assert indices.dtype == jnp.uint32
-    return (ShapedArray(a.shape, a.dtype), ShapedArray(b.shape, b.dtype))
+    return (
+        jax.core.ShapedArray(a.shape, a.dtype),
+        jax.core.ShapedArray(b.shape, b.dtype),
+    )
 
 
-def embedding_dot_backward_xla_translation(
+def embedding_dot_backward_p_xla_translation(
     ctx: xla.TranslationContext,
     avals_in: Sequence[core.AbstractValue],
     avals_out: Sequence[core.AbstractValue],
@@ -345,30 +388,28 @@ def embedding_dot_backward_xla_translation(
     indices: xla.XlaOp,
     g: xla.XlaOp,
 ) -> Sequence[xla.XlaOp]:
-    def helper(a, b, indices, g):
-        return jnp.dot(embedding_dot_fallback(a, b, indices), g)
+    """The actual hardware definion of the embedding dot backward pass."""
+    avals_in = _assert_and_cast_to_shaped(avals_in)
+    avals_out = _assert_and_cast_to_shaped(avals_out)
 
-    computation = xla_computation(grad(helper, argnums=(0, 1)))(*avals_in)
+    a_shape, b_shape, indices_shape, g_shape = avals_in
+    (
+        da_shape,
+        db_shape,
+    ) = avals_out
 
     if ctx.platform == "cpu":
+
+        def helper(a, b, indices, g):
+            return jnp.dot(embedding_dot_fallback(a, b, indices), g)
+
+        computation = xla_computation(grad(helper, argnums=(0, 1)))(*avals_in)
         res = xla_client.ops.Call(ctx.builder, computation, [a, b, indices, g])
         return [
             xla_client.ops.GetTupleElement(res, i)
             for i, _ in enumerate(avals_out)
         ]
     elif ctx.platform == "cuda":
-        a_shape, b_shape, indices_shape, g_shape = avals_in
-        (
-            da_shape,
-            db_shape,
-        ) = avals_out
-        assert isinstance(a_shape, ShapedArray)
-        assert isinstance(b_shape, ShapedArray)
-        assert isinstance(indices_shape, ShapedArray)
-        assert isinstance(g_shape, ShapedArray)
-        assert isinstance(da_shape, ShapedArray)
-        assert isinstance(db_shape, ShapedArray)
-
         if a_shape.dtype == np.float32:
             name = "float_embedding_dot_backward"
 
@@ -392,14 +433,14 @@ def embedding_dot_backward_xla_translation(
             operands=[a, b, indices, g],
             shape_with_layout=xla_client.Shape.tuple_shape(
                 [
-                    convert_to_xla_shape(
+                    _convert_to_xla_shape(
                         val, force_dtype=xla_client.dtype_to_etype(np.float32)
                     )
                     for val in (da_shape, db_shape)
                 ]
             ),
             operand_shapes_with_layout=[
-                convert_to_xla_shape(val)
+                _convert_to_xla_shape(val)
                 for val in (a_shape, b_shape, indices_shape, g_shape)
             ],
             opaque=struct.pack(
@@ -422,11 +463,13 @@ def embedding_dot_backward_xla_translation(
     )
 
 
-embedding_dot_backward_p.def_abstract_eval(embedding_dot_backward_abstract_eval)
+embedding_dot_backward_p.def_abstract_eval(
+    embedding_dot_backward_p_abstract_eval
+)
 embedding_dot_backward_p.multiple_results = True
 embedding_dot_backward_p.def_impl(grad(embedding_dot_fallback, argnums=(0, 1)))
 xla.register_translation(
-    embedding_dot_backward_p, embedding_dot_backward_xla_translation
+    embedding_dot_backward_p, embedding_dot_backward_p_xla_translation
 )
 
 
@@ -494,9 +537,9 @@ def exp_mean_abstract_eval(a, b, offsets, defaults, indices, values):
     assert a.shape[1] % 32 == 0
 
     return (
-        ShapedArray((), jnp.float32),
-        ShapedArray(a.shape, jnp.float32),
-        ShapedArray(b.shape, jnp.float32),
+        jax.core.ShapedArray((), jnp.float32),
+        jax.core.ShapedArray(a.shape, jnp.float32),
+        jax.core.ShapedArray(b.shape, jnp.float32),
     )
 
 
@@ -511,10 +554,10 @@ def exp_mean_xla_translation(
     indices: xla.XlaOp,
     values: xla.XlaOp,
 ) -> Sequence[xla.XlaOp]:
-    assert (isinstance(val, ShapedArray) for val in avals_in)
-    assert (isinstance(val, ShapedArray) for val in avals_out)
-    avals_in = cast(Sequence[ShapedArray], avals_in)
-    avals_out = cast(Sequence[ShapedArray], avals_out)
+    assert (isinstance(val, jax.core.ShapedArray) for val in avals_in)
+    assert (isinstance(val, jax.core.ShapedArray) for val in avals_out)
+    avals_in = cast(Sequence[jax.core.ShapedArray], avals_in)
+    avals_out = cast(Sequence[jax.core.ShapedArray], avals_out)
 
     (
         a_shape,
@@ -537,7 +580,9 @@ def exp_mean_xla_translation(
                 "Using an inefficient exp_sum mechanism", RuntimeWarning
             )
 
-        c_shape = ShapedArray([a_shape.shape[0], b_shape.shape[0]], jnp.float32)
+        c_shape = jax.core.ShapedArray(
+            [a_shape.shape[0], b_shape.shape[0]], jnp.float32
+        )
 
         value_and_grad_computation = xla_computation(
             value_and_grad(exp_mean_fallback, argnums=(0, 1))
@@ -558,7 +603,7 @@ def exp_mean_xla_translation(
                 indices,
                 values,
             ],
-            convert_to_xla_shape(c_shape),
+            _convert_to_xla_shape(c_shape),
         )
         value_and_grad_res = xla_client.ops.Call(
             ctx.builder, value_and_grad_computation, [a, b, dense]
@@ -594,12 +639,12 @@ def exp_mean_xla_translation(
             operands=[a, b, offsets, defaults, indices, values],
             shape_with_layout=xla_client.Shape.tuple_shape(
                 [
-                    convert_to_xla_shape(val)
+                    _convert_to_xla_shape(val)
                     for val in (result_shape, da_shape, db_shape)
                 ]
             ),
             operand_shapes_with_layout=[
-                convert_to_xla_shape(val) for val in avals_in
+                _convert_to_xla_shape(val) for val in avals_in
             ],
             opaque=struct.pack(
                 "IIIII",
@@ -684,7 +729,7 @@ def local_attention_fallback(queries, keys, values, length, attention_width):
         queries, keys, values, length, attention_width
     )
     attention_shape = tuple(
-        get_local_attention_shape(
+        piton.extension.jax.get_local_attention_shape(
             queries.shape[0],
             queries.shape[1],
             queries.shape[2],
@@ -715,7 +760,9 @@ _local_attention_data_cache: Dict[Tuple[int, int, int, int], Any] = {}
 def _get_cached_local_attention_data(b, n, k, w):
     key = (b, n, k, w)
     if key not in _local_attention_data_cache:
-        _local_attention_data_cache[key] = get_local_attention_data(b, n, k, w)
+        _local_attention_data_cache[
+            key
+        ] = piton.extension.jax.get_local_attention_data(b, n, k, w)
 
     ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
     ctypes.pythonapi.PyCapsule_GetPointer.argtypes = [
@@ -783,10 +830,10 @@ local_attention_forward_p = core.Primitive("local_attention_forward")
 
 
 def local_attention_forward_abstract_eval(
-    queries: ShapedArray,
-    keys: ShapedArray,
-    values: ShapedArray,
-    length: ShapedArray,
+    queries: jax.core.ShapedArray,
+    keys: jax.core.ShapedArray,
+    values: jax.core.ShapedArray,
+    length: jax.core.ShapedArray,
     *,
     attention_width: int,
 ):
@@ -803,7 +850,7 @@ def local_attention_forward_abstract_eval(
     assert length.dtype == jnp.uint32
 
     attention_shape = tuple(
-        get_local_attention_shape(
+        piton.extension.jax.get_local_attention_shape(
             queries.shape[0],
             queries.shape[1],
             queries.shape[2],
@@ -812,8 +859,8 @@ def local_attention_forward_abstract_eval(
     )
 
     return (
-        ShapedArray(attention_shape, queries.dtype),
-        ShapedArray(queries.shape, queries.dtype),
+        jax.core.ShapedArray(attention_shape, queries.dtype),
+        jax.core.ShapedArray(queries.shape, queries.dtype),
     )
 
 
@@ -828,10 +875,10 @@ def local_attention_forward_xla_translation(
     *,
     attention_width: int,
 ) -> Sequence[xla.XlaOp]:
-    assert all(isinstance(a, ShapedArray) for a in avals_in)
-    avals_in = cast(Sequence[ShapedArray], avals_in)
-    assert all(isinstance(a, ShapedArray) for a in avals_out)
-    avals_out = cast(Sequence[ShapedArray], avals_out)
+    assert all(isinstance(a, jax.core.ShapedArray) for a in avals_in)
+    avals_in = cast(Sequence[jax.core.ShapedArray], avals_in)
+    assert all(isinstance(a, jax.core.ShapedArray) for a in avals_out)
+    avals_out = cast(Sequence[jax.core.ShapedArray], avals_out)
 
     queries_shape, keys_shape, values_shape, length_shape = avals_in
     attention_shape, result_shape = avals_out
@@ -877,10 +924,10 @@ def local_attention_forward_xla_translation(
             name.encode("utf8"),
             operands=[queries, keys, values, length],
             shape_with_layout=xla_client.Shape.tuple_shape(
-                [convert_to_xla_shape(res) for res in avals_out]
+                [_convert_to_xla_shape(res) for res in avals_out]
             ),
             operand_shapes_with_layout=[
-                convert_to_xla_shape(val) for val in avals_in
+                _convert_to_xla_shape(val) for val in avals_in
             ],
             opaque=opaque,
         )
@@ -909,12 +956,12 @@ local_attention_backward_p = core.Primitive("local_attention_backward")
 
 
 def local_attention_backward_abstract_eval(
-    queries: ShapedArray,
-    keys: ShapedArray,
-    values: ShapedArray,
-    length: ShapedArray,
-    attention: ShapedArray,
-    g: ShapedArray,
+    queries: jax.core.ShapedArray,
+    keys: jax.core.ShapedArray,
+    values: jax.core.ShapedArray,
+    length: jax.core.ShapedArray,
+    attention: jax.core.ShapedArray,
+    g: jax.core.ShapedArray,
     attention_width: int,
 ):
     assert length.shape == tuple()
@@ -931,7 +978,7 @@ def local_attention_backward_abstract_eval(
     assert queries.shape[2] % 16 == 0
 
     attention_shape = tuple(
-        get_local_attention_shape(
+        piton.extension.jax.get_local_attention_shape(
             queries.shape[0],
             queries.shape[1],
             queries.shape[2],
@@ -956,11 +1003,11 @@ def local_attention_backward_xla_translation(
     *,
     attention_width: int,
 ) -> Sequence[xla.XlaOp]:
-    assert all(isinstance(a, ShapedArray) for a in avals_in)
-    avals_in = cast(Sequence[ShapedArray], avals_in)
+    assert all(isinstance(a, jax.core.ShapedArray) for a in avals_in)
+    avals_in = cast(Sequence[jax.core.ShapedArray], avals_in)
 
-    assert all(isinstance(a, ShapedArray) for a in avals_out)
-    avals_out = cast(Sequence[ShapedArray], avals_out)
+    assert all(isinstance(a, jax.core.ShapedArray) for a in avals_out)
+    avals_out = cast(Sequence[jax.core.ShapedArray], avals_out)
 
     (
         queries_shape,
@@ -1006,16 +1053,16 @@ def local_attention_backward_xla_translation(
             name.encode("utf8"),
             operands=[queries, keys, values, length, attention, g],
             shape_with_layout=xla_client.Shape.tuple_shape(
-                [convert_to_xla_shape(avals_out[0])]
+                [_convert_to_xla_shape(avals_out[0])]
                 + [
-                    convert_to_xla_shape(
+                    _convert_to_xla_shape(
                         val, force_dtype=xla_client.dtype_to_etype(jnp.float32)
                     )
                     for val in avals_out[1:]
                 ]
             ),
             operand_shapes_with_layout=[
-                convert_to_xla_shape(val) for val in avals_in
+                _convert_to_xla_shape(val) for val in avals_in
             ],
             opaque=opaque,
         )

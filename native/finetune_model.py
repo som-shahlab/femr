@@ -82,12 +82,13 @@ elif batch_config["task"]["type"] == "labeled_patients":
     if task["labeler_type"] == "survival":
         # Currently need a lot of hacks to get this working right ...
         with open(
-            "../../gpu_experiments/new_batches/batch_4_fixed_again_hire/batch_info.msgpack",
+            "surv_clmbr_batches_new/batch_info.msgpack",
             "rb",
         ) as f:
             old_batch_task = msgpack.load(f)["config"]["task"]
 
             task["time_bins"] = old_batch_task["survival_dict"]["time_bins"]
+            print(task["time_bins"])
 
         with open(
             "../../gpu_experiments/best_surv_model/config.msgpack", "rb"
@@ -162,26 +163,29 @@ params = jax.jit(model.init, static_argnames=["config", "is_training"])(
     rng, config=config, batch=dummy_batch, is_training=True
 )
 
+
+def replace(params, module, weight, value):
+    old_val = params[module][weight]
+    params[module][weight] = value.astype(old_val.dtype).reshape(old_val.shape)
+
+
 if batch_task["type"] == "survival_clmbr":
-    old_code_weight_bias = params["EHRTransformer/~/SurvivalCLMBRTask"][
-        "code_weight_bias"
-    ]
-    new_code_weight_bias = (
-        jnp.log2(jnp.array(batch_task["survival_dict"]["lambdas"]))
-        .astype(dtype=old_code_weight_bias.dtype)
-        .reshape(old_code_weight_bias.shape)
+    replace(
+        params,
+        "EHRTransformer/~/SurvivalCLMBRTask",
+        "code_weight_bias",
+        jnp.log2(jnp.array(batch_task["survival_dict"]["lambdas"])),
     )
-    params["EHRTransformer/~/SurvivalCLMBRTask"][
-        "code_weight_bias"
-    ] = new_code_weight_bias
 elif batch_task["type"] == "clmbr":
     pass
 elif batch_task["type"] == "labeled_patients":
     if batch_task["labeler_type"] == "survival":
-        old_weights = params["EHRTransformer/~/SurvivalTask"]["code_weight"]
-        params["EHRTransformer/~/SurvivalTask"]["code_weight"] = old_weights.at[
-            0, -1
-        ].set(jnp.log2(batch_task["lambda"]))
+        replace(
+            params,
+            "EHRTransformer/~/SurvivalTask",
+            "code_weight_bias",
+            jnp.log2(jnp.array(batch_task["lambda"])),
+        )
 else:
     rootLogger.error("Invalid task for postprocess?")
     exit()
@@ -227,7 +231,12 @@ if args.start_from_checkpoint is not None:
                         )
                         exit()
 
-                if args.freeze_weights:
+                if (
+                    # p
+                    # == "EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed"
+                    # or
+                    args.freeze_weights
+                ):
                     non_fit_params[p] = checkpointed_weights[p]
                     del params[p]
                 else:
@@ -237,6 +246,8 @@ if args.start_from_checkpoint is not None:
                 params[p] = params[p]
 
 
+original_non_fit_params = non_fit_params
+
 non_fit_params = piton.models.transformer.convert_params(
     non_fit_params, jnp.float16
 )
@@ -245,6 +256,18 @@ non_fit_params = hk.data_structures.to_immutable_dict(non_fit_params)
 logging.info(
     "Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params))
 )
+
+total_params = 0
+
+for a, a_w in params.items():
+    for n, v in a_w.items():
+        total = 1
+        for i in v.shape:
+            total *= i
+        total_params += total
+
+
+logging.info("Total params %s", total_params)
 
 
 @functools.partial(
@@ -314,10 +337,16 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
             is_censor = jnp.concatenate(is_censor, axis=0)
             event_times = jnp.concatenate(event_times, axis=0)
 
+            limit_time = jnp.quantile(event_times, 0.95)
+            is_censor = is_censor.at[event_times > limit_time].set(True)
+            event_times = event_times.at[event_times > limit_time].set(
+                limit_time
+            )
+
             c_statistic = piton.extension.metrics.compute_c_statistic(
                 event_times,
                 is_censor,
-                jnp.array(config["task"]["time_bins"]) * 60 * 24,
+                jnp.array(config["task"]["time_bins"]),
                 logits,
             )
         elif config["task"]["labeler_type"] == "binary":
@@ -376,9 +405,11 @@ def update(params, non_fit_params, loss_scale, rng, opt_state, config, batch):
 
     loss_scale = loss_scale.adjust(grads_finite)
 
+    opt_result = apply_optimizer(params, grads, opt_state)
+
     new_params, opt_state = jmp.select_tree(
         grads_finite,
-        apply_optimizer(params, grads, opt_state),
+        opt_result,
         (params, opt_state),
     )
 
@@ -581,9 +612,7 @@ while True:
                 "test", params, non_fit_params, rng, config
             )
             with open(os.path.join(args.directory, "best"), "wb") as out:
-                total_params = params | hk.data_structures.to_mutable_dict(
-                    non_fit_params
-                )
+                total_params = params | original_non_fit_params
                 pickle.dump(total_params, out)
             with open(
                 os.path.join(args.directory, "best_opt_state"), "wb"
@@ -596,6 +625,12 @@ while True:
             ) as out_t:
                 json.dump(test_loss, out_t)
         logging.info("Continuing to train ...")
+
+    if step == num_train_batches:
+        logging.info("Swapping to full training")
+        params = params | original_non_fit_params
+        non_fit_params = {}
+        opt_state = opt.init(params)
 
     params, opt_state, batch_loss, loss_scale = update(
         params,

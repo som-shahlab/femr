@@ -12,8 +12,8 @@ from piton.jax import (
     embedding_dot_fallback,
     exp_mean,
     exp_mean_fallback,
-    gather_scatter,
-    gather_scatter_fallback,
+    gather_scatter_add,
+    gather_scatter_add_fallback,
     get_shifts_and_mult,
     local_attention,
     local_attention_fallback,
@@ -22,7 +22,7 @@ from piton.jax import (
 jnp.set_printoptions(linewidth=200)
 
 
-def gather_scatter_helper(dtype, device):
+def gather_scatter_add_helper(dtype, device):
     A = 512
     B = 256
     N = 1024
@@ -47,12 +47,12 @@ def gather_scatter_helper(dtype, device):
 
     a, indices, g = [device_put(jnp.array(a), device) for a in (a, indices, g)]
 
-    expected = gather_scatter_fallback(a, indices, B)
+    expected = gather_scatter_add_fallback(a, indices, B)
 
-    actual_dummy = gather_scatter(a, indices, B)
+    actual_dummy = gather_scatter_add(a, indices, B)
     assert jnp.allclose(expected, actual_dummy, atol=1e-2, rtol=1e-3)
 
-    actual = jax.jit(gather_scatter, static_argnums=(2,))(a, indices, B)
+    actual = jax.jit(gather_scatter_add, static_argnums=(2,))(a, indices, B)
     assert jnp.allclose(expected, actual, atol=1e-2, rtol=1e-3)
 
     def h(f):
@@ -62,29 +62,31 @@ def gather_scatter_helper(dtype, device):
 
         return grad(helper)
 
-    expected_grad = h(gather_scatter_fallback)(a, indices, B)
-    actual_dummy_grad = h(gather_scatter)(a, indices, B)
+    expected_grad = h(gather_scatter_add_fallback)(a, indices, B)
+    actual_dummy_grad = h(gather_scatter_add)(a, indices, B)
 
     assert jnp.allclose(expected_grad, actual_dummy_grad, atol=1e-2, rtol=1e-3)
 
-    actual_grad = h(jax.jit(gather_scatter, static_argnums=(2,)))(a, indices, B)
+    actual_grad = h(jax.jit(gather_scatter_add, static_argnums=(2,)))(
+        a, indices, B
+    )
     print(expected_grad)
     print(actual_grad)
 
     assert jnp.allclose(expected_grad, actual_grad, atol=1e-2, rtol=1e-3)
 
 
-def test_gather_scatter_cpu():
+def test_gather_scatter_add_cpu():
     cpu_device = devices("cpu")[0]
-    gather_scatter_helper(dtype=jnp.float32, device=cpu_device)
+    gather_scatter_add_helper(dtype=jnp.float32, device=cpu_device)
 
 
-def test_gather_scatter_gpu():
+def test_gather_scatter_add_gpu():
     gpu_device = devices("gpu")[0]
-    gather_scatter_helper(dtype=jnp.float32, device=gpu_device)
+    gather_scatter_add_helper(dtype=jnp.float32, device=gpu_device)
 
 
-def get_result_and_grad(device, dtype):
+def embedding_dot_test_helper(device, dtype):
     key = random.PRNGKey(12352)
 
     key, k1, k2, k3 = random.split(key, 4)
@@ -122,15 +124,15 @@ def get_result_and_grad(device, dtype):
     assert_equal(db1, db2)
 
 
-def test_cpu_implementation():
-    get_result_and_grad(devices("cpu")[0], np.float64)
-    get_result_and_grad(devices("cpu")[0], np.float32)
-    get_result_and_grad(devices("cpu")[0], np.float16)
+def test_embedding_dot_cpu():
+    embedding_dot_test_helper(devices("cpu")[0], np.float64)
+    embedding_dot_test_helper(devices("cpu")[0], np.float32)
+    embedding_dot_test_helper(devices("cpu")[0], np.float16)
 
 
-def test_gpu_implementation():
-    get_result_and_grad(devices("gpu")[0], np.float32)
-    get_result_and_grad(devices("gpu")[0], np.float16)
+def test_embedding_dot_gpu():
+    embedding_dot_test_helper(devices("gpu")[0], np.float32)
+    embedding_dot_test_helper(devices("gpu")[0], np.float16)
 
 
 def exp_mean_helper(dtype, is_zero, device):
