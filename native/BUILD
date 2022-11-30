@@ -283,6 +283,7 @@ cc_library(
         "@concurrentqueue",
         "@boost//:filesystem",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@cpp-base64",
     ],
 )
 

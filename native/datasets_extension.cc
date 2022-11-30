@@ -35,12 +35,10 @@ void keep_alive(py::handle nurse, py::handle patient) {
 namespace {
 class EventWrapper {
    public:
-    EventWrapper(py::module base64, py::module pickle,
-                 PatientDatabase* database, uint32_t patient_id,
-                 absl::CivilSecond birth_date, uint32_t event_index,
-                 const Event& event)
-        : m_base64(base64),
-          m_pickle(pickle),
+    EventWrapper(py::module pickle, PatientDatabase* database,
+                 uint32_t patient_id, absl::CivilSecond birth_date,
+                 uint32_t event_index, const Event& event)
+        : m_pickle(pickle),
           m_database(database),
           m_patient_id(patient_id),
           m_birth_date(birth_date),
@@ -94,12 +92,10 @@ class EventWrapper {
         std::string_view metadata_str =
             m_database->get_event_metadata(m_patient_id, m_event_index);
         py::object bytes = py::bytes(metadata_str.data(), metadata_str.size());
-        py::object decoded = m_base64.attr("b85decode")(bytes);
-        return m_pickle.attr("loads")(decoded);
+        return m_pickle.attr("loads")(bytes);
     }
 
    private:
-    py::module m_base64;
     py::module m_pickle;
 
     PatientDatabase* m_database;
@@ -111,7 +107,6 @@ class EventWrapper {
 }  // namespace
 
 void register_datasets_extension(py::module& root) {
-    py::module base64 = py::module::import("base64");
     py::module pickle = py::module::import("pickle");
 
     py::module abc = py::module::import("collections.abc");
@@ -197,8 +192,7 @@ void register_datasets_extension(py::module& root) {
         .def("__len__", [](PatientDatabase& self) { return self.size(); })
         .def(
             "__getitem__",
-            [python_patient, base64, pickle](py::object self_object,
-                                             uint32_t index) {
+            [python_patient, pickle](py::object self_object, uint32_t index) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
@@ -213,8 +207,8 @@ void register_datasets_extension(py::module& root) {
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    events[i] = EventWrapper(base64, pickle, &self, index,
-                                             birth_date, i, event);
+                    events[i] = EventWrapper(pickle, &self, index, birth_date,
+                                             i, event);
                 }
 
                 return python_patient("patient_id"_a = p.patient_id,

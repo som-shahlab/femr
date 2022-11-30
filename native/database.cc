@@ -10,6 +10,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
+#include "base64.h"
 #include "blockingconcurrentqueue.h"
 #include "count_codes_and_values.hh"
 #include "csv.hh"
@@ -366,7 +367,8 @@ void reader_thread(
             }
         }
 
-        current_entry.event_metadata.push_back(reader.get_row()[4]);
+        current_entry.event_metadata.push_back(
+            base64_decode(reader.get_row()[4]));
 
         current_patient.events.push_back(next_event);
     }

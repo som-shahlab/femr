@@ -405,7 +405,7 @@ class SurvivalCLMBRTask : public Task {
                                 "This should not be possible");
                         }
 
-                        double log_time = std::log2(event.first - start);
+                        float log_time = std::log2(event.first - start);
                         batch_event_codes(event_index) = event.second;
                         batch_event_log_times(event_index) = log_time;
 
@@ -662,6 +662,10 @@ class BatchCreator {
 
     void add_patient(uint32_t patient_id, uint32_t offset,
                      bool actually_add = true) {
+        if (batch_index >= offsets.size()) {
+            throw std::runtime_error(
+                "This should not be possible to go over the batch size?");
+        }
         const Patient& p = iter.get_patient(patient_id);
 
         patient_ids(batch_index) = patient_id;
@@ -800,6 +804,18 @@ class BatchCreator {
         label_indices_tensor.setConstant(ages.size());
 
         for (size_t i = 0; i < label_indices.size(); i++) {
+            if (i >= 1) {
+                if (label_indices[i] < label_indices[i - 1]) {
+                    throw std::runtime_error(
+                        absl::StrCat("Violated the order ", label_indices[i],
+                                     label_indices[i - 1]));
+                }
+                if (label_indices[i] == label_indices[i - 1]) {
+                    throw std::runtime_error(
+                        absl::StrCat("Violated the unique ", label_indices[i],
+                                     label_indices[i - 1]));
+                }
+            }
             label_indices_tensor(i) = label_indices[i];
         }
 

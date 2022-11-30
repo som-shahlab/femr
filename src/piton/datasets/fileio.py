@@ -65,7 +65,7 @@ class EventWriter:
         elif isinstance(field_value, str):
             return field_value
         elif isinstance(field_value, dict):
-            return base64.b85encode(pickle.dumps(field_value)).decode("utf8")
+            return base64.b64encode(pickle.dumps(field_value)).decode("utf8")
         else:
             raise ValueError(
                 f"EventWriter does not have a method for fields with the type of {field_name}"
@@ -147,7 +147,7 @@ class EventReader:
                     return memoryview(field_value.encode("utf8"))
                 elif field_type == "Mapping[str, Any]":
                     return pickle.loads(
-                        base64.b85decode(field_value.encode("utf8"))
+                        base64.b64decode(field_value.encode("utf8"))
                     )
                 else:
                     raise NotImplementedError(
