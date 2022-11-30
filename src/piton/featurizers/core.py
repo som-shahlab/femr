@@ -20,8 +20,6 @@ import itertools
 import torch
 from . import get_gpus_with_minimum_free_memory
 
-# multiprocessing.set_start_method('spawn', force=True)
-
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
 .. py:attribute:: column
@@ -166,32 +164,33 @@ class FeaturizerList:
             return
 
         pids = sorted(labeled_patients.get_all_patient_ids())
-
         pids_parts = np.array_split(pids, num_threads)
-
         tasks = [(database_path, pid_part, labeled_patients, self.featurizers) for pid_part in pids_parts]
 
         ctx = multiprocessing.get_context('forkserver')
         with ctx.Pool(num_threads) as pool:
-            trained_featurizers_tuple_list = list(pool.imap(_run_preprocess_featurizers, tasks))
+            trained_featurizers_list = list(pool.imap(_run_preprocess_featurizers, tasks))
 
-        age_featurizers = []
-        count_featurizers = []
+        featurizers_dict = {}
+        for featurizer in self.featurizers:
+            featurizers_dict[featurizer.get_name()] = []
 
-        for trained_featurizers_tuple in trained_featurizers_tuple_list:
-            age_featurizers.append(trained_featurizers_tuple[0])
-            count_featurizers.append(trained_featurizers_tuple[1])
-
+        for trained_featurizers_tuple in trained_featurizers_list:
+            for i in range(len(self.featurizers)):
+                featurizers_dict[self.featurizers[i].get_name()].append(trained_featurizers_tuple[i])
+    
         # Aggregating age featurizers
-        for age_featurizer in age_featurizers:
-            if age_featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
-                self.featurizers[0].from_dict(age_featurizer.to_dict())
-                break
-
+        if "AgeFeaturizer" in featurizers_dict:
+            for age_featurizer in featurizers_dict["AgeFeaturizer"]:
+                if age_featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
+                    self.featurizers[0].from_dict(age_featurizer.to_dict())
+                    break
+        
         # Aggregating count featurizers
-        patient_codes_dict_list = [count_featurizer.to_dict()["patient_codes"]["values"] for count_featurizer in count_featurizers]
-        patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
-        self.featurizers[1].from_dict({"patient_codes": {"values": patient_codes}})
+        if "CountFeaturizer" in featurizers_dict:
+            patient_codes_dict_list = [count_featurizer.to_dict()["patient_codes"]["values"] for count_featurizer in featurizers_dict["CountFeaturizer"]]
+            patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
+            self.featurizers[1].from_dict({"patient_codes": {"values": patient_codes}})
 
         for featurizer in self.featurizers:
             featurizer.finalize_preprocessing()

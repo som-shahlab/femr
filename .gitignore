@@ -13,4 +13,5 @@ native/result_clmbr
 native/trash
 .ipynb_checkpoints/*
 scratch*
+scratch/*
 tutorials/logs/

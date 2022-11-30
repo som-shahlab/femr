@@ -147,7 +147,7 @@ class LabelingFunction(ABC):
         """
         patients_to_labels: Dict[int, List[Label]] = {}
 
-        if num_patients == None:
+        if num_patients is None:
             database = PatientDatabase(database_path)
             num_patients = len(database)
 

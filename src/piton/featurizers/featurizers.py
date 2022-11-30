@@ -73,6 +73,9 @@ class AgeFeaturizer(Featurizer):
 
     def needs_preprocessing(self) -> bool:
         return self.normalize
+    
+    def get_name(self):
+        return "AgeFeaturizer"
 
 
 class CountFeaturizer(Featurizer):
@@ -154,17 +157,6 @@ class CountFeaturizer(Featurizer):
                             for column, count in current_codes.items()
                         ]
                     )
-                
-
-                # if label_idx == len(labels) - 1:
-                #     all_columns.append(
-                #         [
-                #             ColumnValue(column, count)
-                #             for column, count in current_codes.items()
-                #         ]
-                #     )
-                #     break
-
         else:
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.date]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
@@ -248,23 +240,23 @@ class CountFeaturizer(Featurizer):
 
     def needs_preprocessing(self) -> bool:
         return True
+    
+    def get_name(self):
+        return "CountFeaturizer"
 
 
-def _get_one_patient_text_data(patient, labels, min_char, max_char):
+def _get_one_patient_text_data(patient, labels, note_piton_codes, min_char):
     text_for_all_label = []
 
     label_idx = 0
     current_text = []
     for event in patient.events:
+        if event.code not in note_piton_codes:
+            continue
         while event.start > labels[label_idx].time:
             label_idx += 1
-
-            combined_text = " ".join(current_text)
-            # if len(combined_text) == 0:
-            #     combined_text = " "
-            # else:
-            #     text_for_all_label.append(combined_text)
-            text_for_all_label.append(combined_text[-max_char:])
+            combined_text = " ".join(current_text[-3:])
+            text_for_all_label.append(combined_text)
 
             if label_idx >= len(labels):
                 return text_for_all_label
@@ -280,21 +272,39 @@ def _get_one_patient_text_data(patient, labels, min_char, max_char):
         current_text.append(text_data)
 
     if label_idx < len(labels):
+        combined_text = " ".join(current_text[-3:])
         for label in labels[label_idx:]:
-            combined_text = " ".join(current_text)
-            # if len(combined_text) == 0:
-            #     combined_text = " "
-            # else:
-            #     text_for_all_label.append(combined_text)
-            text_for_all_label.append(combined_text[-max_char:])
+            text_for_all_label.append(combined_text)
 
     return text_for_all_label
+
+
+def _get_one_patient_discharge_summary(patient, discharge_summary_piton_code):
+
+    discharge_summaries = []
+
+    for event in patient.events:
+        if event.code != discharge_summary_piton_code or type(event.value) is not memoryview:
+            continue
+        
+        discharge_summaries.append(bytes(event.value).decode("utf-8"))
+
+    if len(discharge_summaries) == 0:
+        return [" "]
+
+    return discharge_summaries[-1:]
 
 
 def _get_all_patient_text_data(args):
     
     database_path, pids, labeled_patients, params_dict = args
     database = PatientDatabase(database_path)
+
+    note_concept_ids = ["LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/LP173418-7"]
+    note_piton_codes = [database.get_code_dictionary().index(concept_id) for concept_id in note_concept_ids]
+
+    # discharge_summary_concept_id = "LOINC/18842-5"
+    # discharge_summary_piton_code = database.get_code_dictionary().index(discharge_summary_concept_id)
 
     data = []
     patient_ids = []
@@ -306,11 +316,10 @@ def _get_all_patient_text_data(args):
         labels = labeled_patients.pat_idx_to_label(patient_id)
 
         assert len(labels) == 1  # for now since we are only doing 1 label per patient
-
-        # if len(labels) == 0:
-        #     continue
         
-        patient_text_data = _get_one_patient_text_data(patient, labels, params_dict["min_char"], params_dict["max_char"])
+        patient_text_data = _get_one_patient_text_data(patient, labels, note_piton_codes, params_dict["min_char"])
+
+        # patient_text_data = _get_one_patient_discharge_summary(patient, note_piton_codes)
 
         assert len(labels) == len(patient_text_data)
         
@@ -405,58 +414,42 @@ class TextFeaturizer:
         self,
         labeled_patients: LabeledPatients,
         database_path: str,
+        num_patients: None,
         random_seed: int = 1
 ):
         self.labeled_patients = labeled_patients
         self.database_path = database_path
         self.random_seed = random_seed
+        self.num_patients = num_patients
     
     def preprocess_text(self):
         pass
-    
-    def featurize(
-        self, 
-        path_to_model: str,
-        path_to_save: str, 
-        prefix: str = "temp",
-        num_threads: int = 1,
-        num_threads_gpu: int = 1, 
-        min_gpu_size: int = 20,
-        min_char: int = 100, 
-        max_char: int = 10000, 
-        max_length: int = 512, 
-        padding: bool = True, 
-        truncation: bool = True, 
-        chunk_size: int = 1000,
-        batch_size: int = 4096,
-        num_patients: int = None
-    ):
 
-        pids = sorted(self.labeled_patients.get_all_patient_ids())
-        if num_patients is not None:
-            pids = pids[:num_patients]
+    def accumulate_text(
+        self, 
+        path_to_save: str, 
+        prefix: str = "v1",
+        num_threads: int = 1,
+        min_char: int = 100, 
+    ):
+        pids = self.labeled_patients.get_all_patient_ids()
+        if self.num_patients is not None:
+            pids = pids[:self.num_patients]
 
         params_dict = {
             "min_char": min_char, 
-            "max_char": max_char,
-            "max_length": max_length, 
-            "padding": padding, 
-            "truncation": truncation, 
-            "chunk_size": chunk_size, 
-            "min_gpu_size": min_gpu_size, 
-            "batch_size": batch_size
         }
 
         # Text Acculumation
+
         start_time = datetime.datetime.now()
         print("Starting text accumulation")
+        
         pids_parts = np.array_split(pids, num_threads)
         tasks = [(self.database_path, pid_part, self.labeled_patients, params_dict) for pid_part in pids_parts]
         ctx = multiprocessing.get_context('forkserver')
         with ctx.Pool(num_threads) as pool:
             patient_text_data_list = list(pool.imap(_get_all_patient_text_data, tasks))
-
-        # print(len(patient_text_data_list))
 
         text_data = np.concatenate([patient_text_data[0] for patient_text_data in patient_text_data_list], axis=None)
         result_labels = np.concatenate([patient_text_data[1] for patient_text_data in patient_text_data_list], axis=None)
@@ -468,43 +461,44 @@ class TextFeaturizer:
 
         print("Finished text accumulation: ", datetime.datetime.now() - start_time)
 
-        # Generate Tokenization
+    def tokenize_text(
+        self, 
+        path_to_model: str,
+        path_to_save: str,
+        path_to_text_data: str, 
+        prefix: str = "v1",
+        num_threads: int = 1,
+        max_length: int = 512, 
+        padding: bool = True, 
+        truncation: bool = True, 
+        batch_size: int = 4096,
+    ):
+        print("Loading text data...")
+        text_data = load_from_file(path_to_text_data)
+        print("Text data loaded!")
+        params_dict = {
+            "padding": padding, 
+            "truncation": truncation, 
+            "batch_size": batch_size, 
+            "max_length": max_length
+        }
+
+        start_time = datetime.datetime.now()
         print("Starting Tokenization")
         text_data_parts = np.array_split(text_data, num_threads)
         tasks = [(text_data_part, path_to_model, params_dict) for text_data_part in text_data_parts]
         ctx = multiprocessing.get_context('forkserver')
         with ctx.Pool(num_threads) as pool:
             tokenized_text_list = list(pool.imap(_get_tokenized_text, tasks))
+        
+        for i, tokenized_text in enumerate(tokenized_text_list):
+            save_to_file(tokenized_text, os.path.join(path_to_save, f"{i}_tokenized_data.pickle"))
 
-        save_to_file(tokenized_text_list, os.path.join(path_to_save, f"{prefix}_tokenized_text.pickle"))
+        # save_to_file(tokenized_text_list, os.path.join(path_to_save, f"{prefix}_tokenized_text.pickle"))
         
         print("Finished Tokenization: ", datetime.datetime.now() - start_time)
-
-        return None
-
-        # print(tokenized_text_list[0].keys())
-        # exit()
-        # print("Starting Generating Embedding")
-        # # embeddings_list = []
-        # # for tokenized_text in tokenized_text_list:
-        # #     embeddings_list.append(_get_text_embeddings((tokenized_text, path_to_model, params_dict)))
-        
-        # # print("Finished Generating Embedding: ", datetime.datetime.now() - start_time)
-
-        # # Generate Embeddings
-        # tasks = [(tokenized_text, path_to_model, params_dict) for tokenized_text in tokenized_text_list]
-        # ctx = multiprocessing.get_context('forkserver')
-        # with ctx.Pool(num_threads) as pool:
-        #     embeddings_list = list(pool.imap(_get_text_embeddings, tasks))
-        # embeddings = np.concatenate(embeddings_list)
-
-        # result_tuple = (
-        #     embeddings,
-        #     result_labels,
-        #     patient_ids,
-        #     labeling_time,
-        # )
-
-        # save_to_file(result_tuple, os.path.join(path_to_save, f"{prefix}_embeddings.pickle"))
-
-        # return result_tuple
+    
+    def generate_embeddings(self):
+        # Currently this needs to be done separately as a separate script to be run in GPU in Carina. 
+        # Check ...
+        pass

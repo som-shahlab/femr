@@ -3,7 +3,7 @@
 #SBATCH --job-name=array
 #SBATCH --output=logs/array_%A_%a.out
 #SBATCH --error=logs/array_%A_%a.err
-#SBATCH --array=0-10
+#SBATCH --array=0-20
 #SBATCH --time=1-00:00:00
 #SBATCH --partition=gpu,nigam-a100
 #SBATCH --ntasks=1
@@ -14,4 +14,4 @@
 
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 
-python text_featurizer_temp.py $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT
+python 3_2_generate_embeddings.py $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT

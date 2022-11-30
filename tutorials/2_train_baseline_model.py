@@ -1,16 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
-# get_ipython().run_line_magic('load_ext', 'autoreload')
-# get_ipython().run_line_magic('autoreload', '2')
-
-
-# In[2]:
-
-
 import datetime
 import os
 from typing import List, Tuple
@@ -21,41 +8,28 @@ from sklearn import metrics
 
 import piton
 import piton.datasets
+from piton.featurizers import save_to_file, load_from_file
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, precision_recall_curve, auc
+
 from tqdm import tqdm
 import xgboost as xgb
 import lightgbm as lgbm
 
 
 # Please update this path with your extract of piton as noted in previous notebook. 
-PATH_TO_PITON_DB = '/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
-PATH_TO_SAVE_MATRIX = "/share/pi/nigam/rthapa84/data"
-LABELED_PATIENTS = "HighHbA1c_labeled_patients_v3.pickle"
-FEATURIZED_DATA = "HighHbA1c_featurized_patients_v3.pickle"
+PATH_TO_PITON_DB = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
+PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
+LABELED_PATIENTS = "mortality_labeled_patients_test.pickle"
+FEATURIZED_DATA = "mortality_featurized_patients_test.pickle"
 SEED = 97
 
-#PATH_TO_PITON_DB = '/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/'
-#PATH_TO_SAVE_MATRIX = "./"
-
-# Patient database
 database = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
 
-with open(os.path.join(PATH_TO_SAVE_MATRIX, FEATURIZED_DATA), 'rb') as f:
-    featurized_data = pickle.load(f)
-
+featurized_data = load_from_file(os.path.join(PATH_TO_SAVE_MATRIX, FEATURIZED_DATA))
 print("Data loaded")
-
-
-# In[4]:
-
-
-len(featurized_data)
-
-
-# In[5]:
 
 feature_matrix, labels, patient_ids = featurized_data[0], featurized_data[1], featurized_data[2]
 
@@ -67,8 +41,6 @@ y_train = labels[train_pids_idx]
 X_test = feature_matrix[dev_pids_idx]
 y_test = labels[dev_pids_idx]
 
-# X_train, X_test, y_train, y_test = train_test_split(feature_matrix, labels, train_size = 0.8)
-
 print("Training Size:", X_train.shape)
 print("Testing Size:", X_test.shape)
 
@@ -77,7 +49,7 @@ print("Prevalence on training dataset:", round(sum(y_train)/len(y_train), 4))
 print("Prevalence on testing dataset:", round(sum(y_test)/len(y_test), 4))
 
 # Logistic Regresion
-model = LogisticRegression().fit(X_train, y_train)
+model = LogisticRegressionCV().fit(X_train, y_train)
 y_pred_proba = model.predict_proba(X_test)[::,1]
 auroc = metrics.roc_auc_score(y_test, y_pred_proba)
 precision, recall, thresholds = precision_recall_curve(y_test, y_pred_proba)
@@ -92,6 +64,7 @@ auroc = metrics.roc_auc_score(y_test, y_pred_proba)
 precision, recall, thresholds = precision_recall_curve(y_test, y_pred_proba)
 auc_precision_recall = auc(recall, precision)
 print("XGB (auroc, auprc): ", auroc, auc_precision_recall)
+
 
 model = lgbm.LGBMClassifier()
 model.fit(X_train, y_train)
