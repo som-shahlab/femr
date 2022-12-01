@@ -154,31 +154,31 @@ def test_move_billing_codes() -> None:
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
                 code=1234,
-                metadata={
-                    "end": datetime.datetime(1999, 7, 20),
-                    "visit_id": 10,
-                    "clarity_table": "lpch_pat_enc",
-                },
+                end=datetime.datetime(1999, 7, 20),
+                visit_id=10,
+                clarity_table="lpch_pat_enc",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 9),
                 code=OMOP_BIRTH,
-                metadata={"visit_id": 10, "clarity_table": "lpch_pat_enc_dx"},
+                visit_id=10,
+                clarity_table="lpch_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 10),
                 code=42165,
-                metadata={"visit_id": 10, "clarity_table": "shc_pat_enc_dx"},
+                visit_id=10,
+                clarity_table="shc_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 11),
                 code=12345,
-                metadata={"visit_id": 10},
+                visit_id=10,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 13),
                 code=123,
-                metadata={"visit_id": 11},
+                visit_id=11,
             ),
         ],
     )
@@ -189,31 +189,31 @@ def test_move_billing_codes() -> None:
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
                 code=1234,
-                metadata={
-                    "visit_id": 10,
-                    "end": datetime.datetime(1999, 7, 20),
-                    "clarity_table": "lpch_pat_enc",
-                },
+                visit_id=10,
+                end=datetime.datetime(1999, 7, 20),
+                clarity_table="lpch_pat_enc",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 11),
                 code=12345,
-                metadata={"visit_id": 10},
+                visit_id=10,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 13),
                 code=123,
-                metadata={"visit_id": 11},
+                visit_id=11,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 20),
                 code=42165,
-                metadata={"visit_id": 10, "clarity_table": "shc_pat_enc_dx"},
+                visit_id=10,
+                clarity_table="shc_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 20),
                 code=OMOP_BIRTH,
-                metadata={"visit_id": 10, "clarity_table": "lpch_pat_enc_dx"},
+                visit_id=10,
+                clarity_table="lpch_pat_enc_dx",
             ),
         ],
     )

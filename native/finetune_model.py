@@ -443,9 +443,11 @@ def should_decay(module_name, name, value):
     return name not in ("b", "scale", "embeddings", "code_weight_bias")
 
 
-weight_decay_mask = hk.data_structures.map(should_decay, params)
+def mask_fn(params):
+    return hk.data_structures.map(should_decay, params)
 
-logging.info("Applying decay mask %s", weight_decay_mask)
+
+logging.info("Applying decay mask %s", mask_fn(params))
 
 lr_schedule = make_lr_schedule(warmup_percentage=0.01, total_steps=total_steps)
 weight_decay = args.weight_decay
@@ -455,7 +457,7 @@ opt = optax.chain(
     optax.adamw(
         learning_rate=config["learning_rate"],
         weight_decay=config["weight_decay"],
-        mask=weight_decay_mask,
+        mask=mask_fn,
     ),
     optax.scale_by_schedule(lr_schedule),
 )
@@ -629,7 +631,7 @@ while True:
     if step == num_train_batches:
         logging.info("Swapping to full training")
         params = params | original_non_fit_params
-        non_fit_params = {}
+        non_fit_params = hk.data_structures.to_immutable_dict({})
         opt_state = opt.init(params)
 
     params, opt_state, batch_loss, loss_scale = update(

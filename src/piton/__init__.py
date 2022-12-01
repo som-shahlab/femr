@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, field, fields
-from typing import Any, Mapping, Optional, Sequence
+from dataclasses import dataclass
+from typing import Any, List, Tuple
 
 
-@dataclass(frozen=True)
+@dataclass
 class Patient:
     """A patient."""
 
     patient_id: int
-    events: Sequence[Event]
+    events: List[Event]
+
+    def resort(self) -> None:
+        """Resort the events to maintain the day invariant"""
+        self.events.sort()
 
 
-@dataclass(frozen=True, order=True)
 class Event:
     """An event with a patient record.
 
@@ -30,45 +33,48 @@ class Event:
 
     start: datetime.datetime
     code: int
-    value: float | str | None = None
+    value: float | str | None
 
-    # Arbitrary metadata storage for piton.
-    # Note that this is saved using pickle, so it must support pickle serialization / deserialization
+    # This class can also contain any number of other optional fields
+    # Optional fields can be anything, but there are a couple that are considered "standard"
     #
-    # A couple of common fields within here are frequently defined:
     # - end: datetime, the end datetime for this event
     # - visit_id: int, the visit_id this event is tied to
     # - omop_table: str, the omop table this event was pulled from
     # - clarity_table: str, the clarity table where the event comes from
-    metadata: Mapping[str, Any] = field(default_factory=dict)
 
-    def get_int(self, name: str) -> Optional[int]:
-        """Get an integer value with the provided name."""
-        value = self.metadata.get(name)
-        if value is None:
-            return value
-        assert isinstance(value, int)
-        return value
+    def __init__(
+        self,
+        start: datetime.datetime,
+        code: int,
+        value: float | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.start = start
+        self.code = code
+        self.value = value
 
-    def get_str(self, name: str) -> Optional[str]:
-        """Get a string value with the provided name."""
-        value = self.metadata.get(name)
-        if value is None:
-            return value
-        assert isinstance(value, str)
-        return value
+        for a, b in kwargs.items():
+            if b is not None:
+                self.__dict__[a] = b
 
-    def get_datetime(self, name: str) -> Optional[datetime.datetime]:
-        """Get a datetime value with the provided name."""
-        value = self.metadata.get(name)
-        if value is None:
-            return value
-        assert isinstance(value, datetime.datetime)
-        return value
+    def __getattr__(self, __name: str) -> Any:
+        return None
 
-    def __post_init__(self) -> None:
-        """Verify that the event is constructed correctly."""
-        if not (
-            (self.value is None) or isinstance(self.value, (int, float, str))
-        ):
-            raise TypeError("Invalid type of value passed to event", self.value)
+    def __setattr__(self, name: str, value: Any) -> None:
+        self.__dict__[name] = value
+
+    def __lt__(self, other: Event) -> bool:
+        def sort_key(
+            a: Event,
+        ) -> Tuple[datetime.datetime, int, float | str | None, Any]:
+            return (a.start, a.code, a.value, sorted(list(a.__dict__.items())))
+
+        return sort_key(self) < sort_key(other)
+
+    def __eq__(self, other: object) -> bool:
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self) -> str:
+        val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
+        return f"Event({val_str})"

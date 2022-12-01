@@ -191,7 +191,7 @@ class Transformer(hk.Module):
 
             assert e.dtype == jnp.float32
 
-            x = piton.jax.gather_scatter(
+            x = piton.jax.gather_scatter_add(
                 e, batch["sparse_token_indices"], batch["ages"].shape[0]
             )
 

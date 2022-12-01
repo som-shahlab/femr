@@ -45,54 +45,71 @@ class EventWrapper {
           m_event_index(event_index),
           m_event(event) {}
 
-    py::object code() const { return py::cast(m_event.code); }
-
-    py::object start() const {
-        absl::CivilSecond start_time =
-            m_birth_date + 60 * m_event.start_age_in_minutes;
-
-        return py::cast(start_time);
+    py::object code() {
+        if (!m_code) {
+            m_code.emplace(py::cast(m_event.code));
+        }
+        return *m_code;
     }
 
-    py::object value() const {
-        py::object value;
-        switch (m_event.value_type) {
-            case ValueType::NONE:
-                return py::none();
+    py::object start() {
+        if (!m_start) {
+            absl::CivilSecond start_time =
+                m_birth_date + 60 * m_event.start_age_in_minutes;
 
-            case ValueType::NUMERIC:
-                return py::cast(m_event.numeric_value);
-                break;
+            m_start.emplace(py::cast(start_time));
+        }
+        return *m_start;
+    }
 
-            case ValueType::UNIQUE_TEXT:
-            case ValueType::SHARED_TEXT: {
-                std::string_view data;
+    py::object value() {
+        if (!m_value) {
+            switch (m_event.value_type) {
+                case ValueType::NONE:
+                    m_value.emplace(py::none());
+                    break;
 
-                if (m_event.value_type == ValueType::UNIQUE_TEXT) {
-                    auto dict = m_database->get_unique_text_dictionary();
-                    if (dict == nullptr) {
-                        data = "";
+                case ValueType::NUMERIC:
+                    m_value.emplace(py::cast(m_event.numeric_value));
+                    break;
+
+                case ValueType::UNIQUE_TEXT:
+                case ValueType::SHARED_TEXT: {
+                    std::string_view data;
+
+                    if (m_event.value_type == ValueType::UNIQUE_TEXT) {
+                        auto dict = m_database->get_unique_text_dictionary();
+                        if (dict == nullptr) {
+                            data = "";
+                        } else {
+                            data = (*dict)[m_event.text_value];
+                        }
                     } else {
-                        data = (*dict)[m_event.text_value];
+                        data = m_database->get_shared_text_dictionary()
+                                   [m_event.text_value];
                     }
-                } else {
-                    data =
-                        m_database
-                            ->get_shared_text_dictionary()[m_event.text_value];
+
+                    m_value.emplace(py::str(data.data(), data.size()));
+                    break;
                 }
 
-                return py::str(data.data(), data.size());
+                default:
+                    throw std::runtime_error("Invalid value?");
             }
         }
 
-        throw std::runtime_error("Invalid value?");
+        return *m_value;
     }
 
-    py::object metadata() const {
-        std::string_view metadata_str =
-            m_database->get_event_metadata(m_patient_id, m_event_index);
-        py::object bytes = py::bytes(metadata_str.data(), metadata_str.size());
-        return m_pickle.attr("loads")(bytes);
+    py::object metadata() {
+        if (!m_metadata) {
+            std::string_view metadata_str =
+                m_database->get_event_metadata(m_patient_id, m_event_index);
+            py::object bytes =
+                py::bytes(metadata_str.data(), metadata_str.size());
+            m_metadata.emplace(m_pickle.attr("loads")(bytes));
+        }
+        return *m_metadata;
     }
 
    private:
@@ -103,6 +120,11 @@ class EventWrapper {
     absl::CivilSecond m_birth_date;
     uint32_t m_event_index;
     Event m_event;
+
+    boost::optional<py::object> m_start;
+    boost::optional<py::object> m_code;
+    boost::optional<py::object> m_value;
+    boost::optional<py::object> m_metadata;
 };
 }  // namespace
 
@@ -267,13 +289,16 @@ void register_datasets_extension(py::module& root) {
         .def_property_readonly("code", &EventWrapper::code)
         .def_property_readonly("start", &EventWrapper::start)
         .def_property_readonly("value", &EventWrapper::value)
-        .def_property_readonly("metadata", &EventWrapper::metadata)
-        .def("__repr__", [python_event](const EventWrapper& wrapper) {
+        .def_property_readonly(
+            "__getattr__",
+            [](EventWrapper& wrapper, const std::string& attr) {
+                return wrapper.metadata().attr("get")(attr, py::none());
+            })
+        .def("__repr__", [python_event](EventWrapper& wrapper) {
             using namespace pybind11::literals;
-            return py::str(python_event("code"_a = wrapper.code(),
-                                        "start"_a = wrapper.start(),
-                                        "value"_a = wrapper.value(),
-                                        "metadata"_a = wrapper.metadata()));
+            return py::str(python_event(
+                "code"_a = wrapper.code(), "start"_a = wrapper.start(),
+                "value"_a = wrapper.value(), **wrapper.metadata()));
         });
 
     py::class_<Dictionary> dictionary_binding(m, "Dictionary");
