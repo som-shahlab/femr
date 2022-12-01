@@ -110,8 +110,9 @@ void register_datasets_extension(py::module& root) {
     py::class_<PatientDatabase> database_binding(m, "PatientDatabase");
 
     database_binding
-        .def(py::init<const char*, bool>(), py::arg("filename"),
-             py::arg("read_all") = false)
+        .def(py::init<const char*, bool, bool>(), py::arg("filename"),
+             py::arg("read_all") = false,
+             py::arg("read_all_unique_text") = false)
         .def("__len__", [](PatientDatabase& self) { return self.size(); })
         .def(
             "__getitem__",
@@ -149,8 +150,12 @@ void register_datasets_extension(py::module& root) {
                             std::string_view data;
 
                             if (event.value_type == ValueType::UNIQUE_TEXT) {
-                                data = self.get_unique_text_dictionary()
-                                           [event.text_value];
+                                auto dict = self.get_unique_text_dictionary();
+                                if (dict == nullptr) {
+                                    data = "";
+                                } else {
+                                    data = (*dict)[event.text_value];
+                                }
                             } else {
                                 data = self.get_shared_text_dictionary()
                                            [event.text_value];
@@ -190,13 +195,14 @@ void register_datasets_extension(py::module& root) {
                      return self.get_shared_text_count(*iter);
                  }
 
-                 iter = self.get_unique_text_dictionary().find(data);
-                 if (iter) {
+                 auto dict = self.get_unique_text_dictionary();
+                 if (dict != nullptr && dict->find(data)) {
                      return 1;
                  } else {
                      return 0;
                  }
              })
+        .def("compute_split", &PatientDatabase::compute_split)
         .def("close",
              [](const PatientDatabase& self) {
                  // TODO: Implement this to save memory and file pointers

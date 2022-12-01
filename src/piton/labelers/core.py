@@ -4,7 +4,6 @@ from __future__ import annotations
 import collections
 import datetime
 import os
-import pickle
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -21,10 +20,11 @@ from typing import (
     Union,
 )
 
+import random
+from ..datasets import PatientDatabase
 import numpy as np
-
 from .. import Patient
-
+import multiprocessing
 
 @dataclass(frozen=True)
 class TimeHorizon:
@@ -56,41 +56,24 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 class Label:
     """An individual label for a particular patient at a particular time."""
 
-    __slots__ = [
-        "time",  # Arbitrary timestamp (datetime.datetime)
-        "label_type",
-        "value",
-    ]
+    time: datetime.datetime
+    value: Union[bool, int, float, SurvivalValue]
 
-    def __init__(
-        self,
-        time: datetime.datetime,
-        value: Optional[Union[bool, int, float, SurvivalValue]],
-        label_type: LabelType,
-    ):
-        """Construct a label for datetime `time` and value `value`.
+def _apply_labeling_function(args: Tuple(LabelingFunction, str, List[int])) -> List[Dict[int, List[Label]]]:
 
-        Args:
-            time (datetime.datetime): Time in this patient's timeline that corresponds to this label
-            value (Optional[Union[bool, int, float, SurvivalValue]]): Value of label. Defaults to None.
-            label_type (LabelType): Type of label. Must be an element in `VALID_LABEL_TYPES`.
-        """
-        assert (
-            label_type in VALID_LABEL_TYPES
-        ), f"{label_type} not in {VALID_LABEL_TYPES}"
-        if value is not None:
-            if label_type == "boolean":
-                assert isinstance(value, bool)
-            elif label_type == "numeric":
-                assert isinstance(value, float)
-            elif label_type == "categorical":
-                assert isinstance(value, int)
-            elif label_type == "survival":
-                assert isinstance(value, SurvivalValue)
-        self.time = time
-        self.label_type = label_type
-        self.value = value
+    self, database_path, patient_ids = args
+    database = PatientDatabase(database_path)
 
+    patients_to_labels: Dict[int, List[Label]] = {}
+    for patient_id in patient_ids:
+        patient = database[patient_id]
+        labels = self.label(patient)
+
+        if len(labels) > 0:
+            patients_to_labels[patient.patient_id] = labels
+    
+    return patients_to_labels
+        
 
 class LabelingFunction(ABC):
     """An interface for labeling functions.
@@ -98,11 +81,12 @@ class LabelingFunction(ABC):
     A labeling function applies a label to a specific datetime in a given patient's timeline.
     It can be thought of as generating the following list given a specific patient:
         [(patient ID, datetime_1, label_1), (patient ID, datetime_2, label_2), ... ]
-
     Usage:
+    ```
         labeling_function: LabelingFunction = LF(...)
         patients: Sequence[Patient] = ...
         labels: LabeledPatient = labeling_function.apply(patients)
+    ```
     """
 
     @abstractmethod
@@ -147,7 +131,12 @@ class LabelingFunction(ABC):
         """Return what type of labels this labeler returns. See the Label class."""
         pass
 
-    def apply(self, patients: Sequence[Patient]) -> LabeledPatients:
+    def apply(
+        self, 
+        database_path: str,
+        num_threads: int = 1, 
+        num_patients: Optional[int] = None
+    ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
@@ -157,8 +146,20 @@ class LabelingFunction(ABC):
             LabeledPatients: Maps patients to labels
         """
         patients_to_labels: Dict[int, List[Label]] = {}
-        for patient in patients:
-            patients_to_labels[patient.patient_id] = self.label(patient)
+
+        if num_patients is None:
+            database = PatientDatabase(database_path)
+            num_patients = len(database)
+
+        pids = [i for i in range(num_patients)]
+        pids_parts = np.array_split(pids, num_threads)
+
+        tasks = [(self, database_path, pid_part) for pid_part in pids_parts]
+
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
+            results = list(pool.imap(_apply_labeling_function, tasks))
+        patients_to_labels = dict(collections.ChainMap(*results))
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
@@ -182,6 +183,18 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         self.patients_to_labels: Dict[int, List[Label]] = patients_to_labels
         self.labeler_type: LabelType = labeler_type
 
+    def pat_idx_to_label(self, idx: int):
+        return self.patients_to_labels[idx]
+    
+    def get_all_patient_ids(self):
+        return list(self.patients_to_labels.keys())
+    
+    def get_patients_to_labels(self):
+        return self.patients_to_labels
+    
+    def get_labeler_type(self):
+        return self.labeler_type
+
     def as_numpy_arrays(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Convert `patients_to_labels` to a tuple of np.ndarray's.
 
@@ -194,7 +207,6 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         patient_ids: List[int] = []
         label_values: List[Any] = []
         label_times: List[datetime.datetime] = []
-
         if self.labeler_type in ["boolean", "numerical", "categorical"]:
             for patient_id, labels in self.patients_to_labels.items():
                 for label in labels:
@@ -230,18 +242,6 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                 result.append((int(patient_id), label))
         return result
 
-    def save_to_file(self, path_to_file: str):
-        """Save `LabeledPatients` object to Pickle file."""
-        os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-        with open(path_to_file, "wb") as fd:
-            pickle.dump(self, fd)
-
-    @classmethod
-    def load_from_file(cls, path_to_file: str) -> LabeledPatients:
-        """Load `LabeledPatients` object from Pickle file."""
-        with open(path_to_file, "rb") as fd:
-            result = pickle.load(fd)
-        return result
 
     @classmethod
     def load_from_numpy(
@@ -417,20 +417,16 @@ class FixedTimeHorizonEventLF(LabelingFunction):
 
             if is_outcome_occurs_in_time_horizon:
                 results.append(
-                    Label(time=time, value=True, label_type="boolean")
+                    Label(time=time, value=True)
                 )
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(
-                    Label(time=time, value=False, label_type="boolean")
-                )
-            else:
-                results.append(
-                    Label(time=time, value=None, label_type="boolean")
+                    Label(time=time, value=False)
                 )
 
-        # checks that we have a label for each prediction time (even if `None``)
-        assert len(results) == len(self.get_prediction_times(patient))
+        # # checks that we have a label for each prediction time (even if `None``)
+        # assert len(results) == len(self.get_prediction_times(patient))
         return results
 
     def get_patient_start_end_times(
@@ -442,3 +438,28 @@ class FixedTimeHorizonEventLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return "boolean"
+
+
+class OneLabelPerPatient(LabelingFunction):
+
+    def __init__(self, labeling_function, seed=10):
+        self.labeling_function = labeling_function
+        self.seed = seed
+    
+    def label(self, patient: Patient) -> List[Label]:
+        labels = self.labeling_function.label(patient)
+
+        if len(labels) == 0:
+            return labels
+        return [random.choice(labels)]
+
+
+    def get_labeler_type(self) -> LabelType:
+        """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
+        return self.labeling_function.get_labeler_type()
+
+
+    
+
+
+

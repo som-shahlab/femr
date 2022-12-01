@@ -8,6 +8,9 @@
 3. Apply featurization schemes to obtain feature matrices for each patient
 4. Perform other common tasks necessary for research with EHR data
 
+As part of the model building process, it offers the ability to learn clinical language model based representations (CLMBR) as described in Steinberg et al at https://pubmed.ncbi.nlm.nih.gov/33290879/.
+
+
 # Documentation
 
 https://ehr-ml.readthedocs.io/en/latest/ has (outdated) documentation, including setup instructions and a tutorial using SynPuf data.

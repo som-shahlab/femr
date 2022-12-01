@@ -106,10 +106,10 @@ TEST(Database, CreateDatabase) {
         .code = *database.get_code_dictionary().find("bar/parent of foo"),
         .value_type = ValueType::UNIQUE_TEXT};
     EXPECT_EQ(
-        database.get_unique_text_dictionary().find("Long Text").has_value(),
+        database.get_unique_text_dictionary()->find("Long Text").has_value(),
         true);
-    a.text_value = *database.get_unique_text_dictionary().find("Long Text");
-    std::cout << *database.get_unique_text_dictionary().find("Long Text")
+    a.text_value = *database.get_unique_text_dictionary()->find("Long Text");
+    std::cout << *database.get_unique_text_dictionary()->find("Long Text")
               << std::endl;
 
     Event b = {.age_in_days = 3,
@@ -143,5 +143,16 @@ TEST(Database, CreateDatabase) {
                   .value_type = ValueType::NONE},
             a, b, c, d));
 
-    // boost::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
+}
+
+TEST(Database, TestSplits) {
+    std::vector<uint32_t> counts(10);
+
+    for (uint32_t i = 0; i < 10000; i++) {
+        counts[compute_split(12534, i, 10)] += 1;
+    }
+
+    EXPECT_THAT(counts, ElementsAre(1009, 967, 1026, 1004, 978, 976, 991, 1065,
+                                    971, 1013));
 }

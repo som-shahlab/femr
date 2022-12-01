@@ -5,3 +5,13 @@ bazel-*
 *.egg-info
 ignore/*
 tutorials/.ipynb_checkpoints/
+tutorials/trash
+native/results
+native/result
+native/params
+native/result_clmbr
+native/trash
+.ipynb_checkpoints/*
+scratch*
+scratch/*
+tutorials/logs/

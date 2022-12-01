@@ -45,16 +45,16 @@ cc_library(
 """,
 )
 
-pybind11_bazel_version = "9a24c33cbdc510fa60ab7f5ffb7d80ab89272799"
+pybind11_bazel_version = "5a8209f6ddcc848272e27a36a5fc2b79e7438374"
 
 http_archive(
   name = "pybind11_bazel",
   strip_prefix = "pybind11_bazel-" + pybind11_bazel_version,
-  urls = ["https://github.com/pybind/pybind11_bazel/archive/" + pybind11_bazel_version + ".tar.gz"],
-  sha256 = "32feba648e364da83b0876713cca8a7113f58433cee0680591218dbc202f1392",
+  urls = ["https://github.com/Lalaland/pybind11_bazel/archive/" + pybind11_bazel_version + ".tar.gz"],
+  sha256 = "cc9bd704ec128049f6b0c7a64313a690a3f53dac2f040e9d00d87cf33d45d9c1",
 )
 
-pybind11_version = 'aa304c9c7d725ffb9d10af08a3b34cb372307020'
+pybind11_version = 'fab1eebe2c4c52e0abac249f3d058787bc83b5ec'
 
 # We still require the pybind library.
 http_archive(
@@ -62,7 +62,6 @@ http_archive(
   build_file = "@pybind11_bazel//:pybind11.BUILD",
   strip_prefix = "pybind11-" + pybind11_version,
   urls = ["https://github.com/pybind/pybind11/archive/" + pybind11_version + ".tar.gz"],
-  sha256 = "dcda69c3355ce81407a18d9f3aa3fdfd0a84a7e19218356d0c4768cbe1cda02b",
 )
 
 load("@pybind11_bazel//:python_configure.bzl", "python_configure")
@@ -93,10 +92,24 @@ cc_library (
     sha256 = "7d5899e0a8908db423dca82259388a291c642cc335d5c6ef6a6beb08be39b0ef",
 )
 
-new_git_repository(
+http_archive(
+    name = "dlpack",
+    url = "https://github.com/dmlc/dlpack/archive/refs/tags/v0.7.zip",
+    strip_prefix = "dlpack-0.7",
+    build_file_content = """
+cc_library (
+    name = "dlpack",
+    hdrs = ["include/dlpack.h"],
+    visibility = ["//visibility:public"],
+    includes = ["include"],
+)
+""",
+)
+
+http_archive(
     name = "json",
-    commit = "e7b3b40b5a95bc74b9a7f662830a27c49ffc01b4",
-    remote = "https://github.com/nlohmann/json.git",
+    url = "https://github.com/nlohmann/json/archive/refs/tags/v3.11.2.zip",
+    strip_prefix = "json-3.11.2",
      build_file_content = """
 cc_library (
     name = "json",
@@ -105,7 +118,7 @@ cc_library (
      includes = ["include"],
  )
  """,
-   shallow_since = "1573989704 +0100"
+ sha256 = "95651d7d1fcf2e5c3163c3d37df6d6b3e9e5027299e6bd050d157322ceda9ac9",
 )
 
 new_git_repository(
@@ -175,4 +188,47 @@ git_repository(
        commit = "068891fa0720b9ce24ee9649ace0a5ce4f93e417",
        remote = "https://github.com/Lalaland/bazel_clang_tidy.git",
        shallow_since = "1665975942 +0000",
+)
+
+http_archive(
+    name = "rules_cuda",
+    sha256 = "f80438bee9906e9ecb1a8a4ae2365374ac1e8a283897281a2db2fb7fcf746333",
+    strip_prefix = "runtime-b1c7cce21ba4661c17ac72421c6a0e2015e7bef3/third_party/rules_cuda",
+    urls = ["https://github.com/tensorflow/runtime/archive/b1c7cce21ba4661c17ac72421c6a0e2015e7bef3.tar.gz"],
+)
+
+load("@rules_cuda//cuda:dependencies.bzl", "rules_cuda_dependencies")
+rules_cuda_dependencies()
+load("@rules_cc//cc:repositories.bzl", "rules_cc_toolchains")
+rules_cc_toolchains()
+
+dlpack_build = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
+
+http_archive(
+    name = "source_zstd",
+    url = "https://github.com/facebook/zstd/releases/download/v1.5.2/zstd-1.5.2.tar.gz",
+    strip_prefix="zstd-1.5.2",
+    build_file_content = all_content,
+    sha256 = "7c42d56fac126929a6a85dbc73ff1db2411d04f104fae9bdea51305663a83fd0",
+)
+
+http_archive(
+    name = "eigen",
+    sha256 = "0215c6593c4ee9f1f7f28238c4e8995584ebf3b556e9dbf933d84feb98d5b9ef",
+    strip_prefix = "eigen-3.3.8",
+    urls = [
+        "https://gitlab.com/libeigen/eigen/-/archive/3.3.8/eigen-3.3.8.tar.bz2",
+    ],
+    build_file_content =
+"""
+# TODO(keir): Replace this with a better version, like from TensorFlow.
+# See https://github.com/ceres-solver/ceres-solver/issues/337.
+cc_library(
+    name = 'eigen',
+    srcs = [],
+    includes = ['.'],
+    hdrs = glob(['Eigen/**', 'unsupported/**']),
+    visibility = ['//visibility:public'],
+)
+"""
 )
