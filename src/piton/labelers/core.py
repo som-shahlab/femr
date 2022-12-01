@@ -196,7 +196,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         return self.patients_to_labels[idx]
     
     def get_all_patient_ids(self) -> List[int]:
-        return list(self.patients_to_labels.keys())
+        return sorted(list(self.patients_to_labels.keys()))
     
     def get_patients_to_labels(self) -> Dict[int, List[Label]]:
         return self.patients_to_labels
