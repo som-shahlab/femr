@@ -17,6 +17,20 @@ https://ehr-ml.readthedocs.io/en/latest/ has (outdated) documentation, including
 
 # Installation
 
+Special note for NERO users:
+
+You will need to install cuda manually until cuda version is updated on the nero. Follow the following steps for nero. 
+
+1. Download the right version of cuda on your local machine and transfer it over a folder in nero.
+2. Run the installer and make sure to provide correct install path in your home directory. 
+3. Delete /tmp/cuda-insatll.log file cause it will create problems for other users. 
+
+As Nero does not have internet access, you must run the following before running the code below.
+
+```
+export DISTDIR=/local-scratch/nigam/distdir
+```
+
 Run the following:
 
 ```
@@ -27,13 +41,6 @@ cd piton
 pip install -e .
 ```
 
-Special note for NERO users:
-
-As Nero does not have internet access, you must run the following before pip install -e .
-
-```
-export DISTDIR=/local-scratch/nigam/distdir
-```
 
 # Precommit checks
 
