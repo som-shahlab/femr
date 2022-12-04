@@ -253,7 +253,7 @@ class LongAdmissionLabeler(LabelingFunction):
             
             long_admin_bool = (admin_starts[cur_admin_index] - 
                                admin_starts[cur_admin_index-1]).days > 7
-            label = Label(time=admin_starts[cur_admin_index-1], value=long_admin_bool, label_type="boolean")
+            label = Label(time=admin_starts[cur_admin_index-1], value=long_admin_bool)
             labels.append(label)
 
             cur_admin_index += 1

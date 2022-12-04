@@ -9,8 +9,10 @@ dependencies = [
     "numpy >= 1.22",
     "scipy >= 1.6",
     "scikit-learn >= 0.24",
-    "tqdm > =4.60.0",
+    "tqdm >= 4.60.0",
     "zstandard >= 0.18",
+    "nptyping == 2.4.1",
+    "torchtyping == 0.1.4",
 ]
 requires-python=">3.10"
 version = "0.1.0"
