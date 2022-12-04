@@ -15,4 +15,6 @@ void register_metrics_extension(pybind11::module& root) {
 
     m.def("compute_c_statistic", compute_c_statistic);
     m.def("compute_calibration", compute_calibration);
+    m.def("estimate_breslow", estimate_breslow);
+    m.def("apply_breslow", apply_breslow);
 }

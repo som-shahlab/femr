@@ -139,6 +139,7 @@ cc_library(
     deps=[
         "@eigen",
         "@com_google_absl//absl/types:span",
+        "@com_google_absl//absl/strings",
     ],
 )
 
