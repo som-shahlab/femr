@@ -112,6 +112,7 @@ def test_calibration():
 
     assert not np.allclose(expected, invalid, atol=0.01)
 
+
 def test_breslow():
     np.random.seed(341231)
 
@@ -132,12 +133,15 @@ def test_breslow():
 
     times = [0, 1]
 
-    breslow = piton.metrics.estimate_breslow(t[:size // 10], c[:size // 10], times, hazard[:size // 10, :])
+    breslow = piton.metrics.estimate_breslow(
+        t[: size // 10], c[: size // 10], times, hazard[: size // 10, :]
+    )
     cdf = piton.metrics.apply_breslow(t, times, hazard, breslow)
 
     valid_probs = scipy.stats.expon.cdf(t, scale=1 / event_h)
 
     assert np.allclose(cdf, valid_probs, atol=0.03)
+
 
 def test_breslow_hard():
     np.random.seed(341231)
@@ -159,9 +163,11 @@ def test_breslow_hard():
 
     times = [0, 1]
 
-    breslow = piton.metrics.estimate_breslow(t[:size // 10], c[:size // 10], times, hazard[:size // 10, :])
+    breslow = piton.metrics.estimate_breslow(
+        t[: size // 10], c[: size // 10], times, hazard[: size // 10, :]
+    )
     cdf = piton.metrics.apply_breslow(t, times, hazard, breslow)
-    
+
     B = 10
     valid = piton.metrics.compute_calibration(cdf, c, B)
 

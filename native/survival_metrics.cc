@@ -213,10 +213,10 @@ std::vector<double> apply_breslow(
     const Eigen::Tensor<double, 1>& time_bins,
     const Eigen::Tensor<double, 2>& hazards,
     const Eigen::Tensor<double, 2>& breslow) {
-    
+
     ssize_t num_elem = hazards.dimension(0);
     ssize_t num_times = hazards.dimension(1);
-    
+
     ssize_t num_breslow = breslow.dimension(0);
 
     if (num_elem != times.dimension(0)) {
@@ -265,7 +265,7 @@ std::vector<double> apply_breslow(
         size_t end = iter - std::begin(breslow_times);
 
         double total = breslow(end - 1, 0) - breslow(start - 1, 0);
-        
+
         size_t offset = (iter == std::end(breslow_times)) ? 1 : 0;
 
         double bin_delta = breslow(end - offset, 0) - breslow(end - (1 + offset), 0);
@@ -273,10 +273,10 @@ std::vector<double> apply_breslow(
         double rate = bin_delta / bin_time;
 
         total += rate * (time - breslow_times[end - 1]);
-        
+
         total_hazard += total * hazards(i, current_time_bin);
         double prob = -std::expm1(-total_hazard);
-        
+
         // Terrible hack to work around numeric problems ...
         if (prob >= 0.999) {
             prob = 0.999;
@@ -329,9 +329,9 @@ Eigen::Tensor<double, 2> estimate_breslow(
     estimator.push_back(std::make_pair(0, 0));
 
     double current_denom;
-    
+
     ssize_t current_bucket_index = 0;
-    
+
     auto resolve = [&]() {
         if (current_dead.size() != 0) {
             double val = current_dead.size() * 1/ current_denom;
@@ -382,7 +382,7 @@ Eigen::Tensor<double, 2> estimate_breslow(
     }
 
     resolve();
-    
+
     Eigen::Tensor<double, 2> result(estimator.size(), 2);
 
     for (size_t i = 0; i < estimator.size(); i++) {
@@ -433,9 +433,9 @@ Eigen::Tensor<double, 2> estimate_optimal(
     estimator.push_back(std::make_pair(0, 0));
 
     double current_denom;
-    
+
     ssize_t current_bucket_index = 0;
-    
+
     auto resolve = [&]() {
         if (current_dead.size() != 0) {
             double val = current_dead.size() * 1/ current_denom;
@@ -486,7 +486,7 @@ Eigen::Tensor<double, 2> estimate_optimal(
     }
 
     resolve();
-    
+
     Eigen::Tensor<double, 2> result(estimator.size(), 2);
 
     for (size_t i = 0; i < estimator.size(); i++) {
