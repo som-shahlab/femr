@@ -73,6 +73,7 @@ if not os.path.exists(path_to_save):
 
 batch_size: int = 16
 num_patients: int = 1000
+chunk_size: int = 1000
 
 params_dict = {
     "chunk_size": chunk_size, 

@@ -1,60 +1,84 @@
 import piton
-import piton.datasets
 import pickle
-import numpy as np
-
-from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM
-from piton.featurizers.featurizers import TextFeaturizer
-from piton.featurizers import save_to_file, load_from_file
-from typing import Tuple, List
-import multiprocessing
+import torch
 import datetime
+from typing import List
+from piton.featurizers.featurizers_notes import NoteFeaturizer
+from piton.datasets import PatientDatabase
 import os
+from ..labelers.core import LabeledPatients, Label
+from icecream import ic
 
+ic.configureOutput(includeContext=True, prefix=lambda: str(datetime.datetime.now()))
 
 # Please update this path with your extract of piton as noted in previous notebook. 
-path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
-path_to_labeled_patients = "/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pickle"
-database_path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"
-path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
-num_threads = 20
-min_char = 100
-max_char = 10000
-max_length = 4096
-padding = True
-truncation = True
-num_patients = 1000 # None if you want to run on entire patients
-batch_size = 1024
-prefix = "test_mortality"
+PATH_TO_MODELS_DIR = "/local-scratch/nigam/projects/clmbr_text_assets/models/"
+PATH_TO_PATIENT_DATABASE_1_PCT_EXTRACT = "/local-scratch/nigam/projects/clmbr_text_assets/data/piton_database_1_perct/" # n = 33,771
+PATH_TO_PATIENT_DATABASE_FULL_EXTRACT = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2" # n = 2,730,411
+PATH_TO_LABELED_PATIENTS_DIABETES = "/local-scratch/nigam/projects/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle" # n = 418,465
+PATH_TO_LABELED_PATIENTS_MORATLITY = "/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_v1.pickle" # n = XXXXXX
+PATH_TO_LABELED_PATIENTS_TEST = "/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pickle" # n = XXXXXX
+PATH_TO_CACHE_DIR = "/local-scratch/nigam/projects/mwornow/data/"
 
+MODELS = [
+    'Clinical-Longformer',
+    'Bio_ClinicalBERT'
+]
+
+def get_gpus_with_minimum_free_memory(min_mem: float = 5) -> List[int]:
+    """Return a list of GPU devices with at least `min_mem` free memory is in GB."""
+    devices = []
+    num_gpus: int = torch.cuda.device_count()
+    for i in range(num_gpus):
+        free, __ = torch.cuda.mem_get_info(i)
+        if free >= min_mem * 1e9:
+            devices.append(i)
+    return devices
 
 if __name__ == '__main__':
-    # start_time = datetime.datetime.now()
+    # Constants
+    path_to_cache_dir = os.path.join(PATH_TO_CACHE_DIR, 'test_mortality')
+    path_to_model: str = os.path.join(PATH_TO_MODELS_DIR, 'Bio_ClinicalBERT')
+    n_cpu_jobs: int = 20
+    gpu_devices: List = get_gpus_with_minimum_free_memory(10)
+    
+    # Load LabeledPatients
+    with open(PATH_TO_LABELED_PATIENTS_TEST, "rb") as fd:
+        labeled_patients: LabeledPatients = pickle.load(fd)
+    
+    # Get valid codes for notes to keep
+    data = PatientDatabase(PATH_TO_PATIENT_DATABASE_FULL_EXTRACT)
+    valid_note_codes = [ data.get_code_dictionary().index(x) for x in [ "LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/LP173418-7" ] ]
+    
+    
+    note_featurizer = NoteFeaturizer(path_to_patient_database=PATH_TO_PATIENT_DATABASE_FULL_EXTRACT,
+                                    path_to_tokenizer=path_to_model,
+                                    path_to_embedder=path_to_model,
+                                    path_to_cache_dir=path_to_cache_dir,
+                                    path_to_output_dir=path_to_cache_dir, 
+                                    n_cpu_jobs=n_cpu_jobs,
+                                    gpu_devices=gpu_devices,
+                                    params_preprocessor = {
+                                        "min_char_count: ": 100,
+                                        "codes" : valid_note_codes,
+                                    },
+                                    params_tokenizer = {
+                                        "max_length": 4096,
+                                        "padding": True,
+                                        "truncation": True,
+                                    },
+                                    params_embedder = {
+                                        "embed_method": piton.featurizers.featurizers_notes.embed_with_cls,
+                                        "batch_size": 256,
+                                    },
+                                    preprocess_transformations = [
+                                        piton.featurizers.transforms_notes.keep_only_notes_matching_codes,
+                                        piton.featurizers.transforms_notes.remove_notes_after_label,
+                                        piton.featurizers.transforms_notes.remove_short_notes,
+                                        piton.featurizers.transforms_notes.join_all_notes,
+                                    ])
 
-    labeled_patients = load_from_file(path_to_labeled_patients)
-    print("Labeled Patients Loaded")
-
-    text_featurizer = TextFeaturizer(labeled_patients, database_path, num_patients=num_patients)
-
-    text_featurizer.accumulate_text(
-        path_to_save,
-        num_threads=num_threads,
-        min_char=min_char,
-        prefix=prefix,
-    )
-
-    path_to_text_data = os.path.join(path_to_save, f"{prefix}_text_data.pickle")
-
-    path_to_save_tokenized_data = os.path.join(path_to_save, f"{prefix}_tokenized_data")
-    print("Starting tokenization")
-    text_featurizer.tokenize_text(
-        path_to_model,
-        path_to_save_tokenized_data,
-        path_to_text_data,
-        prefix=prefix,
-        num_threads=num_threads,
-        max_length=max_length, 
-        padding=padding, 
-        truncation=truncation, 
-        batch_size=batch_size,
-    )
+    print("Starting text featurization")
+    result_tuple = note_featurizer.featurize(labeled_patients, is_debug = True)
+    print("Finished text featurization")
+    print(result_tuple[0].shape)
