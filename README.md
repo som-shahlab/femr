@@ -58,6 +58,14 @@ pre-commit run --all-files
 ```
 
 
+## Running one of our tools
+```
+export OMOP_SOURCE=/share/pi/nigam...
+export MODIFIED_OMOP_DESTINATION=/share/pi/nigam...
+python tools/blah.py $OMOP_SOURCE $MODIFIED_OMOP_DESTINATION
+```
+
+
 ## GZIP decompression commands
 ```
 export OMOP_SOURCE=/share/pi/nigam...
