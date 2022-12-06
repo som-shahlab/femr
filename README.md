@@ -57,6 +57,19 @@ You can also run it manually with:
 pre-commit run --all-files
 ```
 
+
+## GZIP decompression commands
+```
+export OMOP_SOURCE=/share/pi/nigam...
+gunzip $OMOP_SOURCE/**/*.csv.gz
+```
+
+## Zstandard compression commands
+```
+export OMOP_SOURCE=/share/pi/nigam...
+zstd -1 --rm $OMOP_SOURCE/**/*.csv
+```
+
 ## Generating extract
 
 ```
