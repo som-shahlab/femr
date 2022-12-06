@@ -214,23 +214,24 @@ void register_datasets_extension(py::module& root) {
         .def("__len__", [](PatientDatabase& self) { return self.size(); })
         .def(
             "__getitem__",
-            [python_patient, pickle](py::object self_object, uint32_t index) {
+            [python_patient, pickle](py::object self_object,
+                                     uint32_t patient_id) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
-                if (index >= self.size()) {
+                if (patient_id >= self.size()) {
                     throw py::index_error();
                 }
 
-                Patient p = self.get_patient(index);
+                Patient p = self.get_patient(patient_id);
                 py::tuple events(p.events.size());
 
                 absl::CivilSecond birth_date = p.birth_date;
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    events[i] = EventWrapper(pickle, &self, index, birth_date,
-                                             i, event);
+                    events[i] = EventWrapper(pickle, &self, patient_id,
+                                             birth_date, i, event);
                 }
 
                 return python_patient("patient_id"_a = p.patient_id,

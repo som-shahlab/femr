@@ -473,24 +473,42 @@ xla.register_translation(
 )
 
 
-def exp_mean_fallback(a, b, c):
+@partial(custom_vjp, nondiff_argnums=(2,))
+def exp_mean(a: Array, b: Array, sparse_c: Array):
+    """exp_mean computes the mean value of 2^(a @ b + c), where c is a sparse matrix.
+
+    sparse_c is in CSR form with a tuple of the following elements:
+        offsets: The offsets for each row, indexing into indices / values
+        defaults: The default value for each row
+        indices: All of the indices
+        values: All of the values
+
+    The columns for each row j are in indices[offsets[j] : offsets[j+1]].
+    The values for each row are either defaults[j] or values[offsets[j] : offsets[j+1]]
+    """
+    return exp_mean_fwd(a, b, sparse_c)[0]
+
+
+def exp_mean_fallback(a: Array, b: Array, c: Array) -> Array:
+    """A fallback implementation of exp_mean, where c is dense."""
     matrix = jnp.matmul(a, b.T)
     return jnp.exp2(matrix + c).astype(jnp.float32).mean().astype(a.dtype)
 
 
-@partial(custom_vjp, nondiff_argnums=(2,))
-def exp_mean(a, b, sparse_c):
-    return exp_mean_fwd(a, b, sparse_c)[0]
-
-
 @jax.jit
-def exp_mean_fwd(a, b, sparse_c):
+def exp_mean_fwd(
+    a: Array, b: Array, sparse_c: Array
+) -> Tuple[Array, Tuple[Array, Array, Array]]:
+    """The forward pass for exp_mean"""
     r, da, db = exp_mean_p.bind(a, b, *sparse_c)
     return r, (a, da, db)
 
 
 @jax.jit
-def exp_mean_bwd(_sparse_c, res, g):
+def exp_mean_bwd(
+    _sparse_c: Array, res: Tuple[Array, Array, Array], g: Array
+) -> Tuple[Array, Array]:
+    """The backward pass for exp_mean"""
     (
         a,
         da,
@@ -507,7 +525,15 @@ exp_mean.defvjp(exp_mean_fwd, exp_mean_bwd)
 exp_mean_p = core.Primitive("exp_mean")
 
 
-def exp_mean_abstract_eval(a, b, offsets, defaults, indices, values):
+def exp_mean_p_abstract_eval(
+    a: Array,
+    b: Array,
+    offsets: Array,
+    defaults: Array,
+    indices: Array,
+    values: Array,
+):
+    """Abstract shapes for exp_mean_p."""
     assert a.dtype == b.dtype
     assert len(a.shape) == len(b.shape) == 2
     assert (
@@ -543,7 +569,7 @@ def exp_mean_abstract_eval(a, b, offsets, defaults, indices, values):
     )
 
 
-def exp_mean_xla_translation(
+def exp_mean_p_xla_translation(
     ctx: xla.TranslationContext,
     avals_in: Sequence[core.AbstractValue],
     avals_out: Sequence[core.AbstractValue],
@@ -666,12 +692,13 @@ def exp_mean_xla_translation(
     )
 
 
-exp_mean_p.def_abstract_eval(exp_mean_abstract_eval)
+exp_mean_p.def_abstract_eval(exp_mean_p_abstract_eval)
 exp_mean_p.multiple_results = True
-xla.register_translation(exp_mean_p, exp_mean_xla_translation)
+xla.register_translation(exp_mean_p, exp_mean_p_xla_translation)
 
 
 def get_shifts_and_mult(n):
+    """Get the shifts and multiplication factors for a constant time division algorithm."""
     if n == 0:
         raise ValueError("No inverse for 0")
 

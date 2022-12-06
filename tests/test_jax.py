@@ -239,6 +239,7 @@ def test_exp_mean_complex_gpu():
 
 
 def divide(x, val, shift, mult):
+    """A constant time division algorithm for use on GPUs"""
     if (shift, mult) == (0, 0):
         assert val == 1
         # Divide by 1
@@ -249,6 +250,7 @@ def divide(x, val, shift, mult):
 
 
 def modulus(x, val, shift, mult):
+    """Compute % using the constant time division algorithm"""
     divisor = divide(x, val, shift, mult)
     return x - divisor * val
 

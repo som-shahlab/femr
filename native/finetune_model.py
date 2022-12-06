@@ -232,9 +232,9 @@ if args.start_from_checkpoint is not None:
                         exit()
 
                 if (
-                    # p
-                    # == "EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed"
-                    # or
+                    #p
+                    #== "EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed"
+                    #or
                     args.freeze_weights
                 ):
                     non_fit_params[p] = checkpointed_weights[p]
@@ -337,7 +337,7 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
             is_censor = jnp.concatenate(is_censor, axis=0)
             event_times = jnp.concatenate(event_times, axis=0)
 
-            limit_time = jnp.quantile(event_times, 0.95)
+            limit_time = jnp.quantile(event_times[~is_censor], 0.9)
             is_censor = is_censor.at[event_times > limit_time].set(True)
             event_times = event_times.at[event_times > limit_time].set(
                 limit_time
@@ -574,6 +574,8 @@ rng_sequence = hk.PRNGSequence(rng)
 
 per_limit = min(5000, num_train_batches)
 
+last_good = None
+
 while True:
     next_item = batches.get_next()
     if next_item is None:
@@ -609,6 +611,7 @@ while True:
             logging.info("Diverged, shutting down")
             break
         if dev_loss_metric < best_loss:
+            last_good = step
             best_loss = dev_loss_metric
             test_loss = compute_total_loss(
                 "test", params, non_fit_params, rng, config
@@ -626,12 +629,29 @@ while True:
                 os.path.join(args.directory, "best_test_loss"), "w"
             ) as out_t:
                 json.dump(test_loss, out_t)
+        else:
+            if step - last_good > 15000:
+                logging.info("Waited to long, early stop")
+                break
+
         logging.info("Continuing to train ...")
 
-    if step == num_train_batches:
+    if args.freeze_weights and step == min(10000, num_train_batches * 15):
         logging.info("Swapping to full training")
         params = params | original_non_fit_params
+
         non_fit_params = hk.data_structures.to_immutable_dict({})
+        original_non_fit_params = {}
+
+        opt = optax.chain(
+            optax.clip_by_global_norm(config["max_grad_norm"]),
+            optax.adamw(
+                learning_rate=config["learning_rate"] / 20,
+                weight_decay=config["weight_decay"],
+                mask=mask_fn,
+            ),
+            optax.scale_by_schedule(lr_schedule),
+        )
         opt_state = opt.init(params)
 
     params, opt_state, batch_loss, loss_scale = update(

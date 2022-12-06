@@ -101,14 +101,17 @@ def move_billing_codes(patient: Patient) -> Patient:
                     )
                 end_visits[event.visit_id] = event.end
 
+    new_events = []
     for event in patient.events:
         if event.clarity_table in all_billing_codes:
             key = (event.start, event.code)
             if event.visit_id != lowest_visit.get(key, None):
+                # Drop this event as we already have it, just with a different visit_id?
                 continue
 
             if event.visit_id is None:
                 # This is a bad code, but would rather keep it than get rid of it
+                new_events.append(event)
                 continue
 
             end_visit = end_visits.get(event.visit_id)
@@ -119,6 +122,11 @@ def move_billing_codes(patient: Patient) -> Patient:
             event.start = max(event.start, end_visit)
             if event.end is not None:
                 event.end = max(event.end, end_visit)
+            new_events.append(event)
+        else:
+            new_events.append(event)
+
+    patient.events = new_events
 
     patient.resort()
 

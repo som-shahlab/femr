@@ -299,7 +299,7 @@ event_time = np.array(event_time)
 
 print(logits.shape, is_censor.shape, event_time.shape)
 
-time_bins = np.array(config["task"]["time_bins"]) * 60 * 24
+time_bins = np.array(config["task"]["time_bins"])
 
 import piton.extension.metrics
 
