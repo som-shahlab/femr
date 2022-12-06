@@ -56,3 +56,9 @@ You can also run it manually with:
 ```
 pre-commit run --all-files
 ```
+
+## Generating extract
+
+```
+ etl_stanford_omop OMOP_SOURCE EXTRACT_DESTINATION EXTRACT_LOGS --num_threads 10
+```
