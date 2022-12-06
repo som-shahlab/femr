@@ -232,9 +232,9 @@ if args.start_from_checkpoint is not None:
                         exit()
 
                 if (
-                    #p
-                    #== "EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed"
-                    #or
+                    # p
+                    # == "EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed"
+                    # or
                     args.freeze_weights
                 ):
                     non_fit_params[p] = checkpointed_weights[p]
