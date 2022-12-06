@@ -60,5 +60,9 @@ pre-commit run --all-files
 ## Generating extract
 
 ```
- etl_stanford_omop OMOP_SOURCE EXTRACT_DESTINATION EXTRACT_LOGS --num_threads 10
+export OMOP_SOURCE=/share/pi/nigam...
+export EXTRACT_DESTINATION=/share/pi/nigam...
+export EXTRACT_LOGS=/share/pi/nigam...
+
+etl_stanford_omop $OMOP_SOURCE $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
