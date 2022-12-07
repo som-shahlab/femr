@@ -76,7 +76,7 @@ def _get_tokenized_text(args):
                                     return_tensors="pt",
                                 )
             
-            tokenized_text_data_dict[patient_id]["tokenized_data"] = notes_tokenized
+            tokenized_text_data_dict[patient_id]["tokenized_data"] = notes_tokenized['input_ids'].numpy().astype(np.uint16)
             tokenized_text_data_dict[patient_id]["event_ids"] = text_data["event_ids"]
 
         save_to_file(tokenized_text_data_dict, os.path.join(path_to_save, f"{file_suffix}_tokenized_data.pickle"))
