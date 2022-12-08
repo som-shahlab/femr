@@ -14,6 +14,14 @@ https://ehr-ml.readthedocs.io/en/latest/ has (outdated) documentation, including
 
 # Installation
 
+Special note for NERO users:
+
+As Nero does not have internet access, you must run the following before the other install instructions
+
+```
+export DISTDIR=/local-scratch/nigam/distdir
+```
+
 Run the following:
 
 ```
@@ -24,13 +32,7 @@ cd piton
 pip install -e .
 ```
 
-Special note for NERO users:
 
-As Nero does not have internet access, you must run the following before pip install -e .
-
-```
-export DISTDIR=/local-scratch/nigam/distdir
-```
 
 # Precommit checks
 
