@@ -22,13 +22,11 @@ def _get_all_patient_text_data(args):
     for batch_idx, pids_batch in tqdm(enumerate(pids_loader), total=len(pids_loader)):
 
         data = {}
-        for patient_id in tqdm(pids_batch):
+        for patient_id in pids_batch:
             one_patient_dict = {"text_data": [], "event_ids": []}
             patient = database[patient_id]
-            print("Here")
 
-            for event_id, event in tqdm(enumerate(patient.events)):
-                print("Here")
+            for event_id, event in enumerate(patient.events):
                 if len(note_piton_codes) > 0 and event.code not in note_piton_codes:
                     continue
 
@@ -205,8 +203,8 @@ note_concept_ids = ["LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/34
 # note_concept_ids = ["LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
 # note_concept_ids = []
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
-# path_to_piton_db = "/local-scratch/nigam/projects/rthapa84/data/1_perct_piton_extract_12_07_22"
-path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
+path_to_piton_db = "/local-scratch/nigam/projects/rthapa84/data/1_perct_piton_extract_12_07_22"
+# path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
 path_to_save_text_data = os.path.join(path_to_save, "text_data_chunks")
 path_to_save_tokenized_data = os.path.join(path_to_save, "tokenized_data_chunks")
@@ -225,28 +223,13 @@ if __name__ == '__main__':
     if not os.path.exists(path_to_save_text_data):
         os.makedirs(path_to_save_text_data)
 
-    # text_featurizer.accumulate_text(
-    #     path_to_save_text_data,
-    #     num_threads=num_threads,
-    #     min_char=min_char,
-    #     note_concept_ids=note_concept_ids,
-    #     chunk_size=chunk_size, 
-    # )
-
-    params_dict = {
-            "min_char": min_char, 
-            "note_concept_ids": note_concept_ids, 
-            "chunk_size": chunk_size
-        }
-    
-    pids = [i for i in range(num_patients)]
-    thread_idx = 0
-
-    args = path_to_piton_db, path_to_save_text_data, pids, params_dict, thread_idx
-    _get_all_patient_text_data(args)
-
-    # if not os.path.exists(path_to_save_tokenized_data):
-    #     os.makedirs(path_to_save_tokenized_data)
+    text_featurizer.accumulate_text(
+        path_to_save_text_data,
+        num_threads=num_threads,
+        min_char=min_char,
+        note_concept_ids=note_concept_ids,
+        chunk_size=chunk_size, 
+    )
 
     # text_featurizer.tokenize_text(
     #     path_to_model,
@@ -257,4 +240,20 @@ if __name__ == '__main__':
     #     padding=padding, 
     #     truncation=truncation, 
     # )
+
+
+    # params_dict = {
+    #         "min_char": min_char, 
+    #         "note_concept_ids": note_concept_ids, 
+    #         "chunk_size": chunk_size
+    #     }
+    
+    # pids = [i for i in range(num_patients)]
+    # thread_idx = 0
+
+    # args = path_to_piton_db, path_to_save_text_data, pids, params_dict, thread_idx
+    # _get_all_patient_text_data(args)
+
+    # if not os.path.exists(path_to_save_tokenized_data):
+    #     os.makedirs(path_to_save_tokenized_data)
 
