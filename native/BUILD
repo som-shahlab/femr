@@ -6,6 +6,8 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_library", "pybind_extension")
 
 load("@rules_cuda//cuda:defs.bzl", "cuda_library")
 
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
 cuda_library(
     name="local_attention",
     hdrs=["local_attention.hh"],
@@ -45,6 +47,28 @@ pybind_library(
         ":gather_scatter",
     ],
 )
+
+pybind_library(
+    name="cpu_jax_extension",
+    hdrs=[
+        "jax_extension.hh",
+    ],
+    srcs=[
+        "cpu_jax_extension.cc",
+    ],
+)
+
+string_flag(name = "cuda", build_setting_default = "disabled")
+
+config_setting(
+    name = "cuda_enabled",
+    flag_values = {":cuda": "enabled"}
+)
+
+jax_extension = select({
+    ":cuda_enabled": [":jax_extension"],
+    "//conditions:default": [":cpu_jax_extension"],
+})
 
 pybind_library(
     name="dataloader_extension",
@@ -365,13 +389,13 @@ pybind_library(
     ],
 )
 
+
 pybind_extension(
     name="extension",
     srcs=[
         "extension.cc",
     ],
-    deps=[
-        ":jax_extension",
+    deps= jax_extension + [
         ":datasets_extension",
         ":dataloader_extension",
         ":metrics_extension",

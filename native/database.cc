@@ -589,9 +589,6 @@ PatientDatabase::PatientDatabase(boost::filesystem::path const& path,
       value_index_dictionary(path / "value_index", read_all),
       event_metadata_dictionary(path / "event_metadata", read_all),
       meta_dictionary(path / "meta", read_all) {
-    has_unique_text_dictionary =
-        boost::filesystem::exists(path / "unique_text");
-
     (void)version_id();
 }
 
@@ -663,7 +660,7 @@ Dictionary& PatientDatabase::get_shared_text_dictionary() {
 }
 
 Dictionary* PatientDatabase::get_unique_text_dictionary() {
-    if (has_unique_text_dictionary) {
+    if (unique_text_dictionary) {
         return &(*unique_text_dictionary);
     } else {
         return nullptr;
@@ -672,6 +669,10 @@ Dictionary* PatientDatabase::get_unique_text_dictionary() {
 
 std::string_view PatientDatabase::get_event_metadata(uint32_t patient_id,
                                                      uint32_t event_index) {
+    if (!event_metadata_dictionary) {
+        return std::string_view(nullptr, 0);
+    }
+
     absl::Span<const uint32_t> event_offsets =
         read_span<uint32_t>(*event_metadata_dictionary, patient_id * 2);
 
@@ -924,7 +925,7 @@ get_parents(const std::vector<uint64_t>& raw_codes,
     return {std::move(index_map), std::move(result)};
 }
 
-std::vector<std::string> get_concept_text(
+std::vector<std::pair<std::string, std::string>> get_concept_text(
     const std::vector<uint64_t>& originals,
     const absl::flat_hash_map<uint64_t, uint32_t>& index_map,
     const boost::filesystem::path& concept, char delimiter,
@@ -932,11 +933,14 @@ std::vector<std::string> get_concept_text(
     auto texts = process_nested(
         concept, "concept", num_threads,
         [&](const boost::filesystem::path& path) {
-            std::vector<std::pair<std::string, uint32_t>> result;
+            std::vector<
+                std::pair<std::pair<std::string, std::string>, uint32_t>>
+                result;
 
-            CSVReader reader(path,
-                             {"concept_id", "concept_code", "vocabulary_id"},
-                             delimiter);
+            CSVReader reader(
+                path,
+                {"concept_id", "concept_code", "vocabulary_id", "concept_name"},
+                delimiter);
 
             while (reader.next_row()) {
                 uint64_t concept_id;
@@ -946,13 +950,17 @@ std::vector<std::string> get_concept_text(
                 if (iter != std::end(index_map)) {
                     std::string text = absl::StrCat(reader.get_row()[2], "/",
                                                     reader.get_row()[1]);
-                    result.emplace_back(std::move(text), iter->second);
+
+                    std::string description = reader.get_row()[3];
+                    result.emplace_back(
+                        std::make_pair(std::move(text), std::move(description)),
+                        iter->second);
                 }
             }
 
             return result;
         });
-    std::vector<std::string> result(index_map.size());
+    std::vector<std::pair<std::string, std::string>> result(index_map.size());
     for (auto& text : texts) {
         for (auto& entry : text) {
             result[entry.second] = std::move(entry.first);
@@ -960,7 +968,7 @@ std::vector<std::string> get_concept_text(
     }
 
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].empty()) {
+        if (result[i].first.empty()) {
             throw std::runtime_error(
                 absl::StrCat("Could not map ", i, " ", originals[i]));
         }
@@ -1000,7 +1008,13 @@ Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
     {
         DictionaryWriter main(target / "main");
         for (const auto& t : text) {
-            main.add_value(t);
+            main.add_value(t.first);
+        }
+    }
+    {
+        DictionaryWriter text_description(target / "text_description");
+        for (const auto& t : text) {
+            text_description.add_value(t.second);
         }
     }
     {
@@ -1041,7 +1055,8 @@ Ontology::Ontology(const boost::filesystem::path& path)
     : main_dictionary(path / "main", true),
       parent_dict(path / "parent", true),
       children_dict(path / "children", true),
-      all_parents_dict(path / "all_parents", true) {}
+      all_parents_dict(path / "all_parents", true),
+      text_description(path / "text_description", true) {}
 
 absl::Span<const uint32_t> Ontology::get_parents(uint32_t code) {
     return read_span<uint32_t>(*parent_dict, code);
@@ -1053,3 +1068,11 @@ absl::Span<const uint32_t> Ontology::get_all_parents(uint32_t code) {
     return read_span<uint32_t>(*all_parents_dict, code);
 }
 Dictionary& Ontology::get_dictionary() { return *main_dictionary; }
+
+std::string_view Ontology::get_text_description(uint32_t code) {
+    if (!text_description) {
+        return std::string_view(nullptr, 0);
+    } else {
+        return (*text_description)[code];
+    }
+}

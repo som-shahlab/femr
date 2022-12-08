@@ -29,6 +29,8 @@ class LazyDictionary {
         return *value;
     }
 
+    operator bool() const { return boost::filesystem::exists(path); }
+
    private:
     void init() {
         if (!value) {
@@ -51,11 +53,15 @@ class Ontology {
     absl::Span<const uint32_t> get_all_parents(uint32_t code);
     Dictionary& get_dictionary();
 
+    std::string_view get_text_description(uint32_t code);
+
    private:
     LazyDictionary main_dictionary;
     LazyDictionary parent_dict;
     LazyDictionary children_dict;
     LazyDictionary all_parents_dict;
+
+    LazyDictionary text_description;
 };
 
 enum class ValueType {
@@ -186,6 +192,7 @@ class PatientDatabase {
     LazyDictionary value_index_dictionary;
 
     LazyDictionary event_metadata_dictionary;
+    bool has_event_metadata;
 
     // 0 original_patient_ids
     // 1 sorted_original_patient_ids

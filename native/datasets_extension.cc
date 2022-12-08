@@ -105,9 +105,13 @@ class EventWrapper {
         if (!m_metadata) {
             std::string_view metadata_str =
                 m_database->get_event_metadata(m_patient_id, m_event_index);
-            py::object bytes =
-                py::bytes(metadata_str.data(), metadata_str.size());
-            m_metadata.emplace(m_pickle.attr("loads")(bytes));
+            if (metadata_str.data() != nullptr) {
+                py::object bytes =
+                    py::bytes(metadata_str.data(), metadata_str.size());
+                m_metadata.emplace(m_pickle.attr("loads")(bytes));
+            } else {
+                m_metadata.emplace(py::dict());
+            }
         }
         return *m_metadata;
     }
@@ -284,7 +288,14 @@ void register_datasets_extension(py::module& root) {
         .def("get_all_parents", &Ontology::get_all_parents,
              py::return_value_policy::reference_internal)
         .def("get_dictionary", &Ontology::get_dictionary,
-             py::return_value_policy::reference_internal);
+             py::return_value_policy::reference_internal)
+        .def("get_text_description", [](Ontology& self, uint32_t index) {
+            if (index >= self.get_dictionary().size()) {
+                throw py::index_error();
+            }
+            auto descr = self.get_text_description(index);
+            return py::str(descr.data(), descr.size());
+        });
 
     py::class_<EventWrapper>(m, "EventWrapper")
         .def_property_readonly("code", &EventWrapper::code)

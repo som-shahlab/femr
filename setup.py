@@ -15,6 +15,11 @@ class BazelExtension(setuptools.Extension):
         self.target = target
         self.sourcedir = str(pathlib.Path(sourcedir).resolve())
 
+def has_nvcc():
+    try:
+        subprocess.check_output(["nvcc", "--version"]).decode("utf8")
+    except OSError:
+        return False
 
 class cmake_build_ext(build_ext):
     def build_extensions(self) -> None:
@@ -38,6 +43,9 @@ class cmake_build_ext(build_ext):
 
             if source_env.get("DISTDIR"):
                 extra_args.extend(["--distdir", source_env["DISTDIR"]])
+
+            if has_nvcc():
+                extra_args.extend(["--//:cuda=enabled"])
 
             subprocess.run(
                 args=["bazel", "build", "-c", "opt", ext.target] + extra_args,

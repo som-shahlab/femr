@@ -68,7 +68,7 @@ class Event:
         def sort_key(
             a: Event,
         ) -> Tuple[datetime.datetime, int, float | str | None, Any]:
-            return (a.start, a.code, a.value, sorted(list(a.__dict__.items())))
+            return (a.start, a.code)
 
         return sort_key(self) < sort_key(other)
 

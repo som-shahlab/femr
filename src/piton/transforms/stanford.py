@@ -41,6 +41,7 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
     if birth_date is None:
         return None
 
+    new_events = []
     for event in patient.events:
         if event.start < birth_date:
             delta = birth_date - event.start
@@ -52,6 +53,9 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
         if event.end is not None and event.end < birth_date:
             event.end = birth_date
 
+        new_events.append(event)
+
+    patient.events = new_events
     patient.resort()
 
     return patient
