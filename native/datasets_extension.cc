@@ -301,7 +301,7 @@ void register_datasets_extension(py::module& root) {
         .def_property_readonly("code", &EventWrapper::code)
         .def_property_readonly("start", &EventWrapper::start)
         .def_property_readonly("value", &EventWrapper::value)
-        .def_property_readonly(
+        .def(
             "__getattr__",
             [](EventWrapper& wrapper, const std::string& attr) {
                 return wrapper.metadata().attr("get")(attr, py::none());
