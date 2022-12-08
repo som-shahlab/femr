@@ -19,14 +19,16 @@ def _get_all_patient_text_data(args):
     chunk_size: int = params_dict["chunk_size"]
     pids_loader = [pids[x : x + chunk_size] for x in range(0, len(pids), chunk_size)]
 
-    for batch_idx, pids_batch in enumerate(pids_loader):
+    for batch_idx, pids_batch in tqdm(enumerate(pids_loader), total=len(pids_loader)):
 
         data = {}
-        for patient_id in pids_batch:
+        for patient_id in tqdm(pids_batch):
             one_patient_dict = {"text_data": [], "event_ids": []}
             patient = database[patient_id]
+            print("Here")
 
-            for event_id, event in enumerate(patient.events):
+            for event_id, event in tqdm(enumerate(patient.events)):
+                print("Here")
                 if len(note_piton_codes) > 0 and event.code not in note_piton_codes:
                     continue
 
@@ -58,15 +60,18 @@ def _get_tokenized_text(args):
     text_files, path_to_model, path_to_save, params_dict = args
     tokenizer = AutoTokenizer.from_pretrained(path_to_model)
 
-    for text_file in tqdm(text_files):
+    for text_file in text_files:
 
         file_suffix = text_file.split("/")[-1][:-17]
         text_data_dict = load_from_file(text_file)
 
         tokenized_text_data_dict = {}
-        for patient_id, text_data in tqdm(text_data_dict.items()):
+        for patient_id, text_data in text_data_dict.items():
             tokenized_text_data_dict[patient_id] = {}
             patient_text_data = text_data["text_data"]
+
+            if len(patient_text_data) == 0:
+                continue
 
             notes_tokenized = tokenizer(
                                     patient_text_data,
@@ -89,13 +94,13 @@ def _get_text_embeddings(args):
     text_files, path_to_model, path_to_save, params_dict = args
     model = AutoModel.from_pretrained(path_to_model)
 
-    for text_file in tqdm(text_files):
+    for text_file in text_files:
 
         file_suffix = text_file.split("/")[-1][:-22]
         tokenized_data_dict = load_from_file(text_file)
 
         embeded_text_data_dict = {}
-        for patient_id, tokenized_data in tqdm(tokenized_data_dict.items()):
+        for patient_id, tokenized_data in tokenized_data_dict.items():
             embeded_text_data_dict[patient_id] = {}
             patient_tokenized_data = tokenized_data["tokenized_data"]
 
@@ -142,6 +147,7 @@ class TextFeaturizer:
             num_patients = len(database)
             pids = [i for i in range(num_patients)]
 
+        print(len(pids))
         params_dict = {
             "min_char": min_char, 
             "note_concept_ids": note_concept_ids, 
@@ -195,18 +201,19 @@ class TextFeaturizer:
 
 
 # Procedure note, Progress Note, Discharge Summary, and Nurse Notes respectively
-# note_concept_ids = ["LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
-note_concept_ids = ["LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
-# path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
-path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
-path_to_piton_db = '/local-scratch/nigam/projects/ethanid/piton_1_extract'
+note_concept_ids = ["LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
+# note_concept_ids = ["LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
+# note_concept_ids = []
+# path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
+# path_to_piton_db = "/local-scratch/nigam/projects/rthapa84/data/1_perct_piton_extract_12_07_22"
+path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
 path_to_save_text_data = os.path.join(path_to_save, "text_data_chunks")
 path_to_save_tokenized_data = os.path.join(path_to_save, "tokenized_data_chunks")
 num_threads = 20
 min_char = 100
-num_patients = None # None if you want to run on entire patients
-chunk_size = 10000
+num_patients = 10000 # None if you want to run on entire patients
+chunk_size = 1000
 max_length = 4096
 padding = True
 truncation = True
@@ -218,24 +225,36 @@ if __name__ == '__main__':
     if not os.path.exists(path_to_save_text_data):
         os.makedirs(path_to_save_text_data)
 
-    text_featurizer.accumulate_text(
-        path_to_save_text_data,
-        num_threads=num_threads,
-        min_char=min_char,
-        note_concept_ids=note_concept_ids,
-        chunk_size=chunk_size
-    )
+    # text_featurizer.accumulate_text(
+    #     path_to_save_text_data,
+    #     num_threads=num_threads,
+    #     min_char=min_char,
+    #     note_concept_ids=note_concept_ids,
+    #     chunk_size=chunk_size, 
+    # )
 
-    if not os.path.exists(path_to_save_tokenized_data):
-        os.makedirs(path_to_save_tokenized_data)
+    params_dict = {
+            "min_char": min_char, 
+            "note_concept_ids": note_concept_ids, 
+            "chunk_size": chunk_size
+        }
+    
+    pids = [i for i in range(num_patients)]
+    thread_idx = 0
 
-    text_featurizer.tokenize_text(
-        path_to_model,
-        path_to_save_tokenized_data,
-        path_to_save_text_data,
-        num_threads=num_threads,
-        max_length=max_length, 
-        padding=padding, 
-        truncation=truncation, 
-    )
+    args = path_to_piton_db, path_to_save_text_data, pids, params_dict, thread_idx
+    _get_all_patient_text_data(args)
+
+    # if not os.path.exists(path_to_save_tokenized_data):
+    #     os.makedirs(path_to_save_tokenized_data)
+
+    # text_featurizer.tokenize_text(
+    #     path_to_model,
+    #     path_to_save_tokenized_data,
+    #     path_to_save_text_data,
+    #     num_threads=num_threads,
+    #     max_length=max_length, 
+    #     padding=padding, 
+    #     truncation=truncation, 
+    # )
 
