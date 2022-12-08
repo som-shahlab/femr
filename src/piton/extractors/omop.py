@@ -49,15 +49,15 @@ class _DemographicsConverter(CSVExtractor):
             Event(
                 start=birth,
                 code=4216316,
-                omop_table = "person",
-                clarity_table = row["load_table_id"],
+                omop_table="person",
+                clarity_table=row["load_table_id"],
             )
         ] + [
             Event(
                 start=birth,
                 code=int(row[target]),
-                omop_table = "person",
-                clarity_table = row["load_table_id"],
+                omop_table="person",
+                clarity_table=row["load_table_id"],
             )
             for target in [
                 "gender_concept_id",
@@ -167,14 +167,7 @@ class _ConceptTableConverter(CSVExtractor):
         if end is not None:
             metadata["end"] = end
 
-        return [
-            Event(
-                start=start,
-                code=code,
-                value=value,
-                **metadata
-            )
-        ]
+        return [Event(start=start, code=code, value=value, **metadata)]
 
 
 def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
