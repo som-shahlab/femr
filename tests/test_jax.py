@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import random as pyrandom
 
-import jax
-import jax.numpy as jnp
-import numpy as np
-import pytest
-from jax import device_put, devices, grad, jit, random, value_and_grad
-
 try:
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+    import pytest
+    from jax import device_put, devices, grad, jit, random, value_and_grad
+
     from piton.jax import (
         embedding_dot,
         embedding_dot_fallback,
