@@ -776,9 +776,10 @@ def local_attention(
 
     queries, keys, values and attention_width have the obvious meaning.
 
-    length_mask is special as local_attention support additional length masking.
+    length_mask is special as local_attention supports additional length masking.
     All indices are masked with the length mask before attention is applied.
-    This allows you to pass multiple sequences in one call to local_attention.
+    This allows you to pass multiple sequences in one call to local_attention and know they won't have cross
+    attention.
     """
     return local_attention_fwd(
         queries, keys, values, length_mask, attention_width
