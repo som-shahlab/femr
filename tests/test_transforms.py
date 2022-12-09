@@ -72,9 +72,7 @@ def test_move_to_day_end() -> None:
         patient_id=123,
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 23, 59, 59), code=1234
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 23, 59), code=1234),
             piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
@@ -155,28 +153,32 @@ def test_move_billing_codes() -> None:
         events=[
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
-                end=datetime.datetime(1999, 7, 20),
                 code=1234,
+                end=datetime.datetime(1999, 7, 20),
                 visit_id=10,
-                event_type="lpch_pat_enc",
+                clarity_table="lpch_pat_enc",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 9),
                 code=OMOP_BIRTH,
                 visit_id=10,
-                event_type="lpch_pat_enc_dx",
+                clarity_table="lpch_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 10),
                 code=42165,
                 visit_id=10,
-                event_type="shc_pat_enc_dx",
+                clarity_table="shc_pat_enc_dx",
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 11), code=12345, visit_id=10
+                start=datetime.datetime(1999, 7, 11),
+                code=12345,
+                visit_id=10,
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 13), code=123, visit_id=11
+                start=datetime.datetime(1999, 7, 13),
+                code=123,
+                visit_id=11,
             ),
         ],
     )
@@ -186,28 +188,32 @@ def test_move_billing_codes() -> None:
         events=[
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
-                end=datetime.datetime(1999, 7, 20),
                 code=1234,
                 visit_id=10,
-                event_type="lpch_pat_enc",
+                end=datetime.datetime(1999, 7, 20),
+                clarity_table="lpch_pat_enc",
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 11), code=12345, visit_id=10
+                start=datetime.datetime(1999, 7, 11),
+                code=12345,
+                visit_id=10,
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 13), code=123, visit_id=11
+                start=datetime.datetime(1999, 7, 13),
+                code=123,
+                visit_id=11,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 20),
                 code=42165,
                 visit_id=10,
-                event_type="shc_pat_enc_dx",
+                clarity_table="shc_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 20),
                 code=OMOP_BIRTH,
                 visit_id=10,
-                event_type="lpch_pat_enc_dx",
+                clarity_table="lpch_pat_enc_dx",
             ),
         ],
     )

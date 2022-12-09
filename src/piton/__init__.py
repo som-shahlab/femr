@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, fields
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Any, List, Tuple
 
 
-@dataclass(frozen=True)
+@dataclass
 class Patient:
     """A patient."""
 
     patient_id: int
-    events: Sequence[Event]
+    events: List[Event]
+
+    def resort(self) -> None:
+        """Resort the events to maintain the day invariant"""
+        self.events.sort()
 
 
-@dataclass(frozen=True)
 class Event:
     """An event with a patient record.
 
@@ -23,43 +26,55 @@ class Event:
 
     For example,
         ```
-            value: float | memoryview | None
+            value: float | str | None
         ```
-    Will attempt to decode the `.value` property as a `None` first, then `float`, then `memoryview`.
+    Will attempt to decode the `.value` property as a `None` first, then `float`, then `str`.
     """
 
     start: datetime.datetime
-    code: int  # Is this an OMOP code (or is it an index into your Piton Ontology object?)
+    code: int
+    value: float | str | None
 
-    end: datetime.datetime | None = None
-    value: float | memoryview | None = None
+    # This class can also contain any number of other optional fields
+    # Optional fields can be anything, but there are a couple that are considered "standard"
+    #
+    # - end: datetime, the end datetime for this event
+    # - visit_id: int, the visit_id this event is tied to
+    # - omop_table: str, the omop table this event was pulled from
+    # - clarity_table: str, the clarity table where the event comes from
 
-    # TODO - Seems like `visit_id` should be separated from the Event class as it creates a weird
-    # interdependency between Events (since visits are Events)
-    visit_id: int | None = None
+    def __init__(
+        self,
+        start: datetime.datetime,
+        code: int,
+        value: float | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.start = start
+        self.code = code
+        self.value = value
 
-    # TODO - add the below property
-    omop_table: str | None = None  # OMOP table where this event comes from
+        for a, b in kwargs.items():
+            if b is not None:
+                self.__dict__[a] = b
 
-    # TODO - rename or make __private (confusing)
-    event_type: str | None = None  # Clarity table name where this event comes from (for ETL purposes only)
+    def __getattr__(self, __name: str) -> Any:
+        return None
 
-    def __post_init__(self) -> None:
-        """Verify that the event is constructed correctly."""
-        if not (
-            (self.value is None)
-            or isinstance(self.value, (int, float, memoryview))
-        ):
-            raise TypeError("Invalid type of value passed to event", self.value)
+    def __setattr__(self, name: str, value: Any) -> None:
+        self.__dict__[name] = value
+
+    def __lt__(self, other: Event) -> bool:
+        def sort_key(
+            a: Event,
+        ) -> Tuple[datetime.datetime, int]:
+            return (a.start, a.code)
+
+        return sort_key(self) < sort_key(other)
+
+    def __eq__(self, other: object) -> bool:
+        return self.__dict__ == other.__dict__
 
     def __repr__(self) -> str:
-        """Convert an event to a string."""
-        items = []
-        for f in fields(self):
-            value = getattr(self, f.name)
-            if value is None:
-                continue
-            if f.name == "value" and isinstance(value, memoryview):
-                value = "'" + value.tobytes().decode("utf-8") + "'"
-            items.append(f"{f.name}={value}")
-        return "Event(" + ", ".join(items) + ")"
+        val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
+        return f"Event({val_str})"

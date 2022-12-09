@@ -80,16 +80,25 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
     }
 }
 
+Dictionary::Dictionary(Dictionary&& other): fd(other.fd), mmap_data(other.mmap_data), length(other.length), values_(other.values_), possib_sorted_values(other.possib_sorted_values) {
+    other.mmap_data = nullptr;
+    other.fd = -1;
+}
+
 Dictionary::~Dictionary() noexcept(false) {
-    int ret = munmap(mmap_data, length);
-    if (ret < 0) {
-        throw std::runtime_error(absl::StrCat(
-            "Got error trying to unmap Dictionary", std::strerror(errno)));
+    if (mmap_data != nullptr) {
+        int ret = munmap(mmap_data, length);
+        if (ret < 0) {
+            throw std::runtime_error(absl::StrCat(
+                "Got error trying to unmap Dictionary", std::strerror(errno)));
+        }
     }
-    ret = close(fd);
-    if (ret < 0) {
-        throw std::runtime_error(absl::StrCat(
-            "Got error trying to close Dictionary", std::strerror(errno)));
+    if (fd != -1) {
+        int ret = close(fd);
+        if (ret < 0) {
+            throw std::runtime_error(absl::StrCat(
+                "Got error trying to close Dictionary", std::strerror(errno)));
+        }
     }
 }
 

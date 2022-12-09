@@ -1,6 +1,5 @@
 """Transforms that are unique to STARR OMOP."""
 
-import dataclasses
 import datetime
 from typing import Dict, Optional, Tuple
 
@@ -10,7 +9,6 @@ from piton.extractors.omop import OMOP_BIRTH
 
 def move_to_day_end(patient: Patient) -> Patient:
     """We assume that everything coded at midnight should actually be moved to the end of the day."""
-    new_events = []
     for event in patient.events:
         if (
             event.start.hour == 0
@@ -18,18 +16,18 @@ def move_to_day_end(patient: Patient) -> Patient:
             and event.start.second == 0
             and event.code != OMOP_BIRTH
         ):
-            new_time = (
+            event.start = (
                 event.start
                 + datetime.timedelta(days=1)
-                - datetime.timedelta(seconds=1)
+                - datetime.timedelta(minutes=1)
             )
-            new_events.append(dataclasses.replace(event, start=new_time))
-        else:
-            new_events.append(event)
 
-    new_events.sort(key=lambda a: (a.start, a.code))
+            if event.end is not None:
+                event.end = max(event.start, event.end)
 
-    return Patient(patient.patient_id, new_events)
+    patient.resort()
+
+    return patient
 
 
 def move_pre_birth(patient: Patient) -> Optional[Patient]:
@@ -44,25 +42,22 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
 
     new_events = []
     for event in patient.events:
-        new_start = None
-        new_end = None
         if event.start < birth_date:
-            new_start = birth_date
-        if event.end and event.end < birth_date:
-            new_end = birth_date
+            delta = birth_date - event.start
+            if delta > datetime.timedelta(days=30):
+                continue
 
-        if new_start or new_end:
-            new_events.append(
-                dataclasses.replace(
-                    event,
-                    start=new_start or event.start,
-                    end=new_end or event.end,
-                )
-            )
-        else:
-            new_events.append(event)
+            event.start = birth_date
 
-    return Patient(patient_id=patient.patient_id, events=new_events)
+        if event.end is not None and event.end < birth_date:
+            event.end = birth_date
+
+        new_events.append(event)
+
+    patient.events = new_events
+    patient.resort()
+
+    return patient
 
 
 def move_billing_codes(patient: Patient) -> Patient:
@@ -87,14 +82,17 @@ def move_billing_codes(patient: Patient) -> Patient:
     }
 
     for event in patient.events:
-        if event.event_type in all_billing_codes and event.visit_id is not None:
+        if (
+            event.clarity_table in all_billing_codes
+            and event.visit_id is not None
+        ):
             key = (event.start, event.code)
             if key not in lowest_visit:
                 lowest_visit[key] = event.visit_id
             else:
                 lowest_visit[key] = min(lowest_visit[key], event.visit_id)
 
-        if event.event_type in ("lpch_pat_enc", "shc_pat_enc"):
+        if event.clarity_table in ("lpch_pat_enc", "shc_pat_enc"):
             if event.end is not None:
                 if event.visit_id is None:
                     raise RuntimeError(
@@ -107,11 +105,11 @@ def move_billing_codes(patient: Patient) -> Patient:
                 end_visits[event.visit_id] = event.end
 
     new_events = []
-
     for event in patient.events:
-        if event.event_type in all_billing_codes:
+        if event.clarity_table in all_billing_codes:
             key = (event.start, event.code)
             if event.visit_id != lowest_visit.get(key, None):
+                # Drop this event as we already have it, just with a different visit_id?
                 continue
 
             if event.visit_id is None:
@@ -124,10 +122,15 @@ def move_billing_codes(patient: Patient) -> Patient:
                 raise RuntimeError(
                     f"Expected visit end for code {patient.patient_id} {event} {patient}"
                 )
-            new_events.append(dataclasses.replace(event, start=end_visit))
+            event.start = max(event.start, end_visit)
+            if event.end is not None:
+                event.end = max(event.end, end_visit)
+            new_events.append(event)
         else:
             new_events.append(event)
 
-    new_events.sort(key=lambda a: (a.start, a.code))
+    patient.events = new_events
 
-    return Patient(patient_id=patient.patient_id, events=new_events)
+    patient.resort()
+
+    return patient

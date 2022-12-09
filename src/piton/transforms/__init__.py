@@ -40,7 +40,11 @@ def remove_nones(patient: Patient) -> Patient:
             continue
         new_events.append(event)
 
-    return Patient(patient.patient_id, new_events)
+    patient.events = new_events
+
+    patient.resort()
+
+    return patient
 
 
 def delta_encode(patient: Patient) -> Patient:
@@ -61,4 +65,8 @@ def delta_encode(patient: Patient) -> Patient:
         last_value[key] = event.value
         new_events.append(event)
 
-    return Patient(patient.patient_id, new_events)
+    patient.events = new_events
+
+    patient.resort()
+
+    return patient

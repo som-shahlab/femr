@@ -134,9 +134,7 @@ class IsMaleLF(LabelingFunction):
 
         for event in patient.events:
             if self.is_inpatient_admission(event):
-                labels.append(
-                    Label(time=event.start, value=is_male, label_type="boolean")
-                )
+                labels.append(Label(time=event.start, value=is_male))
         return labels
 
     def get_labeler_type(self) -> LabelType:
