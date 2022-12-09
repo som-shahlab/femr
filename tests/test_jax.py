@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random as pyrandom
+
 import pytest
 
 try:
@@ -21,7 +22,7 @@ try:
         local_attention_fallback,
     )
 except ImportError:
-    pytest.skip("jax package not available?")
+    pytest.skip("jax package not available?", allow_module_level=True)
 
 jnp.set_printoptions(linewidth=200)
 
