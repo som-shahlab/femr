@@ -4,6 +4,89 @@ load(
 
 load("@pybind11_bazel//:build_defs.bzl", "pybind_library", "pybind_extension")
 
+load("@rules_cuda//cuda:defs.bzl", "cuda_library")
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+cuda_library(
+    name="local_attention",
+    hdrs=["local_attention.hh"],
+    srcs=["local_attention.cu"],
+)
+
+cuda_library(
+    name="embedding_dot",
+    hdrs=["embedding_dot.hh"],
+    srcs=["embedding_dot.cu"],
+)
+
+cuda_library(
+    name="gather_scatter",
+    hdrs=["gather_scatter.hh"],
+    srcs=["gather_scatter.cu"],
+)
+
+cuda_library(
+    name="exp_mean",
+    hdrs=["exp_mean.hh"],
+    srcs=["exp_mean.cu"],
+)
+
+pybind_library(
+    name="jax_extension",
+    hdrs=[
+        "jax_extension.hh",
+    ],
+    srcs=[
+        "jax_extension.cc",
+    ],
+    deps=[
+        ":embedding_dot",
+        ":exp_mean",
+        ":local_attention",
+        ":gather_scatter",
+    ],
+)
+
+pybind_library(
+    name="cpu_jax_extension",
+    hdrs=[
+        "jax_extension.hh",
+    ],
+    srcs=[
+        "cpu_jax_extension.cc",
+    ],
+)
+
+string_flag(name = "cuda", build_setting_default = "disabled")
+
+config_setting(
+    name = "cuda_enabled",
+    flag_values = {":cuda": "enabled"}
+)
+
+jax_extension = select({
+    ":cuda_enabled": [":jax_extension"],
+    "//conditions:default": [":cpu_jax_extension"],
+})
+
+pybind_library(
+    name="dataloader_extension",
+    hdrs=[
+        "dataloader_extension.hh",
+    ],
+    srcs=[
+        "dataloader_extension.cc",
+    ],
+    deps=[
+        ":database",
+        ":clmbr_dictionary",
+        ":flatmap",
+        ":survival",
+        "@eigen",
+    ],
+)
+
 make(
     name="zstd",
     lib_source="@source_zstd//:all",
@@ -42,16 +125,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name="flatmap",
-    hdrs=[
-        "flatmap.hh",
-    ],
-    deps=[
-        "@boost//:optional",
-    ],
-)
-
 
 cc_library(
     name="dictionary",
@@ -75,6 +148,32 @@ cc_test(
     ],
     deps=[
         ":dictionary",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="survival_metrics",
+    hdrs=[
+        "survival_metrics.hh",
+    ],
+    srcs=[
+        "survival_metrics.cc",
+    ],
+    deps=[
+        "@eigen",
+        "@com_google_absl//absl/types:span",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name="survival_metrics_test",
+    srcs=[
+        "survival_metrics_test.cc",
+    ],
+    deps=[
+        ":survival_metrics",
         "@gtest//:gtest_main",
     ],
 )
@@ -146,6 +245,15 @@ cc_library(
 )
 
 cc_library(
+    name="stat_utils",
+    hdrs=[
+        "stat_utils.hh",
+    ],
+    srcs=[],
+    deps=[],
+)
+
+cc_library(
     name="count_codes_and_values",
     hdrs=[
         "count_codes_and_values.hh",
@@ -200,6 +308,7 @@ cc_library(
         "@concurrentqueue",
         "@boost//:filesystem",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@cpp-base64",
     ],
 )
 
@@ -220,8 +329,7 @@ cc_library(
     hdrs=[
         "dataloader.hh",
     ],
-    srcs=[
-    ],
+    srcs=[],
     deps=[
         "@concurrentqueue",
     ],
@@ -239,7 +347,6 @@ cc_test(
         "@gtest//:gtest_main",
     ],
 )
-
 
 
 cc_library(
@@ -269,13 +376,29 @@ pybind_library(
     ],
 )
 
+pybind_library(
+    name="metrics_extension",
+    hdrs=[
+        "metrics_extension.hh",
+    ],
+    srcs=[
+        "metrics_extension.cc",
+    ],
+    deps=[
+        ":survival_metrics",
+    ],
+)
+
+
 pybind_extension(
     name="extension",
     srcs=[
         "extension.cc",
     ],
-    deps=[
+    deps= jax_extension + [
         ":datasets_extension",
+        ":dataloader_extension",
+        ":metrics_extension",
     ],
 )
 
@@ -300,14 +423,30 @@ cc_binary(
 )
 
 cc_binary(
-    name="clmbr",
+    name="compute_dictionary",
     srcs=[
-        "clmbr.cc",
+        "compute_dictionary.cc",
     ],
     deps=[
         "@json",
         ":database",
         ":flatmap",
+        ":clmbr_dictionary",
+        ":stat_utils",
+    ],
+)
+
+cc_binary(
+    name="compute_survival_dictionary",
+    srcs=[
+        "compute_survival_dictionary.cc",
+    ],
+    deps=[
+        "@json",
+        ":database",
+        ":flatmap",
+        ":survival",
+        ":stat_utils",
     ],
 )
 
@@ -318,6 +457,46 @@ cc_binary(
     ],
     deps=[
         "@json",
+        ":database",
+        ":flatmap",
+    ],
+)
+
+cc_library(
+    name="flatmap",
+    hdrs=[
+        "flatmap.hh",
+    ],
+    deps=[
+        "@boost//:optional",
+    ],
+)
+
+cc_library(
+    name="survival",
+    hdrs=[
+        "survival.hh",
+    ],
+    deps=[
+        ":flatmap",
+    ],
+)
+
+cc_library(
+    name="clmbr_dictionary",
+    hdrs=[
+        "clmbr_dictionary.hh",
+    ],
+    deps=[
+        "@json",
+    ],
+)
+
+
+cc_binary(
+    name="generate_survival_dataset",
+    srcs=["generate_survival_dataset.cc"],
+    deps=[
         ":database",
         ":flatmap",
     ],

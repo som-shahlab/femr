@@ -59,8 +59,8 @@ void clean_thread(const boost::filesystem::path& in_path,
             continue;
         }
 
-        float value;
-        if (absl::SimpleAtof(text_value, &value)) {
+        double value;
+        if (absl::SimpleAtod(text_value, &value)) {
             continue;
         }
 

@@ -35,7 +35,7 @@ dummy_events = [
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
         code=1,
-        value=memoryview(b"test_value"),
+        value="test_value",
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 5),

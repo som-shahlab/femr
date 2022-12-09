@@ -49,21 +49,23 @@ void create_database_files(const boost::filesystem::path& patients) {
 
     {
         CSVWriter writer((patients / boost::filesystem::unique_path()).string(),
-                         {"patient_id", "code", "start", "value"}, ',');
+                         {"patient_id", "code", "start", "value", "metadata"},
+                         ',');
 
-        writer.add_row({"30", "32", "1990-03-08T09:30:00", ""});
-        writer.add_row({"30", "32", "1990-03-08T10:30:00", ""});
-        writer.add_row({"30", "323", "1990-03-11T14:30:00", "Long Text"});
-        writer.add_row({"30", "326", "1990-03-11T14:30:00", "Short Text"});
-        writer.add_row({"30", "326", "1990-03-14T14:30:00", "34"});
-        writer.add_row({"30", "326", "1990-03-15T14:30:00", "34.5"});
+        writer.add_row({"30", "32", "1990-03-08T09:30:00", "", ""});
+        writer.add_row({"30", "32", "1990-03-08T10:30:00", "", ""});
+        writer.add_row({"30", "323", "1990-03-11T14:30:00", "Long Text", "30"});
+        writer.add_row({"30", "326", "1990-03-11T14:30:00", "Short Text", ""});
+        writer.add_row({"30", "326", "1990-03-14T14:30:00", "34", "50"});
+        writer.add_row({"30", "326", "1990-03-15T14:30:00", "34.5", "30"});
     }
     {
         CSVWriter writer((patients / boost::filesystem::unique_path()).string(),
-                         {"patient_id", "code", "start", "value"}, ',');
+                         {"patient_id", "code", "start", "value", "metadata"},
+                         ',');
 
-        writer.add_row({"70", "32", "1990-03-08T09:30:00", ""});
-        writer.add_row({"70", "323", "1990-03-08T14:30:00", "Short Text"});
-        writer.add_row({"80", "32", "1990-03-08T14:30:00", ""});
+        writer.add_row({"70", "32", "1990-03-08T09:30:00", "", ""});
+        writer.add_row({"70", "323", "1990-03-08T14:30:00", "Short Text", ""});
+        writer.add_row({"80", "32", "1990-03-08T14:30:00", "", ""});
     }
 }

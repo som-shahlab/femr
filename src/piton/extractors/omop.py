@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
-from typing import Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from piton import Event
 from piton.extractors.csv import CSVExtractor
@@ -46,12 +46,18 @@ class _DemographicsConverter(CSVExtractor):
 
         return [
             # 4216316 is the OMOP birth code
-            Event(start=birth, code=4216316, event_type=row["load_table_id"])
+            Event(
+                start=birth,
+                code=4216316,
+                omop_table="person",
+                clarity_table=row["load_table_id"],
+            )
         ] + [
             Event(
                 start=birth,
                 code=int(row[target]),
-                event_type=row["load_table_id"],
+                omop_table="person",
+                clarity_table=row["load_table_id"],
             )
             for target in [
                 "gender_concept_id",
@@ -62,13 +68,24 @@ class _DemographicsConverter(CSVExtractor):
         ]
 
 
-def _try_numeric(val: str) -> float | memoryview | None:
+def _get_date(
+    row: Mapping[str, str], date_field: str
+) -> Optional[datetime.datetime]:
+    """Extract the highest resolution date from the raw data."""
+    for attempt in (date_field + "time", date_field):
+        if attempt in row and row[attempt] != "":
+            return datetime.datetime.fromisoformat(row[attempt])
+
+    return None
+
+
+def _try_numeric(val: str) -> float | str | None:
     if val == "":
         return None
     try:
         return float(val)
     except ValueError:
-        return memoryview(val.encode("utf8"))
+        return val
 
 
 @dataclasses.dataclass
@@ -91,20 +108,10 @@ class _ConceptTableConverter(CSVExtractor):
         else:
             return self.prefix
 
-    def _get_date(
-        self, date_field: str, row: Mapping[str, str]
-    ) -> Optional[datetime.datetime]:
-        """Extract the highest resolution date from the raw data."""
-        for attempt in (date_field + "time", date_field):
-            if attempt in row and row[attempt] != "":
-                return datetime.datetime.fromisoformat(row[attempt])
-
-        return None
-
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
         def normalize_to_float_if_possible(
-            field_name: Optional[str], value: memoryview | float | None
-        ) -> memoryview | float | None:
+            field_name: Optional[str], value: str | float | None
+        ) -> str | float | None:
             if field_name is not None:
                 val = _try_numeric(row[field_name])
                 if val is not None:
@@ -124,14 +131,16 @@ class _ConceptTableConverter(CSVExtractor):
                 code = 26
             elif self.prefix == "visit":
                 code = 8
+            elif self.prefix == "visit_detail":
+                code = 8
             else:
                 return []
 
         if (self.prefix + "_start_date") in row:
-            start = self._get_date(self.prefix + "_start_date", row)
-            end = self._get_date(self.prefix + "_end_date", row)
+            start = _get_date(row, self.prefix + "_start_date")
+            end = _get_date(row, self.prefix + "_end_date")
         else:
-            start = self._get_date(self.prefix + "_date", row)
+            start = _get_date(row, self.prefix + "_date")
             end = None
 
         if start is None:
@@ -147,16 +156,18 @@ class _ConceptTableConverter(CSVExtractor):
         else:
             visit_id = None
 
-        return [
-            Event(
-                start=start,
-                code=code,
-                value=value,
-                end=end,
-                visit_id=visit_id,
-                event_type=row["load_table_id"],
-            )
-        ]
+        metadata: Dict[str, Any] = {
+            "omop_table": self.prefix,
+            "clarity_table": row["load_table_id"],
+        }
+
+        if visit_id is not None:
+            metadata["visit_id"] = visit_id
+
+        if end is not None:
+            metadata["end"] = end
+
+        return [Event(start=start, code=code, value=value, **metadata)]
 
 
 def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
@@ -199,6 +210,10 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             prefix="note",
             concept_id_field="note_class_concept_id",
             string_value_field="note_text",
+        ),
+        _ConceptTableConverter(
+            prefix="visit_detail",
+            concept_id_field="piton_visit_detail_concept_id",
         ),
     ]
 

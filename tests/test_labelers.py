@@ -1,6 +1,8 @@
 import datetime
 import os
-from typing import List, Tuple
+import pathlib
+import pickle
+from typing import List, Optional, Tuple, cast
 
 import numpy as np
 
@@ -16,7 +18,7 @@ SHARED_EVENTS = [
     piton.Event(
         start=datetime.datetime(2010, 1, 1),
         code=1,
-        value=memoryview(b"test_value"),
+        value="test_value",
     ),
     piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
     piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
@@ -50,7 +52,7 @@ def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
 def assert_labels_are_accurate(
     labeled_patients: LabeledPatients,
     patient_id: int,
-    true_labels: List[bool],
+    true_labels: List[Optional[bool]] | List[bool],
     help_text: str = "",
 ):
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
@@ -97,13 +99,12 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
             Label(
                 value=bool(label_numpy[1][i]),
                 time=label_numpy[2][i],
-                label_type="boolean",
             )
             in labeled_patients[patient_id]
         )
 
 
-def test_labeled_patients():
+def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
     patients = create_patients(SHARED_EVENTS)
     true_labels = [
@@ -140,14 +141,16 @@ def test_labeled_patients():
 
     # Saving / Loading
     #   Save labeler results
-    path = "../tmp/test_labelers/CodeLF.pkl"
-    labeled_patients.save_to_file(path)
+    path = tmp_path / "CodeLF.pkl"
+    with open(path, "wb") as of:
+        pickle.dump(labeled_patients, of)
 
     #   Check that file was created
     assert os.path.exists(path)
 
     #   Read in the output files and check that they're accurate
-    labeled_patients_new = LabeledPatients.load_from_file(path)
+    with open(path, "rb") as f:
+        labeled_patients_new = pickle.load(f)
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
@@ -162,7 +165,7 @@ def test_labeled_patients():
         assert np.sum(orig != new) == 0
 
 
-def test_mortality_lf():
+def test_mortality_lf() -> None:
     """Creates a MortalityLF for code 3, which corresponds to "Death Type/" """
     patients = create_patients(SHARED_EVENTS)
     true_labels = [
@@ -192,7 +195,8 @@ def test_mortality_lf():
                 "four",
             ]
 
-    ontology = DummyOntology()
+    dummy_ontology = DummyOntology()
+    ontology = cast(piton.datasets.Ontology, dummy_ontology)
     time_horizon_4_to_12_months = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
@@ -206,7 +210,7 @@ def test_mortality_lf():
         assert_labels_are_accurate(labeled_patients, patient_id, true_labels)
 
 
-def test_code_lf():
+def test_code_lf() -> None:
     """Creates a CodeLF for code '2' with time horizon of (0,180 days)."""
     patients = create_patients(SHARED_EVENTS)
     true_labels = [

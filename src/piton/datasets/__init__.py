@@ -269,3 +269,4 @@ class PatientCollection:
 # Import from C++ extension
 
 PatientDatabase = extension_datasets.PatientDatabase
+Ontology = extension_datasets.Ontology
