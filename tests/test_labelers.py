@@ -1,5 +1,6 @@
 import datetime
 import os
+import pathlib
 import pickle
 from typing import List, Optional, Tuple, cast
 
@@ -103,7 +104,7 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
         )
 
 
-def test_labeled_patients() -> None:
+def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
     patients = create_patients(SHARED_EVENTS)
     true_labels = [
@@ -140,7 +141,7 @@ def test_labeled_patients() -> None:
 
     # Saving / Loading
     #   Save labeler results
-    path = "../tmp/test_labelers/CodeLF.pkl"
+    path = tmp_path / "CodeLF.pkl"
     with open(path, "wb") as of:
         pickle.dump(labeled_patients, of)
 
