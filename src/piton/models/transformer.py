@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+from typing import TypeVar
 
 import haiku as hk
 import jax
@@ -159,12 +159,17 @@ class TransformerBlock(hk.Module):
 
 class Transformer(hk.Module):
     def __init__(self, config):
+        """config has the following keys:
+
+        vocab_size: Embedding vocab size
+        hidden_size: Embedding dimension
+        n_layers: Number of transformer blocks
+        is_hierarchical: Whether or not to use the SNOMED hierarchy for ontology expansion
+        """
         super().__init__(name="Transformer")
         self.config = config
         self.in_norm = hk.RMSNorm(-1)
         self.out_norm = hk.RMSNorm(-1)
-        # self.in_norm = hk.LayerNorm(-1, True, True)
-        # self.out_norm = hk.LayerNorm(-1, True, True)
         self.embed = hk.Embed(
             vocab_size=self.config["vocab_size"],
             embed_dim=self.config["hidden_size"],
@@ -188,7 +193,6 @@ class Transformer(hk.Module):
 
         if self.config.get("is_hierarchical"):
             e = self.embed.embeddings
-
             assert e.dtype == jnp.float32
 
             x = piton.jax.gather_scatter_add(
@@ -278,11 +282,16 @@ class Transformer(hk.Module):
 
 class TransformerFeaturizer(hk.Module):
     def __init__(self, config):
+        """Config matches Transformer(hk.Module)"""
         super().__init__(name="TransformerFeaturizer")
         self.config = config
         self.transformer = Transformer(config)
 
     def __call__(self, batch, is_training):
+        """Transforms a batch using the given transformer featurizer.
+
+        It then pulls representations from that transformer according to batch["label_indices"].
+        """
         sequence_data = self.transformer(batch, is_training)
         if is_training and self.config["internal_dropout"] != 0:
             print(
@@ -295,6 +304,7 @@ class TransformerFeaturizer(hk.Module):
                 x=sequence_data,
             )
 
+        # batch["labeld_indices"] is padded with padding value sequence_data.shape[0]
         mask = batch["label_indices"] != sequence_data.shape[0]
         assert len(sequence_data.shape) == 2
 
@@ -313,9 +323,8 @@ class TransformerFeaturizer(hk.Module):
 
 
 class BooleanTask(hk.Module):
-    def __init__(self, config):
+    def __init__(self, _config):
         super().__init__(name="BooleanClassifier")
-        self.config = config
         self.final_layer = hk.Linear(output_size=1)
 
     def __call__(self, features, mask, batch, _is_training):
@@ -335,6 +344,12 @@ class BooleanTask(hk.Module):
 
 class SurvivalTask(hk.Module):
     def __init__(self, config):
+        """Config consists of:
+        time_bins: The time bins for the piecewice exponential
+        dim: The dimension size to use for the piecewice exponential.
+
+        Please read the Survival-CLMBR paper to understand the algorithm here.
+        """
         super().__init__(name="SurvivalTask")
         self.config = config
         self.time_bins = jnp.array(tuple(config["time_bins"]) + (float("inf"),))
@@ -446,6 +461,7 @@ class CLMBRTask(hk.Module):
 
 class SurvivalCLMBRTask(hk.Module):
     def __init__(self, config):
+        """Please read the Survival-CLMBR paper to understand the algorithm here."""
         super().__init__(name="SurvivalCLMBRTask")
         self.config = config
         num_codes = config["num_codes"]
@@ -540,6 +556,9 @@ class EHRTransformer(hk.Module):
         if no_task:
             return features, mask
         return self.task_model(features, mask, batch["task"], is_training)
+
+
+T = TypeVar("T")
 
 
 def convert_params(tree: T, dtype: jnp.dtype) -> T:

@@ -67,7 +67,7 @@ class Event:
     def __lt__(self, other: Event) -> bool:
         def sort_key(
             a: Event,
-        ) -> Tuple[datetime.datetime, int, float | str | None, Any]:
+        ) -> Tuple[datetime.datetime, int]:
             return (a.start, a.code)
 
         return sort_key(self) < sort_key(other)

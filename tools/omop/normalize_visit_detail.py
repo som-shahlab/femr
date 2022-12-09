@@ -72,7 +72,7 @@ def correct_rows(
             reader = csv.DictReader(f)
             assert reader.fieldnames is not None
             writer = csv.DictWriter(
-                o, reader.fieldnames + ["piton_visit_detail_concept_id"]
+                o, list(reader.fieldnames) + ["piton_visit_detail_concept_id"]
             )
             writer.writeheader()
             for row in reader:

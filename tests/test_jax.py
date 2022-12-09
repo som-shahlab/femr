@@ -5,19 +5,23 @@ import random as pyrandom
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import device_put, devices, grad, jit, random, value_and_grad, vmap
+import pytest
+from jax import device_put, devices, grad, jit, random, value_and_grad
 
-from piton.jax import (
-    embedding_dot,
-    embedding_dot_fallback,
-    exp_mean,
-    exp_mean_fallback,
-    gather_scatter_add,
-    gather_scatter_add_fallback,
-    get_shifts_and_mult,
-    local_attention,
-    local_attention_fallback,
-)
+try:
+    from piton.jax import (
+        embedding_dot,
+        embedding_dot_fallback,
+        exp_mean,
+        exp_mean_fallback,
+        gather_scatter_add,
+        gather_scatter_add_fallback,
+        get_shifts_and_mult,
+        local_attention,
+        local_attention_fallback,
+    )
+except ImportError:
+    pytest.skip("jax package not available?")
 
 jnp.set_printoptions(linewidth=200)
 
@@ -38,8 +42,6 @@ def gather_scatter_add_helper(dtype, device):
     indices = indices.at[-100:, :].set(
         np.array([512, 256], dtype=jnp.uint32).reshape(1, -1)
     )
-    if False:
-        indices = jnp.array([[0, 1], [0, 2], [1, 2], [3, 0]], dtype=jnp.uint32)
     indices_sort = jnp.argsort(indices[:, 1])
     indices = indices[indices_sort, :]
     # print(indices)

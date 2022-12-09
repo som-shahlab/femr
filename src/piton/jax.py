@@ -5,7 +5,6 @@ A collection of custom jax primitives that are necessary for piton's neural netw
 from __future__ import annotations
 
 import ctypes
-import logging
 import struct
 import warnings
 from functools import partial
@@ -13,7 +12,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, cast
 
 import jax
 import numpy as np
-from jax import core, custom_vjp, grad, nn
+from jax import core, grad, nn
 from jax import numpy as jnp
 from jax import value_and_grad, vmap, xla_computation
 from jax.interpreters import xla
@@ -41,11 +40,11 @@ def _convert_to_xla_shape(
 
 
 def _assert_and_cast_to_shaped(
-    l: Sequence[jax.core.AbstractValue],
+    shapes: Sequence[jax.core.AbstractValue],
 ) -> Sequence[jax.core.ShapedArray]:
     """Assert that a sequence of abstract tokens are actually shaped arrays."""
-    assert all(isinstance(a, jax.core.ShapedArray) for a in l)
-    return cast(Sequence[jax.core.ShapedArray], l)
+    assert all(isinstance(a, jax.core.ShapedArray) for a in shapes)
+    return cast(Sequence[jax.core.ShapedArray], shapes)
 
 
 @partial(
@@ -228,12 +227,17 @@ xla.register_translation(
 def embedding_dot(a: Array, b: Array, indices: Array) -> Array:
     """Perform a dot product between two embedding layers over the provided indices.
 
-    a is a 2-d tensor of shape (A, K)
-    b is a 2-d tensor of shape (B, K)
+    a is a 2-d tensor of shape (A, K).
+    b is a 2-d tensor of shape (B, K).
 
-    indices is a 2-d tensor of shape (N, 2), such that indices[:, 0] are indices into A and indices[:, 1] are indices into B.
+    K is the length of the embedding dimension.
+
+    indices is a 2-d tensor of shape (N, 2), such that indices[:, 0] are
+    indices into A and indices[:, 1] are indices into B.
 
     This returns a (N,) shaped tensor that contains the dot products for each row in indices.
+
+    Indices out of range are dropped and the ouput is padded with zeros.
     """
     return embedding_dot_fwd(a, b, indices)[0]
 
@@ -473,7 +477,7 @@ xla.register_translation(
 )
 
 
-@partial(custom_vjp, nondiff_argnums=(2,))
+@partial(jax.custom_vjp, nondiff_argnums=(2,))
 def exp_mean(a: Array, b: Array, sparse_c: Array):
     """exp_mean computes the mean value of 2^(a @ b + c), where c is a sparse matrix.
 
@@ -532,7 +536,7 @@ def exp_mean_p_abstract_eval(
     defaults: Array,
     indices: Array,
     values: Array,
-):
+) -> Tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
     """Abstract shapes for exp_mean_p."""
     assert a.dtype == b.dtype
     assert len(a.shape) == len(b.shape) == 2
@@ -655,9 +659,8 @@ def exp_mean_p_xla_translation(
                 "Could not natively suport dtype " + str(a_shape.dtype)
             )
 
-        m_shift, m_mult = get_shifts_and_mult(
-            (b_shape.shape[0] + 8 * 16 - 1) // (8 * 16)
-        )
+        factor_to_divide_by = (b_shape.shape[0] + 8 * 16 - 1) // (8 * 16)
+        m_shift, m_mult = get_shifts_and_mult(factor_to_divide_by)
 
         res = xla_client.ops.CustomCallWithLayout(
             ctx.builder,
@@ -698,7 +701,9 @@ xla.register_translation(exp_mean_p, exp_mean_p_xla_translation)
 
 
 def get_shifts_and_mult(n):
-    """Get the shifts and multiplication factors for a constant time division algorithm."""
+    """Get the shifts and multiplication factors for the standard constant time division algorithm.
+    See https://gmplib.org/~tege/divcnst-pldi94.pdf
+    """
     if n == 0:
         raise ValueError("No inverse for 0")
 
@@ -713,10 +718,82 @@ def get_shifts_and_mult(n):
     return shift, mult
 
 
+# The following is "technically" a memory leak
+# We just have to hope that piton users don't keep their program open forever ...
+_local_attention_data_cache: Dict[Tuple[int, int, int, int], Any] = {}
+
+
+def _get_cached_local_attention_data(b: int, n: int, k: int, w: int) -> bytes:
+    """The local attention data is the C++ data necessary to run the kernel.
+
+    This data only depends on the sizes passed in, so can be precomputed and shared across invocations of the kernel.
+
+    Note that we have to return a byte string of the pointer to the data.
+    """
+    key = (b, n, k, w)
+    if key not in _local_attention_data_cache:
+        _local_attention_data_cache[
+            key
+        ] = piton.extension.jax.get_local_attention_data(b, n, k, w)
+
+    # We need to pull out the actual pointer and pass that directly.
+
+    ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
+    ctypes.pythonapi.PyCapsule_GetPointer.argtypes = [
+        ctypes.py_object,
+        ctypes.c_char_p,
+    ]
+    pointer = ctypes.pythonapi.PyCapsule_GetPointer(
+        _local_attention_data_cache[key], None
+    )
+
+    result = struct.pack("P", pointer)
+
+    return result
+
+
+def add_batch_if_necessary(data: Array) -> Array:
+    """Add a batch dimension if one is missing."""
+    if len(data.shape) == 2:
+        return jnp.expand_dims(data, 0)
+    else:
+        return data
+
+
+@partial(jax.custom_vjp, nondiff_argnums=(4,))
+def local_attention(
+    queries: Array,
+    keys: Array,
+    values: Array,
+    length_mask: Array,
+    attention_width: int,
+) -> Array:
+    """
+    local_attention is an operation that implements multi-headed attention with a causal local attention pattern.
+
+    A causal local attention pattern means that each token attends to a fixed number of tokens behind it in the
+    sequence.
+
+    queries, keys, values and attention_width have the obvious meaning.
+
+    length_mask is special as local_attention support additional length masking.
+    All indices are masked with the length mask before attention is applied.
+    This allows you to pass multiple sequences in one call to local_attention.
+    """
+    return local_attention_fwd(
+        queries, keys, values, length_mask, attention_width
+    )[0]
+
+
 @partial(vmap, in_axes=(0, 0, 0, None, None))
 def local_attention_fallback_single(
-    queries, keys, values, length, attention_width
-):
+    queries: Array,
+    keys: Array,
+    values: Array,
+    length_mask: Array,
+    attention_width: int,
+) -> Array:
+    """A local attention fallback for a single sequence."""
     logits = queries @ keys.T
 
     causal_mask = jnp.tri(N=queries.shape[0], k=0, dtype=jnp.bool_)
@@ -735,8 +812,8 @@ def local_attention_fallback_single(
     col_indices = col_indices.astype(jnp.uint32)
     row_indices = row_indices.astype(jnp.uint32)
 
-    row_indices = jnp.bitwise_and(row_indices, length)
-    col_indices = jnp.bitwise_and(col_indices, length)
+    row_indices = jnp.bitwise_and(row_indices, length_mask)
+    col_indices = jnp.bitwise_and(col_indices, length_mask)
 
     length_mask = row_indices == col_indices
 
@@ -751,7 +828,14 @@ def local_attention_fallback_single(
     return result
 
 
-def local_attention_fallback(queries, keys, values, length, attention_width):
+def local_attention_fallback(
+    queries: Array,
+    keys: Array,
+    values: Array,
+    length: Array,
+    attention_width: int,
+) -> Tuple[Array, Array]:
+    """The full fallback, that supports batching and the dummy attention values"""
     result = local_attention_fallback_single(
         queries, keys, values, length, attention_width
     )
@@ -771,62 +855,32 @@ def local_attention_fallback(queries, keys, values, length, attention_width):
 
 @partial(grad, argnums=(0, 1, 2))
 def local_attention_backward_fallback(
-    queries, keys, values, length, _attention, g, attention_width
-):
+    queries: Array,
+    keys: Array,
+    values: Array,
+    length: Array,
+    _attention: Array,
+    g: Array,
+    attention_width: int,
+) -> Array:
+    """Fallback for the gradient. Note that we nede to discard the attention."""
     result = local_attention_fallback_single(
         queries, keys, values, length, attention_width
     )
     return (result * g).sum()
 
 
-# The following is "technically" a memory leak
-# We just have to hope that piton users don't keep their program open forever ...
-_local_attention_data_cache: Dict[Tuple[int, int, int, int], Any] = {}
-
-
-def _get_cached_local_attention_data(b, n, k, w):
-    key = (b, n, k, w)
-    if key not in _local_attention_data_cache:
-        _local_attention_data_cache[
-            key
-        ] = piton.extension.jax.get_local_attention_data(b, n, k, w)
-
-    ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
-    ctypes.pythonapi.PyCapsule_GetPointer.argtypes = [
-        ctypes.py_object,
-        ctypes.c_char_p,
-    ]
-    pointer = ctypes.pythonapi.PyCapsule_GetPointer(
-        _local_attention_data_cache[key], None
-    )
-
-    result = struct.pack("P", pointer)
-
-    return result
-
-
-def batch_if_necessary(data):
-    if len(data.shape) == 2:
-        return jnp.expand_dims(data, 0)
-    else:
-        return data
-
-
-def local_attention_impl(queries, keys, values, length, attention_width):
-    queries = batch_if_necessary(queries)
-    keys = batch_if_necessary(keys)
-    values = batch_if_necessary(values)
-
-    attention, result = local_attention_forward_p.bind(
-        queries, keys, values, length, attention_width=attention_width
-    )
-    return result
-
-
-def local_attention_fwd(queries, keys, values, length, attention_width):
-    queries = batch_if_necessary(queries)
-    keys = batch_if_necessary(keys)
-    values = batch_if_necessary(values)
+def local_attention_fwd(
+    queries: Array,
+    keys: Array,
+    values: Array,
+    length: Array,
+    attention_width: int,
+) -> Tuple[Array, Tuple[Array, Array, Array, Array, Array]]:
+    """The forward pass for local_attention."""
+    queries = add_batch_if_necessary(queries)
+    keys = add_batch_if_necessary(keys)
+    values = add_batch_if_necessary(values)
 
     attention, result = local_attention_forward_p.bind(
         queries, keys, values, length, attention_width=attention_width
@@ -835,7 +889,12 @@ def local_attention_fwd(queries, keys, values, length, attention_width):
     return result, res
 
 
-def local_attention_bwd(attention_width, res, g):
+def local_attention_bwd(
+    attention_width: int,
+    res: Tuple[Array, Array, Array, Array, Array],
+    g: Array,
+) -> Tuple[Array, Array, Array, None]:
+    """The backward pass for local_attention."""
     queries, keys, values, length, attention = res
 
     dq, dk, dv = local_attention_backward_p.bind(
@@ -850,7 +909,6 @@ def local_attention_bwd(attention_width, res, g):
     return (dq, dk, dv, None)
 
 
-local_attention = custom_vjp(local_attention_impl, nondiff_argnums=(4,))
 local_attention.defvjp(local_attention_fwd, local_attention_bwd)
 
 local_attention_forward_p = core.Primitive("local_attention_forward")
@@ -863,7 +921,8 @@ def local_attention_forward_abstract_eval(
     length: jax.core.ShapedArray,
     *,
     attention_width: int,
-):
+) -> Tuple[jax.core.ShapedArray, jax.core.ShapedArray]:
+    """Forward shapes for local_attention."""
     assert len(queries.shape) == 3
 
     assert queries.dtype == keys.dtype == values.dtype
@@ -902,6 +961,7 @@ def local_attention_forward_xla_translation(
     *,
     attention_width: int,
 ) -> Sequence[xla.XlaOp]:
+    """Forward op for local_attention."""
     assert all(isinstance(a, jax.core.ShapedArray) for a in avals_in)
     avals_in = cast(Sequence[jax.core.ShapedArray], avals_in)
     assert all(isinstance(a, jax.core.ShapedArray) for a in avals_out)
@@ -990,7 +1050,8 @@ def local_attention_backward_abstract_eval(
     attention: jax.core.ShapedArray,
     g: jax.core.ShapedArray,
     attention_width: int,
-):
+) -> Tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
+    """Abstract shapes for local_attention."""
     assert length.shape == tuple()
     assert length.dtype == jnp.uint32
 
@@ -1030,6 +1091,7 @@ def local_attention_backward_xla_translation(
     *,
     attention_width: int,
 ) -> Sequence[xla.XlaOp]:
+    """Backward op for local_attention."""
     assert all(isinstance(a, jax.core.ShapedArray) for a in avals_in)
     avals_in = cast(Sequence[jax.core.ShapedArray], avals_in)
 

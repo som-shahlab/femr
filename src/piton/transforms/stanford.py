@@ -1,6 +1,5 @@
 """Transforms that are unique to STARR OMOP."""
 
-import dataclasses
 import datetime
 from typing import Dict, Optional, Tuple
 

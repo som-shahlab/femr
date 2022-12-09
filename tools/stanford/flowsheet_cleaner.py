@@ -87,9 +87,9 @@ def get_new_sources(root: str, child: str) -> Set[str]:
                     new_concepts.add(new_row["observation_source_value"])
                 if new_row["unit_concept_id"] == "0":
                     new_concepts.add(new_row["unit_source_value"])
-    except:
+    except Exception as e:
         traceback.print_exc()
-        raise RuntimeError("Failed " + root + " , " + child)
+        raise RuntimeError("Failed " + root + " , " + child, e)
 
     return new_concepts
 

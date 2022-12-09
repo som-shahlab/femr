@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import collections
 import datetime
-import os
-import pickle
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -96,7 +94,7 @@ class LabelingFunction(ABC):
         Returns:
             List[int]: List of applicable OMOP codes
         """
-        pass
+        return []
 
     def get_patient_start_end_times(
         self, patient: Patient

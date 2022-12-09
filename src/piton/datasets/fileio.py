@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import base64
 import csv
-import dataclasses
 import datetime
 import io
 import pickle
 import tempfile
-from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import zstandard
 

@@ -141,35 +141,3 @@ def test_breslow():
     valid_probs = scipy.stats.expon.cdf(t, scale=1 / event_h)
 
     assert np.allclose(cdf, valid_probs, atol=0.03)
-
-
-def test_breslow_hard():
-    np.random.seed(341231)
-
-    event_h = 5
-    censor_h = 8
-
-    size = 100000
-
-    T = scipy.stats.expon.rvs(scale=1 / event_h, size=size)
-    C = scipy.stats.expon.rvs(scale=1 / censor_h, size=size)
-
-    t = np.minimum(T, C)
-    c = C < T
-
-    hazard = np.random.lognormal(size=(size, 2), sigma=0.01)
-    print(hazard)
-    # hazard = np.ones(shape=(size, 2))
-
-    times = [0, 1]
-
-    breslow = piton.metrics.estimate_breslow(
-        t[: size // 10], c[: size // 10], times, hazard[: size // 10, :]
-    )
-    cdf = piton.metrics.apply_breslow(t, times, hazard, breslow)
-
-    B = 10
-    valid = piton.metrics.compute_calibration(cdf, c, B)
-
-    print(valid)
-    assert False
