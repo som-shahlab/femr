@@ -35,12 +35,12 @@ def _get_all_patient_text_data(args):
 
                 text_data = bytes(event.value).decode("utf-8")
 
-                if database.get_text_count(text_data) > 1:
-                    continue
+                # if database.get_text_count(text_data) > 1:
+                #     continue
 
                 if len(text_data) < params_dict["min_char"]:
                     continue
-                
+
                 one_patient_dict["text_data"].append(text_data)
                 one_patient_dict["event_ids"].append(event_id)
             
@@ -58,7 +58,7 @@ def _get_tokenized_text(args):
     text_files, path_to_model, path_to_save, params_dict = args
     tokenizer = AutoTokenizer.from_pretrained(path_to_model)
 
-    for text_file in text_files:
+    for text_file in tqdm(text_files):
 
         file_suffix = text_file.split("/")[-1][:-17]
         text_data_dict = load_from_file(text_file)
@@ -78,9 +78,24 @@ def _get_tokenized_text(args):
                                     max_length=params_dict["max_length"],
                                     return_tensors="pt",
                                 )
-            
-            tokenized_text_data_dict[patient_id]["tokenized_data"] = notes_tokenized['input_ids'].numpy().astype(np.uint16)
-            tokenized_text_data_dict[patient_id]["event_ids"] = text_data["event_ids"]
+
+            input_ids = notes_tokenized['input_ids'].numpy().astype(np.uint16)
+            attention_mask = (input_ids != 1)*1
+            seq_lens = attention_mask.sum(axis=1)
+            event_ids = text_data["event_ids"]
+
+            # print(seq_lens)
+            reverse_idx = np.argsort(seq_lens)[::-1]
+
+            seq_lens = np.array(seq_lens[reverse_idx])
+            input_ids = np.array(input_ids[reverse_idx])
+            event_ids = np.array(event_ids)[reverse_idx]
+
+            # seq_lens, input_ids, event_ids = zip(*sorted(zip(seq_lens, input_ids, event_ids), reverse=True))
+
+            tokenized_text_data_dict[patient_id]["tokenized_data"] = input_ids
+            tokenized_text_data_dict[patient_id]["event_ids"] = event_ids
+            tokenized_text_data_dict[patient_id]["seq_lens"] = seq_lens
 
         save_to_file(tokenized_text_data_dict, os.path.join(path_to_save, f"{file_suffix}_tokenized_data.pickle"))
     
@@ -203,16 +218,18 @@ note_concept_ids = ["LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/34
 # note_concept_ids = ["LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
 # note_concept_ids = []
 # path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
+path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
 path_to_piton_db = "/local-scratch/nigam/projects/rthapa84/data/1_perct_piton_extract_12_07_22"
 # path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
+# path_to_save = "/local-scratch-nvme/nigam/projects/rthapa84/data"
 path_to_save_text_data = os.path.join(path_to_save, "text_data_chunks")
 path_to_save_tokenized_data = os.path.join(path_to_save, "tokenized_data_chunks")
 num_threads = 20
 min_char = 100
-num_patients = 10000 # None if you want to run on entire patients
-chunk_size = 1000
-max_length = 4096
+num_patients = None # None if you want to run on entire patients
+chunk_size = 20000
+max_length = 1024
 padding = True
 truncation = True
 
@@ -220,27 +237,29 @@ if __name__ == '__main__':
 
     text_featurizer = TextFeaturizer(path_to_piton_db, num_patients=num_patients)
 
-    if not os.path.exists(path_to_save_text_data):
-        os.makedirs(path_to_save_text_data)
+    # if not os.path.exists(path_to_save_text_data):
+    #     os.makedirs(path_to_save_text_data)
 
-    text_featurizer.accumulate_text(
-        path_to_save_text_data,
-        num_threads=num_threads,
-        min_char=min_char,
-        note_concept_ids=note_concept_ids,
-        chunk_size=chunk_size, 
-    )
-
-    # text_featurizer.tokenize_text(
-    #     path_to_model,
-    #     path_to_save_tokenized_data,
+    # text_featurizer.accumulate_text(
     #     path_to_save_text_data,
     #     num_threads=num_threads,
-    #     max_length=max_length, 
-    #     padding=padding, 
-    #     truncation=truncation, 
+    #     min_char=min_char,
+    #     note_concept_ids=note_concept_ids,
+    #     chunk_size=chunk_size, 
     # )
 
+    if not os.path.exists(path_to_save_tokenized_data):
+        os.makedirs(path_to_save_tokenized_data)
+
+    text_featurizer.tokenize_text(
+        path_to_model,
+        path_to_save_tokenized_data,
+        path_to_save_text_data,
+        num_threads=num_threads,
+        max_length=max_length, 
+        padding=padding, 
+        truncation=truncation, 
+    )
 
     # params_dict = {
     #         "min_char": min_char, 
@@ -254,6 +273,5 @@ if __name__ == '__main__':
     # args = path_to_piton_db, path_to_save_text_data, pids, params_dict, thread_idx
     # _get_all_patient_text_data(args)
 
-    # if not os.path.exists(path_to_save_tokenized_data):
-    #     os.makedirs(path_to_save_tokenized_data)
+
 
