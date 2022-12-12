@@ -54,16 +54,22 @@ T read_element(const Dictionary& dict, uint32_t index) {
     return span[0];
 }
 
-using UniqueValue = std::pair<uint32_t, std::string>;
-
 struct Entry {
+    uint32_t patient_id;
     uint64_t original_patient_id;
-    std::string bytes;
-    std::vector<UniqueValue> unique_values;
-    std::vector<std::string> event_metadata;
+
+    uint32_t num_unique;
+    uint32_t num_metadata;
+
+    std::vector<std::string>
+        data;  // of size 1 + num_unique + num_event
+               // stores data, then unique values, then event metadata
+
+    bool operator<(const Entry& r) const { return patient_id > r.patient_id; }
 };
 
-void write_patient_to_buffer(uint64_t original_patient_id,
+void write_patient_to_buffer(uint32_t start_unique,
+                             uint64_t original_patient_id,
                              const Patient& current_patient,
                              std::vector<uint32_t>& buffer) {
     if (current_patient.birth_date < epoch) {
@@ -115,9 +121,15 @@ void write_patient_to_buffer(uint64_t original_patient_id,
 
             case ValueType::UNIQUE_TEXT:
             case ValueType::SHARED_TEXT: {
+                uint32_t text_value = event.text_value;
+
+                if (event.value_type == ValueType::UNIQUE_TEXT) {
+                    text_value += start_unique;
+                }
+
                 buffer.push_back(mask | 1);
                 bool is_shared = event.value_type == ValueType::SHARED_TEXT;
-                buffer.push_back((event.text_value << 1) |
+                buffer.push_back((text_value << 1) |
                                  static_cast<uint32_t>(is_shared));
                 break;
             }
@@ -272,27 +284,34 @@ void reader_thread(
     const boost::filesystem::path& patient_file,
     moodycamel::BlockingReaderWriterCircularBuffer<boost::optional<Entry>>&
         queue,
-    std::atomic<uint32_t>& unique_counter,
+    std::atomic<uint64_t>& pid_and_unique_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
     CSVReader reader(patient_file,
                      {"patient_id", "code", "start", "value", "metadata"}, ',');
 
-    Entry current_entry;
-    current_entry.original_patient_id = 0;
-
+    uint64_t original_patient_id = 0;
     Patient current_patient;
+    std::vector<std::string> current_unique;
+    std::vector<std::string> current_metadata;
 
     absl::CivilSecond birth_date;
 
     std::vector<uint32_t> buffer;
     std::string byte_buffer;
     auto output_patient = [&]() {
-        if (current_entry.original_patient_id == 0) {
+        if (original_patient_id == 0) {
             return;
         }
 
-        write_patient_to_buffer(current_entry.original_patient_id,
+        uint64_t pid_and_unique = pid_and_unique_counter.fetch_add(
+            1ul << 32 | current_unique.size(),
+            std::memory_order::memory_order_relaxed);
+
+        uint32_t pid = pid_and_unique >> 32;
+        uint32_t start_unique = pid_and_unique & 0xfffffffful;
+
+        write_patient_to_buffer(start_unique, original_patient_id,
                                 current_patient, buffer);
 
         if (byte_buffer.size() <
@@ -308,15 +327,32 @@ void reader_thread(
         if (buffer.size() >= std::numeric_limits<uint32_t>::max()) {
             throw std::runtime_error(absl::StrCat(
                 "Cannot create a patient with more than uint32_t events ... ",
-                current_entry.original_patient_id, " ", buffer.size()));
+                original_patient_id, " ", buffer.size()));
         }
-        uint32_t count = buffer.size();
-        current_entry.bytes.resize(sizeof(count) + num_bytes);
-        std::memcpy(current_entry.bytes.data(), &count, sizeof(count));
-        std::memcpy(current_entry.bytes.data() + sizeof(count),
-                    byte_buffer.data(), num_bytes);
 
-        queue.wait_enqueue({std::move(current_entry)});
+        uint32_t count = buffer.size();
+
+        std::string bytes(sizeof(count) + num_bytes, 0);
+        std::memcpy(bytes.data(), &count, sizeof(count));
+        std::memcpy(bytes.data() + sizeof(count), byte_buffer.data(),
+                    num_bytes);
+
+        Entry next_entry;
+        next_entry.patient_id = pid;
+        next_entry.original_patient_id = original_patient_id;
+        next_entry.num_unique = current_unique.size();
+        next_entry.num_metadata = current_metadata.size();
+
+        next_entry.data.reserve(1 + current_unique.size() +
+                                current_metadata.size());
+
+        next_entry.data.emplace_back(std::move(bytes));
+        std::move(std::begin(current_unique), std::end(current_unique),
+                  std::back_inserter(next_entry.data));
+        std::move(std::begin(current_metadata), std::end(current_metadata),
+                  std::back_inserter(next_entry.data));
+
+        queue.wait_enqueue({std::move(next_entry)});
     };
 
     while (reader.next_row()) {
@@ -327,16 +363,16 @@ void reader_thread(
         absl::CivilSecond start;
         attempt_parse_time_or_die(reader.get_row()[2], start);
 
-        if (patient_id != current_entry.original_patient_id) {
+        if (patient_id != original_patient_id) {
             output_patient();
 
             current_patient.birth_date = absl::CivilDay(start);
             birth_date = absl::CivilSecond(current_patient.birth_date);
             current_patient.events.clear();
 
-            current_entry.original_patient_id = patient_id;
-            current_entry.unique_values.clear();
-            current_entry.event_metadata.clear();
+            original_patient_id = patient_id;
+            current_unique.clear();
+            current_metadata.clear();
         }
 
         Event next_event;
@@ -360,15 +396,13 @@ void reader_thread(
                     next_event.text_value = iter->second;
                 } else {
                     next_event.value_type = ValueType::UNIQUE_TEXT;
-                    next_event.text_value = unique_counter.fetch_add(1);
-                    current_entry.unique_values.emplace_back(
-                        next_event.text_value, std::move(reader.get_row()[3]));
+                    next_event.text_value = current_unique.size();
+                    current_unique.emplace_back(std::move(reader.get_row()[3]));
                 }
             }
         }
 
-        current_entry.event_metadata.push_back(
-            base64_decode(reader.get_row()[4]));
+        current_metadata.emplace_back(base64_decode(reader.get_row()[4]));
 
         current_patient.events.push_back(next_event);
     }
@@ -437,65 +471,69 @@ PatientDatabase convert_patient_collection_to_patient_database(
             queues;
         queues.reserve(files.size());
 
-        std::atomic<uint32_t> unique_counter(0);
+        std::atomic<uint64_t> patient_and_unique_counter(0);
 
         for (size_t i = 0; i < files.size(); i++) {
             queues.emplace_back(QUEUE_SIZE);
-            threads.emplace_back([i, &files, &queues, &unique_counter,
+            threads.emplace_back([i, &files, &queues,
+                                  &patient_and_unique_counter,
                                   &text_value_to_index, &code_to_index]() {
-                reader_thread(files[i], queues[i], unique_counter,
+                reader_thread(files[i], queues[i], patient_and_unique_counter,
                               code_to_index, text_value_to_index);
             });
         }
 
-        uint32_t next_write_unique = 0;
+        uint32_t next_write_patient = 0;
         DictionaryWriter unique_text(target / "unique_text");
-        std::priority_queue<UniqueValue, std::vector<UniqueValue>,
-                            std::greater<>>
-            unique_value_heap;
+        std::priority_queue<Entry> entry_heap;
 
-        dequeue_many_loop(queues, [&](Entry& entry) {
-            for (auto& unique_value : entry.unique_values) {
-                if (unique_value.first == next_write_unique) {
-                    unique_text.add_value(unique_value.second);
-                    next_write_unique++;
-
-                    while (!unique_value_heap.empty() &&
-                           unique_value_heap.top().first == next_write_unique) {
-                        unique_text.add_value(unique_value_heap.top().second);
-                        next_write_unique++;
-                        unique_value_heap.pop();
-                    }
-                } else {
-                    unique_value_heap.emplace(std::move(unique_value));
-                }
-            }
-
+        auto write_patient = [&](const Entry& entry) {
             original_patient_ids.push_back(entry.original_patient_id);
+
+            patients.add_value(entry.data[0]);
+
+            for (uint32_t i = 0; i < entry.num_unique; i++) {
+                unique_text.add_value(entry.data[i + 1]);
+            }
 
             uint32_t total_length = 0;
 
-            for (const auto& entry : entry.event_metadata) {
-                total_length += entry.size();
+            for (uint32_t i = 0; i < entry.num_metadata; i++) {
+                total_length += entry.data[i + entry.num_unique + 1].size();
             }
 
             std::vector<uint32_t> event_metadata_offsets;
             std::string event_metadata_value;
             event_metadata_value.reserve(total_length);
-            event_metadata_offsets.reserve(entry.event_metadata.size());
+            event_metadata_offsets.reserve(entry.num_metadata);
 
-            for (const auto& entry : entry.event_metadata) {
+            for (uint32_t i = 0; i < entry.num_metadata; i++) {
                 event_metadata_offsets.push_back(event_metadata_value.size());
-                event_metadata_value.append(entry);
+                event_metadata_value.append(
+                    entry.data[i + entry.num_unique + 1]);
             }
 
             event_metadata.add_value(container_to_view(event_metadata_offsets));
             event_metadata.add_value(event_metadata_value);
 
-            patients.add_value(entry.bytes);
+            next_write_patient++;
+        };
+
+        dequeue_many_loop(queues, [&](Entry& entry) {
+            if (entry.patient_id == next_write_patient) {
+                write_patient(entry);
+
+                while (!entry_heap.empty() &&
+                       entry_heap.top().patient_id == next_write_patient) {
+                    write_patient(entry_heap.top());
+                    entry_heap.pop();
+                }
+            } else {
+                entry_heap.emplace(std::move(entry));
+            }
         });
 
-        if (!unique_value_heap.empty()) {
+        if (!entry_heap.empty()) {
             throw std::runtime_error(
                 "Should have an empty heap after done processing?");
         }

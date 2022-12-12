@@ -8,16 +8,18 @@ void create_ontology_files(const boost::filesystem::path& concept_root) {
     boost::filesystem::path concept = concept_root / "concept";
     boost::filesystem::create_directory(concept);
     {
-        CSVWriter writer(
-            (concept / boost::filesystem::unique_path()).string(),
-            {"concept_id", "concept_code", "vocabulary_id", "standard_concept"},
-            ',');
+        CSVWriter writer((concept / boost::filesystem::unique_path()).string(),
+                         {"concept_id", "concept_code", "concept_name",
+                          "vocabulary_id", "standard_concept"},
+                         ',');
 
-        writer.add_row({"32", "foo", "bar", ""});
-        writer.add_row({"323", "parent of foo", "bar", ""});
-        writer.add_row({"3235", "grandparent of foo", "bar", "S"});
-        writer.add_row({"32356", "bad grandparent of foo", "bar", ""});
-        writer.add_row({"326", "lmao", "lol", ""});
+        writer.add_row({"32", "foo", "foo name", "bar", ""});
+        writer.add_row({"323", "parent of foo", "parent foo name", "bar", ""});
+        writer.add_row(
+            {"3235", "grandparent of foo", "grandparent", "bar", "S"});
+        writer.add_row(
+            {"32356", "bad grandparent of foo", "bad grandparent", "bar", ""});
+        writer.add_row({"326", "lmao", "test the descr", "lol", ""});
     }
 
     boost::filesystem::path relationship = concept_root / "relationship";
