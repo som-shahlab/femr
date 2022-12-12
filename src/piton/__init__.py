@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, fields
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Any, List, Tuple
 
 
-@dataclass(frozen=True)
+@dataclass
 class Patient:
     """A patient."""
 
     patient_id: int
-    events: Sequence[Event]
+    events: List[Event]
 
+    def resort(self) -> None:
+        """Resort the events to maintain the day invariant"""
+        self.events.sort()
 
-@dataclass(frozen=True)
 class Event:
     """An event within a patient timeline."""
 
@@ -24,7 +26,7 @@ class Event:
     ########
 
     # Shared ID across all Events of the same type
-    concept_id: int
+    code: int
 
     # Time interval over which this event occurred.
     # Only specify `start` if it's a single moment in time
@@ -38,46 +40,42 @@ class Event:
     end: datetime.datetime | None = None
 
     # Value associated with Event.
-    # If text, then use `memoryview` (e.g. clinical note)
-    # If numeric, then use `float` (e.g. lab value)
-    value: int | float | memoryview | None = None
+    value: int | float | str | None = None
 
-    # Any data associated with this Event that we need to carry
-    # through the ETL in order to apply transformations to the Event
-    # Examples of fields within `metadata`:
-    #   - visit_id
-    #   - load_table_etl
-    metadata: dict | None = None  # type: ignore
+    def __init__(
+        self,
+        start: datetime.datetime,
+        code: int,
+        end: datetime.datetime | None = None,
+        value: float | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.start = start
+        self.code = code
+        self.value = value
+        self.end = end
 
-    def __post_init__(self) -> None:
-        """Verify that the event is constructed correctly."""
-        # Check `value`
-        if not (
-            (self.value is None)
-            or isinstance(self.value, (int, float, memoryview))
-        ):
-            raise TypeError("Invalid type of value passed to event", self.value)
+        for a, b in kwargs.items():
+            if b is not None:
+                self.__dict__[a] = b
+
+    def __getattr__(self, name: str) -> Any:
+        return self.__dict__[name]
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        self.__dict__[name] = value
+
+    def __lt__(self, other: Event) -> bool:
+        def sort_key(
+            a: Event,
+        ) -> Tuple[datetime.datetime, int]:
+            return (a.start, a.code)
+
+        return sort_key(self) < sort_key(other)
+
+    def __eq__(self, other: object) -> bool:
+        return self.__dict__ == other.__dict__
 
     def __repr__(self) -> str:
-        """Convert an event to a string."""
-        items = []
-        for f in fields(self):
-            value = getattr(self, f.name)
-            if value is None:
-                continue
-            if f.name == "value" and isinstance(value, memoryview):
-                value = "'" + value.tobytes().decode("utf-8") + "'"
-            items.append(f"{f.name}={value}")
-        return "Event(" + ", ".join(items) + ")"
-
-    def __hash__(self) -> int:
-        """Need to explicitly define for `self.metadata` since dicts() are unhashable by default."""
-        return hash(
-            (
-                self.concept_id,
-                self.start,
-                self.end,
-                self.value,
-                str(self.metadata),
-            )
-        )
+        val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
+        return f"Event({val_str})"

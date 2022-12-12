@@ -16,22 +16,22 @@ def test_pre_birth() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(start=datetime.datetime(1999, 7, 2), concept_id=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
-            piton.Event(start=datetime.datetime(1999, 7, 11), concept_id=12345),
+            piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
         ],
     )
 
     expected = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(start=datetime.datetime(1999, 7, 9), concept_id=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=1234),
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
-            piton.Event(start=datetime.datetime(1999, 7, 11), concept_id=12345),
+            piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
         ],
     )
 
@@ -42,12 +42,12 @@ def test_remove_small() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(start=datetime.datetime(1999, 7, 2), concept_id=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
-            piton.Event(start=datetime.datetime(1999, 7, 11), concept_id=12345),
-            piton.Event(start=datetime.datetime(1999, 7, 13), concept_id=12345),
+            piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
+            piton.Event(start=datetime.datetime(1999, 7, 13), code=12345),
         ],
     )
 
@@ -55,9 +55,9 @@ def test_remove_small() -> None:
         patient_id=123,
         events=[
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
-            piton.Event(start=datetime.datetime(1999, 7, 11), concept_id=12345),
+            piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
         ],
     )
 
@@ -70,12 +70,12 @@ def test_move_to_day_end() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(start=datetime.datetime(1999, 7, 2), concept_id=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
             piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), concept_id=4321
+                start=datetime.datetime(1999, 7, 2, 12), code=4321
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
         ],
     )
@@ -83,15 +83,9 @@ def test_move_to_day_end() -> None:
     expected = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), concept_id=4321
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 23, 59, 59), concept_id=1234
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 23, 59), code=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
 
@@ -103,15 +97,15 @@ def test_remove_nones() -> None:
         patient_id=123,
         events=[
             piton.Event(
-                start=datetime.datetime(1999, 7, 2), concept_id=1234
+                start=datetime.datetime(1999, 7, 2), code=1234
             ),  # No value, to be removed
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 12),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
         ],
     )
@@ -121,11 +115,11 @@ def test_remove_nones() -> None:
         events=[
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 12),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
             piton.Event(
-                start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH
+                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
             ),
         ],
     )
@@ -137,26 +131,26 @@ def test_delta_encode() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(start=datetime.datetime(1999, 7, 2), concept_id=1234),
-            piton.Event(start=datetime.datetime(1999, 7, 2), concept_id=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 12),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 14),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 19),
-                concept_id=1234,
+                code=1234,
                 value=5,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 20),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
         ],
@@ -165,20 +159,20 @@ def test_delta_encode() -> None:
     expected = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(start=datetime.datetime(1999, 7, 2), concept_id=1234),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 12),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 19),
-                concept_id=1234,
+                code=1234,
                 value=5,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 20),
-                concept_id=1234,
+                code=1234,
                 value=3,
             ),
         ],
@@ -193,42 +187,32 @@ def test_move_billing_codes() -> None:
         events=[
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
+                code=1234,
                 end=datetime.datetime(1999, 7, 20),
-                concept_id=1234,
-                metadata={
-                    "visit_id": 10,
-                    "event_type": "lpch_pat_enc",
-                },
+                visit_id=10,
+                clarity_table="lpch_pat_enc",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 9),
-                concept_id=OMOP_BIRTH,
-                metadata={
-                    "visit_id": 10,
-                    "event_type": "lpch_pat_enc_dx",
-                },
+                code=OMOP_BIRTH,
+                visit_id=10,
+                clarity_table="lpch_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 10),
-                concept_id=42165,
-                metadata={
-                    "visit_id": 10,
-                    "event_type": "shc_pat_enc_dx",
-                },
+                code=42165,
+                visit_id=10,
+                clarity_table="shc_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 11),
-                concept_id=12345,
-                metadata={
-                    "visit_id": 10,
-                },
+                code=12345,
+                visit_id=10,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 13),
-                concept_id=123,
-                metadata={
-                    "visit_id": 11,
-                },
+                code=123,
+                visit_id=11,
             ),
         ],
     )
@@ -238,42 +222,32 @@ def test_move_billing_codes() -> None:
         events=[
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
+                code=1234,
+                visit_id=10,
                 end=datetime.datetime(1999, 7, 20),
-                concept_id=1234,
-                metadata={
-                    "visit_id": 10,
-                    "event_type": "lpch_pat_enc",
-                },
+                clarity_table="lpch_pat_enc",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 11),
-                concept_id=12345,
-                metadata={
-                    "visit_id": 10,
-                },
+                code=12345,
+                visit_id=10,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 13),
-                concept_id=123,
-                metadata={
-                    "visit_id": 11,
-                },
+                code=123,
+                visit_id=11,
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 20),
-                concept_id=42165,
-                metadata={
-                    "visit_id": 10,
-                    "event_type": "shc_pat_enc_dx",
-                },
+                code=42165,
+                visit_id=10,
+                clarity_table="shc_pat_enc_dx",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 20),
-                concept_id=OMOP_BIRTH,
-                metadata={
-                    "visit_id": 10,
-                    "event_type": "lpch_pat_enc_dx",
-                },
+                code=OMOP_BIRTH,
+                visit_id=10,
+                clarity_table="lpch_pat_enc_dx",
             ),
         ],
     )

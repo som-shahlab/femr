@@ -32,7 +32,109 @@ void keep_alive(py::handle nurse, py::handle patient) {
     (void)wr.release();
 }
 
+namespace {
+class EventWrapper {
+   public:
+    EventWrapper(py::module pickle, PatientDatabase* database,
+                 uint32_t patient_id, absl::CivilSecond birth_date,
+                 uint32_t event_index, const Event& event)
+        : m_pickle(pickle),
+          m_database(database),
+          m_patient_id(patient_id),
+          m_birth_date(birth_date),
+          m_event_index(event_index),
+          m_event(event) {}
+
+    py::object code() {
+        if (!m_code) {
+            m_code.emplace(py::cast(m_event.code));
+        }
+        return *m_code;
+    }
+
+    py::object start() {
+        if (!m_start) {
+            absl::CivilSecond start_time =
+                m_birth_date + 60 * m_event.start_age_in_minutes;
+
+            m_start.emplace(py::cast(start_time));
+        }
+        return *m_start;
+    }
+
+    py::object value() {
+        if (!m_value) {
+            switch (m_event.value_type) {
+                case ValueType::NONE:
+                    m_value.emplace(py::none());
+                    break;
+
+                case ValueType::NUMERIC:
+                    m_value.emplace(py::cast(m_event.numeric_value));
+                    break;
+
+                case ValueType::UNIQUE_TEXT:
+                case ValueType::SHARED_TEXT: {
+                    std::string_view data;
+
+                    if (m_event.value_type == ValueType::UNIQUE_TEXT) {
+                        auto dict = m_database->get_unique_text_dictionary();
+                        if (dict == nullptr) {
+                            data = "";
+                        } else {
+                            data = (*dict)[m_event.text_value];
+                        }
+                    } else {
+                        data = m_database->get_shared_text_dictionary()
+                                   [m_event.text_value];
+                    }
+
+                    m_value.emplace(py::str(data.data(), data.size()));
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value?");
+            }
+        }
+
+        return *m_value;
+    }
+
+    py::object metadata() {
+        if (!m_metadata) {
+            std::string_view metadata_str =
+                m_database->get_event_metadata(m_patient_id, m_event_index);
+            if (metadata_str.data() != nullptr) {
+                py::object bytes =
+                    py::bytes(metadata_str.data(), metadata_str.size());
+                m_metadata.emplace(m_pickle.attr("loads")(bytes));
+            } else {
+                m_metadata.emplace(py::dict());
+            }
+        }
+        return *m_metadata;
+    }
+
+   private:
+    py::module m_pickle;
+
+    PatientDatabase* m_database;
+    uint32_t m_patient_id;
+    absl::CivilSecond m_birth_date;
+    uint32_t m_event_index;
+    Event m_event;
+
+    boost::optional<py::object> m_start;
+    boost::optional<py::object> m_code;
+    boost::optional<py::object> m_value;
+    boost::optional<py::object> m_metadata;
+};
+}  // namespace
+
 void register_datasets_extension(py::module& root) {
+    py::module pickle = py::module::import("pickle");
+
     py::module abc = py::module::import("collections.abc");
     py::object abc_sequence = abc.attr("Sequence");
 
@@ -110,70 +212,41 @@ void register_datasets_extension(py::module& root) {
     py::class_<PatientDatabase> database_binding(m, "PatientDatabase");
 
     database_binding
-        .def(py::init<const char*, bool>(), py::arg("filename"),
-             py::arg("read_all") = false)
+        .def(py::init<const char*, bool, bool>(), py::arg("filename"),
+             py::arg("read_all") = false,
+             py::arg("read_all_unique_text") = false)
         .def("__len__", [](PatientDatabase& self) { return self.size(); })
         .def(
             "__getitem__",
-            [python_patient, python_event](py::object self_object,
-                                           uint32_t index) {
+            [python_patient, pickle](py::object self_object,
+                                     uint32_t patient_id) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
-                if (index >= self.size()) {
+                if (patient_id >= self.size()) {
                     throw py::index_error();
                 }
 
-                Patient p = self.get_patient(index);
+                Patient p = self.get_patient(patient_id);
                 py::tuple events(p.events.size());
+
+                absl::CivilSecond birth_date = p.birth_date;
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    absl::CivilSecond event_time = p.birth_date;
-                    uint32_t minutes = event.minutes_offset;
-                    minutes += 24 * 60 * event.age_in_days;
-                    event_time += 60 * minutes;
-                    py::object value;
-                    py::object value_type;
-                    switch (event.value_type) {
-                        case ValueType::NONE:
-                            value = py::none();
-                            break;
-
-                        case ValueType::NUMERIC:
-                            value = py::cast(event.numeric_value);
-                            break;
-
-                        case ValueType::UNIQUE_TEXT:
-                        case ValueType::SHARED_TEXT: {
-                            std::string_view data;
-
-                            if (event.value_type == ValueType::UNIQUE_TEXT) {
-                                data = self.get_unique_text_dictionary()
-                                           [event.text_value];
-                            } else {
-                                data = self.get_shared_text_dictionary()
-                                           [event.text_value];
-                            }
-
-                            value = py::memoryview::from_memory(
-                                (void*)data.data(), data.size(), true);
-
-                            keep_alive(value, self_object);
-
-                            break;
-                        }
-                    }
-                    events[i] = python_event("start"_a = event_time,
-                                             "concept_id"_a = event.concept_id,
-                                             "value"_a = value);
+                    events[i] = EventWrapper(pickle, &self, patient_id,
+                                             birth_date, i, event);
                 }
 
                 return python_patient("patient_id"_a = p.patient_id,
                                       "events"_a = events);
             },
             py::return_value_policy::reference_internal)
-
+        .def("get_patient_birth_date",
+             [](PatientDatabase& self, uint32_t patient_id) {
+                 Patient p = self.get_patient(patient_id);
+                 return p.birth_date;
+             })
         .def("get_code_dictionary", &PatientDatabase::get_code_dictionary,
              py::return_value_policy::reference_internal)
         .def("get_ontology", &PatientDatabase::get_ontology,
@@ -190,13 +263,16 @@ void register_datasets_extension(py::module& root) {
                      return self.get_shared_text_count(*iter);
                  }
 
-                 iter = self.get_unique_text_dictionary().find(data);
-                 if (iter) {
+                 auto dict = self.get_unique_text_dictionary();
+                 if (dict != nullptr && dict->find(data)) {
                      return 1;
                  } else {
                      return 0;
                  }
              })
+        .def("compute_split", &PatientDatabase::compute_split)
+        .def("version_id", &PatientDatabase::version_id)
+        .def("database_id", &PatientDatabase::database_id)
         .def("close",
              [](const PatientDatabase& self) {
                  // TODO: Implement this to save memory and file pointers
@@ -212,22 +288,42 @@ void register_datasets_extension(py::module& root) {
         .def("get_all_parents", &Ontology::get_all_parents,
              py::return_value_policy::reference_internal)
         .def("get_dictionary", &Ontology::get_dictionary,
-             py::return_value_policy::reference_internal);
+             py::return_value_policy::reference_internal)
+        .def("get_text_description", [](Ontology& self, uint32_t index) {
+            if (index >= self.get_dictionary().size()) {
+                throw py::index_error();
+            }
+            auto descr = self.get_text_description(index);
+            return py::str(descr.data(), descr.size());
+        });
+
+    py::class_<EventWrapper>(m, "EventWrapper")
+        .def_property_readonly("code", &EventWrapper::code)
+        .def_property_readonly("start", &EventWrapper::start)
+        .def_property_readonly("value", &EventWrapper::value)
+        .def(
+            "__getattr__",
+            [](EventWrapper& wrapper, const std::string& attr) {
+                return wrapper.metadata().attr("get")(attr, py::none());
+            })
+        .def("__repr__", [python_event](EventWrapper& wrapper) {
+            using namespace pybind11::literals;
+            return py::str(python_event(
+                "code"_a = wrapper.code(), "start"_a = wrapper.start(),
+                "value"_a = wrapper.value(), **wrapper.metadata()));
+        });
 
     py::class_<Dictionary> dictionary_binding(m, "Dictionary");
     dictionary_binding
         .def("__len__", [](Dictionary& self) { return self.size(); })
-        .def(
-            "__getitem__",
-            [](Dictionary& self, uint32_t index) {
-                if (index >= self.size()) {
-                    throw py::index_error();
-                }
-                auto data = self[index];
-                return py::memoryview::from_memory((void*)data.data(),
-                                                   data.size(), true);
-            },
-            py::return_value_policy::reference_internal)
+        .def("__getitem__",
+             [](Dictionary& self, uint32_t index) {
+                 if (index >= self.size()) {
+                     throw py::index_error();
+                 }
+                 auto data = self[index];
+                 return py::str(data.data(), data.size());
+             })
         .def("index",
              [](Dictionary& self, std::string data) {
                  auto iter = self.find(data);

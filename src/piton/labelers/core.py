@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import collections
 import datetime
-import os
-import pickle
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -56,40 +54,8 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 class Label:
     """An individual label for a particular patient at a particular time."""
 
-    __slots__ = [
-        "time",  # Arbitrary timestamp (datetime.datetime)
-        "label_type",
-        "value",
-    ]
-
-    def __init__(
-        self,
-        time: datetime.datetime,
-        value: Optional[Union[bool, int, float, SurvivalValue]],
-        label_type: LabelType,
-    ):
-        """Construct a label for datetime `time` and value `value`.
-
-        Args:
-            time (datetime.datetime): Time in this patient's timeline that corresponds to this label
-            value (Optional[Union[bool, int, float, SurvivalValue]]): Value of label. Defaults to None.
-            label_type (LabelType): Type of label. Must be an element in `VALID_LABEL_TYPES`.
-        """
-        assert (
-            label_type in VALID_LABEL_TYPES
-        ), f"{label_type} not in {VALID_LABEL_TYPES}"
-        if value is not None:
-            if label_type == "boolean":
-                assert isinstance(value, bool)
-            elif label_type == "numeric":
-                assert isinstance(value, float)
-            elif label_type == "categorical":
-                assert isinstance(value, int)
-            elif label_type == "survival":
-                assert isinstance(value, SurvivalValue)
-        self.time = time
-        self.label_type = label_type
-        self.value = value
+    time: datetime.datetime
+    value: Optional[Union[bool, int, float, SurvivalValue]]
 
 
 class LabelingFunction(ABC):
@@ -128,7 +94,7 @@ class LabelingFunction(ABC):
         Returns:
             List[int]: List of applicable OMOP codes
         """
-        pass
+        return []
 
     def get_patient_start_end_times(
         self, patient: Patient
@@ -229,19 +195,6 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                 result.append((int(patient_id), label))
         return result
 
-    def save_to_file(self, path_to_file: str):
-        """Save `LabeledPatients` object to Pickle file."""
-        os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-        with open(path_to_file, "wb") as fd:
-            pickle.dump(self, fd)
-
-    @classmethod
-    def load_from_file(cls, path_to_file: str) -> LabeledPatients:
-        """Load `LabeledPatients` object from Pickle file."""
-        with open(path_to_file, "rb") as fd:
-            result = pickle.load(fd)
-        return result
-
     @classmethod
     def load_from_numpy(
         cls,
@@ -267,7 +220,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             patient_ids, label_values, label_times
         ):
             patients_to_labels[patient_id].append(
-                Label(time=l_time, value=l_value, label_type=labeler_type)
+                Label(time=l_time, value=l_value)
             )
         return LabeledPatients(dict(patients_to_labels), labeler_type)
 
@@ -415,18 +368,12 @@ class FixedTimeHorizonEventLF(LabelingFunction):
             is_censored: bool = end_time < time + time_horizon.end
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(
-                    Label(time=time, value=True, label_type="boolean")
-                )
+                results.append(Label(time=time, value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(
-                    Label(time=time, value=False, label_type="boolean")
-                )
+                results.append(Label(time=time, value=False))
             else:
-                results.append(
-                    Label(time=time, value=None, label_type="boolean")
-                )
+                results.append(Label(time=time, value=None))
 
         # checks that we have a label for each prediction time (even if `None``)
         assert len(results) == len(self.get_prediction_times(patient))

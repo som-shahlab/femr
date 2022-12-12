@@ -5,10 +5,12 @@
 #include <boost/range/iterator_range.hpp>
 #include <deque>
 #include <queue>
+#include <random>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
+#include "base64.h"
 #include "blockingconcurrentqueue.h"
 #include "count_codes_and_values.hh"
 #include "csv.hh"
@@ -24,6 +26,8 @@ constexpr int seconds_per_minute = 60;
 constexpr int minutes_per_hour = 60;
 constexpr int hours_per_day = 24;
 
+constexpr uint32_t current_version = 1;
+
 template <typename T>
 std::string_view container_to_view(const T& data) {
     return std::string_view(reinterpret_cast<const char*>(data.data()),
@@ -37,12 +41,26 @@ absl::Span<const T> read_span(const Dictionary& dict, uint32_t index) {
             mapping.size() / sizeof(T)};
 }
 
+template <typename T>
+std::string_view element_to_view(const T* data) {
+    return absl::string_view(reinterpret_cast<const char*>(data),
+                             sizeof(*data));
+}
+
+template <typename T>
+T read_element(const Dictionary& dict, uint32_t index) {
+    absl::Span<const T> span = read_span<T>(dict, index);
+    assert(span.size() == 1);
+    return span[0];
+}
+
 using UniqueValue = std::pair<uint32_t, std::string>;
 
 struct Entry {
     uint64_t original_patient_id;
     std::string bytes;
     std::vector<UniqueValue> unique_values;
+    std::vector<std::string> event_metadata;
 };
 
 void write_patient_to_buffer(uint64_t original_patient_id,
@@ -60,45 +78,44 @@ void write_patient_to_buffer(uint64_t original_patient_id,
 
     ssize_t count_offset = -1;
 
-    int32_t last_age = 0;
-    int32_t last_minute_offset = 0;
+    int64_t last_age = 0;
 
     for (const Event& event : current_patient.events) {
-        int32_t delta = static_cast<int32_t>(event.age_in_days) - last_age;
+        int64_t delta =
+            static_cast<int64_t>(event.start_age_in_minutes) - last_age;
         if (delta < 0) {
             throw std::runtime_error(absl::StrCat(
                 "Patient days are not sorted in order ", original_patient_id,
-                " with ", event.age_in_days, " ", delta));
+                " with ", event.start_age_in_minutes, " ", delta));
         }
-        int32_t minute_delta =
-            ((minutes_per_hour * hours_per_day) +
-             static_cast<int32_t>(event.minutes_offset) - last_minute_offset) %
-            (minutes_per_hour * hours_per_day);
-
-        if (minute_delta < 0) {
-            throw std::runtime_error(
-                absl::StrCat("Should not have a ngeative minute delta?"));
+        if (delta > std::numeric_limits<uint32_t>::max()) {
+            throw std::runtime_error("Out of bounds error?");
         }
-        last_minute_offset = event.minutes_offset;
-        last_age = event.age_in_days;
+        last_age = event.start_age_in_minutes;
 
-        if (delta == 0 && minute_delta == 0 && count_offset != -1) {
+        if (delta == 0 && count_offset != -1) {
             buffer[count_offset] += 1;
         } else {
             count_offset = buffer.size();
             buffer.push_back(0);
-            buffer.push_back(delta);
-            buffer.push_back(minute_delta);
+            buffer.push_back((uint32_t)delta);
         }
+
+        if ((((uint64_t)event.code) << 2) >
+            std::numeric_limits<uint32_t>::max()) {
+            throw std::runtime_error("Numeric limits error");
+        }
+
+        uint32_t mask = (event.code << 2);
 
         switch (event.value_type) {
             case ValueType::NONE:
-                buffer.push_back((event.concept_id << 2));
+                buffer.push_back(mask | 0);
                 break;
 
             case ValueType::UNIQUE_TEXT:
             case ValueType::SHARED_TEXT: {
-                buffer.push_back((event.concept_id << 2) | 1);
+                buffer.push_back(mask | 1);
                 bool is_shared = event.value_type == ValueType::SHARED_TEXT;
                 buffer.push_back((event.text_value << 1) |
                                  static_cast<uint32_t>(is_shared));
@@ -108,10 +125,10 @@ void write_patient_to_buffer(uint64_t original_patient_id,
             case ValueType::NUMERIC:
                 if (static_cast<uint32_t>(event.numeric_value) ==
                     event.numeric_value) {
-                    buffer.push_back((event.concept_id << 2) | 2);
+                    buffer.push_back(mask | 2);
                     buffer.push_back(event.numeric_value);
                 } else {
-                    buffer.push_back((event.concept_id << 2) | 3);
+                    buffer.push_back(mask | 3);
                     buffer.push_back(event.text_value);
                 }
                 break;
@@ -124,65 +141,130 @@ void write_patient_to_buffer(uint64_t original_patient_id,
 
 void read_patient_from_buffer(Patient& current_patient,
                               const std::vector<uint32_t>& buffer,
-                              uint32_t count) {
-    size_t index = 0;
-    current_patient.birth_date = epoch + buffer[index++];
-    current_patient.events.resize(buffer[index++]);
+                              uint32_t count, uint32_t version) {
+    if (version == 0) {
+        size_t index = 0;
+        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.events.resize(buffer[index++]);
 
-    uint32_t last_age = 0;
-    uint32_t last_minutes = 0;
+        uint64_t last_age = 0;
+        uint32_t last_minutes = 0;
 
-    uint32_t count_with_same = 0;
-    for (Event& event : current_patient.events) {
-        if (count_with_same == 0) {
-            count_with_same = buffer[index++];
-            last_age += buffer[index++];
-            last_minutes += buffer[index++];
-            last_minutes %= (minutes_per_hour * hours_per_day);
-        } else {
-            count_with_same--;
-        }
-        event.age_in_days = last_age;
-        event.minutes_offset = last_minutes;
-
-        uint32_t code_and_type = buffer[index++];
-        event.concept_id = code_and_type >> 2;
-        uint32_t type = code_and_type & 3;
-
-        switch (type) {
-            case 0:
-                event.value_type = ValueType::NONE;
-                break;
-
-            case 1: {
-                uint32_t text_value = buffer[index++];
-                bool is_shared = (text_value & 1) == 1;
-                event.value_type =
-                    is_shared ? ValueType::SHARED_TEXT : ValueType::UNIQUE_TEXT;
-                event.text_value = text_value >> 1;
-                break;
+        uint32_t count_with_same = 0;
+        for (Event& event : current_patient.events) {
+            if (count_with_same == 0) {
+                count_with_same = buffer[index++];
+                last_age += buffer[index++];
+                last_minutes += buffer[index++];
+                last_minutes %= (minutes_per_hour * hours_per_day);
+            } else {
+                count_with_same--;
             }
+            uint64_t darn =
+                last_age * minutes_per_hour * hours_per_day + last_minutes;
+            if (darn > std::numeric_limits<uint32_t>::max()) {
+                throw std::runtime_error("Invalid range ...");
+            }
+            event.start_age_in_minutes = darn;
 
-            case 2:
-            case 3: {
-                event.value_type = ValueType::NUMERIC;
-                if (type == 2) {
-                    event.numeric_value = buffer[index++];
-                } else {
-                    event.text_value = buffer[index++];
+            uint32_t code_and_type = buffer[index++];
+            event.code = code_and_type >> 2;
+            uint32_t type = code_and_type & 3;
+
+            switch (type) {
+                case 0:
+                    event.value_type = ValueType::NONE;
+                    break;
+
+                case 1: {
+                    uint32_t text_value = buffer[index++];
+                    bool is_shared = (text_value & 1) == 1;
+                    event.value_type = is_shared ? ValueType::SHARED_TEXT
+                                                 : ValueType::UNIQUE_TEXT;
+                    event.text_value = text_value >> 1;
+                    break;
                 }
-                break;
+
+                case 2:
+                case 3: {
+                    event.value_type = ValueType::NUMERIC;
+                    if (type == 2) {
+                        event.numeric_value = buffer[index++];
+                    } else {
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value type?");
             }
-
-            default:
-                throw std::runtime_error("Invalid value type?");
         }
-    }
 
-    if (index != count) {
-        throw std::runtime_error(
-            absl::StrCat("Did not read through the entire patient record? ",
-                         index, " ", buffer.size()));
+        if (index != count) {
+            throw std::runtime_error(
+                absl::StrCat("Did not read through the entire patient record? ",
+                             index, " ", buffer.size()));
+        }
+    } else if (version == 1) {
+        size_t index = 0;
+        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.events.resize(buffer[index++]);
+
+        uint32_t last_age = 0;
+
+        uint32_t count_with_same = 0;
+        for (Event& event : current_patient.events) {
+            if (count_with_same == 0) {
+                count_with_same = buffer[index++];
+                last_age += buffer[index++];
+            } else {
+                count_with_same--;
+            }
+            event.start_age_in_minutes = last_age;
+
+            uint32_t code_and_type = buffer[index++];
+            event.code = code_and_type >> 2;
+            uint32_t type = code_and_type & 3;
+
+            switch (type) {
+                case 0:
+                    event.value_type = ValueType::NONE;
+                    break;
+
+                case 1: {
+                    uint32_t text_value = buffer[index++];
+                    bool is_shared = (text_value & 1) == 1;
+                    event.value_type = is_shared ? ValueType::SHARED_TEXT
+                                                 : ValueType::UNIQUE_TEXT;
+                    event.text_value = text_value >> 1;
+                    break;
+                }
+
+                case 2:
+                case 3: {
+                    event.value_type = ValueType::NUMERIC;
+                    if (type == 2) {
+                        event.numeric_value = buffer[index++];
+                    } else {
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value type?");
+            }
+        }
+
+        if (index != count) {
+            throw std::runtime_error(
+                absl::StrCat("Did not read through the entire patient record? ",
+                             index, " ", buffer.size()));
+        }
+    } else {
+        throw std::runtime_error(absl::StrCat(
+            "Does not support reading piton databases of version ", version));
     }
 }
 
@@ -194,7 +276,7 @@ void reader_thread(
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
     CSVReader reader(patient_file,
-                     {"patient_id", "concept_id", "start", "value"}, ',');
+                     {"patient_id", "code", "start", "end", "value", "metadata"}, ',');
 
     Entry current_entry;
     current_entry.original_patient_id = 0;
@@ -242,29 +324,27 @@ void reader_thread(
         attempt_parse_or_die(reader.get_row()[0], patient_id);
         uint64_t code;
         attempt_parse_or_die(reader.get_row()[1], code);
-        absl::CivilSecond time;
-        attempt_parse_time_or_die(reader.get_row()[2], time);
+        absl::CivilSecond start;
+        attempt_parse_time_or_die(reader.get_row()[2], start);
 
         if (patient_id != current_entry.original_patient_id) {
             output_patient();
 
-            current_patient.birth_date = absl::CivilDay(time);
+            current_patient.birth_date = absl::CivilDay(start);
             birth_date = absl::CivilSecond(current_patient.birth_date);
             current_patient.events.clear();
 
             current_entry.original_patient_id = patient_id;
             current_entry.unique_values.clear();
+            current_entry.event_metadata.clear();
         }
 
         Event next_event;
-        uint64_t age_in_seconds = (time - birth_date);
-        next_event.age_in_days =
-            age_in_seconds /
-            (seconds_per_minute * minutes_per_hour * hours_per_day);
-        next_event.minutes_offset =
-            (age_in_seconds / seconds_per_minute) -
-            (next_event.age_in_days * hours_per_day * minutes_per_hour);
-        next_event.concept_id = code_to_index.find(code)->second;
+        uint64_t start_age_in_seconds = (start - birth_date);
+        next_event.start_age_in_minutes =
+            start_age_in_seconds / seconds_per_minute;
+
+        next_event.code = code_to_index.find(code)->second;
 
         if (reader.get_row()[3].empty()) {
             next_event.value_type = ValueType::NONE;
@@ -286,6 +366,9 @@ void reader_thread(
                 }
             }
         }
+
+        current_entry.event_metadata.push_back(
+            base64_decode(reader.get_row()[4]));
 
         current_patient.events.push_back(next_event);
     }
@@ -338,6 +421,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
     std::vector<uint64_t> original_patient_ids;
     {
         DictionaryWriter patients(target / "patients");
+        DictionaryWriter event_metadata(target / "event_metadata");
 
         std::vector<std::thread> threads;
 
@@ -388,6 +472,26 @@ PatientDatabase convert_patient_collection_to_patient_database(
             }
 
             original_patient_ids.push_back(entry.original_patient_id);
+
+            uint32_t total_length = 0;
+
+            for (const auto& entry : entry.event_metadata) {
+                total_length += entry.size();
+            }
+
+            std::vector<uint32_t> event_metadata_offsets;
+            std::string event_metadata_value;
+            event_metadata_value.reserve(total_length);
+            event_metadata_offsets.reserve(entry.event_metadata.size());
+
+            for (const auto& entry : entry.event_metadata) {
+                event_metadata_offsets.push_back(event_metadata_value.size());
+                event_metadata_value.append(entry);
+            }
+
+            event_metadata.add_value(container_to_view(event_metadata_offsets));
+            event_metadata.add_value(event_metadata_value);
+
             patients.add_value(entry.bytes);
         });
 
@@ -432,17 +536,25 @@ PatientDatabase convert_patient_collection_to_patient_database(
         add_counts(codes_and_values.first);
         add_counts(codes_and_values.second);
         meta.add_value(container_to_view(codes));
+
+        meta.add_value(element_to_view(&current_version));
+
+        std::random_device device;
+        uint32_t extract_id = device();
+        meta.add_value(element_to_view(&extract_id));
     }
     std::cout << "Done with meta " << absl::Now() << std::endl;
 
     return PatientDatabase(target, false);
 }
 
-PatientDatabaseIterator::PatientDatabaseIterator(const Dictionary* d)
-    : parent_dictionary(d) {}
+PatientDatabaseIterator::PatientDatabaseIterator(PatientDatabase* d)
+    : parent_database(d) {
+    (void)parent_database->patients->size();
+}
 
 Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
-    std::string_view data = (*parent_dictionary)[patient_id];
+    std::string_view data = (*(parent_database->patients))[patient_id];
 
     uint32_t count;
     std::memcpy(&count, data.data(), sizeof(count));
@@ -450,30 +562,57 @@ Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
         buffer.resize(count * 2);
     }
 
-    streamvbyte_decode(
-        reinterpret_cast<const uint8_t*>(data.data() + sizeof(count)),
-        buffer.data(), count);
+    if (parent_database->version_id() > 0) {
+        streamvbyte_decode(
+            reinterpret_cast<const uint8_t*>(data.data() + sizeof(count)),
+            buffer.data(), count);
+    } else {
+        streamvbyte_decode(
+            reinterpret_cast<const uint8_t*>(data.data() + sizeof(count)),
+            buffer.data(), count);
+    }
 
     current_patient.patient_id = patient_id;
-    read_patient_from_buffer(current_patient, buffer, count);
+    read_patient_from_buffer(current_patient, buffer, count,
+                             parent_database->version_id());
 
     return current_patient;
 }
 
 PatientDatabase::PatientDatabase(boost::filesystem::path const& path,
-                                 bool read_all)
+                                 bool read_all, bool read_all_unique_text)
     : patients(path / "patients", read_all),
       ontology(path / "ontology"),
       shared_text_dictionary(path / "shared_text", read_all),
-      unique_text_dictionary(path / "unique_text", read_all),
+      unique_text_dictionary(path / "unique_text", read_all_unique_text),
       code_index_dictionary(path / "code_index", read_all),
       value_index_dictionary(path / "value_index", read_all),
-      meta_dictionary(path / "meta", read_all) {}
+      event_metadata_dictionary(path / "event_metadata", read_all),
+      meta_dictionary(path / "meta", read_all) {
+    (void)version_id();
+}
 
 uint32_t PatientDatabase::size() { return patients->size(); }
 
+uint32_t PatientDatabase::version_id() {
+    if (meta_dictionary.size() <= 5) {
+        // Needed to handle very old extracts
+        return 0;
+    } else {
+        return read_element<uint32_t>(meta_dictionary, 5);
+    }
+}
+
+uint32_t PatientDatabase::database_id() {
+    if (version_id() == 0) {
+        return 0;
+    } else {
+        return read_element<uint32_t>(meta_dictionary, 6);
+    }
+}
+
 PatientDatabaseIterator PatientDatabase::iterator() {
-    return PatientDatabaseIterator(&(*patients));
+    return PatientDatabaseIterator(this);
 }
 
 Patient PatientDatabase::get_patient(uint32_t patient_id) {
@@ -482,13 +621,13 @@ Patient PatientDatabase::get_patient(uint32_t patient_id) {
 }
 
 uint64_t PatientDatabase::get_original_patient_id(uint32_t patient_id) {
-    return read_span<uint64_t>(*meta_dictionary, 0)[patient_id];
+    return read_span<uint64_t>(meta_dictionary, 0)[patient_id];
 }
 
 boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
     uint64_t original_patient_id) {
     absl::Span<const uint32_t> sorted_span =
-        read_span<uint32_t>(*meta_dictionary, 1);
+        read_span<uint32_t>(meta_dictionary, 1);
     const auto* iter = std::lower_bound(
         std::begin(sorted_span), std::end(sorted_span), original_patient_id,
         [&](uint32_t index, uint64_t original) {
@@ -503,11 +642,11 @@ boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
 }
 
 uint32_t PatientDatabase::get_code_count(uint32_t code) {
-    return read_span<uint32_t>(*meta_dictionary, 2)[code];
+    return read_span<uint32_t>(meta_dictionary, 2)[code];
 }
 
 uint32_t PatientDatabase::get_shared_text_count(uint32_t value) {
-    return read_span<uint32_t>(*meta_dictionary, 3)[value];
+    return read_span<uint32_t>(meta_dictionary, 3)[value];
 }
 
 Ontology& PatientDatabase::get_ontology() { return ontology; }
@@ -520,8 +659,33 @@ Dictionary& PatientDatabase::get_shared_text_dictionary() {
     return *shared_text_dictionary;
 }
 
-Dictionary& PatientDatabase::get_unique_text_dictionary() {
-    return *unique_text_dictionary;
+Dictionary* PatientDatabase::get_unique_text_dictionary() {
+    if (unique_text_dictionary) {
+        return &(*unique_text_dictionary);
+    } else {
+        return nullptr;
+    }
+}
+
+std::string_view PatientDatabase::get_event_metadata(uint32_t patient_id,
+                                                     uint32_t event_index) {
+    if (!event_metadata_dictionary) {
+        return std::string_view(nullptr, 0);
+    }
+
+    absl::Span<const uint32_t> event_offsets =
+        read_span<uint32_t>(*event_metadata_dictionary, patient_id * 2);
+
+    std::string_view data = (*event_metadata_dictionary)[patient_id * 2 + 1];
+    uint32_t end;
+    if (event_index == event_offsets.size() - 1) {
+        end = data.size();
+    } else {
+        end = event_offsets[event_index + 1];
+    }
+
+    return data.substr(event_offsets[event_index],
+                       end - event_offsets[event_index]);
 }
 
 template <typename F>
@@ -604,15 +768,15 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
         [&](const boost::filesystem::path& path) {
             std::vector<uint64_t> result;
 
-            CSVReader reader(path, {"concept_id", "standard_concept"},
+            CSVReader reader(path, {"code", "standard_concept"},
                              delimiter);
 
             while (reader.next_row()) {
-                uint64_t concept_id;
-                attempt_parse_or_die(reader.get_row()[0], concept_id);
+                uint64_t code;
+                attempt_parse_or_die(reader.get_row()[0], code);
 
                 if (reader.get_row()[1] != "") {
-                    result.push_back(concept_id);
+                    result.push_back(code);
                 }
             }
 
@@ -655,18 +819,18 @@ get_parents(const std::vector<uint64_t>& raw_codes,
             ParentMap result;
 
             CSVReader reader(
-                path, {"concept_id_1", "concept_id_2", "relationship_id"},
+                path, {"code_1", "code_2", "relationship_id"},
                 delimiter);
 
             while (reader.next_row()) {
                 const auto& rel_id = reader.get_row()[2];
-                uint64_t concept_id_1;
-                attempt_parse_or_die(reader.get_row()[0], concept_id_1);
-                uint64_t concept_id_2;
-                attempt_parse_or_die(reader.get_row()[1], concept_id_2);
+                uint64_t code_1;
+                attempt_parse_or_die(reader.get_row()[0], code_1);
+                uint64_t code_2;
+                attempt_parse_or_die(reader.get_row()[1], code_2);
 
                 bool is_non_standard =
-                    standard_code_map.count(concept_id_2) == 0;
+                    standard_code_map.count(code_2) == 0;
 
                 size_t valid_rel_index;
                 for (valid_rel_index = 0; valid_rel_index < valid_rels.size();
@@ -677,8 +841,8 @@ get_parents(const std::vector<uint64_t>& raw_codes,
                 }
 
                 if (valid_rel_index < valid_rels.size()) {
-                    result[concept_id_1].push_back(std::make_tuple(
-                        is_non_standard, valid_rel_index, concept_id_2));
+                    result[code_1].push_back(std::make_tuple(
+                        is_non_standard, valid_rel_index, code_2));
                 }
             }
 
@@ -761,7 +925,7 @@ get_parents(const std::vector<uint64_t>& raw_codes,
     return {std::move(index_map), std::move(result)};
 }
 
-std::vector<std::string> get_concept_text(
+std::vector<std::pair<std::string, std::string>> get_concept_text(
     const std::vector<uint64_t>& originals,
     const absl::flat_hash_map<uint64_t, uint32_t>& index_map,
     const boost::filesystem::path& concept, char delimiter,
@@ -769,27 +933,34 @@ std::vector<std::string> get_concept_text(
     auto texts = process_nested(
         concept, "concept", num_threads,
         [&](const boost::filesystem::path& path) {
-            std::vector<std::pair<std::string, uint32_t>> result;
+            std::vector<
+                std::pair<std::pair<std::string, std::string>, uint32_t>>
+                result;
 
-            CSVReader reader(path,
-                             {"concept_id", "concept_code", "vocabulary_id"},
-                             delimiter);
+            CSVReader reader(
+                path,
+                {"code", "concept_code", "vocabulary_id", "concept_name"},
+                delimiter);
 
             while (reader.next_row()) {
-                uint64_t concept_id;
-                attempt_parse_or_die(reader.get_row()[0], concept_id);
+                uint64_t code;
+                attempt_parse_or_die(reader.get_row()[0], code);
 
-                auto iter = index_map.find(concept_id);
+                auto iter = index_map.find(code);
                 if (iter != std::end(index_map)) {
                     std::string text = absl::StrCat(reader.get_row()[2], "/",
                                                     reader.get_row()[1]);
-                    result.emplace_back(std::move(text), iter->second);
+
+                    std::string description = reader.get_row()[3];
+                    result.emplace_back(
+                        std::make_pair(std::move(text), std::move(description)),
+                        iter->second);
                 }
             }
 
             return result;
         });
-    std::vector<std::string> result(index_map.size());
+    std::vector<std::pair<std::string, std::string>> result(index_map.size());
     for (auto& text : texts) {
         for (auto& entry : text) {
             result[entry.second] = std::move(entry.first);
@@ -797,7 +968,7 @@ std::vector<std::string> get_concept_text(
     }
 
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].empty()) {
+        if (result[i].first.empty()) {
             throw std::runtime_error(
                 absl::StrCat("Could not map ", i, " ", originals[i]));
         }
@@ -837,7 +1008,13 @@ Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
     {
         DictionaryWriter main(target / "main");
         for (const auto& t : text) {
-            main.add_value(t);
+            main.add_value(t.first);
+        }
+    }
+    {
+        DictionaryWriter text_description(target / "text_description");
+        for (const auto& t : text) {
+            text_description.add_value(t.second);
         }
     }
     {
@@ -878,7 +1055,8 @@ Ontology::Ontology(const boost::filesystem::path& path)
     : main_dictionary(path / "main", true),
       parent_dict(path / "parent", true),
       children_dict(path / "children", true),
-      all_parents_dict(path / "all_parents", true) {}
+      all_parents_dict(path / "all_parents", true),
+      text_description(path / "text_description", true) {}
 
 absl::Span<const uint32_t> Ontology::get_parents(uint32_t code) {
     return read_span<uint32_t>(*parent_dict, code);
@@ -890,3 +1068,11 @@ absl::Span<const uint32_t> Ontology::get_all_parents(uint32_t code) {
     return read_span<uint32_t>(*all_parents_dict, code);
 }
 Dictionary& Ontology::get_dictionary() { return *main_dictionary; }
+
+std::string_view Ontology::get_text_description(uint32_t code) {
+    if (!text_description) {
+        return std::string_view(nullptr, 0);
+    } else {
+        return (*text_description)[code];
+    }
+}

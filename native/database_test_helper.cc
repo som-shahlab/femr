@@ -10,7 +10,7 @@ void create_ontology_files(const boost::filesystem::path& concept_root) {
     {
         CSVWriter writer(
             (concept / boost::filesystem::unique_path()).string(),
-            {"concept_id", "concept_code", "vocabulary_id", "standard_concept"},
+            {"code", "concept_code", "vocabulary_id", "standard_concept"},
             ',');
 
         writer.add_row({"32", "foo", "bar", ""});
@@ -36,7 +36,7 @@ void create_ontology_files(const boost::filesystem::path& concept_root) {
     {
         CSVWriter writer(
             (concept_relationship / boost::filesystem::unique_path()).string(),
-            {"concept_id_1", "concept_id_2", "relationship_id"}, ',');
+            {"code_1", "code_2", "relationship_id"}, ',');
 
         writer.add_row({"32", "323", "Is a"});
         writer.add_row({"323", "3235", "Is a"});
@@ -49,21 +49,18 @@ void create_database_files(const boost::filesystem::path& patients) {
 
     {
         CSVWriter writer((patients / boost::filesystem::unique_path()).string(),
-                         {"patient_id", "concept_id", "start", "value"}, ',');
-
-        writer.add_row({"30", "32", "1990-03-08T09:30:00", ""});
-        writer.add_row({"30", "32", "1990-03-08T10:30:00", ""});
-        writer.add_row({"30", "323", "1990-03-11T14:30:00", "Long Text"});
-        writer.add_row({"30", "326", "1990-03-11T14:30:00", "Short Text"});
-        writer.add_row({"30", "326", "1990-03-14T14:30:00", "34"});
-        writer.add_row({"30", "326", "1990-03-15T14:30:00", "34.5"});
+                         ',');
+        writer.add_row({"30", "326", "1990-03-11T14:30:00", "Short Text", ""});
+        writer.add_row({"30", "326", "1990-03-14T14:30:00", "34", "50"});
+        writer.add_row({"30", "326", "1990-03-15T14:30:00", "34.5", "30"});
     }
     {
         CSVWriter writer((patients / boost::filesystem::unique_path()).string(),
-                         {"patient_id", "concept_id", "start", "value"}, ',');
+                         {"patient_id", "code", "start", "value", "metadata"},
+                         ',');
 
-        writer.add_row({"70", "32", "1990-03-08T09:30:00", ""});
-        writer.add_row({"70", "323", "1990-03-08T14:30:00", "Short Text"});
-        writer.add_row({"80", "32", "1990-03-08T14:30:00", ""});
+        writer.add_row({"70", "32", "1990-03-08T09:30:00", "", ""});
+        writer.add_row({"70", "323", "1990-03-08T14:30:00", "Short Text", ""});
+        writer.add_row({"80", "32", "1990-03-08T14:30:00", "", ""});
     }
 }

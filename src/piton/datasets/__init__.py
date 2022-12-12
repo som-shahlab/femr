@@ -132,7 +132,7 @@ class EventCollection:
                 [
                     ("patient_id", np.uint64),
                     ("start", np.datetime64),
-                    ("concept_id", np.uint64),
+                    ("code", np.uint64),
                 ]
             ),
             ",",
@@ -269,3 +269,4 @@ class PatientCollection:
 # Import from C++ extension
 
 PatientDatabase = extension_datasets.PatientDatabase
+Ontology = extension_datasets.Ontology

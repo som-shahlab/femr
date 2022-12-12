@@ -25,9 +25,9 @@ class CodeLF(FixedTimeHorizonEventLF):
     TODO - Test on real data
     """
 
-    def __init__(self, concept_id: int, time_horizon: TimeHorizon):
-        """Label the concept_id whose index in your Ontology is equal to `concept_id`."""
-        self.concept_id = concept_id
+    def __init__(self, code: int, time_horizon: TimeHorizon):
+        """Label the code whose index in your Ontology is equal to `code`."""
+        self.code = code
         self.time_horizon = time_horizon
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -39,10 +39,10 @@ class CodeLF(FixedTimeHorizonEventLF):
         return self.time_horizon
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events with the same `concept_id` as `self.concept_id`."""
+        """Return the start times of this patient's events with the same `code` as `self.code`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.concept_id == self.concept_id:
+            if event.code == self.code:
                 times.append(event.start)
         return times
 
@@ -79,7 +79,7 @@ class MortalityLF(CodeLF):
             )
         else:
             death_code: int = list(death_codes)[0][1]
-            super().__init__(concept_id=death_code, time_horizon=time_horizon)
+            super().__init__(code=death_code, time_horizon=time_horizon)
 
 
 ##########################################################
@@ -120,7 +120,7 @@ class IsMaleLF(LabelingFunction):
 
     def is_inpatient_admission(self, event: Event) -> bool:
         """Return TRUE if this event is an admission."""
-        return event.concept_id == self.admission_code
+        return event.code == self.admission_code
 
     def label(self, patient: Patient) -> List[Label]:
         """Label this patient as Male (TRUE) or not (FALSE)."""
@@ -129,14 +129,12 @@ class IsMaleLF(LabelingFunction):
 
         labels: List[Label] = []
         is_male: bool = self.male_code in [
-            event.concept_id for event in patient.events
+            event.code for event in patient.events
         ]
 
         for event in patient.events:
             if self.is_inpatient_admission(event):
-                labels.append(
-                    Label(time=event.start, value=is_male, label_type="boolean")
-                )
+                labels.append(Label(time=event.start, value=is_male))
         return labels
 
     def get_labeler_type(self) -> LabelType:

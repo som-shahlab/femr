@@ -37,7 +37,7 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
 
     std::shuffle(std::begin(entries), std::end(entries),
                  std::default_random_engine(1235423));
-    std::vector<std::string> columns = {"concept_id", "foo", "value"};
+    std::vector<std::string> columns = {"code", "foo", "value"};
 
     size_t num_chunks = 7;
 

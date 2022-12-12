@@ -1,17 +1,54 @@
 """FileIO utilities for reading and writing data."""
 from __future__ import annotations
 
+import base64
 import csv
-import dataclasses
 import datetime
 import io
 import json
+import pickle
 import tempfile
-from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import zstandard
 
 from .. import Event, Patient
+
+def _encode_date(a: datetime.datetime | None) -> str:
+    """Try to encode a date value."""
+    if a is None:
+        return ""
+    else:
+        return a.isoformat()
+
+def _encode_value(a: int | float | str | None) -> str:
+    """Try to encode a string value."""
+    if a is None:
+        return ""
+    else:
+        return str(a)
+
+def _decode_date(a: str) -> datetime.datetime | None:
+    """Try to decode a date value."""
+    if a == "":
+        return None
+    else:
+        return datetime.datetime.fromisoformat(a)
+
+def _decode_value(a: str) -> int | float | str | None:
+    """Try to decode a string value."""
+    if a == "":
+        return None
+    try:
+        if a.isdigit():
+            # If this field is truly an integer, then it will only contain
+            # a string of numbers. If it is a float, it will contain a '.' and thus
+            # `isdigit()` will return FALSE.
+            return int(a)
+        else:
+            return float(a)
+    except ValueError:
+        return a
 
 
 class EventWriter:
@@ -29,58 +66,29 @@ class EventWriter:
         self.rows_written = 0
         self.writer = csv.DictWriter(
             self.o,
-            fieldnames=["patient_id"]
-            + [f.name for f in dataclasses.fields(Event)],
+            fieldnames=["patient_id", "start", "code", "value", "metadata"],
         )
         self.writer.writeheader()
-
-    def _encode_field(self, field_value: str, field_name: str) -> Any:
-        """Encode a field for serialization.
-
-        Must stay in sync with `EventReader._decode_field()`
-
-        Currently supports fields of the following types:
-            - datetime.datetime
-            - int
-            - float
-            - memoryview
-            - str
-            - dict
-            - None (optional)
-        """
-        if field_value is None:
-            # None => ""
-            return ""
-        elif isinstance(field_value, datetime.datetime):
-            # Datetime => ISO format string
-            return field_value.isoformat()
-        elif isinstance(field_value, int):
-            # Int => String
-            return str(field_value)
-        elif isinstance(field_value, float):
-            # Float => String
-            return str(field_value)
-        elif isinstance(field_value, memoryview):
-            return bytes(field_value).decode("utf8")
-        elif isinstance(field_value, str):
-            return field_value
-        elif isinstance(field_value, dict):
-            return json.dumps(field_value)
-        else:
-            raise ValueError(
-                f"EventWriter does not have a method for fields with the type of {field_name}"
-            )
 
     def add_event(self, patient_id: int, event: Event) -> None:
         """Add an event to the record."""
         self.rows_written += 1
         data: Dict[str, Any] = {}
-        data["patient_id"] = patient_id
 
-        for field in dataclasses.fields(event):
-            data[field.name] = self._encode_field(
-                getattr(event, field.name), field.name
+        data["patient_id"] = patient_id
+        data["start"] = _encode_date(event.start)
+        data["code"] = str(event.code)
+        data["end"] = _encode_date(event.end)
+        data["value"] = _encode_value(event.value)
+        data["metadata"] = base64.b64encode(
+            pickle.dumps(
+                {
+                    a: b
+                    for a, b in event.__dict__.items()
+                    if a not in ("start", "code", "end", "value")
+                }
             )
+        ).decode("utf8")
 
         self.writer.writerow(data)
 
@@ -102,83 +110,19 @@ class EventReader:
             decompressor.stream_reader(open(self.filename, "rb"))
         )
         self.reader = csv.DictReader(self.o)
-        self.schema: Dict[str, List[str]] = {
-            field.name: [x.strip() for x in field.type.split("|")]
-            for field in dataclasses.fields(Event)
-        }
-
-    def _decode_field(self, field_value: str, field_name: str) -> Any:
-        """Decode a field for deserialization.
-
-        Must stay in sync with `EventWriter._encode_field()`
-
-        This tries to decode the field in the order that its non-None types
-        are listed in the `Event` class definition.
-        For example, the field:
-            ```
-                value: float | memoryview | None
-            ```
-        will first try to decode `value` into a `None`, then a `float`, finally a `memoryview`
-
-        Currently supports fields of the following types:
-            - datetime.datetime
-            - int
-            - float
-            - memoryview
-            - str
-            - dict
-            - None (optional)
-        """
-        field_types: List = self.schema[field_name]
-        if field_value == "" and "None" in field_types:
-            # Need to check `None` first b/c it's represented by the empty string,
-            # so it will incorrectly trigger casts like `str()` below
-            return None
-        for field_type in field_types:
-            try:
-                if field_type == "datetime.datetime":
-                    return datetime.datetime.fromisoformat(field_value)
-                elif field_type == "int":
-                    if not field_value.isdigit():
-                        # If this field is truly an integer, then it will only contain
-                        # a string of numbers. However, that is not the case if `isdigit()` is FALSE.
-                        # Thus, this field is not a string of numbers (i.e. contains a '.'),
-                        # which means we may erroneously try to cast a float to an int.
-                        # To avoid that mis-cast, we continue so that the `float` type can try
-                        # parsing this field's value.
-                        continue
-                    return int(field_value)
-                elif field_type == "float":
-                    return float(field_value)
-                elif field_type == "str":
-                    return str(field_value)
-                elif field_type == "dict":
-                    return json.loads(field_value)
-                elif field_type == "memoryview":
-                    return memoryview(field_value.encode("utf8"))
-                else:
-                    raise NotImplementedError(
-                        f"Unrecognized field type {field_type} for {field_name}"
-                    )
-            except ValueError:
-                # An exception occurs when we guess the wrong `field_type` for a specific field.
-                # This is expected to occur for fields with multiple possible non-None
-                # types (e.g. 'value: float | memoryview | None'). We just catch the error,
-                # then proceed to trying to decode this field with the next possible type.
-                continue
-        raise ValueError(f"Could not decode {field_name}")
 
     def __iter__(self) -> Iterator[Tuple[int, Event]]:
         """Iterate over each event."""
         for row in self.reader:
-            # Remove `patient_id` from Event since it's not a property of the `Event` object
             id = int(row["patient_id"])
-            del row["patient_id"]
-            for field in dataclasses.fields(Event):
-                row[field.name] = self._decode_field(
-                    row[field.name], field.name
-                )
-            yield (id, Event(**cast(Any, row)))
+
+            code = int(row["code"])
+            start = _decode_date(row["start"])
+            end = _decode_date(row["end"])
+            value = _decode_value(row["value"])
+            metadata = pickle.loads(base64.b64decode(row["metadata"]))
+
+            yield (id, Event(start=start, code=code, end=end, value=value, **metadata)) # type: ignore
 
     def close(self) -> None:
         """Close the event file."""

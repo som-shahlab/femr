@@ -10,16 +10,18 @@ import piton.datasets
 
 dummy_events = [
     piton.Event(
-        start=datetime.datetime(1995, 1, 3), concept_id=0, value=float(34)
+        start=datetime.datetime(1995, 1, 3), 
+        code=0, 
+        value=float(34)
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
-        concept_id=1,
-        value=memoryview(b"test_value"),
+        code=1,
+        value="test_value",
     ),
     piton.Event(
         start=datetime.datetime(2010, 1, 5),
-        concept_id=2,
+        code=2,
         value=None,
     ),
 ]
@@ -62,7 +64,7 @@ def test_events(tmp_path: pathlib.Path) -> None:
         read_events = list(reader)
 
     print(read_events[0])
-    assert set(read_events) == set(all_events)
+    assert sorted(read_events) == sorted(all_events)
 
 
 def test_sort_events(tmp_path: pathlib.Path) -> None:
@@ -75,7 +77,7 @@ def test_sort_events(tmp_path: pathlib.Path) -> None:
     with sorted_events.reader() as reader:
         all_sorted_events = list(reader)
 
-    assert set(all_sorted_events) == set(all_events)
+    assert sorted(all_sorted_events) == sorted(all_events)
 
     for reader_func in sorted_events.sharded_readers():
         with reader_func() as reader:
@@ -91,7 +93,7 @@ def test_patients(tmp_path: pathlib.Path) -> None:
     with patients.reader() as reader:
         all_patients = list(reader)
 
-    assert set(p.patient_id for p in all_patients) == set(range(10, 25))
+    assert sorted(p.patient_id for p in all_patients) == sorted(range(10, 25))
 
     for patient in all_patients:
         assert patient.events == dummy_events
@@ -105,8 +107,8 @@ def transform_func(a: piton.Patient) -> Optional[piton.Patient]:
         events=[
             piton.Event(
                 start=event.start,
-                concept_id=event.concept_id,
-                value=memoryview(b"foo"),
+                code=event.code,
+                value="foo",
             )
             for event in a.events
         ],
@@ -129,9 +131,9 @@ def test_transform_patients(tmp_path: pathlib.Path) -> None:
         better_dummy_events = [
             piton.Event(
                 start=event.start,
-                concept_id=event.concept_id,
-                value=memoryview(b"foo"),
+                code=event.code,
+                value="foo",
             )
             for event in dummy_events
         ]
-        assert set(patient.events) == set(better_dummy_events)
+        assert sorted(patient.events) == sorted(better_dummy_events)

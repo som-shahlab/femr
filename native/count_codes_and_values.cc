@@ -45,7 +45,7 @@ convert_to_vector(const T& container) {
 void clean_thread(const boost::filesystem::path& in_path,
                   CodeCounter& code_counts,
                   const boost::filesystem::path& out_path) {
-    CSVReader reader(in_path, {"value", "concept_id"}, ',');
+    CSVReader reader(in_path, {"value", "code"}, ',');
     CSVWriter writer(out_path, {"value"}, ',');
 
     while (reader.next_row()) {
@@ -59,8 +59,8 @@ void clean_thread(const boost::filesystem::path& in_path,
             continue;
         }
 
-        float value;
-        if (absl::SimpleAtof(text_value, &value)) {
+        double value;
+        if (absl::SimpleAtod(text_value, &value)) {
             continue;
         }
 
