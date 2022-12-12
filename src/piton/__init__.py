@@ -19,7 +19,9 @@ class Patient:
         self.events.sort()
 
 class Event:
-    """An event within a patient timeline."""
+    """An event within a patient timeline.
+    Supports arbitrary properties that can be specified through `kwargs`
+    """
 
     ########
     # Required fields
