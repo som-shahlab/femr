@@ -9,11 +9,7 @@ import piton
 import piton.datasets
 
 dummy_events = [
-    piton.Event(
-        start=datetime.datetime(1995, 1, 3), 
-        code=0, 
-        value=float(34)
-    ),
+    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
     piton.Event(
         start=datetime.datetime(2010, 1, 3),
         code=1,

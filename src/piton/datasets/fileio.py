@@ -14,12 +14,14 @@ import zstandard
 
 from .. import Event, Patient
 
+
 def _encode_date(a: datetime.datetime | None) -> str:
     """Try to encode a date value."""
     if a is None:
         return ""
     else:
         return a.isoformat()
+
 
 def _encode_value(a: int | float | str | None) -> str:
     """Try to encode a string value."""
@@ -28,12 +30,14 @@ def _encode_value(a: int | float | str | None) -> str:
     else:
         return str(a)
 
+
 def _decode_date(a: str) -> datetime.datetime | None:
     """Try to decode a date value."""
     if a == "":
         return None
     else:
         return datetime.datetime.fromisoformat(a)
+
 
 def _decode_value(a: str) -> int | float | str | None:
     """Try to decode a string value."""
@@ -122,7 +126,7 @@ class EventReader:
             value = _decode_value(row["value"])
             metadata = pickle.loads(base64.b64decode(row["metadata"]))
 
-            yield (id, Event(start=start, code=code, end=end, value=value, **metadata)) # type: ignore
+            yield (id, Event(start=start, code=code, end=end, value=value, **metadata))  # type: ignore
 
     def close(self) -> None:
         """Close the event file."""

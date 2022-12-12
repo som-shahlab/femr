@@ -25,15 +25,11 @@ SHARED_EVENTS = [
     piton.Event(start=datetime.datetime(2011, 2, 5), code=2, value=None),
     piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
     piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-    piton.Event(
-        start=datetime.datetime(2015, 6, 5, 0), code=2, value=None
-    ),
+    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
     piton.Event(
         start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
     ),
-    piton.Event(
-        start=datetime.datetime(2015, 6, 15, 11), code=3, value=None
-    ),
+    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
     piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
     piton.Event(
         start=datetime.datetime(2016, 3, 1, 10, 10, 10),

@@ -18,6 +18,7 @@ class Patient:
         """Resort the events to maintain the day invariant"""
         self.events.sort()
 
+
 class Event:
     """An event within a patient timeline.
     Supports arbitrary properties that can be specified through `kwargs`

@@ -17,9 +17,7 @@ def test_pre_birth() -> None:
         patient_id=123,
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
             piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
         ],
     )
@@ -28,9 +26,7 @@ def test_pre_birth() -> None:
         patient_id=123,
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 9), code=1234),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
             piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
         ],
     )
@@ -43,9 +39,7 @@ def test_remove_small() -> None:
         patient_id=123,
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
             piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
             piton.Event(start=datetime.datetime(1999, 7, 13), code=12345),
         ],
@@ -54,9 +48,7 @@ def test_remove_small() -> None:
     invalid = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
             piton.Event(start=datetime.datetime(1999, 7, 11), code=12345),
         ],
     )
@@ -71,12 +63,8 @@ def test_move_to_day_end() -> None:
         patient_id=123,
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), code=4321
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
 
@@ -104,9 +92,7 @@ def test_remove_nones() -> None:
                 code=1234,
                 value=3,
             ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
 
@@ -118,9 +104,7 @@ def test_remove_nones() -> None:
                 code=1234,
                 value=3,
             ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
 
