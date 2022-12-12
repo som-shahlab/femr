@@ -25,8 +25,8 @@ NotesEmbedded = TensorType["n_notes", "embedding_length"]  # noqa
 NotesEmbeddedByToken = TensorType[
     "n_notes", "max_note_token_count", "embedding_length"
 ]  # noqa
-NotesProcessed = List[Tuple[int, Event]]
-PatientLabelNotesTuple = Tuple[int, int, NotesProcessed]
+NotesProcessed = List[Tuple[int, Event]] # event_idx, event (note)
+PatientLabelNotesTuple = Tuple[int, int, NotesProcessed] # patient_id, label_idx, notes
 
 
 START_TIME = time.time()
@@ -115,7 +115,6 @@ class NoteFeaturizer:
         self.path_to_tokenizer: str = path_to_tokenizer # path to HuggingFace Tokenizer
         self.path_to_embedder: str = path_to_embedder # path to HuggingFace Model
         self.path_to_output_dir: str = path_to_output_dir # path to store final output of featurizer
-        data: PatientDatabase = PatientDatabase(path_to_patient_database)
         self.params_preprocessor = params_preprocessor
         self.params_tokenizer = params_tokenizer
         self.params_embedder = params_embedder
@@ -179,9 +178,11 @@ class NoteFeaturizer:
         """Return a tokenized version of each note in `notes`.
 
         Returns:
-            NotesTokenized: Output of running `tokenizer()` on `notes`. Dictionary with three keys:
+            NotesTokenized: Output of running `tokenizer()` on `notes`. 
+            Dictionary with three keys (only the first one, `input_ids`, is saved to conserve memory):
                 - input_ids (TensorType['n_notes', 'max_note_token_count', int]): Vocabulary indices that
                     correspond to each token in the sentence
+                === NOTE: The below keys are output by `tokenizer()`, but are not saved ===
                 - token_type_ids (Optional[TensorType['n_notes', 'max_note_token_count', int]]): Which
                     sequence a token belongs to IF there is more than one sequence
                     (i.e. for [CLS] SEQUENCE_A [SEP] SEQUENCE_B [SEP])
@@ -223,7 +224,7 @@ class NoteFeaturizer:
         )
 
         # Save to file
-        save_tokenized_notes_chunk(path_to_cache_dir, chunk_id, notes_tokenized)
+        save_tokenized_notes_chunk(path_to_cache_dir, chunk_id, { 'input_ids' : notes_tokenized['input_ids'] })
         print_log("tokenize", f"finished chunk #{chunk_id}")
 
         return notes_tokenized
@@ -258,23 +259,15 @@ class NoteFeaturizer:
             batch_size: int = params.get("batch_size", 4096)
             train_loader = [
                 {
-                    "input_ids": notes_tokenized["input_ids"][
-                        x : x + batch_size
-                    ],
-                    "token_type_ids": notes_tokenized["token_type_ids"][
-                        x : x + batch_size
-                    ],
-                    "attention_mask": notes_tokenized["attention_mask"][
-                        x : x + batch_size
-                    ],
+                    "input_ids": notes_tokenized["input_ids"][x : x + batch_size],
+                    "token_type_ids": torch.full(notes_tokenized["input_ids"][x : x + batch_size].shape, 1),
+                    "attention_mask": torch.full(notes_tokenized["input_ids"][x : x + batch_size].shape, 1),
                 }
                 for x in range(
                     0, notes_tokenized["input_ids"].shape[0], batch_size
                 )
             ]
-            print(
-                "Device:", device, f"| # of batches of size {batch_size}:", len(train_loader)
-            )
+            print_log("embed", f"Device: {device} | # of batches of size {batch_size}: {len(train_loader)}")
             
             # Get embedding for each token for each note
             outputs: List[
@@ -290,6 +283,7 @@ class NoteFeaturizer:
                     outputs.append(output.last_hidden_state.detach().cpu())
             
             # Merge together all token embeddings
+            print_log("embed", f"catting chunk {chunk_id}")
             token_embeddings: NotesEmbeddedByToken = torch.cat(outputs)
             assert (
                 token_embeddings.shape[0]
@@ -301,11 +295,13 @@ class NoteFeaturizer:
             )
 
             # Derive a single embedding representation for this note from its token embeddings
+            print_log("embed", f"aggregating chunk {chunk_id}")
             note_embeddings: NotesEmbedded = embed_method(token_embeddings)
             assert note_embeddings.shape[0] == token_embeddings.shape[0]
             assert note_embeddings.shape[1] == token_embeddings.shape[2]
 
             # Save to file
+            print_log("embed", f"saving chunk {chunk_id}")
             save_embedded_notes_chunk(path_to_cache_dir, chunk_id, note_embeddings)
             notes_embedded.append(note_embeddings)
             print_log("embed", f"finished chunk #{chunk_id}")
@@ -326,7 +322,7 @@ class NoteFeaturizer:
 
         patient_ids: List[int] = sorted(labeled_patients.get_all_patient_ids())
         if is_debug: patient_ids = patient_ids[:10000] # 2 chunks
-        num_chunks: int = np.ceil(len(patient_ids) / num_patients_per_chunk)
+        num_chunks: int = int(np.ceil(len(patient_ids) / num_patients_per_chunk))
         patient_ids_by_chunk: List[NDArray] = np.array_split(
             patient_ids, num_chunks
         )
@@ -352,6 +348,7 @@ class NoteFeaturizer:
         patient_label_notes_tuples: List[PatientLabelNotesTuple] = [ y for x in preprocess_parallel_result for y in x ]
         np_patient_ids: NDArray[Shape["n_patients,1"], Int] = np.array([ x[0] for x in patient_label_notes_tuples ])
         np_label_idxs: NDArray[Shape["n_patients,1"], Any] = np.array([ x[1] for x in patient_label_notes_tuples ])
+        print_log("featurize", "Finished Preprocessing...")
 
         # tokenize notes
         print_log("featurize", "Starting Tokenization...")
@@ -369,13 +366,15 @@ class NoteFeaturizer:
             __: List[NotesTokenized] = list(
                 pool.imap(self.tokenize_parallel, tasks)
             )
+        print_log("featurize", "Finished Tokenization...")
 
         # embed notes
         print_log("featurize", "Starting Embedding...")
-        n_gpu_jobs: int = len(self.gpu_devices)
-        n_chunks_per_gpu: int = len(patient_ids_by_chunk) // n_gpu_jobs + 1
+        # Note: need to have num GPUs < num chunks to avoid multiple threads locking trying to read same chunk
+        n_gpu_jobs: int = min(num_chunks, len(self.gpu_devices))
+        n_chunks_per_gpu: int = int(np.ceil(num_chunks / n_gpu_jobs))
         print_log("featurize", 
-            f"Choosing from {n_gpu_jobs} devices ({str(self.gpu_devices)}), with {n_chunks_per_gpu} chunks per device"
+            f"Choosing {n_gpu_jobs} devices from ({str(self.gpu_devices)}), with {n_chunks_per_gpu} chunks per device"
         )
         tasks: List[Tuple] = [
             (
@@ -393,6 +392,7 @@ class NoteFeaturizer:
         with ctx.Pool(n_gpu_jobs) as pool:
             embed_parallel_result: List[NotesEmbedded] = list(pool.imap(self.embed_parallel, tasks))
         embeddings: NDArray[Shape["n_patients", "embedding_length"], float] = np.vstack([ y.numpy() for x in embed_parallel_result for y in x ]) # unwrap nested lists
+        print_log("featurize", "Finished Embedding...")
         
         # save features to file
         assert np_patient_ids.shape[0] == np_label_idxs.shape[0] == embeddings.shape[0]

@@ -32,7 +32,7 @@ class Event:
     code: int  # Is this an OMOP code (or is it an index into your Piton Ontology object?)
 
     end: datetime.datetime | None = None
-    value: float | memoryview | None = None
+    value: float | str | memoryview | None = None
 
     # TODO - Seems like `visit_id` should be separated from the Event class as it creates a weird
     # interdependency between Events (since visits are Events)
@@ -48,7 +48,7 @@ class Event:
         """Verify that the event is constructed correctly."""
         if not (
             (self.value is None)
-            or isinstance(self.value, (int, float, memoryview))
+            or isinstance(self.value, (int, float, str, memoryview))
         ):
             raise TypeError("Invalid type of value passed to event", self.value)
 

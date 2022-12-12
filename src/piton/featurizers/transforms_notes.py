@@ -17,8 +17,10 @@ def remove_short_notes(
     min_char_count: int = kwargs.get("min_char_count", 0)
     new_notes: NotesProcessed = []
     for note in notes:
-        assert isinstance(note[1].value, memoryview)
-        text: str = bytes(note[1].value).decode("utf8")
+        if isinstance(note[1].value, memoryview):
+            text: str = bytes(note[1].value).decode("utf8")
+        else:
+            text: str = str(note[1].value)
         if len(text) >= min_char_count:
             new_notes.append(note)
     return new_notes
@@ -51,3 +53,20 @@ def join_all_notes(
     text: str = " ".join([bytes(note[1].value).decode("utf8") for note in notes])  # type: ignore
     note = Event(start=0, code=0, value=text)
     return [(0, note)]
+
+def keep_only_last_n_chars(
+    notes: NotesProcessed, label: Label, **kwargs
+) -> NotesProcessed:
+    """Keep the last `n_chars` from each note."""
+    n_chars: int = kwargs.get('keep_last_n_chars', None)
+    if n_chars is None:
+        return notes
+    new_notes: NotesProcessed = []
+    for note in notes:
+        if isinstance(note[1].value, memoryview):
+            text: str = bytes(note[1].value).decode("utf8")
+        else:
+            text: str = str(note[1].value)
+        event = Event(start=note[1].start, code=note[1].code, value=text[:n_chars])
+        new_notes.append((note[0], event))
+    return new_notes

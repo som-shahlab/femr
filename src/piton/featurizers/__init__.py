@@ -8,7 +8,6 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 T = TypeVar("T")
 
-
 class Dictionary(Generic[T]):
     mapper: Dict[T, int]
     reverse_mapper: Dict[int, T]

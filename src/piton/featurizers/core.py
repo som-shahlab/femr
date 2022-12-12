@@ -13,8 +13,11 @@ import scipy.sparse
 
 from .. import Patient
 from ..labelers.core import Label, LabeledPatients
-from ..datasets import PatientDatabase, Ontology
 import itertools
+from piton.extension import datasets as extension_datasets
+PatientDatabase = extension_datasets.PatientDatabase
+Ontology = extension_datasets.Ontology
+
 
 ColumnValue = collections.namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
