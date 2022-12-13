@@ -19,9 +19,13 @@ Special note for NERO users:
 You will need to install cuda manually until cuda version is updated on the nero. Follow the following steps for nero.
 
 1. Download the right version of cuda on your local machine and transfer it over a folder in nero [link](https://developer.nvidia.com/cuda-11.1.1-download-archive?target_os=Linux&target_arch=x86_64&target_distro=Ubuntu&target_version=1804&target_type=runfilelocal)
-2. Run the installer as bash command by providing path to install as such bash <cuda_path> --installpath <install_path>. During installation, uncheck all the boxes except cuda toolkit
-3. After the installation completes, it will spit out two paths on terminal that needs to be put into your bashrc file.
-4. Delete /tmp/cuda-insatll.log file cause it will create problems for other users
+2. Run the installer as bash command by providing path to install such as `bash <CUDA_PATH> --installpath=<INSTALL_PATH>`, where `<CUDA_PATH>` is the path to the file you downloaded/transferred in step 1 and `<INSTALL_PATH>` is where you'd like to store the CUDA installation files. During installation, uncheck all the boxes except cuda toolkit.
+3. After the installation completes, it will spit out two paths on terminal that should be put into your .bashrc file:
+```
+export PATH="<INSTALL_PATH>/bin:$PATH"
+export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
+```
+4. Delete the `/tmp/cuda-installer.log` file or it will create problems (e.g., segmentation fault) for other users
 
 Note: you may need to restart your terminal for the changes to reflect
 
