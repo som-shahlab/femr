@@ -114,6 +114,9 @@ config = {
         "attention_width": (512 - 16),
         "internal_dropout": args.internal_dropout,
         "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
+        "note_embedding_data": batch_config["transformer"].get(
+            "note_embedding_data"
+        ),
     },
     "learning_rate": args.learning_rate,
     "max_grad_norm": 1.0,

@@ -13,6 +13,7 @@ parser.add_argument("--clmbr_survival_dictionary_path", type=str)
 parser.add_argument("--labeled_patients_path", type=str)
 parser.add_argument("--is_hierarchical", default=False, action="store_true")
 parser.add_argument("--subset_fraction", default=None, type=float)
+parser.add_argument("--note_embedding_data", default=None, type=str)
 
 args = parser.parse_args()
 
@@ -22,7 +23,7 @@ import json
 import logging
 import pickle
 import random
-from typing import TypeVar
+from typing import TypeVar, Any
 
 import msgpack
 import numpy as np
@@ -120,7 +121,7 @@ if args.subset_fraction is None:
 else:
     train_end = int(args.subset_fraction * 70)
 
-loader_config = {
+loader_config: Any = {
     "transformer": {
         "vocab_size": 1024 * 64,
         "dictionary": dictionary,
@@ -136,6 +137,11 @@ loader_config = {
         ["test", 85, 100],
     ],
 }
+
+if args.note_embedding_data:
+    loader_config["transformer"][
+        "note_embedding_data"
+    ] = args.note_embedding_data
 
 random.seed(loader_config["seed"])
 

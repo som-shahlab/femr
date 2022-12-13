@@ -18,8 +18,10 @@ namespace py = pybind11;
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "clmbr_dictionary.hh"
+#include "constdb.hh"
 #include "database.hh"
 #include "flatmap.hh"
+#include "npy.hh"
 #include "pybind11/eigen/tensor.h"
 #include "survival.hh"
 
@@ -635,6 +637,14 @@ class BatchCreator {
         valid_tokens = Eigen::Tensor<bool, 1>(1 << max_size);
         ages = Eigen::Tensor<float, 1>(1 << max_size);
         normalized_ages = Eigen::Tensor<float, 1>(1 << max_size);
+        is_note_embedding = Eigen::Tensor<bool, 1>(1 << max_size);
+
+        std::string note_path =
+            config["transformer"].value("note_embedding_data", "");
+
+        if (!note_path.empty()) {
+            reader.emplace(note_path.c_str(), true);
+        }
     }
 
     void start_batch(uint32_t max_length) {
@@ -658,6 +668,9 @@ class BatchCreator {
         }
         ages.setConstant(0);
         normalized_ages.setConstant(0);
+
+        current_note_offset = 0;
+        current_note_embedding_bytes.clear();
     }
 
     void add_patient(uint32_t patient_id, uint32_t offset,
@@ -687,12 +700,102 @@ class BatchCreator {
 
         task->start_patient(p);
 
-        for (const auto& event : p.events) {
+        std::vector<int64_t> current_indices;
+
+        if (reader) {
+            auto entry = reader->get_int(p.patient_id * 2);
+
+            if (entry.second != 0) {
+                std::string event_indices(entry.first, entry.second);
+                std::istringstream event_indices_stream(event_indices);
+
+                std::vector<unsigned long> shape;
+
+                bool fortran_order;
+
+                npy::LoadArrayFromNumpy(event_indices_stream, shape,
+                                        fortran_order, current_indices);
+
+                if (false) {
+                    std::cout << "Reading event indices ... " << std::endl;
+                    std::cout << "Shape: ";
+                    for (const auto& a : shape) {
+                        std::cout << a << " ";
+                    }
+                    std::cout << std::endl;
+
+                    std::cout << "Values: ";
+                    for (const auto& a : current_indices) {
+                        std::cout << a << " ";
+                    }
+                    std::cout << std::endl;
+                }
+
+                auto embedding_entry = reader->get_int(p.patient_id * 2 + 1);
+
+                std::string embedding_bytes(embedding_entry.first,
+                                            embedding_entry.second);
+
+                std::istringstream embedding_bytes_stream(embedding_bytes);
+
+                std::vector<char> bytes;
+
+                npy::LoadArrayFromNumpy(embedding_bytes_stream, shape,
+                                        fortran_order, bytes);
+
+                if (bytes.size() != (768 * current_indices.size() * 2)) {
+                    throw std::runtime_error(
+                        absl::StrCat("Does not match up? ", bytes.size(), " ",
+                                     current_indices.size()));
+                }
+
+                current_note_embedding_bytes.insert(
+                    std::end(current_note_embedding_bytes), std::begin(bytes),
+                    std::end(bytes));
+            }
+        }
+
+        auto note_iter = std::begin(current_indices);
+
+        for (size_t event_index = 0; event_index < p.events.size();
+             event_index++) {
+            const Event& event = p.events[event_index];
+
             if (token_dropout != 0 && rng.next_float() < token_dropout) {
                 continue;
             }
 
-            auto features = lookup.get_feature_codes(event);
+            while (note_iter != std::end(current_indices) &&
+                   (size_t)(*note_iter) < event_index) {
+                note_iter++;
+            }
+
+            bool is_note = (note_iter != std::end(current_indices)) &&
+                           ((size_t)*note_iter == event_index);
+
+            if (false && is_note) {
+                std::cout << "What in the world " << p.patient_id << " "
+                          << event_index << " " << int(event.value_type) << " "
+                          << event.text_value << std::endl;
+                std::cout << "Lol?" << std::endl;
+                const Dictionary* dict;
+                if (event.value_type == ValueType::UNIQUE_TEXT) {
+                    dict = data.get_unique_text_dictionary();
+                } else {
+                    dict = &(data.get_shared_text_dictionary());
+                }
+                std::string_view item = (*dict)[event.text_value];
+                std::cout << "Got it next " << item.size() << std::endl;
+                std::cout << "Sure " << std::string(item) << std::endl;
+            }
+
+            std::vector<uint32_t> features;
+            if (!is_note) {
+                features = lookup.get_feature_codes(event);
+            } else {
+                features.push_back((note_iter - std::begin(current_indices)) +
+                                   current_note_offset);
+            }
             if (features.size() == 0) {
                 continue;
             }
@@ -702,16 +805,18 @@ class BatchCreator {
                 codes_seen_today.clear();
             }
 
-            bool all_seen_before = true;
-            for (uint32_t feature : features) {
-                if (!codes_seen_today.count(feature)) {
-                    all_seen_before = false;
-                    codes_seen_today.insert(feature);
+            if (!is_note) {
+                bool all_seen_before = true;
+                for (uint32_t feature : features) {
+                    if (!codes_seen_today.count(feature)) {
+                        all_seen_before = false;
+                        codes_seen_today.insert(feature);
+                    }
                 }
-            }
 
-            if (all_seen_before) {
-                continue;
+                if (all_seen_before) {
+                    continue;
+                }
             }
 
             int32_t index = (int32_t)(total_length) - (int32_t)offset;
@@ -762,6 +867,10 @@ class BatchCreator {
                 } else {
                     tokens(batch_index * max_length + index) = features[0];
                 }
+                if (reader) {
+                    is_note_embedding(batch_index * max_length + index) =
+                        is_note;
+                }
                 valid_tokens(batch_index * max_length + index) = true;
                 ages(batch_index * max_length + index) =
                     event.start_age_in_minutes / (60.0 * 24.0);
@@ -792,6 +901,7 @@ class BatchCreator {
             }
         }
 
+        current_note_offset += current_indices.size();
         batch_index++;
     }
 
@@ -838,6 +948,20 @@ class BatchCreator {
             }
         }
 
+        if (reader) {
+            size_t num_notes = current_note_embedding_bytes.size() / (2 * 768);
+
+            uint32_t num_embed =
+                round_to_nearest_bin(std::max((size_t)1, num_notes), 2);
+
+            note_embedding_bytes =
+                Eigen::Tensor<uint8_t, 1>(num_embed * 2 * 768);
+
+            for (size_t i = 0; i < current_note_embedding_bytes.size(); i++) {
+                note_embedding_bytes(i) = current_note_embedding_bytes[i];
+            }
+        }
+
         task->prepare_batch_data(num_reps);
     }
 
@@ -856,6 +980,10 @@ class BatchCreator {
             }
         } else {
             transformer["tokens"] = tokens;
+        }
+        if (reader) {
+            transformer["is_note_embedding"] = is_note_embedding;
+            transformer["note_embedding_bytes"] = note_embedding_bytes;
         }
         transformer["valid_tokens"] = valid_tokens;
         transformer["ages"] = ages;
@@ -905,6 +1033,13 @@ class BatchCreator {
 
     uint32_t batch_index;
     uint32_t max_length;
+
+    boost::optional<ConstdbReader> reader;
+    std::vector<uint8_t> current_note_embedding_bytes;
+    uint32_t current_note_offset;
+
+    Eigen::Tensor<uint8_t, 1> note_embedding_bytes;
+    Eigen::Tensor<bool, 1> is_note_embedding;
 };
 
 struct BatchInfo {
@@ -1046,6 +1181,9 @@ void create_batches(const std::string& target_path,
             valid_patients.insert(patient_id);
         }
     }
+
+    (void)data.get_unique_text_dictionary();
+    (void)data.get_shared_text_dictionary();
 
     BatchInfo info = proccess_patients_in_parallel(
         data, 40,

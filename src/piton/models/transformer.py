@@ -213,6 +213,21 @@ class Transformer(hk.Module):
         else:
             x = self.embed(batch["tokens"])
 
+        if self.config.get("note_embedding_data"):
+            note_embedding_matrix = (
+                batch["note_embedding_bytes"]
+                .view(dtype=jnp.float16)
+                .reshape(-1, 768)
+            )
+            note_embedding = note_embedding_matrix.at[batch["tokens"]].get(
+                mode="clip"
+            )
+            debug.print("Got {a}", a=batch["is_note_embedding"].mean())
+            assert note_embedding.shape == x.shape
+            x = jnp.where(
+                batch["is_note_embedding"].reshape(-1, 1), note_embedding, x
+            )
+
         dummy_values = jnp.ones((1, 1), dtype=x.dtype)
 
         x = jnp.where(

@@ -58,17 +58,16 @@ pybind_library(
     ],
 )
 
-string_flag(name = "cuda", build_setting_default = "disabled")
+string_flag(name="cuda", build_setting_default="disabled")
 
-config_setting(
-    name = "cuda_enabled",
-    flag_values = {":cuda": "enabled"}
+config_setting(name="cuda_enabled", flag_values={":cuda": "enabled"})
+
+jax_extension = select(
+    {
+        ":cuda_enabled": [":jax_extension"],
+        "//conditions:default": [":cpu_jax_extension"],
+    }
 )
-
-jax_extension = select({
-    ":cuda_enabled": [":jax_extension"],
-    "//conditions:default": [":cpu_jax_extension"],
-})
 
 pybind_library(
     name="dataloader_extension",
@@ -79,6 +78,8 @@ pybind_library(
         "dataloader_extension.cc",
     ],
     deps=[
+        ":constdb",
+        ":npy",
         ":database",
         ":clmbr_dictionary",
         ":flatmap",
@@ -236,6 +237,23 @@ cc_test(
 )
 
 cc_library(
+    name="npy",
+    hdrs=["npy.hh"],
+)
+
+cc_library(
+    name="constdb",
+    hdrs=["constdb.hh"],
+    srcs=[
+        "constdb.cc",
+    ],
+    deps=[
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+
+cc_library(
     name="thread_utils",
     hdrs=[
         "thread_utils.hh",
@@ -323,32 +341,6 @@ cc_test(
     ],
 )
 
-
-cc_library(
-    name="dataloader",
-    hdrs=[
-        "dataloader.hh",
-    ],
-    srcs=[],
-    deps=[
-        "@concurrentqueue",
-    ],
-)
-
-cc_test(
-    name="dataloader_test",
-    srcs=[
-        "dataloader_test.cc",
-    ],
-    deps=[
-        ":dataloader",
-        "@boost//:optional",
-        "@boost//:callable_traits",
-        "@gtest//:gtest_main",
-    ],
-)
-
-
 cc_library(
     name="civil_day_caster",
     hdrs=["civil_day_caster.hh"],
@@ -395,7 +387,8 @@ pybind_extension(
     srcs=[
         "extension.cc",
     ],
-    deps= jax_extension + [
+    deps=jax_extension
+    + [
         ":datasets_extension",
         ":dataloader_extension",
         ":metrics_extension",
