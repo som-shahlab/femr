@@ -45,7 +45,11 @@ cd piton
 pip install -e .
 ```
 
-
+If you want to use PyTorch for deep learning, you can install it as follows (first install numpy dependency):
+```python
+conda install numpy
+conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit=11.3 -c pytorch
+```
 
 # Precommit checks
 
