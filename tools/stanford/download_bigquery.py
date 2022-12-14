@@ -136,8 +136,6 @@ if __name__ == "__main__":
         # Call the `download()` function asynchronously to download the bucket contents to our local filesystem
         extract_job.add_done_callback(partial(download, table.table_id))
         n_tables += 1
-        if n_tables > 10:
-            break
 
     print(f"\n** Downloading a total of {n_tables} tables**\n")
     for i in range(1, n_tables + 1):
