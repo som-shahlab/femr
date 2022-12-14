@@ -56,22 +56,22 @@ def save_tokenized_notes_chunk(path_to_folder: str, chunk: int, notes: NotesToke
     path_to_file: str = os.path.join(path_to_folder, f"notes_tokenized_{chunk}.pkl")
     save_to_pkl(notes, path_to_file)
 def save_embedded_notes_chunk(path_to_folder: str, chunk: int, notes: NotesEmbedded):
-    """Save `notes_embedded_{chunk}.pkl`."""
-    path_to_file: str = os.path.join(path_to_folder, f"notes_embedded_{chunk}.pkl")
-    save_to_pkl(notes, path_to_file)
+    """Save `notes_embedded_{chunk}.pt`."""
+    path_to_file: str = os.path.join(path_to_folder, f"notes_embedded_{chunk}.pt")
+    torch.save(notes, path_to_file)
 # Loading
-def load_preprocessed_note_chunk(path_to_folder: str, chunk: int):
+def load_preprocessed_note_chunk(path_to_folder: str, chunk: int) -> List:
     """Load `notes_preprocessed_{chunk}.pkl`."""
     path_to_file = os.path.join(path_to_folder, f"notes_preprocessed_{chunk}.pkl")
     return load_from_pkl(path_to_file)
-def load_tokenized_note_chunk(path_to_folder: str, chunk: int):
+def load_tokenized_note_chunk(path_to_folder: str, chunk: int) -> NotesTokenized:
     """Load `notes_tokenized_{chunk}.pkl`."""
     path_to_file: str = os.path.join(path_to_folder, f"notes_tokenized_{chunk}.pkl")
     return load_from_pkl(path_to_file)
-def load_embedded_note_chunk(path_to_folder: str, chunk: int):
-    """Load `notes_embedded_{chunk}.pkl`."""
-    path_to_file = os.path.join(path_to_folder, f"notes_embedded_{chunk}.pkl")
-    return load_from_pkl(path_to_file)
+def load_embedded_note_chunk(path_to_folder: str, chunk: int) -> NotesEmbedded:
+    """Load `notes_embedded_{chunk}.pt`."""
+    path_to_file = os.path.join(path_to_folder, f"notes_embedded_{chunk}.pt")
+    return torch.load(path_to_file)
 # Check if file exists
 def is_exist_preprocessed_note_chunk(path_to_folder: str, chunk: int) -> bool:
     """Return TRUE if this chunk exists."""
@@ -90,7 +90,7 @@ def is_exist_embedded_note_chunk(path_to_folder: str, chunk: int) -> bool:
 def embed_with_mean_over_all_tokens(
     embeddings: NotesEmbeddedByToken,
 ) -> NotesEmbedded:
-    return torch.mean(embeddings, dim=1)
+    return torch.mean(embeddings, dim=1).clone()
 def embed_with_cls(embeddings: NotesEmbeddedByToken) -> NotesEmbedded:
     return embeddings[:, 0, :].squeeze()
 
@@ -268,7 +268,7 @@ class NoteFeaturizer:
                 )
             ]
             print_log("embed", f"Device: {device} | # of batches of size {batch_size}: {len(train_loader)}")
-            
+                        
             # Get embedding for each token for each note
             outputs: List[
                 transformers.tokenization_utils_base.BatchEncoding
@@ -280,11 +280,13 @@ class NoteFeaturizer:
                         token_type_ids=batch["token_type_ids"].to(device),
                         attention_mask=batch["attention_mask"].to(device),
                     )
-                    outputs.append(output.last_hidden_state.detach().cpu())
+                    result: TensorType["batch_size", "max_note_token_count", "embedding_length"] = output.last_hidden_state.detach().cpu()
+                    outputs.append(result)
             
             # Merge together all token embeddings
             print_log("embed", f"catting chunk {chunk_id}")
             token_embeddings: NotesEmbeddedByToken = torch.cat(outputs)
+            
             assert (
                 token_embeddings.shape[0]
                 == notes_tokenized["input_ids"].shape[0]
@@ -293,16 +295,24 @@ class NoteFeaturizer:
                 token_embeddings.shape[1]
                 == notes_tokenized["input_ids"].shape[1]
             )
+            ic(len(notes_tokenized), notes_tokenized['input_ids'].shape, token_embeddings.shape)
 
             # Derive a single embedding representation for this note from its token embeddings
+            # Note: Need clone(), otherwise will keep original Tensor when save to file
+            #   see: https://discuss.pytorch.org/t/saving-tensor-with-torch-save-uses-too-much-memory/46865
+            #   or: https://pytorch.org/docs/stable/notes/serialization.html#preserve-storage-sharing
             print_log("embed", f"aggregating chunk {chunk_id}")
-            note_embeddings: NotesEmbedded = embed_method(token_embeddings)
+            note_embeddings: NotesEmbedded = embed_method(token_embeddings).clone()
             assert note_embeddings.shape[0] == token_embeddings.shape[0]
             assert note_embeddings.shape[1] == token_embeddings.shape[2]
 
             # Save to file
             print_log("embed", f"saving chunk {chunk_id}")
             save_embedded_notes_chunk(path_to_cache_dir, chunk_id, note_embeddings)
+            reload = load_embedded_note_chunk(path_to_cache_dir, chunk_id)
+            assert reload.shape == note_embeddings.shape
+            assert type(reload) == type(note_embeddings)
+            
             notes_embedded.append(note_embeddings)
             print_log("embed", f"finished chunk #{chunk_id}")
 
