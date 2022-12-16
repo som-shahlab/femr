@@ -12,9 +12,14 @@ Setup:
 
 How to run:
 ```
-    python3 download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> <PATH TO LOCAL FOLDER WHERE DATASET WHERE DATASET WILL BE DOWNLOADED> --excluded_tables <(Optional) NAME OF TABLE 1 TO BE EXCLUDED FROM DUMP> <(Optional) NAME OF TABLE 2 TO BE EXCLUDED FROM DUMP>
+python3 download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> \
+    <PATH TO LOCAL FOLDER WHERE DATASET WHERE DATASET WILL BE DOWNLOADED>
+    --excluded_tables <(Optional) NAME OF TABLE 1 TO BE IGNORED> <(Optional) NAME OF TABLE 2 TO BE IGNORED>
+```
 
-    Example: python3 download_bigquery.py som-nero-nigam-starr som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03 /local-scratch/nigam/projects/mwornow/piton_tool/ignore/ --excluded_tables observation note_nlp measurement note
+Example: python3 download_bigquery.py som-nero-nigam-starr som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03 \
+    /local-scratch/nigam/projects/mwornow/piton_tool/ignore/ \
+    --excluded_tables observation note_nlp measurement note
 """
 
 from __future__ import annotations
@@ -34,24 +39,38 @@ if __name__ == "__main__":
     parser.add_argument(
         "gcp_project_name",
         type=str,
-        help="The name of *YOUR* GCP project (e.g. 'som-nero-nigam-starr'). Note that this need NOT be the GCP project that contains the dataset -- it just needs to be a GCP project where you have Bucket creation + BigQuery creation permissions.",
+        help=(
+            "The name of *YOUR* GCP project (e.g. 'som-nero-nigam-starr')."
+            " Note that this need NOT be the GCP project that contains the dataset."
+            " It just needs to be a GCP project where you have Bucket creation + BigQuery creation permissions."
+        ),
     )
     parser.add_argument(
         "gcp_dataset_id",
         type=str,
-        help="The Dataset ID of the GCP dataset to download (e.g. 'som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03'). Note that this is the full ID of the dataset (project name + dataset name)",
+        help=(
+            "The Dataset ID of the GCP dataset to download"
+            " (e.g. 'som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03')."
+            " Note that this is the full ID of the dataset (project name + dataset name)"
+        ),
     )
     parser.add_argument(
         "output_dir",
         type=str,
-        help="Path to output directory. Note: The downloaded files will be saved in a subdirectory of this, i.e. `output_dir/gcp_dataset_id/...`",
+        help=(
+            "Path to output directory. Note: The downloaded files will be saved in a subdirectory of this,"
+            " i.e. `output_dir/gcp_dataset_id/...`"
+        ),
     )
     parser.add_argument(
         "--excluded_tables",
         type=str,
         nargs="*",  # 0 or more values expected => creates a list
         default=[],
-        help="Optional. Name(s) of tables to exclude. List tables separated by spaces, i.e. `--excluded_tables observation note_nlp`",
+        help=(
+            "Optional. Name(s) of tables to exclude. List tables separated by spaces,"
+            " i.e. `--excluded_tables observation note_nlp`"
+        ),
     )
     args = parser.parse_args()
 
@@ -63,14 +82,13 @@ if __name__ == "__main__":
     client = bigquery.Client(project=args.gcp_project_name)
     storage_client = storage.Client(project=args.gcp_project_name)
 
-    # We need to create a temporary bucket to extract our dataset into
-    # unfortunately, this is necessary -- GCP doesn't allow you to directly
-    # download BigQuery datasets to your local (you need to go through GCS first)
+    # We need to create a temporary Google Cloud Storage (GCS) bucket to move our data
+    # from BigQuery to Google Cloud Storage. Unfortunately, this is a necessary step:
+    # GCP doesn't allow you to directly download BigQuery datasets to your local (you need to go through GCS first)
     # NOTE: Bucket names must follow this rule: https://cloud.google.com/storage/docs/buckets#naming
     bucket_name: str = (
         f"temp-extract-{(args.gcp_dataset_id.replace('.', '-')).lower()[:50]}"
     )
-
     bucket = storage_client.bucket(bucket_name)
     try:
         bucket = storage_client.create_bucket(bucket, location="us-west2")
@@ -148,7 +166,24 @@ if __name__ == "__main__":
     for i in range(1, n_tables + 1):
         sem.acquire()
         print(f"====> Finished downloading {i} out of {n_tables} tables")
+    print("------\n------")
+    print("Successfully downloaded all tables!")
+    print("------\n------")
 
     # Delete the temporary Google Cloud Storage bucket
     print("\nDeleting temporary bucket...")
-    bucket.delete()
+    try:
+        bucket.delete()
+    except google.cloud.exceptions.Conflict:
+        print(
+            f"The bucket ({bucket_name}) still has undeleted items in it. Deleting those items now..."
+        )
+        undeleted_blobs: google.api_core.page_iterator.HTTPIterator = (
+            storage_client.list_blobs(bucket)
+        )
+        for blob in undeleted_blobs:
+            blob.delete()
+        bucket.delete()
+    print("------\n------")
+    print("Successfully deleted temporary Google Cloud Storage bucket!")
+    print("------\n------")
