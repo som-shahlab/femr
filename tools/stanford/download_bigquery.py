@@ -1,8 +1,8 @@
 """
 A tool for downloading datasets from BigQuery.
 
-IMPORTANT NOTE: This only works for Python <=3.9, which is NOT
-the version used by the `piton_env` conda environment
+IMPORTANT NOTE: If the `google` package gives you trouble with Python 3.10,
+try downgrading to Python 3.9 (see: https://issuetracker.google.com/issues/205238176?pli=1)
 
 Setup:
 ```
@@ -12,9 +12,9 @@ Setup:
 
 How to run:
 ```
-    python3 download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> <PATH TO LOCAL FOLDER WHERE DATASET WHERE DATASET WILL BE DOWNLOADED>
+    python3 download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> <PATH TO LOCAL FOLDER WHERE DATASET WHERE DATASET WILL BE DOWNLOADED> --excluded_tables <(Optional) NAME OF TABLE 1 TO BE EXCLUDED FROM DUMP> <(Optional) NAME OF TABLE 2 TO BE EXCLUDED FROM DUMP>
 
-    Example: python3 download_bigquery.py som-nero-nigam-starr som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03 /local-scratch/nigam/projects/mwornow/data/
+    Example: python3 download_bigquery.py som-nero-nigam-starr som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03 /local-scratch/nigam/projects/mwornow/piton_tool/ignore/ --excluded_tables observation note_nlp measurement note
 """
 
 from __future__ import annotations
@@ -45,6 +45,13 @@ if __name__ == "__main__":
         "output_dir",
         type=str,
         help="Path to output directory. Note: The downloaded files will be saved in a subdirectory of this, i.e. `output_dir/gcp_dataset_id/...`",
+    )
+    parser.add_argument(
+        "--excluded_tables",
+        type=str,
+        nargs="*",  # 0 or more values expected => creates a list
+        default=[],
+        help="Optional. Name(s) of tables to exclude. List tables separated by spaces, i.e. `--excluded_tables observation note_nlp`",
     )
     args = parser.parse_args()
 
@@ -122,7 +129,7 @@ if __name__ == "__main__":
     for table in tables:
         # Get the full name of the table
         table_name: str = f"{table.project}.{table.dataset_id}.{table.table_id}"
-        if table.table_id in ["observation"]:
+        if table.table_id in args.excluded_tables:
             print(f"Skipping extraction | table = {table.table_id}")
             continue
         print(f"Extracting | table = {table.table_id}")
