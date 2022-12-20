@@ -35,7 +35,8 @@ TEST(JoinCsvTest, TestSort) {
     size_t entries_per_chunk = (entries.size() + num_chunks - 1) / num_chunks;
 
     for (size_t i = 0; i < num_chunks; i++) {
-        CSVWriter writer((source / std::to_string(i)).string(), columns, ',');
+        CSVWriter<ZstdWriter> writer(
+            (source / absl::StrCat(i, ".csv.zst")).string(), columns, ',');
         for (size_t j = 0; j < entries_per_chunk; j++) {
             size_t index = i * entries_per_chunk + j;
             if (index < entries.size()) {
@@ -58,7 +59,7 @@ TEST(JoinCsvTest, TestSort) {
         for (auto& entry :
              boost::make_iterator_range(boost::filesystem::directory_iterator(
                  target / std::to_string(i), {}))) {
-            CSVReader reader(entry, columns, ',');
+            CSVReader<ZstdReader> reader(entry, columns, ',');
 
             std::vector<std::string> last_row;
             while (reader.next_row()) {
@@ -115,7 +116,8 @@ TEST(JoinCsvTest, TestSortAndJoin) {
     size_t num_shards = 5;
 
     for (size_t i = 0; i < num_chunks; i++) {
-        CSVWriter writer((source / std::to_string(i)).string(), columns, ',');
+        CSVWriter<ZstdWriter> writer(
+            (source / absl::StrCat(i, ".csv.zst")).string(), columns, ',');
         for (size_t j = 0; j < entries_per_chunk; j++) {
             size_t index = i * entries_per_chunk + j;
             if (index < entries.size()) {
@@ -132,7 +134,8 @@ TEST(JoinCsvTest, TestSortAndJoin) {
 
     int num_keys = 0;
     for (size_t i = 0; i < num_shards; i++) {
-        CSVReader reader(target / absl::StrCat(i, ".csv.zst"), columns, ',');
+        CSVReader<ZstdReader> reader(target / absl::StrCat(i, ".csv.zst"),
+                                     columns, ',');
         while (reader.next_row()) {
             num_keys += 1;
             std::string key = reader.get_row()[0];

@@ -45,8 +45,8 @@ convert_to_vector(const T& container) {
 void clean_thread(const boost::filesystem::path& in_path,
                   CodeCounter& code_counts,
                   const boost::filesystem::path& out_path) {
-    CSVReader reader(in_path, {"value", "code"}, ',');
-    CSVWriter writer(out_path, {"value"}, ',');
+    CSVReader<ZstdReader> reader(in_path, {"value", "code"}, ',');
+    CSVWriter<ZstdWriter> writer(out_path, {"value"}, ',');
 
     while (reader.next_row()) {
         uint64_t code;
@@ -73,7 +73,7 @@ void process_thread(
     boost::filesystem::path& in_path,
     moodycamel::BlockingReaderWriterCircularBuffer<
         boost::optional<std::pair<std::string, size_t>>>& out_queue) {
-    CSVReader reader(in_path, {"value"}, ',');
+    CSVReader<ZstdReader> reader(in_path, {"value"}, ',');
 
     std::string current_value = "";
     size_t current_count = 0;

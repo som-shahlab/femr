@@ -9,7 +9,7 @@ import io
 import multiprocessing
 import os
 import sys
-from typing import Dict, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 import zstandard
 
@@ -54,13 +54,17 @@ def _run_csv_extractor(
     stats: Dict[str, int] = collections.defaultdict(int)
     try:
         with contextlib.ExitStack() as stack:
-            f = stack.enter_context(
-                io.TextIOWrapper(
-                    zstandard.ZstdDecompressor().stream_reader(
-                        open(source, "rb")
+            f: Iterable[str]
+            if source.endswith(".csv.zst"):
+                f = stack.enter_context(
+                    io.TextIOWrapper(
+                        zstandard.ZstdDecompressor().stream_reader(
+                            open(source, "rb")
+                        )
                     )
                 )
-            )
+            else:
+                f = stack.enter_context(open(source, "r"))
 
             debug_writer = None
 
