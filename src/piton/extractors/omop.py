@@ -156,6 +156,11 @@ class _ConceptTableConverter(CSVExtractor):
         else:
             visit_id = None
 
+        if "unit_source_value" in row and row["unit_source_value"]:
+            unit = row["unit_source_value"]
+        else:
+            unit = None
+
         metadata: Dict[str, Any] = {
             "omop_table": self.prefix,
             "clarity_table": row["load_table_id"],
@@ -166,6 +171,9 @@ class _ConceptTableConverter(CSVExtractor):
 
         if end is not None:
             metadata["end"] = end
+
+        if unit is not None:
+            metadata["unit"] = unit
 
         return [Event(start=start, code=code, value=value, **metadata)]
 

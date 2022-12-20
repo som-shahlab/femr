@@ -17,7 +17,7 @@ import json
 import multiprocessing.pool
 import os
 import traceback
-from typing import Dict, Mapping, Optional, Set, cast
+from typing import Dict, Mapping, Optional, Set, Tuple, cast
 
 import zstandard
 
@@ -25,24 +25,30 @@ import zstandard
 def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
     """Convert an incorrect row into a correct one, splitting out the JSON into the correct OMOP columns."""
     if row["load_table_id"] in ("shc_ip_flwsht_meas", "lpch_ip_flwsht_meas"):
-        data = json.loads(row["value_as_string"])
+        first_data = json.loads(row["value_as_string"])
+        second_data = json.loads(row["observation_source_value"])
 
-        if len(data["values"]) != 3:
-            raise RuntimeError("More than 3 values?")
+        values = first_data["values"] + second_data["values"]
 
+        if len(values) != 5:
+            raise RuntimeError(f"Wrong number of values? {values}")
+
+        sheet = ""
         value = ""
         units = ""
         name = ""
 
-        for part in data["values"]:
-            if part["source"] == "ip_flwsht_meas.meas_value":
+        for part in values:
+            if part["source"] == "ip_flt_data.display_name":
+                sheet = cast(str, part["value"]) or sheet
+            elif part["source"] == "ip_flwsht_meas.meas_value":
                 value = cast(str, part["value"]) or value
             elif part["source"] == "ip_flo_gp_data.units":
                 units = cast(str, part["value"]) or units
             elif part["source"] == "ip_flo_gp_data.disp_name":
                 name = cast(str, part["value"]) or name
             else:
-                raise RuntimeError("Got invalid source" + part)
+                raise RuntimeError(f"Got invalid source {part}")
 
         new_row = dict(row)
 
@@ -53,8 +59,17 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
             value_as_number = ""
 
         # Note that we set the concept ids to 0 as we don't know what they should be yet
-        new_row["observation_concept_id"] = "0"
+        if sheet:
+            name = sheet + "/" + name
+            new_row["observation_parent_id"] = "0"
+            new_row["observation_parent_value"] = sheet
+        else:
+            new_row["observation_parent_id"] = ""
+            new_row["observation_parent_value"] = ""
+
         new_row["observation_source_value"] = name
+        new_row["observation_concept_id"] = "0"
+
         new_row["value_as_number"] = value_as_number
         new_row["value_as_string"] = value
         if units is not None and units != "":
@@ -69,9 +84,12 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
         return None
 
 
-def get_new_sources(root: str, child: str) -> Set[str]:
+def get_concepts_to_add(
+    root: str, child: str
+) -> Tuple[Set[str], Set[Tuple[str, str]]]:
     """Pull out the new concept_ids that we have to map."""
     new_concepts = set()
+    new_relationships = set()
 
     try:
         source_path = os.path.join(root, "observation", child)
@@ -85,19 +103,31 @@ def get_new_sources(root: str, child: str) -> Set[str]:
                     continue
                 if new_row["observation_concept_id"] == "0":
                     new_concepts.add(new_row["observation_source_value"])
+                    new_concepts.add(new_row["observation_parent_value"])
+
+                    new_relationships.add(
+                        (
+                            new_row["observation_source_value"],
+                            new_row["observation_parent_value"],
+                        )
+                    )
+
                 if new_row["unit_concept_id"] == "0":
                     new_concepts.add(new_row["unit_source_value"])
     except Exception as e:
         traceback.print_exc()
         raise RuntimeError("Failed " + root + " , " + child, e)
 
-    return new_concepts
+    return new_concepts, new_relationships
 
 
 def correct_rows(
     root: str, target: str, mapping: Mapping[str, str], child: str
 ) -> None:
-    """Using a concept_id map, fix incorrect mappings."""
+    """Using a concept_id map, fix incorrect mappings.
+
+    Currently, this only fixes json encoded observations by decoding them into OMOP fields.
+    Future versions of this code might fix other issues."""
     source_path = os.path.join(root, "observation", child)
     out_path = os.path.join(target, "observation", child)
     with io.TextIOWrapper(
@@ -119,10 +149,14 @@ def correct_rows(
                         new_row["observation_source_value"]
                     ]
 
+                    del new_row["observation_parent_id"]
+                    del new_row["observation_parent_value"]
+
                     if new_row["unit_concept_id"] != "":
                         new_row["unit_concept_id"] = mapping[
                             new_row["unit_source_value"]
                         ]
+
                     writer.writerow(new_row)
 
 
@@ -147,6 +181,7 @@ if __name__ == "__main__":
     os.mkdir(args.target)
 
     new_concepts = set()
+    new_relationships = set()
     with forkserver.Pool(args.num_threads) as pool:
         for directory in os.listdir(args.source):
             os.mkdir(os.path.join(args.target, directory))
@@ -158,16 +193,20 @@ if __name__ == "__main__":
                         os.path.join(args.target, directory, file),
                     )
 
-        for child_concepts in pool.imap_unordered(
-            functools.partial(get_new_sources, args.source),
+        for child_concepts, child_relationships in pool.imap_unordered(
+            functools.partial(get_concepts_to_add, args.source),
             os.listdir(os.path.join(args.source, "observation")),
         ):
             new_concepts |= child_concepts
+            new_relationships |= child_relationships
 
         highest_concept_id = 0
 
         destination_path = os.path.join(
             args.target, "concept", "flowsheet.csv.zst"
+        )
+        destination_rel_path = os.path.join(
+            args.target, "concept_relationship", "flowsheet.csv.zst"
         )
         with io.TextIOWrapper(
             zstandard.ZstdCompressor(1).stream_writer(
@@ -215,6 +254,44 @@ if __name__ == "__main__":
                         "load_row_id": "",
                     }
                 )
+
+        with io.TextIOWrapper(
+            zstandard.ZstdCompressor(1).stream_writer(
+                open(destination_rel_path, "wb")
+            )
+        ) as o2:
+            rel_writer = csv.DictWriter(
+                o2,
+                fieldnames=[
+                    "concept_id_1",
+                    "concept_id_2",
+                    "relationship_id",
+                    "valid_start_DATE",
+                    "valid_end_DATE",
+                    "invalid_reason",
+                    "load_table_id",
+                    "load_row_id",
+                ],
+            )
+            rel_writer.writeheader()
+
+            for child_concept, parent_concept in new_relationships:
+                child_concept_id = new_concept_map[child_concept]
+                parent_concept_id = new_concept_map[parent_concept]
+
+                rel_writer.writerow(
+                    {
+                        "concept_id_1": child_concept_id,
+                        "concept_id_2": parent_concept_id,
+                        "relationship_id": "Is a",
+                        "valid_start_DATE": "1970-01-01",
+                        "valid_end_DATE": "2099-12-31",
+                        "invalid_reason": "",
+                        "load_table_id": "custom mapping",
+                        "load_row_id": "",
+                    }
+                )
+
         for _ in pool.imap_unordered(
             functools.partial(
                 correct_rows, args.source, args.target, new_concept_map
