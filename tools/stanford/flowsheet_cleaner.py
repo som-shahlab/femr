@@ -84,7 +84,7 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
         return None
 
 
-def get_new_sources(
+def get_concepts_to_add(
     root: str, child: str
 ) -> Tuple[Set[str], Set[Tuple[str, str]]]:
     """Pull out the new concept_ids that we have to map."""
@@ -124,7 +124,10 @@ def get_new_sources(
 def correct_rows(
     root: str, target: str, mapping: Mapping[str, str], child: str
 ) -> None:
-    """Using a concept_id map, fix incorrect mappings."""
+    """Using a concept_id map, fix incorrect mappings.
+
+    Currently, this only fixes json encoded observations by decoding them into OMOP fields.
+    Future versions of this code might fix other issues."""
     source_path = os.path.join(root, "observation", child)
     out_path = os.path.join(target, "observation", child)
     with io.TextIOWrapper(
@@ -191,7 +194,7 @@ if __name__ == "__main__":
                     )
 
         for child_concepts, child_relationships in pool.imap_unordered(
-            functools.partial(get_new_sources, args.source),
+            functools.partial(get_concepts_to_add, args.source),
             os.listdir(os.path.join(args.source, "observation")),
         ):
             new_concepts |= child_concepts
