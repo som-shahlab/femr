@@ -26,7 +26,7 @@ constexpr int seconds_per_minute = 60;
 constexpr int minutes_per_hour = 60;
 constexpr int hours_per_day = 24;
 
-constexpr uint32_t current_version = 1;
+constexpr uint32_t current_version = 2;
 
 template <typename T>
 std::string_view container_to_view(const T& data) {
@@ -79,6 +79,7 @@ void write_patient_to_buffer(uint32_t start_unique,
                          " for ", original_patient_id));
     }
     buffer.clear();
+    buffer.push_back(start_unique);
     buffer.push_back(current_patient.birth_date - epoch);
     buffer.push_back(current_patient.events.size());
 
@@ -124,13 +125,12 @@ void write_patient_to_buffer(uint32_t start_unique,
                 uint32_t text_value = event.text_value;
 
                 if (event.value_type == ValueType::UNIQUE_TEXT) {
-                    text_value += start_unique;
+                    buffer.push_back((mask << 1) | 5);
+                } else {
+                    buffer.push_back((mask << 1) | 1);
+                    buffer.push_back(text_value);
                 }
 
-                buffer.push_back(mask | 1);
-                bool is_shared = event.value_type == ValueType::SHARED_TEXT;
-                buffer.push_back((text_value << 1) |
-                                 static_cast<uint32_t>(is_shared));
                 break;
             }
 
@@ -250,6 +250,67 @@ void read_patient_from_buffer(Patient& current_patient,
                     event.value_type = is_shared ? ValueType::SHARED_TEXT
                                                  : ValueType::UNIQUE_TEXT;
                     event.text_value = text_value >> 1;
+                    break;
+                }
+
+                case 2:
+                case 3: {
+                    event.value_type = ValueType::NUMERIC;
+                    if (type == 2) {
+                        event.numeric_value = buffer[index++];
+                    } else {
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value type?");
+            }
+        }
+
+        if (index != count) {
+            throw std::runtime_error(
+                absl::StrCat("Did not read through the entire patient record? ",
+                             index, " ", buffer.size()));
+        }
+    } else if (version == 2) {
+        size_t index = 0;
+        uint32_t current_unique = buffer[index++];
+        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.events.resize(buffer[index++]);
+
+        uint32_t last_age = 0;
+
+        uint32_t count_with_same = 0;
+        for (Event& event : current_patient.events) {
+            if (count_with_same == 0) {
+                count_with_same = buffer[index++];
+                last_age += buffer[index++];
+            } else {
+                count_with_same--;
+            }
+            event.start_age_in_minutes = last_age;
+
+            uint32_t code_and_type = buffer[index++];
+            event.code = code_and_type >> 2;
+            uint32_t type = code_and_type & 3;
+
+            switch (type) {
+                case 0:
+                    event.value_type = ValueType::NONE;
+                    break;
+
+                case 1: {
+                    event.code = event.code >> 1;
+                    if (code_and_type & 4) {
+                        // Is unique
+                        event.value_type = ValueType::UNIQUE_TEXT;
+                        event.text_value = current_unique++;
+                    } else {
+                        event.value_type = ValueType::SHARED_TEXT;
+                        event.text_value = buffer[index++];
+                    }
                     break;
                 }
 
@@ -396,7 +457,6 @@ void reader_thread(
                     next_event.text_value = iter->second;
                 } else {
                     next_event.value_type = ValueType::UNIQUE_TEXT;
-                    next_event.text_value = current_unique.size();
                     current_unique.emplace_back(std::move(reader.get_row()[3]));
                 }
             }
