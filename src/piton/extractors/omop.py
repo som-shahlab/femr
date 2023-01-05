@@ -58,6 +58,7 @@ class _DemographicsConverter(CSVExtractor):
                 code=int(row[target]),
                 omop_table="person",
                 clarity_table=row["load_table_id"],
+                source_code=row[target.replace("_concept_id", "_source_value")],
             )
             for target in [
                 "gender_concept_id",
@@ -174,6 +175,12 @@ class _ConceptTableConverter(CSVExtractor):
 
         if unit is not None:
             metadata["unit"] = unit
+
+        source_code_column = concept_id_field.replace(
+            "_concept_id", "_source_value"
+        )
+        source_code = row.get(source_code_column)
+        metadata["source_code"] = source_code or ""
 
         return [Event(start=start, code=code, value=value, **metadata)]
 
