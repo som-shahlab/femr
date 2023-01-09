@@ -2,12 +2,13 @@ import datetime
 import os
 import argparse
 import pickle
+import time
 from typing import Optional, List
 import piton
 import piton.datasets
 from piton.labelers.core import TimeHorizon, OneLabelPerPatient
-from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF, IsMaleLF, DiabetesLF, HighHbA1cLF
-from piton.featurizers.core import Featurizer, FeaturizerList
+from piton.labelers.omop_labeling_functions import MortalityLF, IsMaleLF, DiabetesLF, HighHbA1cLF
+from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 
 def save_to_pkl(object_to_save, path_to_file: str):
@@ -27,7 +28,10 @@ NUM_THREADS = 20
 LABELING_FUNCTIONS: List[str] = ['mortality', 'diabetes', 'is_male', 'high_hba1c']
 
 if __name__ == '__main__':
-    
+    START_TIME = time.time()
+    def print_log(name: str, content: str):
+        print(f"{int(time.time() - START_TIME)} | {name} | {content}")
+
     parser = argparse.ArgumentParser(
         description="Run Piton featurization"
     )
@@ -89,8 +93,6 @@ if __name__ == '__main__':
     NUM_THREADS: int = args.num_threads
     num_patients: Optional[int] = args.num_patients
 
-    start_time = datetime.datetime.now()
-
     # Load PatientDatabase + Ontology
     data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
     ontology = data.get_ontology()
@@ -112,11 +114,12 @@ if __name__ == '__main__':
     
     # grabbing just one label at random from all the labels
     one_label_labeler = OneLabelPerPatient(labeler)
-    print("Instantiated Labelers")
+    print_log("Labeler", "Instantiated Labeler: " + args.labeling_function)
 
+    print_log("Labeling Patients", "Starting")
     labeled_patients = one_label_labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=num_patients)
     save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
-    print("Finished Labeling Patients: ", datetime.datetime.now() - start_time)
+    print_log("Labeling Patients", "Finished")
 
     # Lets use both age and count featurizer 
     age = AgeFeaturizer()
@@ -124,19 +127,14 @@ if __name__ == '__main__':
     featurizer_age_count = FeaturizerList([age, count])
 
     # Preprocessing the featurizers, which includes processes such as normalizing age. 
+    print_log("Preprocessing Featurizer", "Starting")
     featurizer_age_count.preprocess_featurizers(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
     save_to_pkl(featurizer_age_count, PATH_TO_PREPROCESSED_FEATURIZERS_DATA)
-    print("Finished Preprocessing Featurizers: ", datetime.datetime.now() - start_time)
+    print_log("Preprocessing Featurizer", "Finished")
 
+    print_log("Training Featurizer", "Starting")
     results = featurizer_age_count.featurize(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
     save_to_pkl(results, PATH_TO_FEATURIZED_DATA)
-    print("Finished Training Featurizers: ", datetime.datetime.now() - start_time)
+    print_log("Training Featurizer", "Finished")
 
-    print("Total Time: ", datetime.datetime.now() - start_time)
-
-
-
-
-
-
-
+    print_log("FINISH", "Done")
