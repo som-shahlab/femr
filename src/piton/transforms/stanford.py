@@ -7,7 +7,7 @@ from piton import Patient
 from piton.extractors.omop import OMOP_BIRTH
 
 
-def move_visit_to_day_start(patient: Patient) -> Patient:
+def move_visit_starts_to_day_start(patient: Patient) -> Patient:
     """Assign visit start times of 12:00 AM to the start of the day (12:01 AM)
 
     This avoids visits being pushed to the end of the day by e.g., functions that map
