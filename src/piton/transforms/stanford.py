@@ -9,7 +9,7 @@ from piton.extractors.omop import OMOP_BIRTH
 
 def move_visit_to_day_start(patient: Patient) -> Patient:
     """Assign visit start times of 12:00 AM to the start of the day (12:01 AM)
-    
+
     This avoids visits being pushed to the end of the day by e.g., functions that map
     all events with midnight start times to the end of the day, such as `move_to_day_end`
     """
@@ -18,18 +18,15 @@ def move_visit_to_day_start(patient: Patient) -> Patient:
             event.start.hour == 0
             and event.start.minute == 0
             and event.start.second == 0
-            and event.omop_table == "visit" 
+            and event.omop_table == "visit"
         ):
-            event.start = (
-                event.start
-                + datetime.timedelta(minutes=1)
-            )
-            
+            event.start = event.start + datetime.timedelta(minutes=1)
+
             if event.end is not None:
                 event.end = max(event.start, event.end)
-                
+
     patient.resort()
-    
+
     return patient
 
 
