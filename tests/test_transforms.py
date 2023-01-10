@@ -58,6 +58,28 @@ def test_remove_small() -> None:
     assert remove_short_patients(invalid) is None
 
 
+def test_move_visit_start_to_day_start() -> None:
+    patient = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234, omop_table="visit"),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH)
+        ],
+    )
+    
+    expected = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(start=datetime.datetime(1999, 7, 2, 0, 1), code=1234, omop_table="visit"),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH)
+        ]
+    )
+    
+    assert move_visit_start_to_day_start(patient) == expected
+    
+
 def test_move_to_day_end() -> None:
     patient = piton.Patient(
         patient_id=123,
