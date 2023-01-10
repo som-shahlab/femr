@@ -66,8 +66,8 @@ def move_billing_codes(patient: Patient) -> Patient:
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
     This class fixes that by assigning them to the end of the visit.
     """
-    end_visits: Dict[int, datetime.datetime] = {}
-    lowest_visit: Dict[Tuple[datetime.datetime, int], int] = {}
+    end_visits: Dict[int, datetime.datetime] = {}  # Map from visit ID to visit end time
+    lowest_visit: Dict[Tuple[datetime.datetime, int], int] = {}  # Map from code/start time pairs to visit ID
 
     billing_codes = [
         "pat_enc_dx",
@@ -82,6 +82,7 @@ def move_billing_codes(patient: Patient) -> Patient:
     }
 
     for event in patient.events:
+        # For events that share the same code/start time, we find the lowest visit ID
         if (
             event.clarity_table in all_billing_codes
             and event.visit_id is not None
@@ -91,14 +92,17 @@ def move_billing_codes(patient: Patient) -> Patient:
                 lowest_visit[key] = event.visit_id
             else:
                 lowest_visit[key] = min(lowest_visit[key], event.visit_id)
-
+        
         if event.clarity_table in ("lpch_pat_enc", "shc_pat_enc"):
             if event.end is not None:
                 if event.visit_id is None:
+                    # Every event with an end time should have a visit ID associated with it
                     raise RuntimeError(
                         f"Expected visit id for visit? {patient.patient_id} {event}"
                     )
                 if end_visits.get(event.visit_id, event.end) != event.end:
+                    # Every event associated with a visit should have an end time that matches the visit end time
+                    # Also the end times of all events associated with a visit should have the same end time
                     raise RuntimeError(
                         f"Multiple end visits? {end_visits.get(event.visit_id)} {event}"
                     )
@@ -110,10 +114,13 @@ def move_billing_codes(patient: Patient) -> Patient:
             key = (event.start, event.code)
             if event.visit_id != lowest_visit.get(key, None):
                 # Drop this event as we already have it, just with a different visit_id?
+                # We only keep the copy of the event associated with the lowest visit id
+                # (Lowest visit id is arbitrary, no explicit connection to time)
                 continue
 
             if event.visit_id is None:
-                # This is a bad code, but would rather keep it than get rid of it
+                # This is a bad code (it has no associated visit_id), but 
+                # we would rather keep it than get rid of it
                 new_events.append(event)
                 continue
 
@@ -122,7 +129,11 @@ def move_billing_codes(patient: Patient) -> Patient:
                 raise RuntimeError(
                     f"Expected visit end for code {patient.patient_id} {event} {patient}"
                 )
+                
+            # The start time for an event should be no later than its associated visit end time
             event.start = max(event.start, end_visit)
+            
+            # The end time for an event should be no later than its associated visit end time
             if event.end is not None:
                 event.end = max(event.end, end_visit)
             new_events.append(event)
