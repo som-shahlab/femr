@@ -17,7 +17,7 @@ from piton.extension import datasets as extension_datasets
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
-import xgboost as xgb
+# import xgboost as xgb
 import pickle
 import datetime
 
@@ -31,11 +31,11 @@ import datetime
 
 PATH_TO_PITON_DB = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
-LABELED_PATIENTS = "mortality_labeled_patients_test.pickle"
-PREPROCESSED_FEATURIZERS_DATA = "mortality_preprocessed_featurizers_test.pickle"
-FEATURIZED_DATA = "mortality_featurized_patients_test.pickle"
+LABELED_PATIENTS = "gender_labeled_patients_v2.pickle"
+PREPROCESSED_FEATURIZERS_DATA = "gender_preprocessed_featurizers_test.pickle"
+FEATURIZED_DATA = "gender_featurized_patients_test.pickle"
 
-NUM_PATIENTS = 1000 # None if wants to run on all patients
+NUM_PATIENTS = None # None if wants to run on all patients
 NUM_THREADS = 20
 
 if __name__ == '__main__':
@@ -52,11 +52,11 @@ if __name__ == '__main__':
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
 
-    # Define the mortality labeling function. 
+    # Define the gender labeling function. 
     # labeler = HighHbA1cLF(ontology)
-    labeler = MortalityLF(ontology, time_horizon)
+    # labeler = MortalityLF(ontology, time_horizon)
     # labeler = DiabetesLF(ontology, time_horizon)
-    # labeler = IsMaleLF(ontology)
+    labeler = IsMaleLF(ontology)
     
     # grabbing just one label at random from all the labels
     one_label_labeler = OneLabelPerPatient(labeler)
@@ -69,6 +69,7 @@ if __name__ == '__main__':
 
     print("Finished Labeling Patients: ", datetime.datetime.now() - start_time)
 
+    """
     # Lets use both age and count featurizer 
     age = AgeFeaturizer()
     count = CountFeaturizer(rollup=True)
@@ -90,6 +91,8 @@ if __name__ == '__main__':
     end_time = datetime.datetime.now()
     delta = (end_time - start_time)
     print("Total Time: ", delta)
+
+    """
 
 
 

@@ -18,7 +18,7 @@ from ..datasets import PatientDatabase
 import itertools
 
 import torch
-from . import get_gpus_with_minimum_free_memory
+# from . import get_gpus_with_minimum_free_memory
 
 ColumnValue = namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column

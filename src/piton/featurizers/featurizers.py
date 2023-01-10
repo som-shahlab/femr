@@ -12,7 +12,7 @@ from . import Dictionary, OnlineStatistics
 from .core import ColumnValue, Featurizer
 from ..datasets import PatientDatabase
 import torch
-from . import get_gpus_with_minimum_free_memory
+# from . import get_gpus_with_minimum_free_memory
 import numpy as np
 import multiprocessing
 from tqdm import tqdm

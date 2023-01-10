@@ -217,19 +217,19 @@ class TextFeaturizer:
 note_concept_ids = ["LOINC/28570-0", "LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
 # note_concept_ids = ["LOINC/11506-3", "LOINC/18842-5", "LOINC/34746-8"]
 # note_concept_ids = []
-# path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
-path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
-path_to_piton_db = "/local-scratch/nigam/projects/rthapa84/data/1_perct_piton_extract_12_07_22"
-# path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
-path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
-# path_to_save = "/local-scratch-nvme/nigam/projects/rthapa84/data"
+path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer"
+# path_to_model = "/local-scratch/nigam/projects/clmbr_text_assets/models/Bio_ClinicalBERT"
+# path_to_piton_db = "/local-scratch/nigam/projects/rthapa84/data/1_perct_piton_extract_12_07_22"
+path_to_piton_db = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
+# path_to_save = "/local-scratch/nigam/projects/rthapa84/data/"
+path_to_save = "/local-scratch-nvme/nigam/projects/rthapa84/data"
 path_to_save_text_data = os.path.join(path_to_save, "text_data_chunks")
-path_to_save_tokenized_data = os.path.join(path_to_save, "tokenized_data_chunks")
+path_to_save_tokenized_data = os.path.join(path_to_save, "tokenized_data_chunks_4096")
 num_threads = 20
 min_char = 100
 num_patients = None # None if you want to run on entire patients
 chunk_size = 20000
-max_length = 1024
+max_length = 4096
 padding = True
 truncation = True
 
@@ -273,5 +273,18 @@ if __name__ == '__main__':
     # args = path_to_piton_db, path_to_save_text_data, pids, params_dict, thread_idx
     # _get_all_patient_text_data(args)
 
+
+
+def get_seq_length(folder_path):
+    file_names = os.listdir(folder_path)
+    file_names = [os.path.join(folder_path, fname) for fname in file_names]
+
+    total_seq_length = 0
+    for fname in tqdm(file_names):
+        tokenized_data = load_from_file(fname)
+        for patient_id in tokenized_data:
+            total_seq_length += tokenized_data[patient_id]["seq_lens"].sum()
+    
+    return total_seq_length
 
 
