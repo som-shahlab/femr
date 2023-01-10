@@ -12,6 +12,8 @@ import pandas as pd
 
 # For replicating the data, please use these paths. This expriment was run on carina
 # Please make sure the paths are correct for the server that you are working on.
+
+# This is what ethan gave (only exists on Carina)
 features_path = "/share/pi/nigam/rthapa84/data/hba1c_reps"  #CLMBR representation
 labels_path = "/share/pi/nigam/rthapa84/data/HighHbA1c_labeled_patients_v3.pickle"
 data_path = "/share/pi/nigam/data/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2"

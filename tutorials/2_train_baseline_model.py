@@ -22,7 +22,6 @@ import lightgbm as lgbm
 # Please update this path with your extract of piton as noted in previous notebook. 
 PATH_TO_PITON_DB = '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'
 PATH_TO_SAVE_MATRIX = "/local-scratch/nigam/projects/rthapa84/data"
-LABELED_PATIENTS = "mortality_labeled_patients_test.pickle"
 FEATURIZED_DATA = "mortality_featurized_patients_test.pickle"
 SEED = 97
 

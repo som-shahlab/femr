@@ -23,8 +23,6 @@ def load_from_pkl(path_to_file: str):
         result = pickle.load(fd)
     return result
 
-NUM_PATIENTS = 1000 # None if wants to run on all patients
-NUM_THREADS = 20
 LABELING_FUNCTIONS: List[str] = ['mortality', 'diabetes', 'is_male', 'high_hba1c']
 
 if __name__ == '__main__':
@@ -39,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "path_to_piton_db",
         type=str,
-        help="Path of the folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2'",
+        help="Path of the folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5/'",
     )
 
     parser.add_argument(
@@ -81,8 +79,6 @@ if __name__ == '__main__':
         help="Number of patients to use (used for DEBUGGING)",
         default=None,
     )
-    
-    
 
     args = parser.parse_args()
     PATH_TO_PITON_DB: str = args.path_to_piton_db
