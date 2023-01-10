@@ -62,7 +62,8 @@ class Event:
         return None
 
     def __setattr__(self, name: str, value: Any) -> None:
-        self.__dict__[name] = value
+        if value is not None:
+            self.__dict__[name] = value
 
     def __lt__(self, other: Event) -> bool:
         def sort_key(

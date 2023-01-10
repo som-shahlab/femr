@@ -7,6 +7,15 @@ from piton import Patient
 from piton.extractors.omop import OMOP_BIRTH
 
 
+def _move_date_to_end(
+    d: datetime.datetime,
+) -> datetime.datetime:
+    if d.time() == datetime.time.min:
+        return d + datetime.timedelta(days=1) - datetime.timedelta(minutes=1)
+    else:
+        return d
+
+
 def move_visit_start_to_day_start(patient: Patient) -> Patient:
     """Assign visit start times of 12:00 AM to the start of the day (12:01 AM)
 
@@ -33,20 +42,14 @@ def move_visit_start_to_day_start(patient: Patient) -> Patient:
 def move_to_day_end(patient: Patient) -> Patient:
     """We assume that everything coded at midnight should actually be moved to the end of the day."""
     for event in patient.events:
-        if (
-            event.start.hour == 0
-            and event.start.minute == 0
-            and event.start.second == 0
-            and event.code != OMOP_BIRTH
-        ):
-            event.start = (
-                event.start
-                + datetime.timedelta(days=1)
-                - datetime.timedelta(minutes=1)
-            )
+        if event.code == OMOP_BIRTH:
+            continue
 
-            if event.end is not None:
-                event.end = max(event.start, event.end)
+        event.start = _move_date_to_end(event.start)
+        if event.end is not None:
+
+            event.end = _move_date_to_end(event.end)
+            event.end = max(event.end, event.start)
 
     patient.resort()
 

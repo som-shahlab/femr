@@ -2,13 +2,14 @@
 
 import argparse
 import datetime
+import functools
 import json
 import logging
 import os
 import resource
 from typing import Callable, Dict, Optional, Sequence
 
-from piton import Patient
+from piton import Event, Patient
 from piton.datasets import EventCollection, PatientCollection
 from piton.extractors.csv import run_csv_extractors
 from piton.extractors.omop import get_omop_csv_extractors
@@ -20,6 +21,10 @@ from piton.transforms.stanford import (
 )
 
 
+def _is_visit_event(e: Event) -> bool:
+    return e.omop_table == "visit"
+
+
 def _get_stanford_transformations() -> Sequence[
     Callable[[Patient], Optional[Patient]]
 ]:
@@ -28,9 +33,13 @@ def _get_stanford_transformations() -> Sequence[
     transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
         move_pre_birth,
         move_visit_start_to_day_start,
-        move_billing_codes,
         move_to_day_end,
-        remove_nones,
+        move_billing_codes,
+        functools.partial(
+            remove_nones,  # We have to keep visits in order to sync up visit_ids later in the process
+            # If we ever remove or revisit visit_id, we would want to revisit this
+            do_not_apply_to_filter=_is_visit_event,
+        ),
         delta_encode,
         remove_short_patients,
     ]

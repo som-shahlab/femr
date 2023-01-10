@@ -1,8 +1,8 @@
 """A collection of general use transforms."""
 import datetime
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Optional, Set, Tuple
 
-from piton import Patient
+from piton import Event, Patient
 
 
 def remove_short_patients(
@@ -18,13 +18,17 @@ def remove_short_patients(
         return patient
 
 
-def remove_nones(patient: Patient) -> Patient:
+def remove_nones(
+    patient: Patient,
+    do_not_apply_to_filter: Optional[Callable[[Event], bool]] = None,
+) -> Patient:
     """Remove duplicate codes w/in same day if duplicate code has None value.
 
     There is no point having a NONE value in a timeline when we have an actual value within the same day.
 
     This removes those unnecessary NONE values.
     """
+    do_not_apply_to_filter = do_not_apply_to_filter or (lambda _: False)
     has_value: Set[Tuple[int, datetime.date]] = set()
 
     for event in patient.events:
@@ -36,6 +40,7 @@ def remove_nones(patient: Patient) -> Patient:
         if (
             event.value is None
             and (event.code, event.start.date()) in has_value
+            and not do_not_apply_to_filter(event)
         ):
             continue
         new_events.append(event)
