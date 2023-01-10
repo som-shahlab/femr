@@ -66,8 +66,12 @@ def move_billing_codes(patient: Patient) -> Patient:
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
     This class fixes that by assigning them to the end of the visit.
     """
-    end_visits: Dict[int, datetime.datetime] = {}  # Map from visit ID to visit end time
-    lowest_visit: Dict[Tuple[datetime.datetime, int], int] = {}  # Map from code/start time pairs to visit ID
+    end_visits: Dict[
+        int, datetime.datetime
+    ] = {}  # Map from visit ID to visit end time
+    lowest_visit: Dict[
+        Tuple[datetime.datetime, int], int
+    ] = {}  # Map from code/start time pairs to visit ID
 
     billing_codes = [
         "pat_enc_dx",
@@ -92,7 +96,7 @@ def move_billing_codes(patient: Patient) -> Patient:
                 lowest_visit[key] = event.visit_id
             else:
                 lowest_visit[key] = min(lowest_visit[key], event.visit_id)
-        
+
         if event.clarity_table in ("lpch_pat_enc", "shc_pat_enc"):
             if event.end is not None:
                 if event.visit_id is None:
@@ -119,7 +123,7 @@ def move_billing_codes(patient: Patient) -> Patient:
                 continue
 
             if event.visit_id is None:
-                # This is a bad code (it has no associated visit_id), but 
+                # This is a bad code (it has no associated visit_id), but
                 # we would rather keep it than get rid of it
                 new_events.append(event)
                 continue
@@ -129,10 +133,10 @@ def move_billing_codes(patient: Patient) -> Patient:
                 raise RuntimeError(
                     f"Expected visit end for code {patient.patient_id} {event} {patient}"
                 )
-                
+
             # The start time for an event should be no later than its associated visit end time
             event.start = max(event.start, end_visit)
-            
+
             # The end time for an event should be no later than its associated visit end time
             if event.end is not None:
                 event.end = max(event.end, end_visit)
