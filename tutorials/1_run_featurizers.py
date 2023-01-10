@@ -23,7 +23,7 @@ def load_from_pkl(path_to_file: str):
         result = pickle.load(fd)
     return result
 
-LABELING_FUNCTIONS: List[str] = ['mortality', 'diabetes', 'is_male', 'high_hba1c']
+LABELING_FUNCTIONS: List[str] = ['mortality', 'is_male', 'high_hba1c']
 
 if __name__ == '__main__':
     START_TIME = time.time()
@@ -101,9 +101,7 @@ if __name__ == '__main__':
         labeler = HighHbA1cLF(ontology)
     elif args.labeling_function == 'mortality':
         labeler = MortalityLF(ontology, time_horizon)
-    elif args.labeling_function == 'mortality':
-        labeler = DiabetesLF(ontology, time_horizon)
-    elif args.labeling_function == 'mortality':
+    elif args.labeling_function == 'is_male':
         labeler = IsMaleLF(ontology)
     else:
         raise ValueError(f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}.")
