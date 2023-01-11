@@ -119,7 +119,7 @@ class LabelingFunction(ABC):
         Returns:
             List[int]: List of applicable OMOP codes
         """
-        pass
+        return []
 
     def get_patient_start_end_times(
         self, patient: Patient
@@ -252,7 +252,6 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             for label in labels:
                 result.append((int(patient_id), label))
         return result
-
 
     @classmethod
     def load_from_numpy(

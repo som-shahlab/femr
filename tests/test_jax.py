@@ -2,24 +2,94 @@ from __future__ import annotations
 
 import random as pyrandom
 
-import jax.numpy as jnp
-import numpy as np
-from jax import device_put, devices, grad, jit, random, value_and_grad, vmap
+import pytest
 
-from piton.jax import (
-    embedding_dot,
-    embedding_dot_fallback,
-    exp_mean,
-    exp_mean_fallback,
-    get_shifts_and_mult,
-    local_attention,
-    local_attention_fallback,
-)
+try:
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+    from jax import device_put, devices, grad, jit, random, value_and_grad
+
+    from piton.jax import (
+        embedding_dot,
+        embedding_dot_fallback,
+        exp_mean,
+        exp_mean_fallback,
+        gather_scatter_add,
+        gather_scatter_add_fallback,
+        get_shifts_and_mult,
+        local_attention,
+        local_attention_fallback,
+    )
+except ImportError:
+    pytest.skip("jax package not available?", allow_module_level=True)
 
 jnp.set_printoptions(linewidth=200)
 
 
-def get_result_and_grad(device, dtype):
+def gather_scatter_add_helper(dtype, device):
+    A = 512
+    B = 256
+    N = 1024
+    K = 64
+
+    k = random.PRNGKey(123534)
+    k1, k2, k3 = random.split(k, 3)
+
+    a = random.normal(k1, shape=(A, K), dtype=dtype)
+    indices = random.randint(
+        k2, shape=(N, 2), minval=0, maxval=255, dtype=jnp.uint32
+    )
+    indices = indices.at[-100:, :].set(
+        np.array([512, 256], dtype=jnp.uint32).reshape(1, -1)
+    )
+    indices_sort = jnp.argsort(indices[:, 1])
+    indices = indices[indices_sort, :]
+    # print(indices)
+    g = random.normal(k3, shape=(B, K), dtype=dtype)
+
+    a, indices, g = [device_put(jnp.array(a), device) for a in (a, indices, g)]
+
+    expected = gather_scatter_add_fallback(a, indices, B)
+
+    actual_dummy = gather_scatter_add(a, indices, B)
+    assert jnp.allclose(expected, actual_dummy, atol=1e-2, rtol=1e-3)
+
+    actual = jax.jit(gather_scatter_add, static_argnums=(2,))(a, indices, B)
+    assert jnp.allclose(expected, actual, atol=1e-2, rtol=1e-3)
+
+    def h(f):
+        def helper(*args):
+            val = f(*args)
+            return (val * g).sum()
+
+        return grad(helper)
+
+    expected_grad = h(gather_scatter_add_fallback)(a, indices, B)
+    actual_dummy_grad = h(gather_scatter_add)(a, indices, B)
+
+    assert jnp.allclose(expected_grad, actual_dummy_grad, atol=1e-2, rtol=1e-3)
+
+    actual_grad = h(jax.jit(gather_scatter_add, static_argnums=(2,)))(
+        a, indices, B
+    )
+    print(expected_grad)
+    print(actual_grad)
+
+    assert jnp.allclose(expected_grad, actual_grad, atol=1e-2, rtol=1e-3)
+
+
+def test_gather_scatter_add_cpu():
+    cpu_device = devices("cpu")[0]
+    gather_scatter_add_helper(dtype=jnp.float32, device=cpu_device)
+
+
+def test_gather_scatter_add_gpu():
+    gpu_device = devices("gpu")[0]
+    gather_scatter_add_helper(dtype=jnp.float32, device=gpu_device)
+
+
+def embedding_dot_test_helper(device, dtype):
     key = random.PRNGKey(12352)
 
     key, k1, k2, k3 = random.split(key, 4)
@@ -57,15 +127,15 @@ def get_result_and_grad(device, dtype):
     assert_equal(db1, db2)
 
 
-def test_cpu_implementation():
-    get_result_and_grad(devices("cpu")[0], np.float64)
-    get_result_and_grad(devices("cpu")[0], np.float32)
-    get_result_and_grad(devices("cpu")[0], np.float16)
+def test_embedding_dot_cpu():
+    embedding_dot_test_helper(devices("cpu")[0], np.float64)
+    embedding_dot_test_helper(devices("cpu")[0], np.float32)
+    embedding_dot_test_helper(devices("cpu")[0], np.float16)
 
 
-def test_gpu_implementation():
-    get_result_and_grad(devices("gpu")[0], np.float32)
-    get_result_and_grad(devices("gpu")[0], np.float16)
+def test_embedding_dot_gpu():
+    embedding_dot_test_helper(devices("gpu")[0], np.float32)
+    embedding_dot_test_helper(devices("gpu")[0], np.float16)
 
 
 def exp_mean_helper(dtype, is_zero, device):
@@ -172,6 +242,7 @@ def test_exp_mean_complex_gpu():
 
 
 def divide(x, val, shift, mult):
+    """A constant time division algorithm for use on GPUs"""
     if (shift, mult) == (0, 0):
         assert val == 1
         # Divide by 1
@@ -182,6 +253,7 @@ def divide(x, val, shift, mult):
 
 
 def modulus(x, val, shift, mult):
+    """Compute % using the constant time division algorithm"""
     divisor = divide(x, val, shift, mult)
     return x - divisor * val
 

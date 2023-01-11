@@ -111,7 +111,7 @@ def test_age_featurizer():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon)
+    labeler = CodeLF(2, time_horizon=time_horizon)
     labels = labeler.label(PATIENTS[0])
 
     featurizer = AgeFeaturizer(normalize=False)
