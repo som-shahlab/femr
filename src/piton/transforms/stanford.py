@@ -41,56 +41,58 @@ def move_visit_start_to_day_start(patient: Patient) -> Patient:
 
 def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
     """Assign visit start times to be just before the first event
-    
+
     Assign the start time associated with each visit to be the maximum
-    of (1) 12:00:01 AM and (2) one second before the start time of the 
+    of (1) 12:00:01 AM and (2) one second before the start time of the
     first event on the day of the associated with the visit. Events that
     occur on days prior to the visit do not affect the visit start time.
     """
     first_event_starts: Dict[int, datetime.datetime] = {}
     visit_starts: Dict[int, datetime.datetime] = {}
-    
+
     # Find the given start time for each visit
     for event in patient.events:
         if event.omop_table == "visit":
             visit_starts[event.visit_id] = event.start
-    
+
     # Find the minimum start time over all non-visit events associated with each visit
     for event in patient.events:
         if event.visit_id is not None:
             # Ignore any events for which event start is before the associated visit start
             # Also ignore non-visit events starting same time as visit (i.e., at midnight)
-            if event.start > visit_starts[event.visit_id]:  
+            if event.start > visit_starts[event.visit_id]:
                 if event.visit_id in first_event_starts:
-                    first_event_starts[event.visit_id] = min(event.start, first_event_starts[event.visit_id])
+                    first_event_starts[event.visit_id] = min(
+                        event.start, first_event_starts[event.visit_id]
+                    )
                 else:
                     first_event_starts[event.visit_id] = event.start
-    
+
     # Assign visit start times to be one second before the first event associated with that visit
     for event in patient.events:
         if event.omop_table == "visit":
             if event.visit_id in first_event_starts:
                 first_event_time = first_event_starts[event.visit_id]
-                # We assume temporal granularity is at the minute level so that 
+                # We assume temporal granularity is at the minute level so that
                 # if the first non-visit event was at 12:01 AM then there will
                 # be no other events between 12:00 AM and 12:01 AM
                 event.start = first_event_time - datetime.timedelta(seconds=1)
             elif event.start.time() == datetime.time.min:
                 # If there are no events with nontrivial timestamps and
                 # the visit start is assigned to be the start of the day, just
-                # add one second so that the visit start is anchored before all 
+                # add one second so that the visit start is anchored before all
                 # non-visit events.
                 # NOTE: This assumes that all midnight non-visit events are moved to day end,
                 # otherwise there will be non-visit events with start times before the
                 # visit start time.
                 event.start = event.start + datetime.timedelta(seconds=1)
-                    
+
             if event.end is not None:
                 # Reset the visit end to be ≥ the visit start
                 event.end = max(event.start, event.end)
-    
+
     patient.resort()
-    
+
     return patient
 
 
