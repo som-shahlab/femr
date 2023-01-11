@@ -3,6 +3,7 @@ import os
 from typing import List, Tuple
 
 import numpy as np
+import pickle
 
 import piton
 import piton.datasets
@@ -20,7 +21,7 @@ SHARED_EVENTS = [
     ),
     piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
     piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
-    piton.Event(start=datetime.datetime(2011, 2, 5), code=2, value=None),
+    piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
     piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
     piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
     piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
@@ -34,6 +35,18 @@ SHARED_EVENTS = [
     ),
 ]
 
+
+def save_to_pkl(object_to_save, path_to_file: str):
+    """Save object to Pickle file."""
+    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+    with open(path_to_file, "wb") as fd:
+        pickle.dump(object_to_save, fd)
+
+def load_from_pkl(path_to_file: str):
+    """Load object from Pickle file."""
+    with open(path_to_file, "rb") as fd:
+        result = pickle.load(fd)
+    return result
 
 def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
     patients: List[piton.Patient] = []
@@ -97,7 +110,6 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
             Label(
                 value=bool(label_numpy[1][i]),
                 time=label_numpy[2][i],
-                label_type="boolean",
             )
             in labeled_patients[patient_id]
         )
@@ -108,25 +120,23 @@ def test_labeled_patients():
     patients = create_patients(SHARED_EVENTS)
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
+        True, False, False
     ]
 
     time_horizon_6_months = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon_6_months)
-    labeled_patients = labeler.apply(patients)
+    labeler = CodeLF(3, 2, time_horizon_6_months)
+
+    patients_to_labels = {}
+
+    for patient in patients:
+        labels = labeler.label(patient)
+
+        if len(labels) > 0:
+            patients_to_labels[patient.patient_id] = labels
+
+    labeled_patients = LabeledPatients(patients_to_labels, labeler.get_labeler_type())
 
     # Data representations
     #   Check that label counter is correct
@@ -141,13 +151,13 @@ def test_labeled_patients():
     # Saving / Loading
     #   Save labeler results
     path = "../tmp/test_labelers/CodeLF.pkl"
-    labeled_patients.save_to_file(path)
+    save_to_pkl(labeled_patients, path)
 
     #   Check that file was created
     assert os.path.exists(path)
 
     #   Read in the output files and check that they're accurate
-    labeled_patients_new = LabeledPatients.load_from_file(path)
+    labeled_patients_new = load_from_pkl(path)
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
@@ -185,7 +195,7 @@ def test_mortality_lf():
             return [
                 memoryview("zero".encode("utf8")),
                 memoryview("one".encode("utf8")),
-                memoryview("two".encode("utf8")),
+                memoryview("Visit/IP".encode("utf8")),
                 memoryview("Condition Type/OMOP4822053".encode("utf8")),
                 memoryview("four".encode("utf8")),
             ]
