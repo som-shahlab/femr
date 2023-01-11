@@ -221,13 +221,30 @@ http_archive(
     ],
     build_file_content =
 """
-# TODO(keir): Replace this with a better version, like from TensorFlow.
-# See https://github.com/ceres-solver/ceres-solver/issues/337.
 cc_library(
     name = 'eigen',
     srcs = [],
     includes = ['.'],
     hdrs = glob(['Eigen/**', 'unsupported/**']),
+    visibility = ['//visibility:public'],
+)
+"""
+)
+
+http_archive(
+    name = "cpp-base64",
+    strip_prefix = "cpp-base64-2.rc.08",
+    urls = [
+        "https://github.com/ReneNyffenegger/cpp-base64/archive/refs/tags/V2.rc.08.zip",
+    ],
+    sha256 = "5e5366919938b834ca95fec4c2a80ad0c002872175d43226c933d25e40572883",
+    build_file_content =
+"""
+cc_library(
+    name = 'cpp-base64',
+    srcs = ['base64.cpp'],
+    includes = ['.'],
+    hdrs = ['base64.h'],
     visibility = ['//visibility:public'],
 )
 """

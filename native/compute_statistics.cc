@@ -5,7 +5,7 @@
 using json = nlohmann::json;
 
 boost::filesystem::path extract =
-    "/local-scratch/nigam/projects/ethanid/piton_1_extract";
+    "/local-scratch/nigam/projects/ethanid/piton_9_extract";
 
 int main() {
     PatientDatabase database(extract, true);
@@ -33,22 +33,16 @@ int main() {
             if (event.code == 580) {
                 has_ip = true;
             }
+            length_counts[(uint32_t)event.value_type] += 1;
         }
-
-        if (false && !has_ip) {
-            continue;
-        }
-
-        if (patient_id == 0) {
-            std::cout << valid_events << std::endl;
-        }
-
-        // length_counts[valid_events] += 1;
-        length_counts[valid_events] += 1;
     }
 
-    std::ofstream o(
-        "/local-scratch/nigam/projects/ethanid/piton/native/results/"
-        "final_counts");
-    o << json(length_counts);
+    for (uint32_t i = 0; i < 4; i++) {
+        std::cout << i << " " << length_counts[i] << std::endl;
+    }
+
+    // std::ofstream o(
+    //     "/local-scratch/nigam/projects/ethanid/piton/native/results/"
+    //     "final_counts");
+    // o << json(length_counts);
 }

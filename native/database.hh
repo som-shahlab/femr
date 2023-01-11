@@ -29,6 +29,8 @@ class LazyDictionary {
         return *value;
     }
 
+    operator bool() const { return boost::filesystem::exists(path); }
+
    private:
     void init() {
         if (!value) {
@@ -51,11 +53,15 @@ class Ontology {
     absl::Span<const uint32_t> get_all_parents(uint32_t code);
     Dictionary& get_dictionary();
 
+    std::string_view get_text_description(uint32_t code);
+
    private:
     LazyDictionary main_dictionary;
     LazyDictionary parent_dict;
     LazyDictionary children_dict;
     LazyDictionary all_parents_dict;
+
+    LazyDictionary text_description;
 };
 
 enum class ValueType {
@@ -66,11 +72,7 @@ enum class ValueType {
 };
 
 struct Event {
-    uint16_t age_in_days;
-    uint16_t minutes_offset;
-
-    float age;
-
+    uint32_t start_age_in_minutes;
     uint32_t code;
     ValueType value_type;
 
@@ -80,8 +82,7 @@ struct Event {
     };
 
     bool operator==(const Event& other) const {
-        return (age_in_days == other.age_in_days &&
-                minutes_offset == other.minutes_offset && code == other.code &&
+        return (start_age_in_minutes == other.start_age_in_minutes &&
                 value_type == other.value_type &&
                 text_value == other.text_value);
     }
@@ -100,10 +101,10 @@ class PatientDatabaseIterator {
     Patient& get_patient(uint32_t patient_id);
 
    private:
-    PatientDatabaseIterator(const Dictionary* d);
+    PatientDatabaseIterator(PatientDatabase* d);
     friend PatientDatabase;
 
-    const Dictionary* const parent_dictionary;
+    PatientDatabase* const parent_database;
 
     Patient current_patient;
     std::vector<uint32_t> buffer;
@@ -170,6 +171,14 @@ class PatientDatabase {
         return result;
     }
 
+    // Event metadata
+    std::string_view get_event_metadata(uint32_t patient_id,
+                                        uint32_t event_index);
+
+    // Metadata information
+    uint32_t version_id();
+    uint32_t database_id();
+
    private:
     LazyDictionary patients;
 
@@ -182,12 +191,17 @@ class PatientDatabase {
     LazyDictionary code_index_dictionary;
     LazyDictionary value_index_dictionary;
 
+    LazyDictionary event_metadata_dictionary;
+    bool has_event_metadata;
+
     // 0 original_patient_ids
     // 1 sorted_original_patient_ids
     // 2 code counts
     // 3 text value counts
     // 4 original_code_ids
-    LazyDictionary meta_dictionary;
+    // 5 version_id
+    // 6 database_id
+    Dictionary meta_dictionary;
 };
 
 PatientDatabase convert_patient_collection_to_patient_database(

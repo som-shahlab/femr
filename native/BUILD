@@ -6,6 +6,8 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_library", "pybind_extension")
 
 load("@rules_cuda//cuda:defs.bzl", "cuda_library")
 
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
 cuda_library(
     name="local_attention",
     hdrs=["local_attention.hh"],
@@ -16,6 +18,12 @@ cuda_library(
     name="embedding_dot",
     hdrs=["embedding_dot.hh"],
     srcs=["embedding_dot.cu"],
+)
+
+cuda_library(
+    name="gather_scatter",
+    hdrs=["gather_scatter.hh"],
+    srcs=["gather_scatter.cu"],
 )
 
 cuda_library(
@@ -36,8 +44,31 @@ pybind_library(
         ":embedding_dot",
         ":exp_mean",
         ":local_attention",
+        ":gather_scatter",
     ],
 )
+
+pybind_library(
+    name="cpu_jax_extension",
+    hdrs=[
+        "jax_extension.hh",
+    ],
+    srcs=[
+        "cpu_jax_extension.cc",
+    ],
+)
+
+string_flag(name = "cuda", build_setting_default = "disabled")
+
+config_setting(
+    name = "cuda_enabled",
+    flag_values = {":cuda": "enabled"}
+)
+
+jax_extension = select({
+    ":cuda_enabled": [":jax_extension"],
+    "//conditions:default": [":cpu_jax_extension"],
+})
 
 pybind_library(
     name="dataloader_extension",
@@ -117,6 +148,32 @@ cc_test(
     ],
     deps=[
         ":dictionary",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="survival_metrics",
+    hdrs=[
+        "survival_metrics.hh",
+    ],
+    srcs=[
+        "survival_metrics.cc",
+    ],
+    deps=[
+        "@eigen",
+        "@com_google_absl//absl/types:span",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name="survival_metrics_test",
+    srcs=[
+        "survival_metrics_test.cc",
+    ],
+    deps=[
+        ":survival_metrics",
         "@gtest//:gtest_main",
     ],
 )
@@ -251,6 +308,7 @@ cc_library(
         "@concurrentqueue",
         "@boost//:filesystem",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@cpp-base64",
     ],
 )
 
@@ -318,15 +376,29 @@ pybind_library(
     ],
 )
 
+pybind_library(
+    name="metrics_extension",
+    hdrs=[
+        "metrics_extension.hh",
+    ],
+    srcs=[
+        "metrics_extension.cc",
+    ],
+    deps=[
+        ":survival_metrics",
+    ],
+)
+
+
 pybind_extension(
     name="extension",
     srcs=[
         "extension.cc",
     ],
-    deps=[
-        ":jax_extension",
+    deps= jax_extension + [
         ":datasets_extension",
         ":dataloader_extension",
+        ":metrics_extension",
     ],
 )
 
@@ -417,5 +489,15 @@ cc_library(
     ],
     deps=[
         "@json",
+    ],
+)
+
+
+cc_binary(
+    name="generate_survival_dataset",
+    srcs=["generate_survival_dataset.cc"],
+    deps=[
+        ":database",
+        ":flatmap",
     ],
 )

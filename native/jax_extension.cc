@@ -6,6 +6,7 @@
 
 #include "embedding_dot.hh"
 #include "exp_mean.hh"
+#include "gather_scatter.hh"
 #include "local_attention.hh"
 
 namespace py = pybind11;
@@ -68,6 +69,8 @@ std::vector<std::tuple<std::string, py::capsule, std::string>> get_kernels() {
 
     WRAP(result, half_local_attention_forward, "gpu");
     WRAP(result, half_local_attention_backward, "gpu");
+
+    WRAP(result, float_gather_scatter, "gpu");
 
 #undef WRAP
 

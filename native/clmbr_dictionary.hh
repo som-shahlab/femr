@@ -3,19 +3,25 @@
 #include <cstdint>
 #include <nlohmann/json.hpp>
 
+// The type of dictionary entry
 enum class DictEntryType {
     CODE,
     NUMERIC,
     TEXT,
 };
 
+// The exact dictionary entry
 struct DictEntry {
     DictEntryType type;
     uint32_t code;
-    float weight;
+    double weight;
 
-    float val_start = 0;
-    float val_end = 0;
+    // Only for numeric dictionary entries
+    // A numeric dictionary entry covers from [start_val, end_val)
+    double val_start = 0;
+    double val_end = 0;
+
+    // Only for text dictionary entries
     uint32_t text_value = 0;
 
     bool operator<(const DictEntry& other) { return weight < other.weight; }
