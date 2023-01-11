@@ -252,9 +252,9 @@ class CountFeaturizer(Featurizer):
         
     def from_dict(self, data: Mapping[str, Any]):
         self.patient_codes = Dictionary(data["patient_codes"])
-        self.exclusion_codes = data["exclusion_codes"]
-        self.time_bins = data["time_bins"]
-        self.is_rollup = data["is_rollup"]
+        self.exclusion_codes = data.get("exclusion_codes", {}), # defaults to empty set
+        self.time_bins = data.get("time_bins", None) # defaults to None
+        self.is_rollup = data.get("is_rollup", False) # defaults to False
 
     def is_needs_preprocessing(self) -> bool:
         return True

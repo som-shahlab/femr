@@ -25,6 +25,18 @@ def load_from_pkl(path_to_file: str):
 
 LABELING_FUNCTIONS: List[str] = ['mortality', 'is_male', 'high_hba1c']
 
+"""
+Example running:
+
+python3 1_run_featurizers.py \
+    /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pickle \
+    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_preprocessed_featurizers.pickle \
+    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
+    --labeling_function is_male \
+    --num_threads 2 \
+    --num_patients 10000
+"""
 if __name__ == '__main__':
     START_TIME = time.time()
     def print_log(name: str, content: str):
@@ -47,22 +59,22 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "path_to_preprocessed_featurizers",
+        "path_to_save_preprocessed_featurizers",
         type=str,
-        help="Path to the Piton XXXX. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pickle'",
+        help="Path to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pickle'",
     )
     
     parser.add_argument(
-        "path_to_featurized_data",
+        "path_to_save_featurized_patients",
         type=str,
-        help="Path to the Piton XXXX. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
+        help="Path to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
     )
     
     parser.add_argument(
         "--labeling_function",
         type=str,
         help="Name of labeling function to create.",
-        options=LABELING_FUNCTIONS,
+        choices=LABELING_FUNCTIONS,
         default=LABELING_FUNCTIONS[0],
     )
 
@@ -82,24 +94,28 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     PATH_TO_PITON_DB: str = args.path_to_piton_db
-    PATH_TO_SAVE_MATRIX: str = args.path_to_save_matrix
     PATH_TO_LABELED_PATIENTS: str = args.path_to_labeled_patients
-    PATH_TO_PREPROCESSED_FEATURIZERS_DATA: str = args.path_to_preprocessed_featurizers
-    PATH_TO_FEATURIZED_DATA: str = args.path_to_featurized_data
-    NUM_THREADS: int = args.num_threads
+    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = args.path_to_save_preprocessed_featurizers
+    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = args.path_to_save_featurized_patients
+    num_threads: int = args.num_threads
     num_patients: Optional[int] = args.num_patients
+    
+    # create directories to save files
+    os.makedirs(os.path.dirname(os.path.abspath(PATH_TO_SAVE_PREPROCESSED_FEATURIZERS)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(PATH_TO_SAVE_FEATURIZED_PATIENTS)), exist_ok=True)
 
     # Load PatientDatabase + Ontology
     data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
     ontology = data.get_ontology()
+    print_log("PatientDatabase", "Loaded from: " + PATH_TO_PITON_DB)
 
     # Define the labeling function. 
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=365)
-    )
     if args.labeling_function == 'high_hba1c':
         labeler = HighHbA1cLF(ontology)
     elif args.labeling_function == 'mortality':
+        time_horizon = TimeHorizon(
+            datetime.timedelta(days=0), datetime.timedelta(days=365)
+        )
         labeler = MortalityLF(ontology, time_horizon)
     elif args.labeling_function == 'is_male':
         labeler = IsMaleLF(ontology)
@@ -111,24 +127,24 @@ if __name__ == '__main__':
     print_log("Labeler", "Instantiated Labeler: " + args.labeling_function)
 
     print_log("Labeling Patients", "Starting")
-    labeled_patients = one_label_labeler.apply(PATH_TO_PITON_DB, NUM_THREADS, num_patients=num_patients)
+    labeled_patients = one_label_labeler.apply(PATH_TO_PITON_DB, num_threads, num_patients=num_patients)
     save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
 
     # Lets use both age and count featurizer 
     age = AgeFeaturizer()
-    count = CountFeaturizer(rollup=True)
+    count = CountFeaturizer(is_rollup=True)
     featurizer_age_count = FeaturizerList([age, count])
 
     # Preprocessing the featurizers, which includes processes such as normalizing age. 
     print_log("Preprocessing Featurizer", "Starting")
-    featurizer_age_count.preprocess_featurizers(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
-    save_to_pkl(featurizer_age_count, PATH_TO_PREPROCESSED_FEATURIZERS_DATA)
+    featurizer_age_count.preprocess_featurizers(PATH_TO_PITON_DB, labeled_patients, num_threads)
+    save_to_pkl(featurizer_age_count, PATH_TO_SAVE_PREPROCESSED_FEATURIZERS)
     print_log("Preprocessing Featurizer", "Finished")
 
-    print_log("Training Featurizer", "Starting")
-    results = featurizer_age_count.featurize(labeled_patients, PATH_TO_PITON_DB, NUM_THREADS)
-    save_to_pkl(results, PATH_TO_FEATURIZED_DATA)
-    print_log("Training Featurizer", "Finished")
+    print_log("Featurize Patients", "Starting")
+    results = featurizer_age_count.featurize(PATH_TO_PITON_DB, labeled_patients, num_threads)
+    save_to_pkl(results, PATH_TO_SAVE_FEATURIZED_PATIENTS)
+    print_log("Featurize Patients", "Finished")
 
     print_log("FINISH", "Done")

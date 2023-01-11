@@ -78,35 +78,35 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
                 ))
                 
                 for (column, value) in label_features:
-                    assert 0 <= column < featurizer.num_columns(), (
+                    assert 0 <= column < featurizer.get_num_columns(), (
                         f"The featurizer {featurizer} provided an out of bounds column for "
                         f"{column} on patient {patient_id} ({column} must be between 0 and "
-                        f"{featurizer.num_columns()})"
+                        f"{featurizer.get_num_columns()})"
                     )
                     indices.append(column_offset + column)
                     data.append(value)
             
             # Record what the starting column should be for the next featurizer
-            column_offset += featurizer.num_columns()
+            column_offset += featurizer.get_num_columns()
     indptr.append(len(indices)) # Need one last `indptr` for end of last row in CSR sparse matrix
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
     np_data: NDArray[Shape["n_total_features, 1"], np.float] = np.array(data, dtype=np.float)
     np_indices: NDArray[Shape["n_total_features, 1"], np.int] = np.array(indices, dtype=np.int)
-    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int] = np.array([ x[0] for x in label_data ], dtype=np.int)
+    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int] = np.array(indptr, dtype=np.int)
     # n_rows = number of Labels across all Patients
     total_rows: int = len(label_data)
     # n_cols = sum of number of columns output by each Featurizer
-    total_columns: int = sum(x.num_columns() for x in featurizers)
+    total_columns: int = sum(x.get_num_columns() for x in featurizers)
     assert np_indptr.shape[0] == total_rows + 1, f"`indptr` length should be equal to '{total_rows + 1}', but instead is '{np_indptr.shape[0]}"
     assert np_data.shape == np_indices.shape, f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
     data_matrix = scipy.sparse.csr_matrix(
         (np_data, np_indices, np_indptr), shape=(total_rows, total_columns)
     )
 
-    label_pids: NDArray[Shape["n_labels, 1"], np.int] = np.array([ x[1] for x in label_data ], dtype=np.int)
-    label_values: NDArray[Shape["n_labels, 1"], Any] = np.array([ x[2] for x in label_data ])
-    label_times: NDArray[Shape["n_labels, 1"], np.datetime64]  = np.array([ x[3] for x in label_data ], dtype=np.datetime64)
+    label_pids: NDArray[Shape["n_labels, 1"], np.int] = np.array([ x[0] for x in label_data ], dtype=np.int)
+    label_values: NDArray[Shape["n_labels, 1"], Any] = np.array([ x[1] for x in label_data ])
+    label_times: NDArray[Shape["n_labels, 1"], np.datetime64]  = np.array([ x[2] for x in label_data ], dtype=np.datetime64)
     assert label_pids.shape == label_values.shape == label_times.shape, f"These should all be equal: {label_pids.shape} | {label_values.shape} | {label_times.shape}"
     
     data_matrix.check_format() # remove when we think its works
