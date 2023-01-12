@@ -9,6 +9,8 @@ from piton.transforms.stanford import (
     move_billing_codes,
     move_pre_birth,
     move_to_day_end,
+    move_visit_start_to_day_start,
+    move_visit_start_to_first_event_start,
 )
 
 
@@ -86,6 +88,40 @@ def test_move_visit_start_to_day_start() -> None:
     )
 
     assert move_visit_start_to_day_start(patient) == expected
+
+
+def test_move_visit_start_to_first_event_start() -> None:
+    patient = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(  # A non-visit event with no explicit start time
+                start=datetime.datetime(1999, 7, 2), code=1234
+            ),
+            piton.Event(  # A visit event
+                start=datetime.datetime(1999, 7, 2),
+                code=3456,
+                omop_table="visit",
+            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=2345),
+        ],
+    )
+
+    expected = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(  # A non-visit event with no explicit start time
+                start=datetime.datetime(1999, 7, 2), code=1234
+            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=2345),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 23, 58, 59),
+                code=3456,
+                omop_table="visit",
+            ),
+        ],
+    )
+
+    assert move_visit_start_to_first_event_start(patient) == expected
 
 
 def test_move_to_day_end() -> None:

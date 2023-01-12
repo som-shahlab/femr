@@ -43,31 +43,31 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
     """Assign visit start times to be just before the first event
 
     This function assigns the start time associated with each visit to be
-    either (1) one second before the start time of the first event on the 
+    either (1) one second before the start time of the first event on the
     day of the associated with the visit, or (2) 11:58:59 PM if the visit
-    has no associated events or all events associated with the visit have 
-    a start time of '00:00:00'. Events that occur on days prior to the 
+    has no associated events or all events associated with the visit have
+    a start time of '00:00:00'. Events that occur on days prior to the
     visit do not affect the visit start time.
 
     NOTE: This function assumes that all non-visit events with the same
     start time as the visit event (e.g., events with a start time at midnight
     such as billing codes, in the case where visit events also have a midnight
-    start time) are moved to day end, otherwise there may be non-visit events 
+    start time) are moved to day end, otherwise there may be non-visit events
     with start times before the visit start time.
 
     The reason for assigning a start time of 11:58:59 PM is that it makes
     visit start times fall one second before the 11:59:00 PM start times
-    to which non-visit events with start times of `00:00:00` (such as 
+    to which non-visit events with start times of `00:00:00` (such as
     billing and diagnosis codes) are assigned via `move_to_day_end`.
-    
+
     Our design choice assumes that temporal granularity in the raw data is
     at the minute level so that if the first non-visit event was at 12:01 AM
     then there will be no other events between 12:00 AM and 12:01 AM.
-    
+
     Note that not all visit start times are set to 12:00 AM in the raw data.
-    STARR-OMOP currently uses the first available value out of (1) hospital 
-    admission time, (2) effective date datetime, and (3) effective date, in 
-    that order. In the OMOP DEID from 12/20/2022 about 10% of visits have 
+    STARR-OMOP currently uses the first available value out of (1) hospital
+    admission time, (2) effective date datetime, and (3) effective date, in
+    that order. In the OMOP DEID from 12/20/2022 about 10% of visits have
     a time that is not  '00:00:00'.
     """
     first_event_starts: Dict[int, datetime.datetime] = {}
@@ -98,7 +98,11 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
                 first_event_time = first_event_starts[event.visit_id]
                 event.start = first_event_time - datetime.timedelta(seconds=1)
             elif event.start.time() == datetime.time.min:
-                event.start = event.start + datetime.timedelta(days=1) - datetime.timedelta(seconds=61)
+                event.start = (
+                    event.start
+                    + datetime.timedelta(days=1)
+                    - datetime.timedelta(seconds=61)
+                )
 
             if event.end is not None:
                 # Reset the visit end to be ≥ the visit start

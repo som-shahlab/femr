@@ -18,6 +18,7 @@ from piton.transforms.stanford import (
     move_billing_codes,
     move_pre_birth,
     move_to_day_end,
+    move_visit_start_to_first_event_start,
 )
 
 
@@ -32,7 +33,7 @@ def _get_stanford_transformations() -> Sequence[
     # All of these transformations are information preserving
     transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
         move_pre_birth,
-        move_visit_start_to_day_start,
+        move_visit_start_to_first_event_start,
         move_to_day_end,
         move_billing_codes,
         functools.partial(
