@@ -204,7 +204,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     def get_labeler_type(self) -> LabelType:
         return self.labeler_type
 
-    def as_numpy_arrays(self) -> Tuple[NDArray[Shape["n_patients, 1"], np.int], 
+    def as_numpy_arrays(self) -> Tuple[NDArray[Shape["n_patients, 1"], np.int64], 
                                        NDArray[Shape["n_patients, 1"], Any], 
                                        NDArray[Shape["n_patients, 1"], datetime.datetime]]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
@@ -256,7 +256,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     @classmethod
     def load_from_numpy(
         cls,
-        patient_ids: NDArray[Shape["n_patients, 1"], np.int],
+        patient_ids: NDArray[Shape["n_patients, 1"], np.int64],
         label_values: NDArray[Shape["n_patients, 1"], Any],
         label_times: NDArray[Shape["n_patients, 1"], datetime.datetime],
         labeler_type: LabelType,

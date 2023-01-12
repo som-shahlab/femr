@@ -6,7 +6,7 @@ from typing import List
 
 from .. import Event
 from ..labelers.core import Label
-from .featurizers_notes import NotesProcessed
+from ..featurizers.featurizers_notes import NotesProcessed
 
 def remove_short_notes(
     notes: NotesProcessed, label: Label, **kwargs
@@ -28,8 +28,8 @@ def remove_short_notes(
 def keep_only_notes_matching_codes(
     notes: NotesProcessed, label: Label, **kwargs,
 ) -> NotesProcessed:
-    """Keep only notes that have a `code` contained in `codes`."""
-    codes: List[int] = kwargs.get('codes', [])
+    """Keep only notes that have a `code` contained in `keep_notes_with_codes`."""
+    codes: List[int] = kwargs.get('keep_notes_with_codes', [])
     new_notes: NotesProcessed = []
     for note in notes:
         if note[1].code in codes:
@@ -50,8 +50,8 @@ def join_all_notes(
     notes: NotesProcessed, label: Label, **kwargs
 ) -> NotesProcessed:
     """Join all notes from `notes` together into one long string."""
-    text: str = " ".join([bytes(note[1].value).decode("utf8") for note in notes])  # type: ignore
-    note = Event(start=0, code=0, value=text)
+    text: str = " ".join([note[1].value for note in notes])  # type: ignore
+    note = Event(start=None, code=None, value=text)
     return [(0, note)]
 
 def keep_only_last_n_chars(
