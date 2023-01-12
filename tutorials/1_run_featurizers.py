@@ -11,20 +11,6 @@ from piton.labelers.omop_labeling_functions import MortalityLF, IsMaleLF, Diabet
 from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 
-def save_to_pkl(object_to_save, path_to_file: str):
-    """Save object to Pickle file."""
-    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-    with open(path_to_file, "wb") as fd:
-        pickle.dump(object_to_save, fd)
-
-def load_from_pkl(path_to_file: str):
-    """Load object from Pickle file."""
-    with open(path_to_file, "rb") as fd:
-        result = pickle.load(fd)
-    return result
-
-LABELING_FUNCTIONS: List[str] = ['mortality', 'is_male', 'high_hba1c']
-
 """
 Example running:
 
@@ -34,9 +20,18 @@ python3 1_run_featurizers.py \
     /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_preprocessed_featurizers.pickle \
     /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
     --labeling_function is_male \
-    --num_threads 2 \
-    --num_patients 10000
+    --num_threads 10 \
+    --num_patients 100000
 """
+
+def save_to_pkl(object_to_save, path_to_file: str):
+    """Save object to Pickle file."""
+    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+    with open(path_to_file, "wb") as fd:
+        pickle.dump(object_to_save, fd)
+
+LABELING_FUNCTIONS: List[str] = ['mortality', 'is_male', 'high_hba1c']
+
 if __name__ == '__main__':
     START_TIME = time.time()
     def print_log(name: str, content: str):
@@ -47,27 +42,27 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "path_to_piton_db",
+        "path_to_patient_database",
         type=str,
-        help="Path of the folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5'",
+        help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5/'",
     )
 
     parser.add_argument(
         "path_to_labeled_patients",
         type=str,
-        help="Path to the Piton LabeledPatient. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pickle'",
+        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pickle'",
     )
 
     parser.add_argument(
         "path_to_save_preprocessed_featurizers",
         type=str,
-        help="Path to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pickle'",
+        help="Path to file to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pickle'",
     )
     
     parser.add_argument(
         "path_to_save_featurized_patients",
         type=str,
-        help="Path to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
+        help="Path to file to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
     )
     
     parser.add_argument(
@@ -92,8 +87,9 @@ if __name__ == '__main__':
         default=None,
     )
 
+    # Parse CLI args
     args = parser.parse_args()
-    PATH_TO_PITON_DB: str = args.path_to_piton_db
+    PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
     PATH_TO_LABELED_PATIENTS: str = args.path_to_labeled_patients
     PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = args.path_to_save_preprocessed_featurizers
     PATH_TO_SAVE_FEATURIZED_PATIENTS: str = args.path_to_save_featurized_patients
@@ -105,9 +101,9 @@ if __name__ == '__main__':
     os.makedirs(os.path.dirname(os.path.abspath(PATH_TO_SAVE_FEATURIZED_PATIENTS)), exist_ok=True)
 
     # Load PatientDatabase + Ontology
-    data = piton.datasets.PatientDatabase(PATH_TO_PITON_DB)
-    ontology = data.get_ontology()
-    print_log("PatientDatabase", "Loaded from: " + PATH_TO_PITON_DB)
+    database = piton.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
+    ontology = database.get_ontology()
+    print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
     # Define the labeling function. 
     if args.labeling_function == 'high_hba1c':
@@ -127,7 +123,7 @@ if __name__ == '__main__':
     print_log("Labeler", "Instantiated Labeler: " + args.labeling_function)
 
     print_log("Labeling Patients", "Starting")
-    labeled_patients = one_label_labeler.apply(PATH_TO_PITON_DB, num_threads, num_patients=num_patients)
+    labeled_patients = one_label_labeler.apply(PATH_TO_PATIENT_DATABASE, num_threads, num_patients=num_patients)
     save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
 
@@ -138,12 +134,12 @@ if __name__ == '__main__':
 
     # Preprocessing the featurizers, which includes processes such as normalizing age. 
     print_log("Preprocessing Featurizer", "Starting")
-    featurizer_age_count.preprocess_featurizers(PATH_TO_PITON_DB, labeled_patients, num_threads)
+    featurizer_age_count.preprocess_featurizers(PATH_TO_PATIENT_DATABASE, labeled_patients, num_threads)
     save_to_pkl(featurizer_age_count, PATH_TO_SAVE_PREPROCESSED_FEATURIZERS)
     print_log("Preprocessing Featurizer", "Finished")
 
     print_log("Featurize Patients", "Starting")
-    results = featurizer_age_count.featurize(PATH_TO_PITON_DB, labeled_patients, num_threads)
+    results = featurizer_age_count.featurize(PATH_TO_PATIENT_DATABASE, labeled_patients, num_threads)
     save_to_pkl(results, PATH_TO_SAVE_FEATURIZED_PATIENTS)
     print_log("Featurize Patients", "Finished")
 

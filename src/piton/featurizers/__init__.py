@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
-import pickle
-import torch
 from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 T = TypeVar("T")
@@ -154,26 +151,3 @@ class OnlineStatistics:
             "current_mean": self.current_mean,
             "variance": self.variance,
         }
-
-
-def get_gpus_with_minimum_free_memory(min_mem: float = 5, num_gpus: int = 8) -> List[int]:
-    """Return a list of GPU devices with at least `min_mem` free memory is in GB."""
-    devices = []
-    for i in range(num_gpus):
-        free, __ = torch.cuda.mem_get_info(i)
-        if free >= min_mem * 1e9:
-            devices.append(i)
-    return devices
-
-
-def save_to_file(object_to_save, path_to_file: str):
-    """Save object to Pickle file."""
-    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-    with open(path_to_file, "wb") as fd:
-        pickle.dump(object_to_save, fd)
-
-def load_from_file(path_to_file: str):
-    """Load object from Pickle file."""
-    with open(path_to_file, "rb") as fd:
-        result = pickle.load(fd)
-    return result

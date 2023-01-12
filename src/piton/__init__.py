@@ -55,15 +55,13 @@ class Event:
         self.value = value
 
         for a, b in kwargs.items():
-            if b is not None:
-                self.__dict__[a] = b
+            self.__dict__[a] = b
 
     def __getattr__(self, __name: str) -> Any:
         return None
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if value is not None:
-            self.__dict__[name] = value
+        self.__dict__[name] = value
 
     def __lt__(self, other: Event) -> bool:
         def sort_key(
@@ -79,3 +77,12 @@ class Event:
     def __repr__(self) -> str:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
         return f"Event({val_str})"
+
+    def __getstate__(self) -> dict:
+        """Make this object pickleable (write)"""
+        return self.__dict__
+
+    def __setstate__(self, d):
+        """Make this object pickleable (read)"""
+        for a, b in d.items():
+            self.__dict__[a] = b

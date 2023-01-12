@@ -91,9 +91,9 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
     indptr.append(len(indices)) # Need one last `indptr` for end of last row in CSR sparse matrix
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
-    np_data: NDArray[Shape["n_total_features, 1"], np.float] = np.array(data, dtype=np.float)
-    np_indices: NDArray[Shape["n_total_features, 1"], np.int] = np.array(indices, dtype=np.int)
-    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int] = np.array(indptr, dtype=np.int)
+    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(data, dtype=np.float32)
+    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(indices, dtype=np.int64)
+    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(indptr, dtype=np.int64)
     # n_rows = number of Labels across all Patients
     total_rows: int = len(label_data)
     # n_cols = sum of number of columns output by each Featurizer
@@ -104,7 +104,7 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
         (np_data, np_indices, np_indptr), shape=(total_rows, total_columns)
     )
 
-    label_pids: NDArray[Shape["n_labels, 1"], np.int] = np.array([ x[0] for x in label_data ], dtype=np.int)
+    label_pids: NDArray[Shape["n_labels, 1"], np.int64] = np.array([ x[0] for x in label_data ], dtype=np.int64)
     label_values: NDArray[Shape["n_labels, 1"], Any] = np.array([ x[1] for x in label_data ])
     label_times: NDArray[Shape["n_labels, 1"], np.datetime64]  = np.array([ x[2] for x in label_data ], dtype=np.datetime64)
     assert label_pids.shape == label_values.shape == label_times.shape, f"These should all be equal: {label_pids.shape} | {label_values.shape} | {label_times.shape}"
@@ -174,7 +174,7 @@ class FeaturizerList:
             return
 
         patient_ids: List[int] = labeled_patients.get_all_patient_ids()
-        patient_ids_per_thread: List[NDArray[np.int]] = np.array_split(patient_ids, num_threads)
+        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads)
         tasks = [ (database_path, patient_ids, labeled_patients, self.featurizers) 
                  for patient_ids in patient_ids_per_thread ]
 
@@ -228,7 +228,7 @@ class FeaturizerList:
         """
 
         patient_ids: List[int] = labeled_patients.get_all_patient_ids()
-        patient_ids_per_thread: List[NDArray[np.int]] = np.array_split(patient_ids, num_threads)
+        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads)
         tasks = [ (database_path, patient_ids, labeled_patients, self.featurizers) 
                  for patient_ids in patient_ids_per_thread ]
 
@@ -239,7 +239,7 @@ class FeaturizerList:
         
         # Join results
         data_matrix = scipy.sparse.vstack([ x[0] for x in results ])
-        label_pids: NDArray[Shape["n_labels, 1"], np.int] = np.concatenate([ x[1] for x in results ])
+        label_pids: NDArray[Shape["n_labels, 1"], np.int64] = np.concatenate([ x[1] for x in results ])
         label_values: NDArray[Shape["n_labels, 1"], Any] = np.concatenate([ x[2] for x in results ])
         label_times: NDArray[Shape["n_labels, 1"], np.datetime64] = np.concatenate([ x[3] for x in results ])
         

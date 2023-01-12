@@ -37,6 +37,7 @@ def save_to_pkl(object_to_save, path_to_file: str):
     """Save object to Pickle file."""
     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
     with open(path_to_file, "wb") as fd:
+        print(fd is None, object_to_save is None)
         pickle.dump(object_to_save, fd)
 
 def load_from_pkl(path_to_file: str):
@@ -144,10 +145,11 @@ class NoteFeaturizer:
         labeled_patients: LabeledPatients = args[2]
         transformations: List[Callable] = args[3]
         path_to_temp_dir: str = args[4]
-        params: dict = args[5]
+        is_force_refresh: bool = args[5]
+        params: dict = args[6]
 
         chunk_id = patient_ids[0]  # identify chunk by its first patient ID
-        if is_exist_preprocessed_note_chunk(path_to_temp_dir, chunk_id):
+        if (not is_force_refresh) and is_exist_preprocessed_note_chunk(path_to_temp_dir, chunk_id):
             print_log("preprocess", f"loading pre-written chunk #{chunk_id}")
             return load_preprocessed_note_chunk(path_to_temp_dir, chunk_id)
 
@@ -159,11 +161,11 @@ class NoteFeaturizer:
             patient: Patient = patient_database[patient_id] # type: ignore
             labels: List[Label] = labeled_patients.get_labels_from_patient_idx(patient_id)
             for label_idx, label in enumerate(labels):
-                # All events that have a `value` of type `memoryview` are clinical notes
+                # All events that have a `value` of type `str` are clinical notes
                 notes: NotesProcessed = [
                     (event_idx, event)
                     for event_idx, event in enumerate(patient.events)
-                    if isinstance(event.value, memoryview)
+                    if isinstance(event.value, str)
                 ]
                 # Apply transformations sequentially to `notes`
                 for transform in transformations:
@@ -171,7 +173,7 @@ class NoteFeaturizer:
                 notes_for_labels.append((patient_id, label_idx, notes))
             # logging
             if patient_idx / len(patient_ids) > percent_done:
-                print_log("preprocess", f"done with {int(percent_done * 100)}% of #{chunk_id}")
+                print_log("preprocess", f"done with {int(percent_done * 100)}% of chunk #{chunk_id}")
                 percent_done += 0.05
 
         save_preprocessed_notes_chunk(
@@ -199,10 +201,11 @@ class NoteFeaturizer:
         patient_ids: List[int] = args[0]
         path_to_tokenizer: str = args[1]
         path_to_temp_dir: str = args[2]
-        params = args[3]
+        is_force_refresh: bool = args[3]
+        params = args[4]
 
         chunk_id = patient_ids[0]  # identify chunk by its first patient ID
-        if is_exist_tokenized_note_chunk(path_to_temp_dir, chunk_id):
+        if (not is_force_refresh) and is_exist_tokenized_note_chunk(path_to_temp_dir, chunk_id):
             print_log("tokenize", f"loading pre-written chunk #{chunk_id}")
             return load_tokenized_note_chunk(path_to_temp_dir, chunk_id)
 
@@ -240,13 +243,14 @@ class NoteFeaturizer:
         device: str = args[1]
         path_to_embedder: str = args[2]
         path_to_temp_dir: str = args[3]
-        params: dict = args[4]
+        is_force_refresh: bool = args[4]
+        params: dict = args[5]
 
         notes_embedded: List[NotesEmbedded] = []
 
         for patient_ids in patient_ids_chunks:
             chunk_id = patient_ids[0]  # identify chunk by its first patient ID
-            if is_exist_embedded_note_chunk(path_to_temp_dir, chunk_id):
+            if (not is_force_refresh) and is_exist_embedded_note_chunk(path_to_temp_dir, chunk_id):
                 print_log("embed", f"loading pre-written chunk #{chunk_id}")
                 notes_embedded.append(load_embedded_note_chunk(path_to_temp_dir, chunk_id))
                 continue
@@ -335,6 +339,7 @@ class NoteFeaturizer:
         self,
         labeled_patients: LabeledPatients,
         num_patients_per_chunk: Optional[int] = None,
+        is_force_refresh: bool = False,
         is_debug: bool = False,
     ) -> List[List[ColumnValue]]:
         """Run all steps of note processing pipeline in sequence (preprocess -> tokenize -> embed)."""
@@ -360,6 +365,7 @@ class NoteFeaturizer:
                 labeled_patients,
                 self.preprocess_transformations,
                 self.path_to_temp_dir,
+                is_force_refresh,
                 self.params_preprocessor,
             )
             for patient_ids_in_chunk in patient_ids_by_chunk
@@ -381,6 +387,7 @@ class NoteFeaturizer:
                 patient_ids_in_chunk,
                 self.path_to_tokenizer,
                 self.path_to_temp_dir,
+                is_force_refresh,
                 self.params_tokenizer,
             )
             for patient_ids_in_chunk in patient_ids_by_chunk
@@ -408,6 +415,7 @@ class NoteFeaturizer:
                 self.gpu_devices[i],
                 self.path_to_embedder,
                 self.path_to_temp_dir,
+                is_force_refresh,
                 self.params_embedder,
             )
             for i in range(0, n_gpu_jobs)
