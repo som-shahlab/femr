@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import os
 import pickle
-import torch
+# import torch
 from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 T = TypeVar("T")
@@ -156,14 +156,14 @@ class OnlineStatistics:
         }
 
 
-def get_gpus_with_minimum_free_memory(min_mem: float = 5, num_gpus: int = 8) -> List[int]:
-    """Return a list of GPU devices with at least `min_mem` free memory is in GB."""
-    devices = []
-    for i in range(num_gpus):
-        free, __ = torch.cuda.mem_get_info(i)
-        if free >= min_mem * 1e9:
-            devices.append(i)
-    return devices
+# def get_gpus_with_minimum_free_memory(min_mem: float = 5, num_gpus: int = 8) -> List[int]:
+#     """Return a list of GPU devices with at least `min_mem` free memory is in GB."""
+#     devices = []
+#     for i in range(num_gpus):
+#         free, __ = torch.cuda.mem_get_info(i)
+#         if free >= min_mem * 1e9:
+#             devices.append(i)
+#     return devices
 
 
 def save_to_file(object_to_save, path_to_file: str):

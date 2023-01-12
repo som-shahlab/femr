@@ -12,30 +12,74 @@ import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 
-NUM_PATIENTS = 5
-
-SHARED_EVENTS = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
+dummy_events = [
+    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
     piton.Event(
-        start=datetime.datetime(2010, 1, 1),
+        start=datetime.datetime(2010, 1, 3),
         code=1,
         value="test_value",
     ),
-    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
-    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
-    piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
     piton.Event(
-        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
-    ),
-    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
-    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=None
+        start=datetime.datetime(2010, 1, 5),
+        code=2,
+        value=None,
     ),
 ]
+
+all_events: List[Tuple[int, piton.Event]] = []
+
+for patient_id in range(10, 25):
+    all_events.extend((patient_id, event) for event in dummy_events)
+
+
+def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
+    events = piton.datasets.EventCollection(os.path.join(tmp_path, "events"))
+
+    random.shuffle(all_events)
+
+    chunks = 7
+    events_per_chunk = (len(all_events) + chunks - 1) // chunks
+
+    for i in range(7):
+        with contextlib.closing(events.create_writer()) as writer:
+            for patient_id, event in all_events[
+                i * events_per_chunk : (i + 1) * events_per_chunk
+            ]:
+                writer.add_event(patient_id, event)
+
+    return events
+
+
+def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
+    return create_events(tmp_path).to_patient_collection(
+        os.path.join(tmp_path, "patients")
+    )
+
+
+# NUM_PATIENTS = 5
+
+# SHARED_EVENTS = [
+#     piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
+#     piton.Event(
+#         start=datetime.datetime(2010, 1, 1),
+#         code=1,
+#         value="test_value",
+#     ),
+#     piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
+#     piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
+#     piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
+#     piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
+#     piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
+#     piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
+#     piton.Event(
+#         start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
+#     ),
+#     piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
+#     piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
+#     piton.Event(
+#         start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=None
+#     ),
+# ]
 
 
 def save_to_pkl(object_to_save, path_to_file: str):
@@ -50,16 +94,16 @@ def load_from_pkl(path_to_file: str):
         result = pickle.load(fd)
     return result
 
-def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
-    patients: List[piton.Patient] = []
-    for patient_id in range(NUM_PATIENTS):
-        patients.append(
-            piton.Patient(
-                patient_id,
-                events,
-            )
-        )
-    return patients
+# def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
+#     patients: List[piton.Patient] = []
+#     for patient_id in range(NUM_PATIENTS):
+#         patients.append(
+#             piton.Patient(
+#                 patient_id,
+#                 events,
+#             )
+#         )
+#     return patients
 
 
 def assert_labels_are_accurate(
@@ -119,7 +163,7 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
 
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
-    patients = create_patients(SHARED_EVENTS)
+    patients = create_patients(tmp_path)
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
         True, False, False

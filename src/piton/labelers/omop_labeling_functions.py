@@ -265,6 +265,79 @@ class LongAdmissionLabeler(LabelingFunction):
         return "boolean"
 
 
+@dataclass
+class InpatientAdmission:
+    start_age: int
+    end_age: int
+
+
+class InpatientAdmissionHelper:
+    """The inpatient admission helper enables users to gather all of the inpatient
+    admissions for a particular patient.
+    See the extractor for a percise query for what an inpatient admission is. Do note
+    that if you want a more sophisticated definition, please use the ADT data directly.
+    Do note that this does one further step of processing on the that query by merging overlapping
+    "admissions".
+    """
+
+    def __init__(self, timelines: timeline.TimelineReader):
+        dictionary = timelines.get_dictionary()
+
+        inpatient_visit_code = "Visit/IP"
+        admission_code = dictionary.map(inpatient_visit_code)
+        if admission_code is None:
+            raise ValueError(
+                f"Could not find inpatient visit code? {inpatient_visit_code}"
+            )
+        else:
+            self.admission_code = admission_code
+
+    def get_inpatient_admissions(
+        self, patient: timeline.Patient
+    ) -> List[InpatientAdmission]:
+        results = []
+        current_admission: Optional[InpatientAdmission] = None
+        for i, day in enumerate(patient.days):
+            admission_values = []
+
+            for obs_value in day.observations_with_values:
+                if obs_value.code == self.admission_code:
+                    if obs_value.is_text:
+                        raise ValueError(
+                            f"Got a text admission code? {patient.patient_id} {day.date} {obs_value.code}"
+                        )
+                    else:
+                        admission_values.append(int(obs_value.numeric_value))
+
+            if (
+                current_admission is not None
+                and day.age > current_admission.end_age
+            ):
+                # We can close out the current admission
+                results.append(current_admission)
+                current_admission = None
+
+            if len(admission_values) > 0:
+                max_discharge = max(admission_values)
+                if current_admission is None:
+                    current_admission = InpatientAdmission(
+                        day.age, day.age + max_discharge
+                    )
+                else:
+                    current_admission = InpatientAdmission(
+                        current_admission.start_age,
+                        max(day.age + max_discharge, current_admission.end_age),
+                    )
+
+        if current_admission is not None:
+            results.append(current_admission)
+
+        return results
+
+    def get_all_patient_ids(self, ind: index.Index) -> Set[int]:
+        return set(ind.get_patient_ids(self.admission_code))
+        
+
 class InpatientReadmissionLabeler(FixedTimeHorizonEventLF):
     """
     This labeler is designed to predict whether a patient will be readmitted within 30 days.
