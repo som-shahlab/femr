@@ -184,17 +184,18 @@ class FeaturizerList:
             trained_featurizers: List[Featurizer] = [ y for x in pool.imap(_run_preprocess_featurizers, tasks) for y in x ]
         grouped_featurizers: collections.defaultdict = collections.defaultdict(list)
         for featurizer in trained_featurizers:
-            grouped_featurizers[featurizer.get_name()].append(featurizer)
+            featurizer_name = featurizer.__class__.__name__
+            grouped_featurizers[featurizer_name].append(featurizer)
     
         # Aggregating age featurizers
-        age_featurizer_idx: int = [ idx for idx, f in enumerate(self.featurizers) if f.get_name() == 'AgeFeaturizer' ][0]
+        age_featurizer_idx: int = [ idx for idx, f in enumerate(self.featurizers) if f.__class__.__name__ == 'AgeFeaturizer' ][0]
         for featurizer in grouped_featurizers.get("AgeFeaturizer", []):
             if featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
                 self.featurizers[age_featurizer_idx].from_dict(featurizer.to_dict())
                 break
         
         # Aggregating count featurizers
-        count_featurizer_idx: int = [ idx for idx, f in enumerate(self.featurizers) if f.get_name() == 'CountFeaturizer' ][0]
+        count_featurizer_idx: int = [ idx for idx, f in enumerate(self.featurizers) if f.__class__.__name__ == 'CountFeaturizer' ][0]
         if "CountFeaturizer" in grouped_featurizers:
             patient_codes_dict_list = [
                 f.to_dict()["patient_codes"]["values"] for f in grouped_featurizers["CountFeaturizer"]
@@ -325,10 +326,6 @@ class Featurizer(ABC):
     def is_needs_preprocessing(self) -> bool:
         """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()` should do nothing."""
         return False
-
-    def get_name(self) -> str:
-        """Return a unique identifier for this Featurizer."""
-        return "no name"
 
     def to_dict(self) -> Dict[str, Any]:
         """Return dictionary representation."""

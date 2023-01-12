@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple, Collection
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -82,9 +82,6 @@ class AgeFeaturizer(Featurizer):
 
     def is_needs_preprocessing(self) -> bool:
         return self.is_normalize
-    
-    def get_name(self) -> str:
-        return "AgeFeaturizer"
 
 
 class CountFeaturizer(Featurizer):
@@ -95,24 +92,29 @@ class CountFeaturizer(Featurizer):
     """
 
     def __init__(self,
-                 is_rollup: bool = False,
-                 exclusion_codes: List[int] = [],
-                 time_bins: Optional[List[Optional[int]]] = None,
+                 is_ontology_expansion: bool = False,
+                 exclusion_codes: Collection[int] = [],
+                 time_bins: Optional[List[float]] = None,
     ):
         """
         Args:
-            is_rollup (bool, optional): _description_. Defaults to False.
+            is_ontology_expansion (bool, optional): _description_. Defaults to False.
             exclusion_codes (List[int], optional): _description_. Defaults to [].
-            time_bins (Optional[List[Optional[int]]], optional): [90, 180] refers to [0-90, 90-180]; [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
+            time_bins (Optional[List[float]], optional): [90, 180] refers to [0-90, 90-180]; [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
         """
         self.patient_codes: Dictionary = Dictionary()
         self.exclusion_codes = set(exclusion_codes)
-        self.time_bins: Optional[List[Optional[int]]] = time_bins
-        self.is_rollup: bool = is_rollup
+        self.time_bins: Optional[List[float]] = time_bins
+        self.is_ontology_expansion: bool = is_ontology_expansion
+
+        if self.time_bins:
+            assert len(set(self.time_bins)) == len(self.time_bins), "Duplicate entires. Please make sure the entries are unique"
+            assert sorted(self.time_bins) == self.time_bins, "Time_bins list must be sorted."
+
 
     def get_codes(self, code: int, ontology: extension_datasets.Ontology) -> Iterator[int]:
         if code not in self.exclusion_codes:
-            if self.is_rollup:
+            if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(code):
                     yield subcode
             else:
@@ -247,17 +249,14 @@ class CountFeaturizer(Featurizer):
             "patient_codes": self.patient_codes.to_dict(),
             "exclusion_codes": self.exclusion_codes,
             "time_bins": self.time_bins,
-            "is_rollup": self.is_rollup,
+            "is_ontology_expansion": self.is_ontology_expansion,
         }
         
     def from_dict(self, data: Mapping[str, Any]):
         self.patient_codes = Dictionary(data["patient_codes"])
         self.exclusion_codes = data.get("exclusion_codes", {}), # defaults to empty set
         self.time_bins = data.get("time_bins", None) # defaults to None
-        self.is_rollup = data.get("is_rollup", False) # defaults to False
+        self.is_ontology_expansion = data.get("is_ontology_expansion", False) # defaults to False
 
     def is_needs_preprocessing(self) -> bool:
         return True
-    
-    def get_name(self) -> str:
-        return "CountFeaturizer"
