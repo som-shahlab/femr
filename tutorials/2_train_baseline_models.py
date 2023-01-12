@@ -14,10 +14,12 @@ from sklearn.linear_model import LogisticRegressionCV
 from sklearn.metrics import f1_score, precision_recall_curve, auc
 
 import xgboost as xgb
-import lightgbm as lgbm
+# import lightgbm as lgbm
 
 """
 Example running:
+
+Note: Please make sure to install xgboost. `pip install xgboost`
 
 python3 2_train_baseline_models.py \
     /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
