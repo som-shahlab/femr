@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime
 from typing import List, Set, Tuple, Deque, Dict
 from collections import deque
+from dataclasses import dataclass
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
