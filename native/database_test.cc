@@ -10,14 +10,14 @@
 
 using namespace testing;
 
-TEST(Database, CreateOntology) {
+void create_ontology_helper(bool compressed) {
     boost::filesystem::path root = boost::filesystem::temp_directory_path() /
                                    boost::filesystem::unique_path();
     boost::filesystem::create_directory(root);
 
     boost::filesystem::path concept_root =
         root / boost::filesystem::unique_path();
-    create_ontology_files(concept_root);
+    create_ontology_files(concept_root, compressed);
 
     boost::filesystem::path destination =
         root / boost::filesystem::unique_path();
@@ -60,6 +60,11 @@ TEST(Database, CreateOntology) {
     boost::filesystem::remove_all(root);
 }
 
+TEST(Database, CreateOntology) {
+    create_ontology_helper(true);
+    create_ontology_helper(false);
+}
+
 TEST(Database, CreateDatabase) {
     boost::filesystem::path root = boost::filesystem::temp_directory_path() /
                                    boost::filesystem::unique_path();
@@ -69,7 +74,7 @@ TEST(Database, CreateDatabase) {
 
     boost::filesystem::path concept_root =
         root / boost::filesystem::unique_path();
-    create_ontology_files(concept_root);
+    create_ontology_files(concept_root, true);
 
     boost::filesystem::path patients = root / boost::filesystem::unique_path();
     create_database_files(patients);
