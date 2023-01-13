@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import datetime
+import os
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -14,15 +15,16 @@ from typing import (
     List,
     Literal,
     Optional,
-    Sequence,
     Tuple,
     Union,
 )
+from nptyping import NDArray, Shape
 
+import random
+from ..datasets import PatientDatabase
 import numpy as np
-
 from .. import Patient
-
+import multiprocessing
 
 @dataclass(frozen=True)
 class TimeHorizon:
@@ -49,14 +51,36 @@ LabelType = Union[
 
 VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
-
 @dataclass
 class Label:
     """An individual label for a particular patient at a particular time."""
 
     time: datetime.datetime
-    value: Optional[Union[bool, int, float, SurvivalValue]]
+    value: Union[bool, int, float, SurvivalValue]
 
+def _apply_labeling_function(args: Tuple[LabelingFunction, str, List[int]]) -> Dict[int, List[Label]]:
+    """Apply a labeling function to the set of patients included in `patient_ids`.
+    Gets called as a parallelized subprocess of the .apply() method of `LabelingFunction`.
+    """
+    labeling_function: LabelingFunction = args[0]
+    database_path: str = args[1]
+    patient_ids: List[int] = args[2]
+    
+    database: PatientDatabase = PatientDatabase(database_path)
+    patients_to_labels: Dict[int, List[Label]] = {}
+    for patient_id in patient_ids:
+        patient: Patient = database[patient_id] # type: ignore
+        labels: List[Label] = labeling_function.label(patient)
+
+        # Only add a patient to the `patient_to_labels` dict if they have at least one label
+        # This allows for faster iteration over the .keys() of this dict, since we know 
+        # that each patient in this dict must have a label (which is faster than iterating over each
+        # patient and checking len(labels) > 0).
+        if len(labels) > 0:
+            patients_to_labels[patient_id] = labels
+    
+    return patients_to_labels
+        
 
 class LabelingFunction(ABC):
     """An interface for labeling functions.
@@ -64,11 +88,12 @@ class LabelingFunction(ABC):
     A labeling function applies a label to a specific datetime in a given patient's timeline.
     It can be thought of as generating the following list given a specific patient:
         [(patient ID, datetime_1, label_1), (patient ID, datetime_2, label_2), ... ]
-
     Usage:
+    ```
         labeling_function: LabelingFunction = LF(...)
         patients: Sequence[Patient] = ...
         labels: LabeledPatient = labeling_function.apply(patients)
+    ```
     """
 
     @abstractmethod
@@ -85,7 +110,7 @@ class LabelingFunction(ABC):
         """
         pass
 
-    def get_required_codes(self) -> List[int]:
+    def get_required_codes(self) -> List[int]: # type: ignore
         """Return the set of codes that a patient must have at least one to qualify for this labeler.
 
         This allows us to only extract patients from the :class:`PatientDatabase` who have a code
@@ -113,18 +138,37 @@ class LabelingFunction(ABC):
         """Return what type of labels this labeler returns. See the Label class."""
         pass
 
-    def apply(self, patients: Sequence[Patient]) -> LabeledPatients:
+    def apply(
+        self, 
+        database_path: str,
+        num_threads: int = 1, 
+        num_patients: Optional[int] = None
+    ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
-            patients (Sequence[Patient]): A sequence of Patient objcets
+            database_path (str): Path to `PatientDatabase` on disk
+            num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
+            num_patients (Optional[int], optional): Number of patients to process - useful for debugging. 
+                If None, use all patients.
 
         Returns:
             LabeledPatients: Maps patients to labels
         """
-        patients_to_labels: Dict[int, List[Label]] = {}
-        for patient in patients:
-            patients_to_labels[patient.patient_id] = self.label(patient)
+        # Split patient IDs across parallelized processes
+        if num_patients is None:
+            num_patients = len(PatientDatabase(database_path))
+        pids = list(range(num_patients))
+        pids_parts = np.array_split(pids, num_threads)
+
+        # Multiprocessing
+        tasks = [ (self, database_path, pid_part) for pid_part in pids_parts ]
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
+            results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
+        
+        # Join results and return
+        patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
@@ -148,19 +192,32 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         self.patients_to_labels: Dict[int, List[Label]] = patients_to_labels
         self.labeler_type: LabelType = labeler_type
 
-    def as_numpy_arrays(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Convert `patients_to_labels` to a tuple of np.ndarray's.
+    def get_labels_from_patient_idx(self, idx: int) -> List[Label]:
+        return self.patients_to_labels[idx]
+    
+    def get_all_patient_ids(self) -> List[int]:
+        return sorted(list(self.patients_to_labels.keys()))
+    
+    def get_patients_to_labels(self) -> Dict[int, List[Label]]:
+        return self.patients_to_labels
+    
+    def get_labeler_type(self) -> LabelType:
+        return self.labeler_type
 
-        One np.ndarray for each of:
+    def as_numpy_arrays(self) -> Tuple[NDArray[Shape["n_patients, 1"], np.int64], 
+                                       NDArray[Shape["n_patients, 1"], Any], 
+                                       NDArray[Shape["n_patients, 1"], datetime.datetime]]:
+        """Convert `patients_to_labels` to a tuple of NDArray's.
+
+        One NDArray for each of:
             Patient ID, Label value, Label time
 
         Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: (Patient IDs, Label values, Label time)
+            Tuple[NDArray, NDArray, NDArray]: (Patient IDs, Label values, Label time)
         """
         patient_ids: List[int] = []
         label_values: List[Any] = []
         label_times: List[datetime.datetime] = []
-
         if self.labeler_type in ["boolean", "numerical", "categorical"]:
             for patient_id, labels in self.patients_to_labels.items():
                 for label in labels:
@@ -199,27 +256,23 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     @classmethod
     def load_from_numpy(
         cls,
-        patient_ids: np.ndarray,
-        label_values: np.ndarray,
-        label_times: np.ndarray,
+        patient_ids: NDArray[Shape["n_patients, 1"], np.int64],
+        label_values: NDArray[Shape["n_patients, 1"], Any],
+        label_times: NDArray[Shape["n_patients, 1"], datetime.datetime],
         labeler_type: LabelType,
     ) -> LabeledPatients:
-        """Create a :class:`LabeledPatients` from np.ndarray labels.
+        """Create a :class:`LabeledPatients` from NDArray labels.
 
             Inverse of `as_numpy_arrays()`
 
         Args:
-            patient_ids (np.ndarray): Patient IDs for the corresponding label.
-            label_values (np.ndarray): Values for the corresponding label.
-            label_times (np.ndarray): Times that the corresponding label occurs.
+            patient_ids (NDArray): Patient IDs for the corresponding label.
+            label_values (NDArray): Values for the corresponding label.
+            label_times (NDArray): Times that the corresponding label occurs.
             labeler_type (LabelType): LabelType of the corresponding labels.
         """
-        patients_to_labels: DefaultDict[
-            int, List[Label]
-        ] = collections.defaultdict(list)
-        for patient_id, l_value, l_time in zip(
-            patient_ids, label_values, label_times
-        ):
+        patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)
+        for patient_id, l_value, l_time in zip(list(patient_ids), list(label_values), list(label_times)):
             patients_to_labels[patient_id].append(
                 Label(time=l_time, value=l_value)
             )
@@ -369,15 +422,17 @@ class FixedTimeHorizonEventLF(LabelingFunction):
             is_censored: bool = end_time < time + time_horizon.end
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(Label(time=time, value=True))
+                results.append(
+                    Label(time=time, value=True)
+                )
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value=False))
-            else:
-                results.append(Label(time=time, value=None))
+                results.append(
+                    Label(time=time, value=False)
+                )
 
-        # checks that we have a label for each prediction time (even if `None``)
-        assert len(results) == len(self.get_prediction_times(patient))
+        # # checks that we have a label for each prediction time (even if `None``)
+        # assert len(results) == len(self.get_prediction_times(patient))
         return results
 
     def get_patient_start_end_times(
@@ -389,3 +444,20 @@ class FixedTimeHorizonEventLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return "boolean"
+
+
+class OneLabelPerPatient(LabelingFunction):
+    # TODO - update
+    def __init__(self, labeling_function, seed=10):
+        self.labeling_function = labeling_function
+        self.seed = seed
+    
+    def label(self, patient: Patient) -> List[Label]:
+        labels = self.labeling_function.label(patient)
+        if len(labels) == 0:
+            return labels
+        return [random.choice(labels)]
+
+    def get_labeler_type(self) -> LabelType:
+        """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
+        return self.labeling_function.get_labeler_type()
