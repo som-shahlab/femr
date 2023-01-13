@@ -1,12 +1,10 @@
-import contextlib
 import csv
 import datetime
 import io
 import os
 import pathlib
-import random
 import shutil
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Mapping, Sequence
 
 import zstandard as zst
 
@@ -25,7 +23,7 @@ class DummyConverter(piton.extractors.csv.CSVExtractor):
     def get_events(self, row: Mapping[str, str]) -> Sequence[piton.Event]:
         e = piton.Event(
             start=datetime.datetime(int(row["event_start"]), 1, 1),
-            code=row["event_code"],
+            code=int(row["event_code"]),
             value=row["event_value"],
             metadata="test",
         )
@@ -65,7 +63,7 @@ def run_test(tmp_path: pathlib.Path):
     path_to_output: str = os.path.join(tmp_path, "event_collection")
     stats_dict: Dict[str, Dict[str, int]] = {}
     event_collection = run_csv_extractors(
-        tmp_path,  # path to files
+        str(tmp_path),  # path to files
         path_to_output,
         [DummyConverter()],
         debug_folder=os.path.join(tmp_path, "lost_csv_rows/"),
