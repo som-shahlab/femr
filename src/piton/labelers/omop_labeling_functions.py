@@ -20,26 +20,27 @@ from .core import (
 # Labeling functions derived from FixedTimeHorizonEventLF
 ##########################################################
 
-
 class CodeLF(FixedTimeHorizonEventLF):
-    """Apply a label based on a single code's occurrence over a fixed time horizon."""
+    """Apply a label based on a 1+ codes' occurrence(s) over a fixed time horizon."""
 
     def __init__(
-        self, admission_code: int, code: int, time_horizon: TimeHorizon
+        self, codes: List[int], time_horizon: TimeHorizon, prediction_codes: List[int] 
     ):
-        """Label the code whose index in your Ontology is equal to `code`."""
-        self.admission_code = admission_code
-        self.code = code
-        self.time_horizon = time_horizon
+        """Label events whose index in your Ontology is in `self.codes`."""
+        self.codes: List[int] = codes
+        self.time_horizon: TimeHorizon = time_horizon
+        self.prediction_codes: List[int] = prediction_codes
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return each event's start time as the time to make a prediction."""
+        """Return each event's start time as the time to make a prediction.
+            Default to all events whose `code` is in `self.prediction_codes`."""
         return [
             datetime.datetime.strptime(
+                # TODO - Why add 23:59:00?
                 str(e.start)[:10] + " 23:59:00", "%Y-%m-%d %H:%M:%S"
             )
             for e in patient.events
-            if e.code == self.admission_code
+            if e.code in self.prediction_codes
         ]
 
     def get_time_horizon(self) -> TimeHorizon:
@@ -47,13 +48,12 @@ class CodeLF(FixedTimeHorizonEventLF):
         return self.time_horizon
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events which have the exact same `code` as `self.code`."""
+        """Return the start times of this patient's events whose `code` is in `self.codes`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.code == self.code:
+            if event.code in self.codes:
                 times.append(event.start)
         return times
-
 
 class MortalityLF(CodeLF):
     """Apply a label for whether or not a patient dies within the `time_horizon`."""
@@ -71,17 +71,15 @@ class MortalityLF(CodeLF):
         Raises:
             ValueError: Raised if there are multiple unique codes that map to the death code
         """
-        CODE_DEATH_PREFIX = "Condition Type/OMOP4822053"
+        CODE_DEATH = "Condition Type/OMOP4822053"
         INPATIENT_VISIT_CODE = "Visit/IP"
         admission_code = ontology.get_dictionary().index(INPATIENT_VISIT_CODE)
 
         death_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
             code_str = bytes(code_str).decode("utf-8")
-            if code_str == CODE_DEATH_PREFIX:
+            if code_str == CODE_DEATH:
                 death_codes.add((code_str, code))
-            # if code_str.startswith(CODE_DEATH_PREFIX):
-            #     death_codes.add((code_str, code))
 
         if len(death_codes) != 1:
             raise ValueError(
@@ -90,9 +88,9 @@ class MortalityLF(CodeLF):
         else:
             death_code: int = list(death_codes)[0][1]
             super().__init__(
-                admission_code=admission_code,
-                code=death_code,
+                codes=[death_code],
                 time_horizon=time_horizon,
+                prediction_codes=[admission_code],
             )
 
 
@@ -130,9 +128,9 @@ class DiabetesLF(CodeLF):
         else:
             diabetes_code: int = list(diabetes_codes)[0][1]
             super().__init__(
-                admission_code=admission_code,
-                code=diabetes_code,
+                codes=[diabetes_code],
                 time_horizon=time_horizon,
+                prediction_codes=[admission_code],
             )
 
 def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[int]:
@@ -196,7 +194,7 @@ class HighHbA1cLF(LabelingFunction):
 
             if event.code == self.hba1c_lab_code:
 
-                is_diabetes = event.value > 6.5
+                is_diabetes = float(event.value) > 6.5
 
                 if last_trigger is None or (event.start - last_trigger).days > self.last_trigger_days:
                     labels.append(Label(time=event.start - datetime.timedelta(minutes=1), 
@@ -266,5 +264,3 @@ class IsMaleLF(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
-
-

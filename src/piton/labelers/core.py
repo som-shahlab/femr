@@ -33,6 +33,11 @@ class TimeHorizon:
     start: datetime.timedelta
     end: datetime.timedelta
 
+@dataclass(frozen=True)
+class InfiniteTimeHorizon:
+    """An interval of time (with no end date)."""
+    
+    start: datetime.timedelta
 
 @dataclass(frozen=True)
 class SurvivalValue:
@@ -461,3 +466,131 @@ class OneLabelPerPatient(LabelingFunction):
     def get_labeler_type(self) -> LabelType:
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return self.labeling_function.get_labeler_type()
+
+class InfiniteTimeHorizonEventLF(LabelingFunction):
+    """Label events that occur at any time in this patient's future.
+
+    An infinite time horizon labeler enables you to label events that occur at any time in the
+    future. It is a boolean event that is TRUE if the event of interest occurs (optionally after some initial
+    buffer window).
+
+    No labels are generated if the patient record is "censored" before the end of the horizon.
+
+    You are required to implement three methods:
+        get_outcome_times() for defining the datetimes of the event of interset
+        get_prediction_times() for defining the datetimes at which we make our predictions
+        get_time_horizon() for defining the length of time (i.e. `InfiniteTimeHorizon`) to use for the time horizon
+    """
+
+    @abstractmethod
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a sorted list containing the datetimes that the event of interest "occurs".
+
+        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
+
+        Args:
+            patient (Patient): A patient object
+
+        Returns:
+            List[datetime.datetime]: A list of datetimes, one corresponding to an occurrence of the outcome
+        """
+        pass
+
+    @abstractmethod
+    def get_time_horizon(self) -> InfiniteTimeHorizon:
+        """Return infinite time horizon for making predictions with this labeling function.
+        
+        NOTE: An infinite time horizon only has a `start`, but has no `end` (b/c its infinite)
+
+        Example:
+            X is the time that you're making a prediction (given by `get_prediction_times()`)
+            (A,None) is your time horizon (given by `get_time_horizon()`)
+            O is an outcome (given by `get_outcome_times()`)
+
+            Then given a patient timeline:
+                X-----(X+A)----------------
+
+
+            This has a label of TRUE:
+                X-----(X+A)--O-------------
+
+            This has a label of TRUE:
+                X-----(X+A)--O-----------O-
+
+            This has a label of FALSE:
+                X---O-(X+A)----------------
+
+            This has a label of TRUE:
+                X-----(X+A)------------O---
+        """
+        pass
+
+    @abstractmethod
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a sorted list containing the datetimes at which we'll make a prediction.
+
+        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
+        """
+        pass
+
+    def label(self, patient: Patient) -> List[Label]:
+        """Return a list of Labels for an individual patient.
+
+        Assumes that events in `patient.events` are already sorted in chronologically
+        ascending order (i.e. start -> end).
+
+        Args:
+            patient (Patient): A patient object
+
+        Returns:
+            List[Label]: A list containing a label for each datetime returned by `get_prediction_times()`
+        """
+        if len(patient.events) == 0:
+            return []
+
+        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        time_horizon: InfiniteTimeHorizon = self.get_time_horizon()
+
+        results: List[Label] = []
+        curr_outcome_idx: int = 0
+        # For each prediction time, check if there is an outcome which occurs within the (start, end)
+        # of the time horizon
+        for time in self.get_prediction_times(patient):
+            while (
+                curr_outcome_idx < len(outcome_times)
+                and outcome_times[curr_outcome_idx] < time + time_horizon.start
+            ):
+                # This is the idx in `outcome_times` that corresponds to the first outcome EQUAL or AFTER
+                # the time horizon for this prediction time starts (if one exists)
+                curr_outcome_idx += 1
+
+            # TRUE if an event occurs within the time horizon
+            is_outcome_occurs_in_time_horizon: bool = curr_outcome_idx < len(
+                outcome_times
+            ) and (
+                time + time_horizon.start
+                <= outcome_times[curr_outcome_idx]
+            )
+
+            is_censored: bool = False # Assume no censoring for infinite time horizon labeler
+            if is_outcome_occurs_in_time_horizon:
+                results.append(Label(time=time, value=True))
+            elif not is_censored:
+                # Not censored + no outcome => FALSE
+                results.append(Label(time=time, value=False))
+            else:
+                results.append(Label(time=time, value=None))
+
+        # checks that we have a label for each prediction time (even if `None``)
+        assert len(results) == len(self.get_prediction_times(patient))
+        return results
+
+    def get_patient_start_end_times(
+        self, patient: Patient
+    ) -> Tuple[datetime.datetime, datetime.datetime]:
+        """Return the datetimes that we consider the (start, end) of this patient."""
+        return (patient.events[0].start, patient.events[-1].start)
+
+    def get_labeler_type(self) -> LabelType:
+        """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
+        return "boolean"
