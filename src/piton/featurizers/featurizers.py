@@ -206,10 +206,6 @@ class CountFeaturizer(Featurizer):
                     # if i + 1 == len(self.time_bins):
                     #     continue
 
-                    if max_time is None:
-                        # This means that this bin accepts everything
-                        continue
-
                     while len(codes_per_bin[i]) > 0:
                         next_code, next_date = codes_per_bin[i][0]
 
