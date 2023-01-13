@@ -9,7 +9,7 @@ import io
 import multiprocessing
 import os
 import sys
-from typing import Dict, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 import zstandard
 
@@ -54,13 +54,19 @@ def _run_csv_extractor(
     stats: Dict[str, int] = collections.defaultdict(int)
     try:
         with contextlib.ExitStack() as stack:
-            f = stack.enter_context(
-                io.TextIOWrapper(
-                    zstandard.ZstdDecompressor().stream_reader(
-                        open(source, "rb")
+            f: Iterable[str]
+            if source.endswith(".csv.zst"):
+                # Support Zstandard compressed CSVs
+                f = stack.enter_context(
+                    io.TextIOWrapper(
+                        zstandard.ZstdDecompressor().stream_reader(
+                            open(source, "rb")
+                        )
                     )
                 )
-            )
+            else:
+                # Support normal CSVs
+                f = stack.enter_context(open(source, "r"))
 
             debug_writer = None
 
@@ -86,13 +92,22 @@ def _run_csv_extractor(
                                 os.makedirs(
                                     os.path.dirname(debug_file), exist_ok=True
                                 )
-                                debug_f = stack.enter_context(
-                                    io.TextIOWrapper(
-                                        zstandard.ZstdCompressor(
-                                            level=1
-                                        ).stream_writer(open(debug_file, "wb"))
+                                if debug_file.endswith(".csv.zst"):
+                                    # Support Zstandard compressed CSVs
+                                    debug_f = stack.enter_context(
+                                        io.TextIOWrapper(
+                                            zstandard.ZstdCompressor(
+                                                level=1
+                                            ).stream_writer(
+                                                open(debug_file, "wb")
+                                            )
+                                        )
                                     )
-                                )
+                                else:
+                                    # Support normal CSVs
+                                    debug_f = stack.enter_context(
+                                        open(debug_file, "r")
+                                    )
                                 assert reader.fieldnames is not None
                                 debug_writer = csv.DictWriter(
                                     debug_f,
@@ -136,7 +151,7 @@ def run_csv_extractors(
     )
 
     if debug_folder:
-        os.mkdir(debug_folder)
+        os.makedirs(debug_folder, exist_ok=True)
 
     target = EventCollection(target_location)
 
