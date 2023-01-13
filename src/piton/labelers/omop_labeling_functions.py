@@ -77,7 +77,7 @@ class MortalityLF(CodeLF):
 
         death_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
-            code_str = bytes(code_str).decode("utf-8")
+            # code_str = bytes(code_str).decode("utf-8")
             if code_str == CODE_DEATH_PREFIX:
                 death_codes.add((code_str, code))
             # if code_str.startswith(CODE_DEATH_PREFIX):
@@ -118,7 +118,7 @@ class DiabetesLF(CodeLF):
 
         diabetes_codes: Set[Tuple[str, int]] = set()
         for code, code_str in enumerate(ontology.get_dictionary()):
-            code_str = bytes(code_str).decode("utf-8")
+            # code_str = bytes(code_str).decode("utf-8")
             if code_str == DIABETES_CODE:
                 diabetes_codes.add((code_str, code))
 
@@ -191,7 +191,7 @@ class HighHbA1cLF(LabelingFunction):
                 event.start > first_diabetes_code_date):
                 break
             
-            if event.value is None or type(event.value) is memoryview:
+            if event.value is None or type(event.value) is str:
                 continue
 
             if event.code == self.hba1c_lab_code:
