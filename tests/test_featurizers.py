@@ -2,7 +2,13 @@ import datetime
 import math
 import os
 import pickle
-from typing import List
+import pathlib
+import random
+import contextlib
+import io
+import zstandard
+import csv
+from typing import List, cast, Optional, Tuple
 
 import numpy as np
 import scipy.sparse
@@ -11,65 +17,194 @@ import piton
 import piton.datasets
 from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import TimeHorizon
+from piton.labelers.core import TimeHorizon, LabelingFunction, LabeledPatients
 from piton.labelers.omop_labeling_functions import CodeLF
 
-SHARED_EVENTS = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0),
+
+# SHARED_EVENTS = [
+#     piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
+#     piton.Event(
+#         start=datetime.datetime(2010, 1, 1),
+#         code=1,
+#         value="test_value",
+#     ),
+#     piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
+#     piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=None),
+#     piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
+#     piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
+#     piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
+#     piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
+#     piton.Event(
+#         start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
+#     ),
+#     piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
+#     piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
+#     piton.Event(
+#         start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=4, value=None
+#     ),
+# ]
+
+# NUM_PATIENTS = 5
+# NUM_EVENTS = len(SHARED_EVENTS)
+
+
+# def create_patients() -> List[piton.Patient]:
+#     patients: List[piton.Patient] = []
+
+#     events = SHARED_EVENTS[:NUM_EVENTS]
+#     for patient_id in range(NUM_PATIENTS):
+#         patients.append(
+#             piton.Patient(
+#                 patient_id,
+#                 events,
+#             )
+#         )
+#     return patients
+
+
+# PATIENTS = create_patients()
+
+# class DummyOntology:
+#     def get_dictionary(self):
+#         return [
+#             "zero", 
+#             "one", 
+#             "two", 
+#             "three", 
+#             "four"
+#         ]
+
+
+dummy_events = [
+    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
     piton.Event(
         start=datetime.datetime(2010, 1, 1),
         code=1,
-        value=memoryview(b"test_value"),
+        value="test_value",
     ),
-    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=True),
+    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
+    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=None),
+    piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
+    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
+    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
+    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
     piton.Event(
-        start=datetime.datetime(2010, 6, 5),
-        code=3,
+        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
     ),
-    piton.Event(start=datetime.datetime(2011, 2, 5), code=2, value=True),
-    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=False),
-    piton.Event(start=datetime.datetime(2012, 10, 5), code=3),
-    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=False),
+    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
+    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
     piton.Event(
-        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=True
-    ),
-    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3),
-    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=True),
-    piton.Event(
-        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=False
+        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=4, value=None
     ),
 ]
 
-NUM_PATIENTS = 5
-NUM_EVENTS = len(SHARED_EVENTS)
+all_events: List[Tuple[int, piton.Event]] = []
+
+for patient_id in range(10, 20):
+    all_events.extend((patient_id, event) for event in dummy_events)
 
 
-def create_patients() -> List[piton.Patient]:
-    patients: List[piton.Patient] = []
+def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
+    events = piton.datasets.EventCollection(os.path.join(tmp_path, "events"))
 
-    events = SHARED_EVENTS[:NUM_EVENTS]
-    for patient_id in range(NUM_PATIENTS):
-        patients.append(
-            piton.Patient(
-                patient_id,
-                events,
-            )
+    # random.shuffle(all_events)
+
+    chunks = 7
+    events_per_chunk = (len(all_events) + chunks - 1) // chunks
+
+    for i in range(7):
+        with contextlib.closing(events.create_writer()) as writer:
+            for patient_id, event in all_events[
+                i * events_per_chunk : (i + 1) * events_per_chunk
+            ]:
+                writer.add_event(patient_id, event)
+
+    return events
+
+
+def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
+    return create_events(tmp_path).to_patient_collection(
+        os.path.join(tmp_path, "patients")
+    )
+
+tmp_path = "/local-scratch/nigam/projects/rthapa84/data/scratch"
+patient_collection = create_patients(tmp_path)
+with patient_collection.reader() as reader:
+    all_patients = list(reader)
+
+print(len(all_patients))
+
+def create_ontology_dir(path_to_ontology_dir: str, concepts: List[str]):
+    path_to_mimic_concept_file: str = os.path.join(
+        path_to_ontology_dir, "concept", "concept.csv.zst"
+    )
+
+    os.makedirs(os.path.join(path_to_ontology_dir + "/concept_relationship/"), exist_ok = True)
+    os.makedirs(os.path.dirname(path_to_mimic_concept_file), exist_ok=True)
+    
+    concept_map: Dict[str, int] = {}
+    # Create additional MIMIC-specific ontology
+    with io.TextIOWrapper(
+        zstandard.ZstdCompressor(1).stream_writer(
+            open(path_to_mimic_concept_file, "wb")
         )
-    return patients
+    ) as o:
+        writer = csv.DictWriter(
+            o,
+            fieldnames=[
+                "concept_id", "concept_name", "domain_id", "vocabulary_id",
+                "concept_class_id", "standard_concept", "concept_code", "valid_start_DATE",
+                "valid_end_DATE", "invalid_reason", "load_table_id", "load_row_id",
+            ],
+        )
 
+        writer.writeheader()
 
-PATIENTS = create_patients()
-
+        next_code: int = 0
+        for i, c in enumerate(concepts):
+            code: int = i + next_code
+            concept_map[c] = code
+            print(c, code)
+            writer.writerow(
+                {
+                    "concept_id": str(code),
+                    "concept_name": c,
+                    "domain_id": "Observation",
+                    "vocabulary_id": "Vocabulary",
+                    "concept_class_id": "Observation",
+                    "standard_concept": "",
+                    "concept_code": c,
+                    "valid_start_DATE": "1970-01-01",
+                    "valid_end_DATE": "2099-12-31",
+                    "invalid_reason": "",
+                    "load_table_id": "custom_mapping",
+                    "load_row_id": "",
+                }
+            )
+    return concept_map
 
 class DummyOntology:
     def get_dictionary(self):
         return [
-            memoryview("zero".encode("utf8")),
-            memoryview("one".encode("utf8")),
-            memoryview("two".encode("utf8")),
-            memoryview("three".encode("utf8")),
-            memoryview("four".encode("utf8")),
+            "zero", 
+            "one", 
+            "two", 
+            "three", 
+            "four"
         ]
+
+path_to_ontology_dir = '/local-scratch/nigam/projects/rthapa84/data/scratch/ontology'
+concepts = [ str(x) for x in DummyOntology().get_dictionary() ]
+concept_map = create_ontology_dir(path_to_ontology_dir, concepts)
+print(concept_map) # just for your reference
+
+path_to_ontology = "/local-scratch/nigam/projects/rthapa84/data/scratch/ontology"
+path_to_dummy_database = "/local-scratch/nigam/projects/rthapa84/data/scratch/target"
+patient_collection.to_patient_database(
+    path_to_dummy_database,
+    path_to_ontology,  # concept.csv
+    num_threads=2,
+).close()
 
 
 def _assert_featurized_patients_structure(
@@ -107,25 +242,49 @@ def _assert_featurized_patients_structure(
     )
 
 
+def create_labeled_patients(labeler: LabelingFunction, patients: List[piton.Patient]):
+    pat_to_labels = {}
+
+    for patient in patients:
+        labels = labeler.label(patient)
+
+        if len(labels) > 0:
+            pat_to_labels[patient.patient_id] = labels
+
+    labeled_patients = LabeledPatients(pat_to_labels, labeler.get_labeler_type())
+
+    return labeled_patients
+
+
 def test_age_featurizer():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon=time_horizon)
-    labels = labeler.label(PATIENTS[0])
 
-    featurizer = AgeFeaturizer(normalize=False)
-    patient_features = featurizer.featurize(PATIENTS[0], labels)
+    database = piton.datasets.PatientDatabase(path_to_dummy_database)
 
-    assert patient_features[0] == [ColumnValue(column=0, value=0.0)]
-    assert patient_features[5] == [
-        ColumnValue(column=0, value=16.512328767123286)
+    labeler = CodeLF(3, 2, time_horizon=time_horizon)
+    labels = labeler.label(database[0])
+
+    dummy_ontology = DummyOntology()
+    ontology = cast(piton.datasets.Ontology, dummy_ontology)
+
+    featurizer = AgeFeaturizer(is_normalize=False)
+    patient_features = featurizer.featurize(database[0], labels, ontology)
+
+    assert patient_features[0] == [ColumnValue(column=0, value=15.005479452054795)]
+    assert patient_features[1] == [
+        ColumnValue(column=0, value=17.767123287671232)
     ]
     assert patient_features[-1] == [
-        ColumnValue(column=0, value=21.172602739726027)
+        ColumnValue(column=0, value=20.46027397260274)
     ]
 
-    featurizer = AgeFeaturizer(normalize=True)
+    labeled_patients = labeler.apply()
+
+    labeled_patients = create_labeled_patients(labeler, PATIENTS)
+
+    featurizer = AgeFeaturizer(is_normalize=True)
     featurizer_list = FeaturizerList([featurizer])
     featurizer_list.preprocess_featurizers(PATIENTS, labeler)
     featurized_patients = featurizer_list.featurize(PATIENTS, labeler)
