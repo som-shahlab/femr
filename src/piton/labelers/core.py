@@ -63,11 +63,11 @@ class Label:
     time: datetime.datetime
     value: Union[bool, int, float, SurvivalValue]
 
-def _apply_labeling_function(args: Tuple[LabelingFunction, str, List[int]]) -> Dict[int, List[Label]]:
+def _apply_labeling_function(args: Tuple[Labeler, str, List[int]]) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
-    Gets called as a parallelized subprocess of the .apply() method of `LabelingFunction`.
+    Gets called as a parallelized subprocess of the .apply() method of `Labeler`.
     """
-    labeling_function: LabelingFunction = args[0]
+    labeling_function: Labeler = args[0]
     database_path: str = args[1]
     patient_ids: List[int] = args[2]
     
@@ -87,7 +87,7 @@ def _apply_labeling_function(args: Tuple[LabelingFunction, str, List[int]]) -> D
     return patients_to_labels
         
 
-class LabelingFunction(ABC):
+class Labeler(ABC):
     """An interface for labeling functions.
 
     A labeling function applies a label to a specific datetime in a given patient's timeline.
@@ -95,7 +95,7 @@ class LabelingFunction(ABC):
         [(patient ID, datetime_1, label_1), (patient ID, datetime_2, label_2), ... ]
     Usage:
     ```
-        labeling_function: LabelingFunction = LF(...)
+        labeling_function: Labeler = LF(...)
         patients: Sequence[Patient] = ...
         labels: LabeledPatient = labeling_function.apply(patients)
     ```
@@ -313,7 +313,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
 ##########################################################
 
 
-class FixedTimeHorizonEventLF(LabelingFunction):
+class FixedTimeHorizonEventLabeler(Labeler):
     """Label events that occur within a particular time horizon.
 
     A fixed time horizon labeler enables you to label events that occur within a particular
@@ -451,7 +451,7 @@ class FixedTimeHorizonEventLF(LabelingFunction):
         return "boolean"
 
 
-class OneLabelPerPatient(LabelingFunction):
+class OneLabelPerPatient(Labeler):
     # TODO - update
     def __init__(self, labeling_function, seed=10):
         self.labeling_function = labeling_function
@@ -467,7 +467,7 @@ class OneLabelPerPatient(LabelingFunction):
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return self.labeling_function.get_labeler_type()
 
-class InfiniteTimeHorizonEventLF(LabelingFunction):
+class InfiniteTimeHorizonEventLabeler(Labeler):
     """Label events that occur at any time in this patient's future.
 
     An infinite time horizon labeler enables you to label events that occur at any time in the
