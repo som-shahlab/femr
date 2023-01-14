@@ -20,8 +20,10 @@ from .core import (
 def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[int]:
     children_code_set = set([code])
     parent_deque = deque([code])
+    
+    print(parent_deque)
 
-    while len(parent_deque) == 0:
+    while len(parent_deque) > 0:
         temp_parent_code = parent_deque.popleft()
         for temp_child_code in ontology.get_children(temp_parent_code):
             children_code_set.add(temp_child_code)
@@ -161,14 +163,13 @@ class HighHbA1cLF(LabelingFunction):
         ontology: extension_datasets.Ontology, 
         last_trigger_days: int = 180,
     ):
-
-        DIABETES_STR = "SNOMED/44054006"
-        HbA1c_STR = "LOINC/4548-4"
-
         self.last_trigger_days = last_trigger_days
-        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_STR)
 
-        diabetes_code = ontology.get_dictionary().index(DIABETES_STR)
+        HbA1c_str: str = "LOINC/4548-4"
+        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_str)
+
+        diabetes_str: str = "SNOMED/44054006"
+        diabetes_code = ontology.get_dictionary().index(diabetes_str)
         self.diabetes_codes = _get_all_children(ontology, diabetes_code)
 
     def label(self, patient: Patient) -> List[Label]:
@@ -291,15 +292,6 @@ class OpioidOverdoseLabeler(FixedTimeHorizonEventLF):
 
         self.opioid_codes = _get_all_children(ontology, dictionary.index("ATC/N02A"))
 
-        # TODO - what does this do?
-        opioid_patient_ids = ind.get_all_patient_ids(self.opioid_codes)
-        overdose_patient_ids = ind.get_all_patient_ids(self.overdose_codes)
-        self.possible_patients = {
-            True: set(opioid_patient_ids),
-            False: set(opioid_patient_ids) & set(overdose_patient_ids),
-        }
-        # TODO - end
-
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.codes`."""
         times: List[datetime.datetime] = []
@@ -325,7 +317,7 @@ class OpioidOverdoseLabeler(FixedTimeHorizonEventLF):
 
 class LupusDiseaseLabeler(InfiniteTimeHorizonEventLF):
     """
-        TODO - document + check
+    Label if patient is ever diagnosed with Lupus at any time in the future.
     """
 
     def __init__(
@@ -359,6 +351,7 @@ class LupusDiseaseLabeler(InfiniteTimeHorizonEventLF):
     def get_labeler_type(self) -> LabelType:
         return "binary"
 
+
 class CeliacTestLabeler(LabelingFunction):
     """
         The Celiac test labeler predicts whether or not a celiac test will be positive or negative.
@@ -374,17 +367,10 @@ class CeliacTestLabeler(LabelingFunction):
         self.celiac_codes = _get_all_children(ontology, dictionary.index("ICD9CM/579.0")) | \
                                 _get_all_children(ontology, dictionary.index("ICD10CM/K90.0"))
         
-        # TODO - what does this do?
-        self.pos_value = timelines.get_value_dictionary().map(
-            "Positive"
-        )
-        self.neg_value = timelines.get_value_dictionary().map(
-            "Negative"
-        )
-        # TODO - end
+        self.pos_value = 'Positive'
+        self.neg_value = 'Negative'
 
     def label(self, patient: Patient) -> List[Label]:
-        # TODO - check
         if len(patient.events) == 0:
             return []
         

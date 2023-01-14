@@ -22,11 +22,51 @@ from .core import (
 ##########################################################
 # Labeling functions for Lab Values
 ##########################################################
+class OutcomeFromLabValue(FixedTimeHorizonEventLF):
+    """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value over a fixed time horizon."""
+    
+    def __init__(
+        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon, severity: str,
+    ):
+        """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
+        Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
+        self.time_horizon: TimeHorizon = time_horizon
+        self.severity: str = severity
+        self.codes = []
+        for omop_concept_id in self.omop_concept_ids:
+            self.codes.append(ontology.get_code_from_concept_id(omop_concept_id))
+        
+    def get_time_horizon(self) -> TimeHorizon:
+        return self.time_horizon
 
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return the start times of this patient's events which correspond to thrombocytopenia (according to lab value)."""
+        times: List[datetime.datetime] = []
+        for event in patient.events:
+            if event.code in self.codes:
+                times.append(event.start)
+        return times
+        
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return each event's start time as the time to make a prediction.
+            Default to all events whose `code` is in `self.prediction_codes`."""
+        return []
+
+    def get_label(self, value: float):
+        if value < 150:
+            return 'mild'
+        elif value < 100:
+            return 'moderate'
+        elif value < 50:
+            return 'severe'
+        return 'normal'
+
+    def convert(self, unit_concept_id: int, value_as_number: float):
+        return value_as_number
 
 class ThrombocytopeniaLabValue(LabelQuery):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L). Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
-    concept_ids = [
+    omop_concept_ids = [
         37037425,
         40654106,
         3031586,
@@ -36,6 +76,36 @@ class ThrombocytopeniaLabValue(LabelQuery):
         3024929,
         21492791,
     ]
+    
+    def __init__(
+        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon, severity: str,
+    ):
+        """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
+        Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
+        self.time_horizon: TimeHorizon = time_horizon
+        self.severity: str = severity
+        self.codes = []
+        for omop_concept_id in self.omop_concept_ids:
+            self.codes.append(ontology.get_code_from_concept_id(omop_concept_id))
+        
+    def get_time_horizon(self) -> TimeHorizon:
+        return self.time_horizon
+
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return the start times of this patient's events which correspond to thrombocytopenia 
+        at severity level `self.severity` (according to lab value)."""
+        times: List[datetime.datetime] = []
+        for event in patient.events:
+            if event.code in self.codes \
+                and self.get_label(event.value) == self.severity:
+                times.append(event.start)
+        return times
+        
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return each event's start time as the time to make a prediction.
+            Default to all events whose `code` is in `self.prediction_codes`."""
+        return []
+
     def get_label(self, value: float):
         if value < 150:
             return 'mild'
@@ -43,12 +113,14 @@ class ThrombocytopeniaLabValue(LabelQuery):
             return 'moderate'
         elif value < 50:
             return 'severe'
-        
+        return 'normal'
+
     def convert(self, unit_concept_id: int, value_as_number: float):
         return value_as_number
 
 class HyperkalemiaQuery(LabelQuery):
     """lab-based definition for hyperkalemia using blood potassium concentration (mmol/L). Thresholds: mild(>5.5),moderate(>6),severe(>7), and abnormal range."""
+    original_concept_ids = [40653595, 37074594, 40653596,]
     concept_ids = [
         40653596,
         40653595,
@@ -87,6 +159,7 @@ class HyperkalemiaQuery(LabelQuery):
 
 class HypoglycemiaQuery(LabelQuery):
     """lab-based definition for hypoglycemia using blood glucose concentration (mmol/L). Thresholds: mild(<3), moderate(<3.5), severe(<=3.9), and abnormal range."""
+    original_concept_ids = [4144235, 1002597]
     concept_ids = [
         3009397,
         3040694,
@@ -116,6 +189,7 @@ class HypoglycemiaQuery(LabelQuery):
     
 class HyponatremiaQuery(LabelQuery):
     """lab-based definition for hyponatremia based on blood sodium concentration (mmol/L). Thresholds: mild (<=135),moderate(<130),severe(<125), and abnormal range."""
+    original_concept_ids = [40653762]
     concept_ids = [
         40653762,
         3038702,
@@ -136,6 +210,7 @@ class HyponatremiaQuery(LabelQuery):
     
 class AnemiaQuery(LabelQuery):
     """lab-based definition for anemia based on hemoglobin levels (g/L). Thresholds: mild(<120),moderate(<110),severe(<70), and reference range"""
+    original_concept_ids = [37072252]
     concept_ids = [
         37072252,
         3048275,
@@ -163,6 +238,7 @@ class AnemiaQuery(LabelQuery):
     
 class NeutropeniaQuery(LabelQuery):
     """lab-based definition for neutropenia based on neutrophils count (thousands/uL). Thresholds: mild(<1.5), moderate(<1), severe(<0.5)"""
+    
     wbc_concept_ids = [
         3000905, 
         4298431, 
@@ -172,6 +248,7 @@ class NeutropeniaQuery(LabelQuery):
         3035839, 
         3018199,
     ]
+    original_neutrophil_concept_ids = [37045722, 37049637]
     neutrophil_concept_ids = [
         37045722,
         37049637,
@@ -229,6 +306,7 @@ class NeutropeniaQuery(LabelQuery):
     
 class ThrombocytopeniaQuery(LabelQuery):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L). Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
+    original_concept_ids = [37037425,40654106]
     concept_ids = [
         40654106,
         37037425,
@@ -268,6 +346,9 @@ class AcuteKidneyInjuryQuery(LabelQuery):
 ##########################################################
 
 class HypoglycemiaDxQuery(DxLabelQuery):
+    orignal_concept_ids = [380688,4226798,36714116,24609,
+                 4029423,45757363,4096804,4048805,
+                 4228112,23034,4029424,45769876 ]
     concept_ids = [
         45769876, 23034, 4029423, 4226798, 24609, 380688, 
         4228112, 36714116, 4048805, 44789318, 4030181, 
@@ -280,6 +361,7 @@ class HypoglycemiaDxQuery(DxLabelQuery):
     ]
 
 class AKIDxQuery(DxLabelQuery):
+    orignal_concept_ids = [ 197320,432961,444044]
     concept_ids = [
         444044, 197320, 432961, 43530914, 44809173, 
         4143190, 196455, 37395520, 37395518, 44809170, 
@@ -299,6 +381,8 @@ class AKIDxQuery(DxLabelQuery):
     ]
 
 class AnemiaDxQuery(DxLabelQuery):
+    orignal_concept_ids = [ 439777, 37018722, 37017132, 35624756, 
+                 4006467, 37398911, 37395652 ]
     concept_ids = [
         4144077, 4312021, 42537687, 37399453, 4097961, 4225810, 45757092, 4203291, 37018722, 
         4190190, 4098013, 4125491, 4085853, 444289, 4121114, 4173192, 4242755, 4032006, 
@@ -362,6 +446,7 @@ class AnemiaDxQuery(DxLabelQuery):
     ]
         
 class HyperkalemiaDxQuery(DxLabelQuery):
+    orignal_concept_ids = [ 434610]
     concept_ids = [
         434610,
         4030355,
@@ -378,6 +463,7 @@ class HyperkalemiaDxQuery(DxLabelQuery):
         
 class HyponatremiaDxQuery(CodeLF):
     """Apply a label for whether or not a patient has at least one occurrence of Hyponatremia in `time_horizon`."""
+    original_concept_ids = [435515,4232311]
     omop_concept_ids: List[int] = [
         435515,
         4232311,
@@ -411,6 +497,7 @@ class HyponatremiaDxQuery(CodeLF):
         )
         
 class ThrombocytopeniaDxQuery(DxLabelQuery):
+    orignal_concept_ids = [432870, ]
     concept_ids = [
         432870, 4100998, 4156233, 42572969, 4301602, 4300464, 
         35625536, 4101583, 138723, 4139555, 440372, 36674972, 
@@ -436,6 +523,7 @@ class ThrombocytopeniaDxQuery(DxLabelQuery):
     ]
         
 class NeutropeniaDxQuery(DxLabelQuery):
+    orignal_concept_ids = [ 301794,320073, ]
     concept_ids = [
         37117238,
         37205095,
