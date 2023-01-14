@@ -3,18 +3,12 @@ from __future__ import annotations
 
 from abc import abstractmethod
 import datetime
-from typing import List, Set, Tuple, Deque, Dict
+from typing import List
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .omop import (
-    CodeLF
-)
 from .core import (
-    FixedTimeHorizonEventLF,
-    Label,
-    LabelingFunction,
-    LabelType,
+    TimeHorizonEventLabeler,
     TimeHorizon,
 )
 
@@ -28,8 +22,8 @@ from .core import (
 # likely to be noisy.
 ##########################################################
 
-class OutcomeFromLabValue(FixedTimeHorizonEventLF):
-    """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value over a fixed time horizon."""
+class OutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
+    """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value over a time horizon."""
     original_omop_concept_ids: List[int] = []
     omop_concept_ids: List[int] = []
     
@@ -77,7 +71,7 @@ class OutcomeFromLabValue(FixedTimeHorizonEventLF):
         """Convert `value` to a float in the same units as the thresholds in `self.value_to_label`."""
         return value
 
-class ThrombocytopeniaLabValue(OutcomeFromLabValue):
+class ThrombocytopeniaLabValueLabeler(OutcomeFromLabValueLabeler):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L). Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
     original_omop_concept_ids = [37037425,40654106] # parent OMOP concept IDs, from which `omop_concept_ids`` are derived
     omop_concept_ids = [
@@ -91,9 +85,6 @@ class ThrombocytopeniaLabValue(OutcomeFromLabValue):
         21492791,
     ]
 
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        return []
-
     def value_to_label(self, value: float) -> str:
         if value < 150:
             return 'mild'
@@ -106,7 +97,7 @@ class ThrombocytopeniaLabValue(OutcomeFromLabValue):
     def normalize_value_with_units(self, value: float, unit_concept_id: int) -> float:
         return value
 
-class HyperkalemiaLabValue(OutcomeFromLabValue):
+class HyperkalemiaLabValueLabeler(OutcomeFromLabValueLabeler):
     """lab-based definition for hyperkalemia using blood potassium concentration (mmol/L). Thresholds: mild(>5.5),moderate(>6),severe(>7), and abnormal range."""
     original_omop_concept_ids = [40653595, 37074594, 40653596,] # parent OMOP concept IDs, from which `omop_concept_ids`` are derived
     omop_concept_ids = [
@@ -139,7 +130,7 @@ class HyperkalemiaLabValue(OutcomeFromLabValue):
             return value / 18
         raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
 
-class HypoglycemiaLabValue(OutcomeFromLabValue):
+class HypoglycemiaLabValueLabeler(OutcomeFromLabValueLabeler):
     """lab-based definition for hypoglycemia using blood glucose concentration (mmol/L). Thresholds: mild(<3), moderate(<3.5), severe(<=3.9), and abnormal range."""
     original_omop_concept_ids = [4144235, 1002597] # parent OMOP IDs, `from`` which omop_
     concept_ids = [
@@ -170,7 +161,7 @@ class HypoglycemiaLabValue(OutcomeFromLabValue):
             return value  
         raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
     
-class HyponatremiaLabValue(OutcomeFromLabValue):
+class HyponatremiaLabValueLabeler(OutcomeFromLabValueLabeler):
     """lab-based definition for hyponatremia based on blood sodium concentration (mmol/L). Thresholds: mild (<=135),moderate(<130),severe(<125), and abnormal range."""
     original_omop_concept_ids = [40653762] # parent OMOP IDs, `from`` which omop_
     concept_ids = [
@@ -196,7 +187,7 @@ class HyponatremiaLabValue(OutcomeFromLabValue):
     def normalize_value_with_units(self, value: float, unit_concept_id: int) -> float:
         return value
     
-class AnemiaLabValue(OutcomeFromLabValue):
+class AnemiaLabValueLabeler(OutcomeFromLabValueLabeler):
     """lab-based definition for anemia based on hemoglobin levels (g/L). Thresholds: mild(<120),moderate(<110),severe(<70), and reference range"""
     original_omop_concept_ids = [37072252] # parent OMOP IDs, `from`` which omop_
     concept_ids = [
@@ -227,33 +218,10 @@ class AnemiaLabValue(OutcomeFromLabValue):
             return value / 100 # NOTE: This weird *10 / 100 is how Lawrence did it
         raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
 
-class ThrombocytopeniaLabValue(OutcomeFromLabValue):
-    """lab-based definition for thrombocytopenia based on platelet count (10^9/L). Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
-    original_omop_concept_ids = [37037425,40654106] # parent OMOP IDs, `from`` which omop_
-    concept_ids = [
-        40654106,
-        37037425,
-        3031586,
-        3033641,
-        3007461,
-        3010834,
-        3024929,
-        21492791,
-    ]
-    def value_to_label(self, value: float) -> str:
-        if value < 150:
-            return 'mild'
-        elif value < 100:
-            return 'moderate'
-        elif value < 50:
-            return 'severe'
-        return 'normal'
-
-    def normalize_value_with_units(self, value: float, unit_concept_id: int) -> float:
-        return value
-
-class NeutropeniaLabValue(OutcomeFromLabValue):
+class NeutropeniaLabValueLabeler(OutcomeFromLabValueLabeler):
     """lab-based definition for neutropenia based on neutrophils count (thousands/uL). Thresholds: mild(<1.5), moderate(<1), severe(<0.5)"""
+    
+    # TODO
     
     wbc_concept_ids = [
         3000905, 
@@ -278,9 +246,9 @@ class NeutropeniaLabValue(OutcomeFromLabValue):
     
     def get_label_wrapper(self, neutrophil: float, bands: float, wbc: float):
         if neutrophil is not None or bands is not None:
-            return self.get_label((neutrophil or 0) + (bands or 0))
+            return self.value_to_label((neutrophil or 0) + (bands or 0))
         elif wbc is not None:
-            return self.get_label(wbc)
+            return self.value_to_label(wbc)
         assert False, 'No valid values found'
 
     def value_to_label(self, value: float) -> str:
@@ -302,6 +270,7 @@ class NeutropeniaLabValue(OutcomeFromLabValue):
         elif unit_concept_id == 8647:
             # /uL - divide by 1000 to convert to 1000/uL
             return value / 1000
+        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
     
     def band_convert(self, unit_concept_id: int, value: float, measurement_concept_id: int, wbc: float):
         if measurement_concept_id == 3035839 and value <= 100:
@@ -310,6 +279,7 @@ class NeutropeniaLabValue(OutcomeFromLabValue):
         elif measurement_concept_id == 3018199 and unit_concept_id == 8784:
             # band form neutrophils in blood (count) 
             return value / 1000
+        raise ValueError(f"Unknown combination of: unit_concept_id {unit_concept_id}, measurement_concept_id {measurement_concept_id}")
 
     def neutrophil_convert(self, unit_concept_id: int, value: float, measurement_concept_id: int, wbc: float):
         if unit_concept_id == 8554 and value <= 100:
@@ -319,8 +289,9 @@ class NeutropeniaLabValue(OutcomeFromLabValue):
             return None
         elif unit_concept_id == 8784:
             return value / 1000
-                        
-class AcuteKidneyInjuryLabValue(OutcomeFromLabValue):
+        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
+
+class AcuteKidneyInjuryLabValueLabeler(OutcomeFromLabValueLabeler):
     # TODO - very complicated
     """lab-based definition for acute kidney injury based on blood creatinine levels (umol/L) according to KDIGO (stages 1,2, and 3), and abnormal range."""
     concept_ids = [
