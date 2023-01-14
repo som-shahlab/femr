@@ -127,26 +127,18 @@ def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
         os.path.join(tmp_path, "patients")
     )
 
-tmp_path = "/local-scratch/nigam/projects/rthapa84/data/scratch"
-patient_collection = create_patients(tmp_path)
-with patient_collection.reader() as reader:
-    all_patients = list(reader)
-
-print(len(all_patients))
-
-def create_ontology_dir(path_to_ontology_dir: str, concepts: List[str]):
-    path_to_mimic_concept_file: str = os.path.join(
+def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
+    path_to_concept_file: str = os.path.join(
         path_to_ontology_dir, "concept", "concept.csv.zst"
     )
-
+    os.makedirs(os.path.dirname(path_to_concept_file), exist_ok=True)
     os.makedirs(os.path.join(path_to_ontology_dir + "/concept_relationship/"), exist_ok = True)
-    os.makedirs(os.path.dirname(path_to_mimic_concept_file), exist_ok=True)
     
     concept_map: Dict[str, int] = {}
     # Create additional MIMIC-specific ontology
     with io.TextIOWrapper(
         zstandard.ZstdCompressor(1).stream_writer(
-            open(path_to_mimic_concept_file, "wb")
+            open(path_to_concept_file, "wb")
         )
     ) as o:
         writer = csv.DictWriter(
@@ -164,7 +156,6 @@ def create_ontology_dir(path_to_ontology_dir: str, concepts: List[str]):
         for i, c in enumerate(concepts):
             code: int = i + next_code
             concept_map[c] = code
-            print(c, code)
             writer.writerow(
                 {
                     "concept_id": str(code),
@@ -193,18 +184,40 @@ class DummyOntology:
             "four"
         ]
 
-path_to_ontology_dir = '/local-scratch/nigam/projects/rthapa84/data/scratch/ontology'
-concepts = [ str(x) for x in DummyOntology().get_dictionary() ]
-concept_map = create_ontology_dir(path_to_ontology_dir, concepts)
-print(concept_map) # just for your reference
+def create_database(tmp_path: pathlib.Path) -> None:
 
-path_to_ontology = "/local-scratch/nigam/projects/rthapa84/data/scratch/ontology"
-path_to_dummy_database = "/local-scratch/nigam/projects/rthapa84/data/scratch/target"
-patient_collection.to_patient_database(
-    path_to_dummy_database,
-    path_to_ontology,  # concept.csv
-    num_threads=2,
-).close()
+    patient_collection = create_patients(tmp_path)
+    with patient_collection.reader() as reader:
+        all_patients = list(reader)
+
+    path_to_ontology = os.path.join(tmp_path, "ontology")
+    concepts = [ str(x) for x in DummyOntology().get_dictionary() ]
+    concept_map = create_ontology(path_to_ontology, concepts)
+    print(concept_map)
+
+    path_to_database = os.path.join(tmp_path, "target")
+
+    if not os.path.exists(path_to_database):
+        os.mkdir(path_to_database)
+
+    patient_collection.to_patient_database(
+        path_to_database,
+        path_to_ontology,  # concept.csv
+        num_threads=2,
+    ).close()
+
+# path_to_ontology_dir = '/local-scratch/nigam/projects/rthapa84/data/scratch/ontology'
+# concepts = [ str(x) for x in DummyOntology().get_dictionary() ]
+# concept_map = create_ontology(path_to_ontology_dir, concepts)
+# print(concept_map) # just for your reference
+
+# path_to_ontology = "/local-scratch/nigam/projects/rthapa84/data/scratch/ontology"
+# path_to_dummy_database = "/local-scratch/nigam/projects/rthapa84/data/scratch/target"
+# patient_collection.to_patient_database(
+#     path_to_dummy_database,
+#     path_to_ontology,  # concept.csv
+#     num_threads=2,
+# ).close()
 
 
 def _assert_featurized_patients_structure(
