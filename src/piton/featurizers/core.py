@@ -10,11 +10,12 @@ from nptyping import NDArray, Shape
 
 import numpy as np
 import scipy.sparse
+import pickle
 
 from .. import Patient
 from ..labelers.core import Label, LabeledPatients
-import itertools
 from piton.extension import datasets as extension_datasets
+from piton.datasets import PatientCollection
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
 
@@ -39,6 +40,7 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
     # Load patients + ontology
     database: PatientDatabase = PatientDatabase(database_path)
     ontology: Ontology = database.get_ontology()
+
     
     # Construct CSR sparse matrix
     data: List[Any] = [] # non-zero entries in sparse matrix
@@ -126,6 +128,7 @@ def _run_preprocess_featurizers(args: Tuple[str, List[int], LabeledPatients, Lis
     # Load patients
     database: PatientDatabase = PatientDatabase(database_path)
 
+
     # Preprocess featurizers on all Labels for each Patient...
     for patient_id in patient_ids:
         patient: Patient = database[patient_id] # type: ignore
@@ -163,7 +166,7 @@ class FeaturizerList:
         self,
         database_path: str,
         labeled_patients: LabeledPatients,
-        num_threads: int = 1,
+        num_threads: int = 1
     ):
         """Preprocess `self.featurizers` on the provided set of `labeled_patients`."""
 
@@ -186,24 +189,11 @@ class FeaturizerList:
         for featurizer in trained_featurizers:
             featurizer_name = featurizer.__class__.__name__
             grouped_featurizers[featurizer_name].append(featurizer)
-    
-        # Aggregating age featurizers
-        age_featurizer_idx: int = [ idx for idx, f in enumerate(self.featurizers) if f.__class__.__name__ == 'AgeFeaturizer' ][0]
-        for featurizer in grouped_featurizers.get("AgeFeaturizer", []):
-            if featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
-                self.featurizers[age_featurizer_idx].from_dict(featurizer.to_dict())
-                break
         
-        # Aggregating count featurizers
-        count_featurizer_idx: int = [ idx for idx, f in enumerate(self.featurizers) if f.__class__.__name__ == 'CountFeaturizer' ][0]
-        if "CountFeaturizer" in grouped_featurizers:
-            patient_codes_dict_list = [
-                f.to_dict()["patient_codes"]["values"] for f in grouped_featurizers["CountFeaturizer"]
-            ]
-            patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
-            self.featurizers[count_featurizer_idx].from_dict({
-                "patient_codes": { "values": patient_codes }
-            })
+        # Aggregating featurizers
+        for idx, featurizer in enumerate(self.featurizers):
+            featurizer_name = featurizer.__class__.__name__
+            self.featurizers[idx] = featurizer.aggregate_featurizers(grouped_featurizers[featurizer_name])
 
         for featurizer in self.featurizers:
             featurizer.finalize_preprocessing()
@@ -212,7 +202,7 @@ class FeaturizerList:
         self,
         database_path: str,
         labeled_patients: LabeledPatients,
-        num_threads: int = 1,
+        num_threads: int = 1
     ) -> Tuple[Any, Any, Any, Any]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
@@ -268,6 +258,15 @@ class Featurizer(ABC):
         Args:
             patient (Patient): A patient to preprocess on.
             labels (List[Label]): The list of labels of this patient to preprocess on.
+        """
+        pass
+    
+    @classmethod
+    def aggregate_featurizers(featurizers: List[Featurizer]) -> Featurizer:
+        """After preprocessing featurizer using multiprocessing, this method aggregates all those featurizers into one.
+        
+        Args:
+            featurizers (List[self]): A list of preprocessed featurizers
         """
         pass
 

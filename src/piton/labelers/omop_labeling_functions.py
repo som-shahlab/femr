@@ -140,7 +140,7 @@ def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[in
     children_code_set = set([code])
     parent_deque = deque([code])
 
-    while len(parent_deque) == 0:
+    while len(parent_deque) > 0:
         temp_parent_code = parent_deque.popleft()
         for temp_child_code in ontology.get_children(temp_parent_code):
             children_code_set.add(temp_child_code)

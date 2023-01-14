@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import itertools
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple, Collection
 
@@ -45,6 +46,15 @@ class AgeFeaturizer(Featurizer):
         for label in labels:
             age_in_yrs: float = (label.time - patient_birth_date).days / 365
             self.age_statistics.add(age_in_yrs)
+    
+    @classmethod
+    def aggregate_featurizers(self, featurizers: List[Featurizer]) -> AgeFeaturizer:
+        # Aggregating age featurizers
+        for featurizer in featurizers:
+            if featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
+                new_featurizer = featurizers[0]
+                new_featurizer.from_dict(featurizer.to_dict())
+                return new_featurizer
 
     def featurize(
         self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology,
@@ -73,7 +83,7 @@ class AgeFeaturizer(Featurizer):
     def to_dict(self) -> Dict[str, Any]:
         return { 
                 "age_statistics": self.age_statistics.to_dict(),
-                "is_normalize": self.is_normalize,
+                "is_normalize": self.is_normalize
             }
 
     def from_dict(self, data: Mapping[str, Any]):
@@ -125,6 +135,20 @@ class CountFeaturizer(Featurizer):
         for event in patient.events:
             if event.value is None:
                 self.patient_codes.add(event.code)
+    
+    @classmethod
+    def aggregate_featurizers(cls, featurizers: List[Featurizer]) -> CountFeaturizer:
+        # Aggregating count featurizers
+        patient_codes_dict_list = [featurizer.to_dict()["patient_codes"]["values"] for featurizer in featurizers]
+        patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
+
+        featurizer_dict = featurizers[0].to_dict()
+        featurizer_dict["patient_codes"] = {"values": patient_codes}
+
+        new_featurizer = featurizers[0]
+        new_featurizer.from_dict(featurizer_dict)
+
+        return new_featurizer
 
     def get_num_columns(self) -> int:
         if self.time_bins is None:
