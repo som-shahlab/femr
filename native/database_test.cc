@@ -43,6 +43,17 @@ void create_ontology_helper(bool compressed) {
         EXPECT_EQ(ontology.get_dictionary()[2], "bar/parent of foo");
         EXPECT_EQ(ontology.get_dictionary()[3], "bar/grandparent of foo");
 
+        EXPECT_EQ(ontology.get_concept_id_from_code(0), 32);
+        EXPECT_EQ(ontology.get_concept_id_from_code(1), 326);
+        EXPECT_EQ(ontology.get_concept_id_from_code(2), 323);
+        EXPECT_EQ(ontology.get_concept_id_from_code(3), 3235);
+
+        EXPECT_EQ(*ontology.get_code_from_concept_id(32), 0);
+        EXPECT_EQ(*ontology.get_code_from_concept_id(326), 1);
+        EXPECT_EQ(*ontology.get_code_from_concept_id(323), 2);
+        EXPECT_EQ(*ontology.get_code_from_concept_id(3235), 3);
+        EXPECT_EQ((bool)ontology.get_code_from_concept_id(45645), false);
+
         EXPECT_THAT(helper(ontology.get_children(1)), ElementsAre());
         EXPECT_THAT(helper(ontology.get_parents(1)), ElementsAre());
         EXPECT_THAT(helper(ontology.get_all_parents(1)),

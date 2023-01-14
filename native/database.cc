@@ -917,7 +917,7 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
 
 std::pair<absl::flat_hash_map<uint64_t, uint32_t>,
           std::vector<std::vector<uint32_t>>>
-get_parents(const std::vector<uint64_t>& raw_codes,
+get_parents(std::vector<uint64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
     auto standard_code_map =
@@ -1018,6 +1018,7 @@ get_parents(const std::vector<uint64_t>& raw_codes,
             uint32_t index = next_index++;
             index_map[target_index] = index;
             to_process.push_back(target_index);
+            raw_codes.push_back(target_index);
             return index;
         } else {
             return iter->second;
@@ -1111,7 +1112,7 @@ const std::vector<uint32_t>& all_parents_helper(
     return *value;
 }
 
-Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
+Ontology create_ontology(std::vector<uint64_t> raw_codes,
                          const boost::filesystem::path& concept,
                          const boost::filesystem::path& target, char delimiter,
                          size_t num_threads) {
@@ -1163,6 +1164,13 @@ Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
             all_parent.add_value(container_to_view(parents));
         }
     }
+    {
+        DictionaryWriter concept_ids(target / "concept_id");
+        for (size_t i = 0; i < raw_codes.size(); i++) {
+            concept_ids.add_value(container_to_view(
+                absl::Span<const uint64_t>(raw_codes.data() + i, 1)));
+        }
+    }
     return Ontology(target);
 }
 
@@ -1171,7 +1179,8 @@ Ontology::Ontology(const boost::filesystem::path& path)
       parent_dict(path / "parent", true),
       children_dict(path / "children", true),
       all_parents_dict(path / "all_parents", true),
-      text_description(path / "text_description", true) {}
+      text_description(path / "text_description", true),
+      concept_ids(path / "concept_id", true) {}
 
 absl::Span<const uint32_t> Ontology::get_parents(uint32_t code) {
     return read_span<uint32_t>(*parent_dict, code);
@@ -1190,4 +1199,15 @@ std::string_view Ontology::get_text_description(uint32_t code) {
     } else {
         return (*text_description)[code];
     }
+}
+
+boost::optional<uint32_t> Ontology::get_code_from_concept_id(
+    uint64_t concept_id) {
+    std::string_view target =
+        container_to_view(absl::Span<uint64_t>(&concept_id, 1));
+    return concept_ids->find(target);
+}
+
+uint64_t Ontology::get_concept_id_from_code(uint32_t code) {
+    return read_span<uint64_t>(*concept_ids, code)[0];
 }
