@@ -37,9 +37,9 @@ class AgeFeaturizer(Featurizer):
         """
         Args:
 <<<<<<< HEAD
-            is_normalize (bool, optional): If TRUE, then normalize a patient's age at each 
+            is_normalize (bool, optional): If TRUE, then normalize a patient's age at each
             label across their ages at all labels. Defaults to True.
-        """        
+        """
 =======
             is_normalize (bool, optional): If TRUE, then normalize a patient's age at each label across their ages at all labels. Defaults to True.
         """
@@ -137,7 +137,7 @@ class CountFeaturizer(Featurizer):
         Args:
             is_ontology_expansion (bool, optional): _description_. Defaults to False.
             exclusion_codes (List[int], optional): _description_. Defaults to [].
-            time_bins (Optional[List[float]], optional): [90, 180] refers to [0-90, 90-180]; 
+            time_bins (Optional[List[float]], optional): [90, 180] refers to [0-90, 90-180];
                                                          [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
         """
         self.patient_codes: Dictionary = Dictionary()
@@ -172,7 +172,7 @@ class CountFeaturizer(Featurizer):
     @classmethod
 <<<<<<< HEAD
     def aggregate_featurizers(cls, featurizers: List[Featurizer]) -> CountFeaturizer:
-        """After preprocessing featurizer using multiprocessing, this method aggregates all 
+        """After preprocessing featurizer using multiprocessing, this method aggregates all
         those featurizers into one.
         """
 =======
