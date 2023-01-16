@@ -12,7 +12,7 @@ import piton.datasets
 from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import TimeHorizon
-from piton.labelers.omop_labeling_functions import CodeLF
+from piton.labelers.omop import CodeLabeler
 
 SHARED_EVENTS = [
     piton.Event(start=datetime.datetime(1995, 1, 3), code=0),
@@ -111,7 +111,7 @@ def test_age_featurizer():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon=time_horizon)
+    labeler = CodeLabeler([2], time_horizon=time_horizon)
     labels = labeler.label(PATIENTS[0])
 
     featurizer = AgeFeaturizer(normalize=False)
@@ -143,7 +143,7 @@ def test_count_featurizer():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon)
+    labeler = CodeLabeler([2], time_horizon)
     labels = labeler.label(PATIENTS[0])
 
     featurizer = CountFeaturizer(DummyOntology)
@@ -183,7 +183,7 @@ def test_count_bins_featurizer():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon)
+    labeler = CodeLabeler([2], time_horizon)
     labels = labeler.label(PATIENTS[0])
 
     time_bins = [90, 180, math.inf]
@@ -219,7 +219,7 @@ def test_complete_featurization():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon)
+    labeler = CodeLabeler([2], time_horizon)
 
     age_featurizer = AgeFeaturizer(normalize=True)
     age_featurizer_list = FeaturizerList([age_featurizer])
@@ -271,7 +271,7 @@ def test_serialization_and_deserialization():
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon)
+    labeler = CodeLabeler([2], time_horizon)
 
     time_bins = [90, 180, math.inf]
     count_featurizer = CountFeaturizer(DummyOntology, time_bins=time_bins)
