@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import datetime
-from typing import List, Set, Tuple, Optional
 from collections import deque
+from typing import List, Optional, Set, Tuple
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets

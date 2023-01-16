@@ -6,9 +6,6 @@ import pathlib
 import numpy as np
 import scipy.sparse
 
-from tools import (NUM_PATIENTS, create_database,
-                   get_piton_codes, save_to_pkl, load_from_pkl)
-
 import piton
 import piton.datasets
 from piton.featurizers.core import ColumnValue, FeaturizerList

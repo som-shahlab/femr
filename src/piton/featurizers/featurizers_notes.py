@@ -13,10 +13,7 @@ from icecream import ic
 from nptyping import Int, NDArray, Shape
 from torchtyping import TensorType
 from transformers import AutoModel, AutoTokenizer
-<<<<<<< HEAD
-=======
 
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
 from .. import Event, Patient
 from ..datasets import PatientDatabase
 from ..labelers.core import Label, LabeledPatients
@@ -291,15 +288,7 @@ class NoteFeaturizer:
         truncation = params.get("tokenizer_truncation", True)
 
         # Run notes through an already-trained tokenizer
-<<<<<<< HEAD
         text: List = [ note[1].value for (_, _, notes) in notes_for_labels for note in notes ]
-=======
-        text: List = [
-            note[1].value
-            for (__, __, notes) in notes_for_labels
-            for note in notes
-        ]
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
         notes_tokenized: NotesTokenized = tokenizer(
             text,
             padding=padding,

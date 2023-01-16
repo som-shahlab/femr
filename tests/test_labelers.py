@@ -5,10 +5,6 @@ from typing import List, Optional, Tuple, cast
 
 import numpy as np
 
-from tools import (create_database, create_patients_list, 
-                   create_labeled_patients_list, get_piton_codes, 
-                   save_to_pkl, load_from_pkl, dummy_events)
-
 import piton
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
@@ -86,7 +82,9 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     piton_target_code = get_piton_codes(ontology, 2)
     piton_admission_code = get_piton_codes(ontology, 3)
 
-    labeler = CodeLF(piton_admission_code, piton_target_code, time_horizon=time_horizon)
+    labeler = CodeLF(
+        piton_admission_code, piton_target_code, time_horizon=time_horizon
+    )
     labeled_patients = labeler.apply(database_path)
 
     true_labels = [

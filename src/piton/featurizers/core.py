@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 import numpy as np
 import scipy.sparse
 
+from piton.extension import datasets as extension_datasets
+
 from .. import Patient
 from ..labelers.core import Label, LabeledPatients
 from piton.extension import datasets as extension_datasets
@@ -84,7 +86,7 @@ def _run_featurizer(
                 label.time, # labeling_time
             ))
 
-            # Keep track of starting column for each successive featurizer as we 
+            # Keep track of starting column for each successive featurizer as we
             # combine their features into one large matrix
             column_offset: int = 0 
             for j, feature_columns in enumerate(columns_by_featurizer):
@@ -357,8 +359,8 @@ class Featurizer(ABC):
             ]
 
         Where each ColumnValue is of the form: (idx of column for this feature, feature value).
-        
-        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct 
+
+        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct
         Label and each (sparse) column is a feature
 
         Args:
@@ -367,11 +369,11 @@ class Featurizer(ABC):
             ontology (Optional[Ontology]): Ontology for Event codes.
 
         Returns:
-             List[List[ColumnValue]]: A list of 'features' (where 'features' is a list itself) for 
+             List[List[ColumnValue]]: A list of 'features' (where 'features' is a list itself) for
              each Label.
                 The length of this list of lists == length of `labels`
                     [idx] = corresponds to the Label at `labels[idx]`
-                    [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features 
+                    [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features
                     for this label
         """
         pass
@@ -385,7 +387,7 @@ class Featurizer(ABC):
         return "no name"
 
     def is_needs_preprocessing(self) -> bool:
-        """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()` 
+        """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()`
         should do nothing.
         """
         return False
