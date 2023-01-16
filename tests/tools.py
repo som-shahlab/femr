@@ -5,7 +5,7 @@ import io
 import os
 import pathlib
 import pickle
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 import zstandard
 
