@@ -58,8 +58,8 @@ conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit
 
 ## Installation
 ```
-conda install pre-commit
-conda install pytest
+conda install pre-commit -y
+conda install pytest -y
 pre-commit install
 ```
 

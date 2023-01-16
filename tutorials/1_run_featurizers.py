@@ -19,9 +19,8 @@ python3 1_run_featurizers.py \
     /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pickle \
     /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_preprocessed_featurizers.pickle \
     /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
-    --labeling_function is_male \
-    --num_threads 10 \
-    --num_patients 100000
+    --labeling_function mortality \
+    --num_threads 20
 """
 
 def save_to_pkl(object_to_save, path_to_file: str):
