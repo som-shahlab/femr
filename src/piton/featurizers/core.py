@@ -6,10 +6,9 @@ import multiprocessing
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from nptyping import NDArray, Shape
-
 import numpy as np
 import scipy.sparse
+from nptyping import NDArray, Shape
 
 from piton.extension import datasets as extension_datasets
 
