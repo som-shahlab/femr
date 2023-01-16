@@ -214,7 +214,8 @@ class NoteFeaturizer:
             "preprocess", f"applying transformations to chunk #{chunk_id}"
         )
         notes_for_labels: List[PatientLabelNotesTuple] = []
-        percent_done: float = 0.05  # note: need this hacky way of doing tqdm b/c of tqdm's printouts will be ruined by multiprocessing
+        # note: need this hacky way of doing tqdm b/c of tqdm's printouts will be ruined by multiprocessing
+        percent_done: float = 0.05  
         for patient_idx, patient_id in enumerate(patient_ids):
             patient: Patient = patient_database[patient_id]  # type: ignore
             labels: List[Label] = labeled_patients.get_labels_from_patient_idx(
@@ -342,7 +343,8 @@ class NoteFeaturizer:
                 a = torch.cuda.memory_allocated(device)
                 print_log(
                     "embed",
-                    f"chunk #{chunk_id} | device {device}, total (mem): {t}, reserved: {r}, allocated: {a}, free: {t - r - a}",
+                    f"chunk #{chunk_id} | device {device}, total (mem): "\ 
+                    f"{t}, reserved: {r}, allocated: {a}, free: {t - r - a}",
                 )
 
             try:
@@ -550,7 +552,7 @@ class NoteFeaturizer:
             np_label_idxs,
         )
         save_to_pkl(
-            result_tuple, os.path.join(self.path_to_output_dir, f"features.pkl")
+            result_tuple, os.path.join(self.path_to_output_dir, "features.pkl")
         )
         print_log("featurize", "DONE")
         # TODO: Fix typing
