@@ -55,13 +55,9 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
 
         if len(labels) == 0:
             continue
-
-        # Keep track of starting column for each successive featurizer as we combine their features
-        # into one large matrix
-        column_offset: int = 0 
     
         # For each Featurizer, apply it to this Patient...
-        columns_by_featurizer = []
+        columns_by_featurizer: List[List[List[ColumnValue]]] = []
         for featurizer in featurizers:
             # `features` can be thought of as a 2D array (i.e. list of lists),
             # where rows correspond to `labels` and columns to `ColumnValue` (i.e. features)
@@ -78,8 +74,10 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
                 label.value, # result_labels
                 label.time, # labeling_time
             ))
-
-            column_offset = 0
+            
+            # Keep track of starting column for each successive featurizer as we combine their features
+            # into one large matrix
+            column_offset: int = 0 
             for j, feature_columns in enumerate(columns_by_featurizer):
                 for column, value in feature_columns[i]:
                     assert 0 <= column < featurizers[j].get_num_columns(), (

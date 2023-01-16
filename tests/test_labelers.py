@@ -7,60 +7,12 @@ from typing import List, Optional, Tuple, cast
 import numpy as np
 import pickle
 
+from tools import *
+
 import piton
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon, LabelingFunction
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
-
-
-NUM_PATIENTS = 5
-
-SHARED_EVENTS = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
-    piton.Event(
-        start=datetime.datetime(2010, 1, 1),
-        code=1,
-        value="test_value",
-    ),
-    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
-    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
-    ),
-    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
-    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=4, value=None
-    ),
-]
-
-
-def save_to_pkl(object_to_save, path_to_file: str):
-    """Save object to Pickle file."""
-    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
-    with open(path_to_file, "wb") as fd:
-        pickle.dump(object_to_save, fd)
-
-def load_from_pkl(path_to_file: str):
-    """Load object from Pickle file."""
-    with open(path_to_file, "rb") as fd:
-        result = pickle.load(fd)
-    return result
-
-def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
-    patients: List[piton.Patient] = []
-    for patient_id in range(NUM_PATIENTS):
-        patients.append(
-            piton.Patient(
-                patient_id,
-                events,
-            )
-        )
-    return patients
 
 
 def assert_labels_are_accurate(
@@ -117,36 +69,31 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
             in labeled_patients[patient_id]
         )
 
-    
-def create_labeled_patients(labeler: LabelingFunction, patients: List[piton.Patient]):
-    pat_to_labels = {}
-
-    for patient in patients:
-        labels = labeler.label(patient)
-
-        if len(labels) > 0:
-            pat_to_labels[patient.patient_id] = labels
-
-    labeled_patients = LabeledPatients(pat_to_labels, labeler.get_labeler_type())
-
-    return labeled_patients
-
-
 
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
-    patients = create_patients(SHARED_EVENTS)
+
+    time_horizon = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=180)
+    )
+
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = piton.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    piton_target_code = get_piton_codes(ontology, 2)
+    piton_admission_code = get_piton_codes(ontology, 3)
+
+    labeler = CodeLF(piton_admission_code, piton_target_code, time_horizon=time_horizon)
+    labels = labeler.label(database[0])
+    labeled_patients = labeler.apply(database_path)
+
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
         True, False, False
     ]
-
-    time_horizon_6_months = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=180)
-    )
-    labeler = CodeLF(3, 2, time_horizon_6_months)
-
-    labeled_patients = create_labeled_patients(labeler, patients)
 
     # Data representations
     #   Check that label counter is correct
@@ -160,7 +107,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     # Saving / Loading
     #   Save labeler results
-    path = "../tmp/test_labelers/CodeLF.pkl"
+    path = os.path.join(tmp_path, "CodeLF.pkl")
     save_to_pkl(labeled_patients, path)
 
     #   Check that file was created
@@ -184,7 +131,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
 def test_mortality_lf() -> None:
     """Creates a MortalityLF for code 3, which corresponds to "Death Type/" """
-    patients = create_patients(SHARED_EVENTS)
+    patients = create_patients_list(dummy_events)
     true_labels = [
         # Assumes time horizon (0, 180) days + MortalityLF() where code is 3
         False,
@@ -210,7 +157,7 @@ def test_mortality_lf() -> None:
     )
     labeler = MortalityLF(ontology, time_horizon_12_months)
 
-    labeled_patients = create_labeled_patients(labeler, patients)
+    labeled_patients = create_labeled_patients_list(labeler, patients)
 
     # Selected the right code
     assert labeler.code == 4
@@ -221,7 +168,7 @@ def test_mortality_lf() -> None:
 
 def test_code_lf() -> None:
     """Creates a CodeLF for code '2' with time horizon of (0,180 days)."""
-    patients = create_patients(SHARED_EVENTS)
+    patients = create_patients_list(dummy_events)
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
         True, False, False
@@ -241,7 +188,7 @@ def test_code_lf() -> None:
         ]
 
     # Label patients and check that they're correct
-    labeled_patients = create_labeled_patients(labeler, patients)
+    labeled_patients = create_labeled_patients_list(labeler, patients)
 
     # All label values are correct -- assumes all patients have same events
     for patient_id in labeled_patients.keys():
@@ -256,7 +203,7 @@ def test_time_horizons():
             TimeHorizon(
                 datetime.timedelta(days=0), datetime.timedelta(days=180)
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 3), code=2, value=None
@@ -300,7 +247,7 @@ def test_time_horizons():
             TimeHorizon(
                 datetime.timedelta(days=180), datetime.timedelta(days=365)
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2000, 1, 3), code=2, value=None
@@ -336,7 +283,7 @@ def test_time_horizons():
             # Test #2
             # (0, 0) days
             TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=0)),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 3), code=3, value=None
@@ -365,7 +312,7 @@ def test_time_horizons():
             TimeHorizon(
                 datetime.timedelta(days=10), datetime.timedelta(days=10)
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 3), code=3, value=None
@@ -402,7 +349,7 @@ def test_time_horizons():
                 datetime.timedelta(hours=5),
                 datetime.timedelta(hours=10, minutes=30),
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 0, 0),
@@ -509,7 +456,7 @@ def test_time_horizons():
     for test_idx, test in enumerate(tests):
         horizon, patients, true_labels = test
         labeler = CodeLF(3, 2, horizon)
-        labeled_patients = create_labeled_patients(labeler, patients)
+        labeled_patients = create_labeled_patients_list(labeler, patients)
         for i in range(len(patients)):
             # all patients have same events
             assert_labels_are_accurate(
@@ -519,13 +466,3 @@ def test_time_horizons():
                 help_text=f" | test #{test_idx}",
             )
 
-
-# # `LabeledPatients` class
-# test_labeled_patients()
-
-# # Labeling functions
-# test_code_lf()
-# test_mortality_lf()
-
-# # Time Horizons
-# test_time_horizons()
