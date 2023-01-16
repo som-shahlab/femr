@@ -76,7 +76,8 @@ def _run_featurizer(
             )
             assert len(features) == len(
                 labels
-            ), f"The featurizer `{featurizer}` didn't generate a set of features for every label for patient {patient_id} ({len(features)} != {len(labels)})"
+            ), f"The featurizer `{featurizer}` didn't generate a set of features for "\
+                f"every label for patient {patient_id} ({len(features)} != {len(labels)})"
             columns_by_featurizer.append(features)
 
         for i, label in enumerate(labels):
@@ -325,7 +326,8 @@ class Featurizer(ABC):
     # TODO - rename to 'train' ??
     def preprocess(self, patient: Patient, labels: List[Label]):
         """Preprocess the featurizer on the given patient and label indices.
-        This should do nothing if `is_needs_preprocessing()` returns FALSE, i.e. the featurizer doesn't need preprocessing.
+        This should do nothing if `is_needs_preprocessing()` returns FALSE, 
+        i.e. the featurizer doesn't need preprocessing.
 
         Args:
             patient (Patient): A patient to preprocess on.
@@ -335,7 +337,8 @@ class Featurizer(ABC):
 
     @classmethod
     def aggregate_featurizers(featurizers: List[Featurizer]) -> Featurizer:
-        """After preprocessing featurizer using multiprocessing, this method aggregates all those featurizers into one.
+        """After preprocessing featurizer using multiprocessing, this method aggregates all 
+        those featurizers into one.
 
         Args:
             featurizers (List[self]): A list of preprocessed featurizers
