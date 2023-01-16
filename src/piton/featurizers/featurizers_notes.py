@@ -287,7 +287,11 @@ class NoteFeaturizer:
         truncation = params.get("tokenizer_truncation", True)
 
         # Run notes through an already-trained tokenizer
-        text: List = [ note[1].value for (_, _, notes) in notes_for_labels for note in notes ]
+        text: List = [
+            note[1].value
+            for (_, _, notes) in notes_for_labels
+            for note in notes
+        ]
         notes_tokenized: NotesTokenized = tokenizer(
             text,
             padding=padding,

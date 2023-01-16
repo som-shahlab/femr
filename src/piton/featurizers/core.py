@@ -15,7 +15,7 @@ from piton.extension import datasets as extension_datasets
 
 from .. import Patient
 from ..labelers.core import Label, LabeledPatients
-from piton.extension import datasets as extension_datasets
+
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
 
@@ -81,15 +81,17 @@ def _run_featurizer(
 
         for i, label in enumerate(labels):
             indptr.append(len(indices))
-            label_data.append((
-                patient_id, # patient_ids
-                label.value, # result_labels
-                label.time, # labeling_time
-            ))
+            label_data.append(
+                (
+                    patient_id,  # patient_ids
+                    label.value,  # result_labels
+                    label.time,  # labeling_time
+                )
+            )
 
             # Keep track of starting column for each successive featurizer as we
             # combine their features into one large matrix
-            column_offset: int = 0 
+            column_offset: int = 0
             for j, feature_columns in enumerate(columns_by_featurizer):
                 for column, value in feature_columns[i]:
                     assert 0 <= column < featurizers[j].get_num_columns(), (
@@ -112,12 +114,22 @@ def _run_featurizer(
     total_columns: int = sum(x.get_num_columns() for x in featurizers)
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
-    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(data, dtype=np.float32)
-    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(indices, dtype=np.int64)
-    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(indptr, dtype=np.int64)
+    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(
+        data, dtype=np.float32
+    )
+    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(
+        indices, dtype=np.int64
+    )
+    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(
+        indptr, dtype=np.int64
+    )
 
-    assert np_indptr.shape[0] == total_rows + 1, f"`indptr` length should be equal to '{total_rows + 1}', but instead is '{np_indptr.shape[0]}"
-    assert np_data.shape == np_indices.shape, f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
+    assert (
+        np_indptr.shape[0] == total_rows + 1
+    ), f"`indptr` length should be equal to '{total_rows + 1}', but instead is '{np_indptr.shape[0]}"
+    assert (
+        np_data.shape == np_indices.shape
+    ), f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
     data_matrix = scipy.sparse.csr_matrix(
         (np_data, np_indices, np_indptr), shape=(total_rows, total_columns)
     )

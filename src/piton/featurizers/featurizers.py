@@ -36,8 +36,8 @@ class AgeFeaturizer(Featurizer):
     def __init__(self, is_normalize: bool = True):
         """
         Args:
-            is_normalize (bool, optional): If TRUE, then normalize a patient's age at each 
-            label across their ages at all labels. Defaults to True.    
+            is_normalize (bool, optional): If TRUE, then normalize a patient's age at each
+            label across their ages at all labels. Defaults to True.
         """
         self.is_normalize = is_normalize
         self.age_statistics = OnlineStatistics()
@@ -165,7 +165,9 @@ class CountFeaturizer(Featurizer):
                 self.patient_codes.add(event.code)
 
     @classmethod
-    def aggregate_featurizers(cls, featurizers: List[Featurizer]) -> CountFeaturizer:
+    def aggregate_featurizers(
+        cls, featurizers: List[Featurizer]
+    ) -> CountFeaturizer:
         """After preprocessing featurizer using multiprocessing, this method aggregates all
         those featurizers into one.
         """
