@@ -1,17 +1,17 @@
 import datetime
 import os
 import pathlib
-import pickle
 from typing import List, Optional, Tuple, cast
 
 import numpy as np
-import pickle
 
-from tools import *
+from tools import (create_database, create_patients_list, 
+                   create_labeled_patients_list, get_piton_codes, 
+                   save_to_pkl, load_from_pkl, dummy_events)
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon, LabelingFunction
+from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 
 
@@ -87,7 +87,6 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     piton_admission_code = get_piton_codes(ontology, 3)
 
     labeler = CodeLF(piton_admission_code, piton_target_code, time_horizon=time_horizon)
-    labels = labeler.label(database[0])
     labeled_patients = labeler.apply(database_path)
 
     true_labels = [

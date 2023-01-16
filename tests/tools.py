@@ -149,20 +149,6 @@ def create_database(tmp_path: pathlib.Path,
     ).close()
 
 
-def create_labeled_patients(labeler: LabelingFunction, patients: List[piton.Patient]):
-    pat_to_labels = {}
-
-    for patient in patients:
-        labels = labeler.label(patient)
-
-        if len(labels) > 0:
-            pat_to_labels[patient.patient_id] = labels
-
-    labeled_patients = LabeledPatients(pat_to_labels, labeler.get_labeler_type())
-
-    return labeled_patients
-
-
 def get_piton_codes(ontology, target_code):
     piton_concept_id = f"dummy/{DummyOntology().get_dictionary()[target_code]}"
     piton_target_code = ontology.get_dictionary().index(piton_concept_id)

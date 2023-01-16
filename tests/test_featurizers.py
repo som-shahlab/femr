@@ -1,21 +1,19 @@
 import datetime
 import math
 import os
-import pickle
 import pathlib
-import io
-from typing import List, cast, Optional, Tuple
 
 import numpy as np
 import scipy.sparse
 
-from tools import *
+from tools import (NUM_PATIENTS, create_database,
+                   get_piton_codes, save_to_pkl, load_from_pkl)
 
 import piton
 import piton.datasets
 from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import TimeHorizon, LabelingFunction, LabeledPatients
+from piton.labelers.core import TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF
 
 
@@ -50,7 +48,7 @@ def _assert_featurized_patients_structure(
         np.sum(featurized_patients[3] == label_time)
         == NUM_PATIENTS * len(labels_per_patient)
     )
-    
+
 
 def test_age_featurizer(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
