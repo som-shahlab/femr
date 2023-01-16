@@ -9,21 +9,10 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 import scipy.sparse
-<<<<<<< HEAD
 
 from .. import Patient
 from ..labelers.core import Label, LabeledPatients
 from piton.extension import datasets as extension_datasets
-=======
-from nptyping import NDArray, Shape
-
-from piton.datasets import PatientCollection
-from piton.extension import datasets as extension_datasets
-
-from .. import Patient
-from ..labelers.core import Label, LabeledPatients
-
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
 
@@ -89,7 +78,6 @@ def _run_featurizer(
 
         for i, label in enumerate(labels):
             indptr.append(len(indices))
-<<<<<<< HEAD
             label_data.append((
                 patient_id, # patient_ids
                 label.value, # result_labels
@@ -99,19 +87,6 @@ def _run_featurizer(
             # Keep track of starting column for each successive featurizer as we 
             # combine their features into one large matrix
             column_offset: int = 0 
-=======
-            label_data.append(
-                (
-                    patient_id,  # patient_ids
-                    label.value,  # result_labels
-                    label.time,  # labeling_time
-                )
-            )
-
-            # Keep track of starting column for each successive featurizer as we combine their features
-            # into one large matrix
-            column_offset: int = 0
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
             for j, feature_columns in enumerate(columns_by_featurizer):
                 for column, value in feature_columns[i]:
                     assert 0 <= column < featurizers[j].get_num_columns(), (
@@ -128,24 +103,10 @@ def _run_featurizer(
         len(indices)
     )  # Need one last `indptr` for end of last row in CSR sparse matrix
 
-<<<<<<< HEAD
-=======
-    # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
-    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(
-        data, dtype=np.float32
-    )
-    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(
-        indices, dtype=np.int64
-    )
-    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(
-        indptr, dtype=np.int64
-    )
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
     # n_rows = number of Labels across all Patients
     total_rows: int = len(label_data)
     # n_cols = sum of number of columns output by each Featurizer
     total_columns: int = sum(x.get_num_columns() for x in featurizers)
-<<<<<<< HEAD
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
     np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(data, dtype=np.float32)
@@ -154,14 +115,6 @@ def _run_featurizer(
 
     assert np_indptr.shape[0] == total_rows + 1, f"`indptr` length should be equal to '{total_rows + 1}', but instead is '{np_indptr.shape[0]}"
     assert np_data.shape == np_indices.shape, f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
-=======
-    assert (
-        np_indptr.shape[0] == total_rows + 1
-    ), f"`indptr` length should be equal to '{total_rows + 1}', but instead is '{np_indptr.shape[0]}"
-    assert (
-        np_data.shape == np_indices.shape
-    ), f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
     data_matrix = scipy.sparse.csr_matrix(
         (np_data, np_indices, np_indptr), shape=(total_rows, total_columns)
     )
@@ -404,15 +357,9 @@ class Featurizer(ABC):
             ]
 
         Where each ColumnValue is of the form: (idx of column for this feature, feature value).
-<<<<<<< HEAD
         
         Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct 
         Label and each (sparse) column is a feature
-=======
-
-        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct Label
-        and each (sparse) column is a feature
->>>>>>> ab5430786a61a65d5b57e2490cd02ea0e0292b05
 
         Args:
             patient (Patient): A patient to featurize.

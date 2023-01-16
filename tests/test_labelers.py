@@ -13,7 +13,6 @@ import piton
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
-from tools import *
 
 
 def assert_labels_are_accurate(

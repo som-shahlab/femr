@@ -5,7 +5,7 @@ import io
 import os
 import pathlib
 import pickle
-from typing import List, Optional, Tuple, cast
+from typing import List, Tuple, Dict
 
 import zstandard
 
@@ -140,7 +140,7 @@ def create_database(
 
     patient_collection = create_patients(tmp_path)
     with patient_collection.reader() as reader:
-        all_patients = list(reader)
+        _ = list(reader)
 
     path_to_ontology = os.path.join(tmp_path, "ontology")
     concepts = [str(x) for x in dummy_ontology.get_dictionary()]
