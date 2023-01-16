@@ -134,7 +134,10 @@ class DiabetesLF(CodeLF):
                 time_horizon=time_horizon,
             )
 
-def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[int]:
+
+def _get_all_children(
+    ontology: extension_datasets.Ontology, code: int
+) -> Set[int]:
 
     children_code_set = set([code])
     parent_deque = deque([code])
@@ -144,7 +147,7 @@ def _get_all_children(ontology: extension_datasets.Ontology, code:int) -> Set[in
         for temp_child_code in ontology.get_children(temp_parent_code):
             children_code_set.add(temp_child_code)
             parent_deque.append(temp_child_code)
-        
+
     return children_code_set
 
 
@@ -155,8 +158,8 @@ class HighHbA1cLF(LabelingFunction):
     """
 
     def __init__(
-        self, 
-        ontology: extension_datasets.Ontology, 
+        self,
+        ontology: extension_datasets.Ontology,
         last_trigger_days: int = 180,
     ):
 
@@ -186,10 +189,12 @@ class HighHbA1cLF(LabelingFunction):
 
         for event in patient.events:
 
-            if (first_diabetes_code_date is not None and 
-                event.start > first_diabetes_code_date):
+            if (
+                first_diabetes_code_date is not None
+                and event.start > first_diabetes_code_date
+            ):
                 break
-            
+
             if event.value is None or type(event.value) is str:
                 continue
 
@@ -197,16 +202,24 @@ class HighHbA1cLF(LabelingFunction):
 
                 is_diabetes = event.value > 6.5
 
-                if last_trigger is None or (event.start - last_trigger).days > self.last_trigger_days:
-                    labels.append(Label(time=event.start - datetime.timedelta(minutes=1), 
-                                        value=is_diabetes))
-                    last_trigger = event.start 
-                
+                if (
+                    last_trigger is None
+                    or (event.start - last_trigger).days
+                    > self.last_trigger_days
+                ):
+                    labels.append(
+                        Label(
+                            time=event.start - datetime.timedelta(minutes=1),
+                            value=is_diabetes,
+                        )
+                    )
+                    last_trigger = event.start
+
                 if is_diabetes:
                     break
-        
+
         return labels
-    
+
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
@@ -257,13 +270,9 @@ class IsMaleLF(LabelingFunction):
 
         for event in patient.events:
             if self.is_inpatient_admission(event):
-                labels.append(
-                    Label(time=event.start, value=is_male)
-                )
+                labels.append(Label(time=event.start, value=is_male))
         return labels
 
     def get_labeler_type(self) -> LabelType:
         """Return that these labels are booleans."""
         return "boolean"
-
-

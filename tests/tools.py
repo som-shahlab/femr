@@ -1,17 +1,17 @@
-import datetime
-import os
-import pickle
-import pathlib
 import contextlib
-import io
-import zstandard
 import csv
-from typing import List, cast, Optional, Tuple
+import datetime
+import io
+import os
+import pathlib
+import pickle
+from typing import List, Optional, Tuple, cast
+
+import zstandard
 
 import piton
 import piton.datasets
-from piton.labelers.core import LabelingFunction, LabeledPatients
-
+from piton.labelers.core import LabeledPatients, LabelingFunction
 
 dummy_events = [
     piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
@@ -71,8 +71,11 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
         path_to_ontology_dir, "concept", "concept.csv.zst"
     )
     os.makedirs(os.path.dirname(path_to_concept_file), exist_ok=True)
-    os.makedirs(os.path.join(path_to_ontology_dir + "/concept_relationship/"), exist_ok = True)
-    
+    os.makedirs(
+        os.path.join(path_to_ontology_dir + "/concept_relationship/"),
+        exist_ok=True,
+    )
+
     concept_map: Dict[str, int] = {}
 
     with io.TextIOWrapper(
@@ -83,9 +86,18 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
         writer = csv.DictWriter(
             o,
             fieldnames=[
-                "concept_id", "concept_name", "domain_id", "vocabulary_id",
-                "concept_class_id", "standard_concept", "concept_code", "valid_start_DATE",
-                "valid_end_DATE", "invalid_reason", "load_table_id", "load_row_id",
+                "concept_id",
+                "concept_name",
+                "domain_id",
+                "vocabulary_id",
+                "concept_class_id",
+                "standard_concept",
+                "concept_code",
+                "valid_start_DATE",
+                "valid_end_DATE",
+                "invalid_reason",
+                "load_table_id",
+                "load_row_id",
             ],
         )
 
@@ -113,27 +125,25 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
             )
     return concept_map
 
+
 class DummyOntology:
     def get_dictionary(self):
-        return [
-            "zero", 
-            "one", 
-            "two", 
-            "three", 
-            "four"
-        ]
+        return ["zero", "one", "two", "three", "four"]
+
 
 dummy_ontology = DummyOntology()
 
-def create_database(tmp_path: pathlib.Path, 
-                    dummy_ontology: DummyOntology = dummy_ontology) -> None:
+
+def create_database(
+    tmp_path: pathlib.Path, dummy_ontology: DummyOntology = dummy_ontology
+) -> None:
 
     patient_collection = create_patients(tmp_path)
     with patient_collection.reader() as reader:
         all_patients = list(reader)
 
     path_to_ontology = os.path.join(tmp_path, "ontology")
-    concepts = [ str(x) for x in dummy_ontology.get_dictionary() ]
+    concepts = [str(x) for x in dummy_ontology.get_dictionary()]
     concept_map = create_ontology(path_to_ontology, concepts)
     print(concept_map)
 
@@ -154,6 +164,7 @@ def get_piton_codes(ontology, target_code):
     piton_target_code = ontology.get_dictionary().index(piton_concept_id)
     return piton_target_code
 
+
 def create_patients_list(events: List[piton.Event]) -> List[piton.Patient]:
     patients: List[piton.Patient] = []
     for patient_id in range(NUM_PATIENTS):
@@ -166,7 +177,9 @@ def create_patients_list(events: List[piton.Event]) -> List[piton.Patient]:
     return patients
 
 
-def create_labeled_patients_list(labeler: LabelingFunction, patients: List[piton.Patient]):
+def create_labeled_patients_list(
+    labeler: LabelingFunction, patients: List[piton.Patient]
+):
     pat_to_labels = {}
 
     for patient in patients:
@@ -175,7 +188,9 @@ def create_labeled_patients_list(labeler: LabelingFunction, patients: List[piton
         if len(labels) > 0:
             pat_to_labels[patient.patient_id] = labels
 
-    labeled_patients = LabeledPatients(pat_to_labels, labeler.get_labeler_type())
+    labeled_patients = LabeledPatients(
+        pat_to_labels, labeler.get_labeler_type()
+    )
 
     return labeled_patients
 
