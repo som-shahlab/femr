@@ -1,23 +1,24 @@
+import argparse
 import os
+import pickle
 import time
 from typing import List, Tuple
 
 import numpy as np
+import xgboost as xgb
 from sklearn import metrics
-import argparse
-import pickle
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.metrics import auc, f1_score, precision_recall_curve
 
 import piton
 import piton.datasets
 
-from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import f1_score, precision_recall_curve, auc
-
-import xgboost as xgb
-import lightgbm as lgbm
+# import lightgbm as lgbm
 
 """
 Example running:
+
+Note: Please make sure to install xgboost. `pip install xgboost`
 
 python3 2_train_baseline_models.py \
     /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
@@ -27,33 +28,36 @@ python3 2_train_baseline_models.py \
     --num_threads 10
 """
 
+
 def load_from_pkl(path_to_file: str):
     """Load object from Pickle file."""
     with open(path_to_file, "rb") as fd:
         result = pickle.load(fd)
     return result
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     START_TIME = time.time()
+
     def print_log(name: str, content: str):
         print(f"{int(time.time() - START_TIME)} | {name} | {content}")
 
     parser = argparse.ArgumentParser(
         description="Train baseline models (LR, XGBoost, etc.)"
     )
-    
+
     parser.add_argument(
         "path_to_patient_database",
         type=str,
         help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5'",
     )
-    
+
     parser.add_argument(
         "path_to_featurized_patients",
         type=str,
         help="Path to the file containing features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
     )
-    
+
     parser.add_argument(
         "--num_threads",
         type=int,
@@ -74,7 +78,7 @@ if __name__ == '__main__':
         help="Seed to use to split data into train/test splits -- used by PatientDatabase.compute_split(seed)",
         default=0,
     )
-    
+
     # Parse CLI args
     args = parser.parse_args()
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
@@ -82,33 +86,58 @@ if __name__ == '__main__':
     num_threads: int = int(args.num_threads)
     split_seed: int = int(args.split_seed)
     percent_train: float = float(args.percent_train)
-    assert 0 < percent_train < 1, f"percent_train must be between 0 and 1, not {percent_train}"
+    assert (
+        0 < percent_train < 1
+    ), f"percent_train must be between 0 and 1, not {percent_train}"
 
     # Load PatientDatabase
     database = piton.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
-    
+
     # Load featurized patients
     featurized_data = load_from_pkl(PATH_TO_FEATURIZED_PATIENTS)
-    feature_matrix, patient_ids, label_values, label_times = featurized_data[0], featurized_data[1], featurized_data[2], featurized_data[3]
-    print_log("Featurized Patients", f"Loaded from: {PATH_TO_FEATURIZED_PATIENTS}")
+    feature_matrix, patient_ids, label_values, label_times = (
+        featurized_data[0],
+        featurized_data[1],
+        featurized_data[2],
+        featurized_data[3],
+    )
+    print_log(
+        "Featurized Patients", f"Loaded from: {PATH_TO_FEATURIZED_PATIENTS}"
+    )
     print_log("Featurized Patients", f"Number of patients: {len(patient_ids)}")
-    print_log("Featurized Patients", f"Feature matrix shape: {feature_matrix.shape}")
+    print_log(
+        "Featurized Patients", f"Feature matrix shape: {feature_matrix.shape}"
+    )
 
     # Train/test splits
-    print_log("Dataset Split", f"Splitting dataset {round(percent_train, 3)} / {round(1 - percent_train, 3)} train / test, with seed {split_seed}")
-    hashed_pids = np.array([ database.compute_split(split_seed, pid) for pid in patient_ids ])
+    print_log(
+        "Dataset Split",
+        f"Splitting dataset {round(percent_train, 3)} / {round(1 - percent_train, 3)} train / test, with seed {split_seed}",
+    )
+    hashed_pids = np.array(
+        [database.compute_split(split_seed, pid) for pid in patient_ids]
+    )
     train_pids_idx = np.where(hashed_pids < (percent_train * 100))[0]
     test_pids_idx = np.where(hashed_pids >= (percent_train * 100))[0]
-    X_train, y_train = feature_matrix[train_pids_idx], label_values[train_pids_idx]
+    X_train, y_train = (
+        feature_matrix[train_pids_idx],
+        label_values[train_pids_idx],
+    )
     X_test, y_test = feature_matrix[test_pids_idx], label_values[test_pids_idx]
-    print_log("Dataset Split", f"Train shape: X = {X_train.shape}, Y = {y_train.shape}")
-    print_log("Dataset Split", f"Test shape: X = {X_test.shape}, Y = {y_test.shape}")
-    print_log("Dataset Split", f"Prevalence: Total = {round(np.mean(label_values), 3)}, Train = {round(np.mean(y_train), 3)}, Test = {round(np.mean(y_test), 3)}")
+    print_log(
+        "Dataset Split",
+        f"Train shape: X = {X_train.shape}, Y = {y_train.shape}",
+    )
+    print_log(
+        "Dataset Split", f"Test shape: X = {X_test.shape}, Y = {y_test.shape}"
+    )
+    print_log(
+        "Dataset Split",
+        f"Prevalence: Total = {round(np.mean(label_values), 3)}, Train = {round(np.mean(y_train), 3)}, Test = {round(np.mean(y_test), 3)}",
+    )
 
-    def run_analysis(title: str,
-                     y_train, y_train_proba,
-                     y_test, y_test_proba):
+    def run_analysis(title: str, y_train, y_train_proba, y_test, y_test_proba):
         print(f"---- {title} ----")
         print("Train:")
         print_metrics(y_train, y_train_proba)

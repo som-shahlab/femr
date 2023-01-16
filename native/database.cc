@@ -348,8 +348,9 @@ void reader_thread(
     std::atomic<uint64_t>& pid_and_unique_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
-    CSVReader reader(patient_file,
-                     {"patient_id", "code", "start", "value", "metadata"}, ',');
+    CSVReader<ZstdReader> reader(
+        patient_file, {"patient_id", "code", "start", "value", "metadata"},
+        ',');
 
     uint64_t original_patient_id = 0;
     Patient current_patient;
@@ -805,22 +806,44 @@ void process_nested_helper(
 }
 
 template <typename F>
-std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
+std::vector<std::result_of_t<F(CSVReader<TextReader>&)>> process_nested(
     const boost::filesystem::path& root, std::string_view prefix,
-    size_t num_threads, F f) {
+    size_t num_threads, bool actually_necessary,
+    const std::vector<std::string>& columns, char delimiter, F f) {
     boost::filesystem::path directory = root / std::string(prefix);
-    boost::filesystem::path direct_file =
-        root / (std::string(prefix) + ".csv.tsv");
-    if (boost::filesystem::exists(direct_file)) {
-        return {f(direct_file)};
+
+    boost::filesystem::path direct_file_uncompressed =
+        root / (std::string(prefix) + ".csv");
+    boost::filesystem::path direct_file_compressed =
+        root / (std::string(prefix) + ".csv.zst");
+
+    using R = std::result_of_t<F(CSVReader<TextReader>&)>;
+
+    auto helper = [&f, &columns,
+                   &delimiter](const boost::filesystem::path& path) -> R {
+        if (!boost::filesystem::exists(path)) {
+            return {};
+        } else {
+            if (path.extension() == ".zst") {
+                CSVReader<ZstdReader> reader(path, columns, delimiter);
+                return f(reader);
+            } else {
+                CSVReader<TextReader> reader(path, columns, delimiter);
+                return f(reader);
+            }
+        }
+    };
+
+    if (boost::filesystem::exists(direct_file_compressed)) {
+        return {helper(direct_file_compressed)};
+    } else if (boost::filesystem::exists(direct_file_uncompressed)) {
+        return {helper(direct_file_uncompressed)};
     } else if (boost::filesystem::exists(directory)) {
         std::vector<std::thread> threads;
         moodycamel::BlockingConcurrentQueue<
             boost::optional<boost::filesystem::path>>
             queue;
-        std::vector<
-            std::vector<std::result_of_t<F(const boost::filesystem::path&)>>>
-            result_queues(num_threads);
+        std::vector<std::vector<R>> result_queues(num_threads);
 
         for (auto& entry : boost::make_iterator_range(
                  boost::filesystem::directory_iterator(directory), {})) {
@@ -829,8 +852,8 @@ std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
         }
 
         for (size_t i = 0; i < num_threads; i++) {
-            threads.emplace_back([i, &queue, &f, &result_queues]() {
-                process_nested_helper(queue, f, result_queues[i]);
+            threads.emplace_back([i, &queue, &helper, &result_queues]() {
+                process_nested_helper(queue, helper, result_queues[i]);
             });
             queue.enqueue(boost::none);
         }
@@ -843,8 +866,7 @@ std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
         for (const auto& vec : result_queues) {
             size += vec.size();
         }
-        std::vector<std::result_of_t<F(const boost::filesystem::path&)>>
-            final_result;
+        std::vector<R> final_result;
         final_result.reserve(size);
         for (auto& vec : result_queues) {
             for (auto& entry : vec) {
@@ -853,8 +875,13 @@ std::vector<std::result_of_t<F(const boost::filesystem::path)>> process_nested(
         }
         return final_result;
     } else {
-        throw std::runtime_error(absl::StrCat("Could not find directory ",
-                                              root.string(), " , ", prefix));
+        if (actually_necessary) {
+            throw std::runtime_error(absl::StrCat(
+                "Could not find directory ", root.string(), " , ", prefix));
+        } else {
+            std::vector<R> final_result;
+            return final_result;
+        }
     }
 }
 
@@ -862,12 +889,9 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
     auto valid = process_nested(
-        concept, "concept", num_threads,
-        [&](const boost::filesystem::path& path) {
+        concept, "concept", num_threads, true,
+        {"concept_id", "standard_concept"}, delimiter, [&](auto& reader) {
             std::vector<uint64_t> result;
-
-            CSVReader reader(path, {"concept_id", "standard_concept"},
-                             delimiter);
 
             while (reader.next_row()) {
                 uint64_t concept_id;
@@ -893,7 +917,7 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
 
 std::pair<absl::flat_hash_map<uint64_t, uint32_t>,
           std::vector<std::vector<uint32_t>>>
-get_parents(const std::vector<uint64_t>& raw_codes,
+get_parents(std::vector<uint64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
     auto standard_code_map =
@@ -912,13 +936,10 @@ get_parents(const std::vector<uint64_t>& raw_codes,
                                            "Is a"};
 
     auto parents = process_nested(
-        concept, "concept_relationship", num_threads,
-        [&](const boost::filesystem::path& path) {
+        concept, "concept_relationship", num_threads, false,
+        {"concept_id_1", "concept_id_2", "relationship_id"}, delimiter,
+        [&](auto& reader) {
             ParentMap result;
-
-            CSVReader reader(
-                path, {"concept_id_1", "concept_id_2", "relationship_id"},
-                delimiter);
 
             while (reader.next_row()) {
                 const auto& rel_id = reader.get_row()[2];
@@ -997,6 +1018,7 @@ get_parents(const std::vector<uint64_t>& raw_codes,
             uint32_t index = next_index++;
             index_map[target_index] = index;
             to_process.push_back(target_index);
+            raw_codes.push_back(target_index);
             return index;
         } else {
             return iter->second;
@@ -1029,16 +1051,12 @@ std::vector<std::pair<std::string, std::string>> get_concept_text(
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
     auto texts = process_nested(
-        concept, "concept", num_threads,
-        [&](const boost::filesystem::path& path) {
+        concept, "concept", num_threads, true,
+        {"concept_id", "concept_code", "vocabulary_id", "concept_name"},
+        delimiter, [&](auto& reader) {
             std::vector<
                 std::pair<std::pair<std::string, std::string>, uint32_t>>
                 result;
-
-            CSVReader reader(
-                path,
-                {"concept_id", "concept_code", "vocabulary_id", "concept_name"},
-                delimiter);
 
             while (reader.next_row()) {
                 uint64_t concept_id;
@@ -1094,7 +1112,7 @@ const std::vector<uint32_t>& all_parents_helper(
     return *value;
 }
 
-Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
+Ontology create_ontology(std::vector<uint64_t> raw_codes,
                          const boost::filesystem::path& concept,
                          const boost::filesystem::path& target, char delimiter,
                          size_t num_threads) {
@@ -1146,6 +1164,13 @@ Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
             all_parent.add_value(container_to_view(parents));
         }
     }
+    {
+        DictionaryWriter concept_ids(target / "concept_id");
+        for (size_t i = 0; i < raw_codes.size(); i++) {
+            concept_ids.add_value(container_to_view(
+                absl::Span<const uint64_t>(raw_codes.data() + i, 1)));
+        }
+    }
     return Ontology(target);
 }
 
@@ -1154,7 +1179,8 @@ Ontology::Ontology(const boost::filesystem::path& path)
       parent_dict(path / "parent", true),
       children_dict(path / "children", true),
       all_parents_dict(path / "all_parents", true),
-      text_description(path / "text_description", true) {}
+      text_description(path / "text_description", true),
+      concept_ids(path / "concept_id", true) {}
 
 absl::Span<const uint32_t> Ontology::get_parents(uint32_t code) {
     return read_span<uint32_t>(*parent_dict, code);
@@ -1173,4 +1199,15 @@ std::string_view Ontology::get_text_description(uint32_t code) {
     } else {
         return (*text_description)[code];
     }
+}
+
+boost::optional<uint32_t> Ontology::get_code_from_concept_id(
+    uint64_t concept_id) {
+    std::string_view target =
+        container_to_view(absl::Span<uint64_t>(&concept_id, 1));
+    return concept_ids->find(target);
+}
+
+uint64_t Ontology::get_concept_id_from_code(uint32_t code) {
+    return read_span<uint64_t>(*concept_ids, code)[0];
 }

@@ -58,17 +58,16 @@ pybind_library(
     ],
 )
 
-string_flag(name = "cuda", build_setting_default = "disabled")
+string_flag(name="cuda", build_setting_default="disabled")
 
-config_setting(
-    name = "cuda_enabled",
-    flag_values = {":cuda": "enabled"}
+config_setting(name="cuda_enabled", flag_values={":cuda": "enabled"})
+
+jax_extension = select(
+    {
+        ":cuda_enabled": [":jax_extension"],
+        "//conditions:default": [":cpu_jax_extension"],
+    }
 )
-
-jax_extension = select({
-    ":cuda_enabled": [":jax_extension"],
-    "//conditions:default": [":cpu_jax_extension"],
-})
 
 pybind_library(
     name="dataloader_extension",
@@ -164,17 +163,6 @@ cc_library(
         "@eigen",
         "@com_google_absl//absl/types:span",
         "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_test(
-    name="survival_metrics_test",
-    srcs=[
-        "survival_metrics_test.cc",
-    ],
-    deps=[
-        ":survival_metrics",
-        "@gtest//:gtest_main",
     ],
 )
 
@@ -395,7 +383,8 @@ pybind_extension(
     srcs=[
         "extension.cc",
     ],
-    deps= jax_extension + [
+    deps=jax_extension
+    + [
         ":datasets_extension",
         ":dataloader_extension",
         ":metrics_extension",
@@ -450,18 +439,6 @@ cc_binary(
     ],
 )
 
-cc_binary(
-    name="detect_duplicates",
-    srcs=[
-        "detect_duplicates.cc",
-    ],
-    deps=[
-        "@json",
-        ":database",
-        ":flatmap",
-    ],
-)
-
 cc_library(
     name="flatmap",
     hdrs=[
@@ -489,15 +466,5 @@ cc_library(
     ],
     deps=[
         "@json",
-    ],
-)
-
-
-cc_binary(
-    name="generate_survival_dataset",
-    srcs=["generate_survival_dataset.cc"],
-    deps=[
-        ":database",
-        ":flatmap",
     ],
 )

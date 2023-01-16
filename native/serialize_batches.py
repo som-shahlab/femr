@@ -1,10 +1,11 @@
 import os
 import pickle
+
+import msgpack
+import numpy as np
 import tensorflow as tf
 
 import piton.extension.dataloader
-import msgpack
-import numpy as np
 
 data_path = "/local-scratch/nigam/projects/ethanid/piton_1_extract"
 

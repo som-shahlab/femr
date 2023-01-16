@@ -9,11 +9,13 @@ os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
 
 
 import pickle
-import piton.extension.dataloader
-import piton.models.transformer
+
 import msgpack
 import numpy as np
 from jax import make_jaxpr
+
+import piton.extension.dataloader
+import piton.models.transformer
 
 data_path = "/local-scratch/nigam/projects/ethanid/piton_1_extract"
 
@@ -31,7 +33,6 @@ data = piton.datasets.PatientDatabase(data_path)
 male_code = data.get_code_dictionary().index("Gender/M")
 
 import json
-
 
 dictionary = msgpack.load(open(dictionary_path, "rb"), use_list=False)
 
@@ -88,13 +89,13 @@ loader = piton.extension.dataloader.BatchCreator(data_path, "trash/config.json")
 print("Ready to go!")
 print(loader.get_batch("train", 1))
 
-import piton.models.transformer
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jmp
 import optax
 
-import jmp
+import piton.models.transformer
 
 
 def roberta_classification_fn(batch):
@@ -127,8 +128,9 @@ if False:
             params[k] = v
 
 
-from jax import debug
 from typing import TypeVar
+
+from jax import debug
 
 T = TypeVar("T")
 

@@ -55,6 +55,9 @@ class Ontology {
 
     std::string_view get_text_description(uint32_t code);
 
+    boost::optional<uint32_t> get_code_from_concept_id(uint64_t concept_id);
+    uint64_t get_concept_id_from_code(uint32_t code);
+
    private:
     LazyDictionary main_dictionary;
     LazyDictionary parent_dict;
@@ -62,6 +65,7 @@ class Ontology {
     LazyDictionary all_parents_dict;
 
     LazyDictionary text_description;
+    LazyDictionary concept_ids;
 };
 
 enum class ValueType {
@@ -209,7 +213,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
     const boost::filesystem::path& concept,
     const boost::filesystem::path& target, char delimiter, size_t num_threads);
 
-Ontology create_ontology(const std::vector<uint64_t>& raw_codes,
+Ontology create_ontology(std::vector<uint64_t> raw_codes,
                          const boost::filesystem::path& concept,
                          const boost::filesystem::path& target, char delimiter,
                          size_t num_threads);

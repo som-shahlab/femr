@@ -289,23 +289,25 @@ void register_datasets_extension(py::module& root) {
              py::return_value_policy::reference_internal)
         .def("get_dictionary", &Ontology::get_dictionary,
              py::return_value_policy::reference_internal)
-        .def("get_text_description", [](Ontology& self, uint32_t index) {
-            if (index >= self.get_dictionary().size()) {
-                throw py::index_error();
-            }
-            auto descr = self.get_text_description(index);
-            return py::str(descr.data(), descr.size());
-        });
+        .def("get_text_description",
+             [](Ontology& self, uint32_t index) {
+                 if (index >= self.get_dictionary().size()) {
+                     throw py::index_error();
+                 }
+                 auto descr = self.get_text_description(index);
+                 return py::str(descr.data(), descr.size());
+             })
+        .def("get_code_from_concept_id", &Ontology::get_code_from_concept_id)
+        .def("get_concept_id_from_code", &Ontology::get_concept_id_from_code);
 
     py::class_<EventWrapper>(m, "EventWrapper")
         .def_property_readonly("code", &EventWrapper::code)
         .def_property_readonly("start", &EventWrapper::start)
         .def_property_readonly("value", &EventWrapper::value)
-        .def(
-            "__getattr__",
-            [](EventWrapper& wrapper, const std::string& attr) {
-                return wrapper.metadata().attr("get")(attr, py::none());
-            })
+        .def("__getattr__",
+             [](EventWrapper& wrapper, const std::string& attr) {
+                 return wrapper.metadata().attr("get")(attr, py::none());
+             })
         .def("__repr__", [python_event](EventWrapper& wrapper) {
             using namespace pybind11::literals;
             return py::str(python_event(

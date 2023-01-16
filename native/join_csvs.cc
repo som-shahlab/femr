@@ -136,7 +136,7 @@ void sort_reader(
         } else {
             auto source = *item;
 
-            CSVReader reader(source.string(), delimiter);
+            CSVReader<ZstdReader> reader(source.string(), delimiter);
             if (reader.columns != columns) {
                 throw std::runtime_error("Columns of input don't match " +
                                          source.string());
@@ -172,7 +172,8 @@ void sort_writer(
     auto sort_indices = get_sort_indices(columns, sort_keys);
 
     auto flush = [&]() {
-        auto target_file = target_dir / boost::filesystem::unique_path();
+        auto target_file = target_dir / boost::filesystem::unique_path(
+                                            "%%%%%%%%%%%%%%.csv.zst");
 
         for (const auto& row : rows) {
             convert_to_column_values(sort_keys, sort_indices, row, row_values);
@@ -184,7 +185,7 @@ void sort_writer(
                                                         a, b);
                   });
 
-        CSVWriter writer(target_file.string(), columns, delimiter);
+        CSVWriter<ZstdWriter> writer(target_file.string(), columns, delimiter);
         for (const auto& row_index : row_indices) {
             writer.add_row(rows[row_index]);
         }
@@ -278,7 +279,7 @@ void join_csvs(
     const boost::filesystem::path& target_file,
     const std::vector<std::pair<std::string, ColumnValueType>>& sort_keys,
     char delimiter) {
-    std::vector<CSVReader> source_files;
+    std::vector<CSVReader<ZstdReader>> source_files;
 
     std::vector<std::string> columns;
 
@@ -286,7 +287,7 @@ void join_csvs(
              boost::filesystem::directory_iterator(source_directory), {})) {
         const boost::filesystem::path& source = entry.path();
         if (columns.empty()) {
-            columns = get_csv_columns(source.string(), delimiter);
+            columns = get_csv_columns(source, delimiter);
         }
         source_files.emplace_back(source, delimiter);
         if (source_files.size() == 1) {
@@ -303,7 +304,7 @@ void join_csvs(
         return;
     }
 
-    CSVWriter target(target_file, columns, delimiter);
+    CSVWriter<ZstdWriter> target(target_file, columns, delimiter);
 
     auto sort_indices = get_sort_indices(columns, sort_keys);
 
