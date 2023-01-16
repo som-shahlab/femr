@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import collections
 import multiprocessing
-import pickle
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Mapping, Optional, Tuple
+
+from nptyping import NDArray, Shape
 
 import numpy as np
 import scipy.sparse

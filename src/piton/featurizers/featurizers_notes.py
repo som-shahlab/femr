@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import transformers
-from icecream import ic
 from nptyping import Int, NDArray, Shape
 from torchtyping import TensorType
 from transformers import AutoModel, AutoTokenizer
