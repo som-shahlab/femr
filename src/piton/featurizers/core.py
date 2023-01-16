@@ -47,7 +47,7 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
     indices: List[int] = [] # maps each element in `data`` to its column in the sparse matrix
     indptr: List[int] = [] # maps each element in `data` and `indices` to the rows of the sparse matrix
     label_data: List[Tuple] = []
-    
+
     # For each Patient...
     for patient_id in patient_ids:
         patient: Patient = database[patient_id] # type: ignore
@@ -59,7 +59,9 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
         # Keep track of starting column for each successive featurizer as we combine their features
         # into one large matrix
         column_offset: int = 0 
+    
         # For each Featurizer, apply it to this Patient...
+        columns_by_featurizer = []
         for featurizer in featurizers:
             # `features` can be thought of as a 2D array (i.e. list of lists),
             # where rows correspond to `labels` and columns to `ColumnValue` (i.e. features)
@@ -67,29 +69,29 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
             assert len(features) == len(labels), (
                 f"The featurizer `{featurizer}` didn't generate a set of features for every label for patient {patient_id} ({len(features)} != {len(labels)})"
             )
-            
-            # For each Label, add a row for its features in our CSR sparse matrix...
-            for (label, label_features) in zip(labels, features):
-                # `data[indptr[i]:indptr[i+1]]` is the data corresponding to row `i` in CSR sparse matrix
-                # `indices[indptr[i]:indptr[i+1]]` is the columns corresponding to row `i` in CSR sparse matrix
-                indptr.append(len(indices))
-                label_data.append((
-                    patient_id, # patient_ids
-                    label.value, # result_labels
-                    label.time, # labeling_time
-                ))
-                
-                for (column, value) in label_features:
-                    assert 0 <= column < featurizer.get_num_columns(), (
-                        f"The featurizer {featurizer} provided an out of bounds column for "
+            columns_by_featurizer.append(features)
+        
+        for i, label in enumerate(labels):
+            indptr.append(len(indices))
+            label_data.append((
+                patient_id, # patient_ids
+                label.value, # result_labels
+                label.time, # labeling_time
+            ))
+
+            column_offset = 0
+            for j, feature_columns in enumerate(columns_by_featurizer):
+                for column, value in feature_columns[i]:
+                    assert 0 <= column < featurizers[j].get_num_columns(), (
+                        f"The featurizer {featurizers[j]} provided an out of bounds column for "
                         f"{column} on patient {patient_id} ({column} must be between 0 and "
-                        f"{featurizer.get_num_columns()})"
+                        f"{featurizers[j].get_num_columns()})"
                     )
                     indices.append(column_offset + column)
                     data.append(value)
             
-            # Record what the starting column should be for the next featurizer
-            column_offset += featurizer.get_num_columns()
+                # Record what the starting column should be for the next featurizer
+                column_offset += featurizers[j].get_num_columns()
     indptr.append(len(indices)) # Need one last `indptr` for end of last row in CSR sparse matrix
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
@@ -111,7 +113,7 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
     label_times: NDArray[Shape["n_labels, 1"], np.datetime64]  = np.array([ x[2] for x in label_data ], dtype=np.datetime64)
     assert label_pids.shape == label_values.shape == label_times.shape, f"These should all be equal: {label_pids.shape} | {label_values.shape} | {label_times.shape}"
     
-    data_matrix.check_format() # remove when we think its works
+    # data_matrix.check_format() # remove when we think its works
     
     return data_matrix, label_pids, label_values, label_times
 

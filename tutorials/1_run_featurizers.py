@@ -131,7 +131,6 @@ if __name__ == '__main__':
     age = AgeFeaturizer()
     count = CountFeaturizer(is_ontology_expansion=True)
     featurizer_age_count = FeaturizerList([age, count])
-    print(age.to_dict())
 
     # Preprocessing the featurizers, which includes processes such as normalizing age. 
     print_log("Preprocessing Featurizer", "Starting")

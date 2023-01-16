@@ -49,6 +49,7 @@ class AgeFeaturizer(Featurizer):
     
     @classmethod
     def aggregate_featurizers(self, featurizers: List[Featurizer]) -> AgeFeaturizer:
+        "After preprocessing featurizer using multiprocessing, this method aggregates all those featurizers into one."
         # Aggregating age featurizers
         for featurizer in featurizers:
             if featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
@@ -138,6 +139,8 @@ class CountFeaturizer(Featurizer):
     
     @classmethod
     def aggregate_featurizers(cls, featurizers: List[Featurizer]) -> CountFeaturizer:
+        """After preprocessing featurizer using multiprocessing, this method aggregates all those featurizers into one."""
+
         # Aggregating count featurizers
         patient_codes_dict_list = [featurizer.to_dict()["patient_codes"]["values"] for featurizer in featurizers]
         patient_codes = list(itertools.chain.from_iterable(patient_codes_dict_list))
