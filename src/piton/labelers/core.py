@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import collections
 import datetime
-import os
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping

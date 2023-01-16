@@ -10,12 +10,10 @@ from nptyping import NDArray, Shape
 
 import numpy as np
 import scipy.sparse
-import pickle
 
 from .. import Patient
 from ..labelers.core import Label, LabeledPatients
 from piton.extension import datasets as extension_datasets
-from piton.datasets import PatientCollection
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
 
@@ -74,9 +72,9 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
                 label.value, # result_labels
                 label.time, # labeling_time
             ))
-            
-            # Keep track of starting column for each successive featurizer as we combine their features
-            # into one large matrix
+
+            # Keep track of starting column for each successive featurizer as we 
+            # combine their features into one large matrix
             column_offset: int = 0 
             for j, feature_columns in enumerate(columns_by_featurizer):
                 for column, value in feature_columns[i]:
@@ -92,14 +90,16 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
                 column_offset += featurizers[j].get_num_columns()
     indptr.append(len(indices)) # Need one last `indptr` for end of last row in CSR sparse matrix
 
-    # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
-    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(data, dtype=np.float32)
-    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(indices, dtype=np.int64)
-    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(indptr, dtype=np.int64)
     # n_rows = number of Labels across all Patients
     total_rows: int = len(label_data)
     # n_cols = sum of number of columns output by each Featurizer
     total_columns: int = sum(x.get_num_columns() for x in featurizers)
+
+    # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
+    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(data, dtype=np.float32)
+    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(indices, dtype=np.int64)
+    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(indptr, dtype=np.int64)
+
     assert np_indptr.shape[0] == total_rows + 1, f"`indptr` length should be equal to '{total_rows + 1}', but instead is '{np_indptr.shape[0]}"
     assert np_data.shape == np_indices.shape, f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
     data_matrix = scipy.sparse.csr_matrix(
@@ -298,8 +298,8 @@ class Featurizer(ABC):
 
         Where each ColumnValue is of the form: (idx of column for this feature, feature value).
         
-        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct Label
-        and each (sparse) column is a feature
+        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct 
+        Label and each (sparse) column is a feature
 
         Args:
             patient (Patient): A patient to featurize.
@@ -307,10 +307,12 @@ class Featurizer(ABC):
             ontology (Optional[Ontology]): Ontology for Event codes.
 
         Returns:
-             List[List[ColumnValue]]: A list of 'features' (where 'features' is a list itself) for each Label.
+             List[List[ColumnValue]]: A list of 'features' (where 'features' is a list itself) for 
+             each Label.
                 The length of this list of lists == length of `labels`
                     [idx] = corresponds to the Label at `labels[idx]`
-                    [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features for this label
+                    [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features 
+                    for this label
         """
         pass
 
@@ -323,7 +325,9 @@ class Featurizer(ABC):
         return "no name"
 
     def is_needs_preprocessing(self) -> bool:
-        """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()` should do nothing."""
+        """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()` 
+        should do nothing.
+        """
         return False
 
     def to_dict(self) -> Dict[str, Any]:

@@ -12,7 +12,6 @@ import torch
 import transformers
 from torchtyping import TensorType
 from transformers import AutoModel, AutoTokenizer
-from icecream import ic
 from .. import Event, Patient
 from ..datasets import PatientDatabase
 from .core import ColumnValue
@@ -222,7 +221,7 @@ class NoteFeaturizer:
         truncation = params.get("tokenizer_truncation", True)
 
         # Run notes through an already-trained tokenizer
-        text: List = [ note[1].value for (__, __, notes) in notes_for_labels for note in notes ]
+        text: List = [ note[1].value for (_, _, notes) in notes_for_labels for note in notes ]
         notes_tokenized: NotesTokenized = tokenizer(
             text,
             padding=padding,
@@ -394,7 +393,7 @@ class NoteFeaturizer:
         ]
         ctx = multiprocessing.get_context("forkserver")
         with ctx.Pool(self.n_cpu_jobs) as pool:
-            __: List[NotesTokenized] = list(
+            _: List[NotesTokenized] = list(
                 pool.imap(self.tokenize_parallel, tasks)
             )
         print_log("featurize", "Finished Tokenization...")
