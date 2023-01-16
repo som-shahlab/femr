@@ -3,28 +3,21 @@ from __future__ import annotations
 
 import collections
 import datetime
+import multiprocessing
 import os
 import pprint
+import random
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import (
-    Any,
-    DefaultDict,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, DefaultDict, Dict, List, Literal, Optional, Tuple, Union
+
+import numpy as np
 from nptyping import NDArray, Shape
 
-import random
-from ..datasets import PatientDatabase
-import numpy as np
 from .. import Patient
-import multiprocessing
+from ..datasets import PatientDatabase
+
 
 @dataclass(frozen=True)
 class TimeHorizon:
@@ -51,6 +44,7 @@ LabelType = Union[
 
 VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
+
 @dataclass
 class Label:
     """An individual label for a particular patient at a particular time."""
@@ -58,29 +52,32 @@ class Label:
     time: datetime.datetime
     value: Union[bool, int, float, SurvivalValue]
 
-def _apply_labeling_function(args: Tuple[LabelingFunction, str, List[int]]) -> Dict[int, List[Label]]:
+
+def _apply_labeling_function(
+    args: Tuple[LabelingFunction, str, List[int]]
+) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `LabelingFunction`.
     """
     labeling_function: LabelingFunction = args[0]
     database_path: str = args[1]
     patient_ids: List[int] = args[2]
-    
+
     database: PatientDatabase = PatientDatabase(database_path)
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
-        patient: Patient = database[patient_id] # type: ignore
+        patient: Patient = database[patient_id]  # type: ignore
         labels: List[Label] = labeling_function.label(patient)
 
         # Only add a patient to the `patient_to_labels` dict if they have at least one label
-        # This allows for faster iteration over the .keys() of this dict, since we know 
+        # This allows for faster iteration over the .keys() of this dict, since we know
         # that each patient in this dict must have a label (which is faster than iterating over each
         # patient and checking len(labels) > 0).
         if len(labels) > 0:
             patients_to_labels[patient_id] = labels
-    
+
     return patients_to_labels
-        
+
 
 class LabelingFunction(ABC):
     """An interface for labeling functions.
@@ -110,7 +107,7 @@ class LabelingFunction(ABC):
         """
         pass
 
-    def get_required_codes(self) -> List[int]: # type: ignore
+    def get_required_codes(self) -> List[int]:  # type: ignore
         """Return the set of codes that a patient must have at least one to qualify for this labeler.
 
         This allows us to only extract patients from the :class:`PatientDatabase` who have a code
@@ -139,17 +136,17 @@ class LabelingFunction(ABC):
         pass
 
     def apply(
-        self, 
+        self,
         database_path: str,
-        num_threads: int = 1, 
-        num_patients: Optional[int] = None
+        num_threads: int = 1,
+        num_patients: Optional[int] = None,
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
             database_path (str): Path to `PatientDatabase` on disk
             num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
-            num_patients (Optional[int], optional): Number of patients to process - useful for debugging. 
+            num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
                 If None, use all patients.
 
         Returns:
@@ -162,13 +159,17 @@ class LabelingFunction(ABC):
         pids_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
-        tasks = [ (self, database_path, pid_part) for pid_part in pids_parts ]
-        ctx = multiprocessing.get_context('forkserver')
+        tasks = [(self, database_path, pid_part) for pid_part in pids_parts]
+        ctx = multiprocessing.get_context("forkserver")
         with ctx.Pool(num_threads) as pool:
-            results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
-        
+            results: List[Dict[int, List[Label]]] = list(
+                pool.imap(_apply_labeling_function, tasks)
+            )
+
         # Join results and return
-        patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
+        patients_to_labels: Dict[int, List[Label]] = dict(
+            collections.ChainMap(*results)
+        )
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
@@ -194,19 +195,23 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
 
     def get_labels_from_patient_idx(self, idx: int) -> List[Label]:
         return self.patients_to_labels[idx]
-    
+
     def get_all_patient_ids(self) -> List[int]:
         return sorted(list(self.patients_to_labels.keys()))
-    
+
     def get_patients_to_labels(self) -> Dict[int, List[Label]]:
         return self.patients_to_labels
-    
+
     def get_labeler_type(self) -> LabelType:
         return self.labeler_type
 
-    def as_numpy_arrays(self) -> Tuple[NDArray[Shape["n_patients, 1"], np.int64], 
-                                       NDArray[Shape["n_patients, 1"], Any], 
-                                       NDArray[Shape["n_patients, 1"], datetime.datetime]]:
+    def as_numpy_arrays(
+        self,
+    ) -> Tuple[
+        NDArray[Shape["n_patients, 1"], np.int64],
+        NDArray[Shape["n_patients, 1"], Any],
+        NDArray[Shape["n_patients, 1"], datetime.datetime],
+    ]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
 
         One NDArray for each of:
@@ -271,8 +276,12 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             label_times (NDArray): Times that the corresponding label occurs.
             labeler_type (LabelType): LabelType of the corresponding labels.
         """
-        patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)
-        for patient_id, l_value, l_time in zip(list(patient_ids), list(label_values), list(label_times)):
+        patients_to_labels: DefaultDict[
+            int, List[Label]
+        ] = collections.defaultdict(list)
+        for patient_id, l_value, l_time in zip(
+            list(patient_ids), list(label_values), list(label_times)
+        ):
             patients_to_labels[patient_id].append(
                 Label(time=l_time, value=l_value)
             )
@@ -422,14 +431,10 @@ class FixedTimeHorizonEventLF(LabelingFunction):
             is_censored: bool = end_time < time + time_horizon.end
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(
-                    Label(time=time, value=True)
-                )
+                results.append(Label(time=time, value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(
-                    Label(time=time, value=False)
-                )
+                results.append(Label(time=time, value=False))
 
         # # checks that we have a label for each prediction time (even if `None``)
         # assert len(results) == len(self.get_prediction_times(patient))
@@ -451,7 +456,7 @@ class OneLabelPerPatient(LabelingFunction):
     def __init__(self, labeling_function, seed=10):
         self.labeling_function = labeling_function
         self.seed = seed
-    
+
     def label(self, patient: Patient) -> List[Label]:
         labels = self.labeling_function.label(patient)
         if len(labels) == 0:

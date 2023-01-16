@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import List
 
 from .. import Event
-from ..labelers.core import Label
 from ..featurizers.featurizers_notes import NotesProcessed
+from ..labelers.core import Label
+
 
 def remove_short_notes(
     notes: NotesProcessed, label: Label, **kwargs
@@ -25,17 +26,21 @@ def remove_short_notes(
             new_notes.append(note)
     return new_notes
 
+
 def keep_only_notes_matching_codes(
-    notes: NotesProcessed, label: Label, **kwargs,
+    notes: NotesProcessed,
+    label: Label,
+    **kwargs,
 ) -> NotesProcessed:
     """Keep only notes that have a `code` contained in `keep_notes_with_codes`."""
-    codes: List[int] = kwargs.get('keep_notes_with_codes', [])
+    codes: List[int] = kwargs.get("keep_notes_with_codes", [])
     new_notes: NotesProcessed = []
     for note in notes:
         if note[1].code in codes:
             new_notes.append(note)
     return new_notes
-    
+
+
 def remove_notes_after_label(
     notes: NotesProcessed, label: Label, **kwargs
 ) -> NotesProcessed:
@@ -46,6 +51,7 @@ def remove_notes_after_label(
             new_notes.append(note)
     return new_notes
 
+
 def join_all_notes(
     notes: NotesProcessed, label: Label, **kwargs
 ) -> NotesProcessed:
@@ -54,11 +60,12 @@ def join_all_notes(
     note = Event(start=None, code=None, value=text)
     return [(0, note)]
 
+
 def keep_only_last_n_chars(
     notes: NotesProcessed, label: Label, **kwargs
 ) -> NotesProcessed:
     """Keep the last `n_chars` from each note."""
-    n_chars: int = kwargs.get('keep_last_n_chars', None)
+    n_chars: int = kwargs.get("keep_last_n_chars", None)
     if n_chars is None:
         return notes
     new_notes: NotesProcessed = []
@@ -67,6 +74,8 @@ def keep_only_last_n_chars(
             text: str = bytes(note[1].value).decode("utf8")
         else:
             text: str = str(note[1].value)
-        event = Event(start=note[1].start, code=note[1].code, value=text[:n_chars])
+        event = Event(
+            start=note[1].start, code=note[1].code, value=text[:n_chars]
+        )
         new_notes.append((note[0], event))
     return new_notes

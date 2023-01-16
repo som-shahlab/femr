@@ -15,25 +15,25 @@ parser.add_argument("--num_batch_threads", type=int)
 
 args = parser.parse_args()
 
-import pickle
-import piton.extension.dataloader
-from immutabledict import immutabledict
-import logging
-import queue
-import msgpack
-import piton.models.transformer
+import copy
 import functools
+import logging
+import pickle
+import queue
 import random
+import threading
+from typing import TypeVar
+
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import optax
-import queue
-import threading
-import copy
 import jmp
+import msgpack
+import optax
+from immutabledict import immutabledict
 
-from typing import TypeVar
+import piton.extension.dataloader
+import piton.models.transformer
 
 T = TypeVar("T")
 
@@ -58,18 +58,18 @@ rootLogger.info(f"Training model with {args}")
 with open(args.batch_info_path, "rb") as f:
     batch_info = msgpack.load(f, use_list=False)
 
-batch_config = batch_info['config']
+batch_config = batch_info["config"]
 
 
-batch_task = batch_config['task']
+batch_task = batch_config["task"]
 task = {}
-task['type'] = batch_task['type']
-if batch_task['type'] == "survival_clmbr":
-    task['num_time_bins'] = len(batch_task['survival_dict']['time_bins'])
-    task['num_codes'] = len(batch_task['survival_dict']['codes'])
-    task['dim'] = args.clmbr_survival_dim
-elif batch_config['task']['type'] == "clmbr":
-    task['vocab_size'] = batch_task['vocab_size']
+task["type"] = batch_task["type"]
+if batch_task["type"] == "survival_clmbr":
+    task["num_time_bins"] = len(batch_task["survival_dict"]["time_bins"])
+    task["num_codes"] = len(batch_task["survival_dict"]["codes"])
+    task["dim"] = args.clmbr_survival_dim
+elif batch_config["task"]["type"] == "clmbr":
+    task["vocab_size"] = batch_task["vocab_size"]
 else:
     rootLogger.error("Invalid task?")
     exit()
@@ -80,7 +80,7 @@ config = {
     "seed": batch_config["seed"],
     "task": task,
     "transformer": {
-        "vocab_size": batch_config['transformer']['vocab_size'],
+        "vocab_size": batch_config["transformer"]["vocab_size"],
         "hidden_size": 768,
         "intermediate_size": 3072,
         "n_heads": 12,
@@ -100,6 +100,7 @@ config_path = os.path.join(args.directory, "config.msgpack")
 with open(config_path, "wb") as out:
     msgpack.dump(config, out)
 
+
 def to_immutable(d):
     result = {}
     for k, v in d.items():
@@ -107,22 +108,34 @@ def to_immutable(d):
             result[k] = to_immutable(v)
         else:
             result[k] = v
-    
+
     return immutabledict(result)
+
 
 config = to_immutable(config)
 
-loader = piton.extension.dataloader.BatchCreator(args.data_path, args.batch_info_path)
+loader = piton.extension.dataloader.BatchCreator(
+    args.data_path, args.batch_info_path
+)
 
-logging.info("Loaded batches %s %s", loader.get_number_of_batches("train"), loader.get_number_of_batches("dev"))
+logging.info(
+    "Loaded batches %s %s",
+    loader.get_number_of_batches("train"),
+    loader.get_number_of_batches("dev"),
+)
+
 
 def model_fn(config, batch):
     model = piton.models.transformer.EHRTransformer(config)(batch)
     return model
 
+
 dummy_batch = jax.tree_map(lambda a: jnp.array(a), loader.get_batch("train", 0))
 
-logging.info("Got dummy batch %s", str(jax.tree_map(lambda a: (a.shape, a.dtype, a.device()), dummy_batch)))
+logging.info(
+    "Got dummy batch %s",
+    str(jax.tree_map(lambda a: (a.shape, a.dtype, a.device()), dummy_batch)),
+)
 
 rng = jax.random.PRNGKey(42)
 model = hk.transform(model_fn)
@@ -135,17 +148,24 @@ params = jax.jit(model.init, static_argnames="config")(
     batch=dummy_batch,
 )
 
-if batch_task['type'] == "survival_clmbr":
-    old_weights = params['EHRTransformer/~/SurvivalCLMBRTask']['code_weights']
-    manual_weights = jnp.log2(jnp.array(batch_task['survival_dict']['lambdas'])).astype(dtype=old_weights.dtype)
-    params['EHRTransformer/~/SurvivalCLMBRTask']['code_weights'] = old_weights.at[:, -1].set(manual_weights)
-elif batch_config['task']['type'] == "clmbr":
+if batch_task["type"] == "survival_clmbr":
+    old_weights = params["EHRTransformer/~/SurvivalCLMBRTask"]["code_weights"]
+    manual_weights = jnp.log2(
+        jnp.array(batch_task["survival_dict"]["lambdas"])
+    ).astype(dtype=old_weights.dtype)
+    params["EHRTransformer/~/SurvivalCLMBRTask"][
+        "code_weights"
+    ] = old_weights.at[:, -1].set(manual_weights)
+elif batch_config["task"]["type"] == "clmbr":
     pass
 else:
     rootLogger.error("Invalid task?")
     exit()
 
-logging.info("Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params)))
+logging.info(
+    "Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params))
+)
+
 
 def _cast_floating_to(tree: T, dtype: jnp.dtype) -> T:
     def conditional_cast(x):
@@ -167,7 +187,7 @@ def compute_total_loss(split, params, rng, config):
     num_to_get = min(500, loader.get_number_of_batches(split))
     for i in range(num_to_get):
         batch = loader.get_batch(split, i)
-        total_loss += compute_loss( 
+        total_loss += compute_loss(
             _cast_floating_to(params, jnp.float16), rng, config, batch
         )
 
@@ -248,7 +268,10 @@ best_loss = float("inf")
 
 index_queue = queue.Queue(maxsize=300)
 
-def index_thread(index_queue, seed, total_steps, num_train_batches, num_batch_threads):
+
+def index_thread(
+    index_queue, seed, total_steps, num_train_batches, num_batch_threads
+):
     rng = random.Random(seed)
     order = None
     for step in range(total_steps):
@@ -260,6 +283,7 @@ def index_thread(index_queue, seed, total_steps, num_train_batches, num_batch_th
 
     for _ in range(num_batch_threads):
         index_queue.put(None)
+
 
 batcher_thread = threading.Thread(
     target=index_thread,
@@ -277,6 +301,7 @@ batcher_thread.start()
 
 batch_queue = queue.Queue(maxsize=300)
 
+
 def batch_thread(index_queue, batch_queue, data_path, batch_info_path):
     thread_loader = piton.extension.dataloader.BatchCreator(
         data_path, batch_info_path
@@ -286,28 +311,30 @@ def batch_thread(index_queue, batch_queue, data_path, batch_info_path):
         if next_item is None:
             batch_queue.put(None)
             break
-        
+
         batch_index, step = next_item
 
-        batch = thread_loader.get_batch(
-            "train", batch_index
-        )
+        batch = thread_loader.get_batch("train", batch_index)
         batch = jax.tree_map(lambda a: jnp.array(a), batch)
         batch_queue.put((batch, step))
 
     batch_queue.put(None)
 
-batcher_threads = [threading.Thread(
-    target=batch_thread,
-    args=(
-        index_queue,
-        batch_queue,
-        args.data_path,
-        args.batch_info_path,
-    ),
-    name="batch_thread",
-    daemon=True,
-) for _ in range(args.num_batch_threads)]
+
+batcher_threads = [
+    threading.Thread(
+        target=batch_thread,
+        args=(
+            index_queue,
+            batch_queue,
+            args.data_path,
+            args.batch_info_path,
+        ),
+        name="batch_thread",
+        daemon=True,
+    )
+    for _ in range(args.num_batch_threads)
+]
 
 remaining_threads = 0
 for t in batcher_threads:
@@ -315,7 +342,9 @@ for t in batcher_threads:
     t.start()
 
 logging.info("Starting loss scale %s", loss_scale)
-logging.info("Starting train loss %s", compute_total_loss("train", params, rng, config))
+logging.info(
+    "Starting train loss %s", compute_total_loss("train", params, rng, config)
+)
 dev_loss = compute_total_loss("dev", params, rng, config)
 logging.info("Starting dev loss %s", dev_loss)
 
@@ -333,7 +362,9 @@ while True:
 
     if (step % 5000 == 0 and step != 0) or step == 500:
         logging.info("Loss scale %s", loss_scale)
-        logging.info("Train loss %s", compute_total_loss("train", params, rng, config))
+        logging.info(
+            "Train loss %s", compute_total_loss("train", params, rng, config)
+        )
         dev_loss = compute_total_loss("dev", params, rng, config)
         logging.info("Dev loss %s", dev_loss)
         if dev_loss != dev_loss:

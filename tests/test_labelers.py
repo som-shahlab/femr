@@ -5,14 +5,17 @@ import pickle
 from typing import List, Optional, Tuple, cast
 
 import numpy as np
-import pickle
-
-from tools import *
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon, LabelingFunction
+from piton.labelers.core import (
+    Label,
+    LabeledPatients,
+    LabelingFunction,
+    TimeHorizon,
+)
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
+from tools import *
 
 
 def assert_labels_are_accurate(
@@ -86,13 +89,17 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     piton_target_code = get_piton_codes(ontology, 2)
     piton_admission_code = get_piton_codes(ontology, 3)
 
-    labeler = CodeLF(piton_admission_code, piton_target_code, time_horizon=time_horizon)
+    labeler = CodeLF(
+        piton_admission_code, piton_target_code, time_horizon=time_horizon
+    )
     labels = labeler.label(database[0])
     labeled_patients = labeler.apply(database_path)
 
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
-        True, False, False
+        True,
+        False,
+        False,
     ]
 
     # Data representations
@@ -143,11 +150,11 @@ def test_mortality_lf() -> None:
     class DummyOntology:
         def get_dictionary(self):
             return [
-                "zero", 
-                "one", 
-                "two", 
-                "Visit/IP", 
-                "Condition Type/OMOP4822053"
+                "zero",
+                "one",
+                "two",
+                "Visit/IP",
+                "Condition Type/OMOP4822053",
             ]
 
     dummy_ontology = DummyOntology()
@@ -171,7 +178,9 @@ def test_code_lf() -> None:
     patients = create_patients_list(dummy_events)
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
-        True, False, False
+        True,
+        False,
+        False,
     ]
 
     # Create a CodeLF for Code 2
@@ -256,7 +265,9 @@ def test_time_horizons():
                         start=datetime.datetime(2000, 10, 5), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2000, 10, 10), code=2, value=None
+                        start=datetime.datetime(2000, 10, 10),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2002, 4, 5), code=2, value=None
@@ -289,7 +300,9 @@ def test_time_horizons():
                         start=datetime.datetime(2015, 1, 3), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3, 23, 59), code=2, value=None
+                        start=datetime.datetime(2015, 1, 3, 23, 59),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 5), code=1, value=None
@@ -318,7 +331,9 @@ def test_time_horizons():
                         start=datetime.datetime(2015, 1, 3), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 13, 23, 59), code=2, value=None
+                        start=datetime.datetime(2015, 1, 13, 23, 59),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 23), code=1, value=None
@@ -327,7 +342,9 @@ def test_time_horizons():
                         start=datetime.datetime(2015, 2, 2), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 2, 15, 11, 59), code=2, value=None
+                        start=datetime.datetime(2015, 2, 15, 11, 59),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 3, 20), code=2, value=None
@@ -465,4 +482,3 @@ def test_time_horizons():
                 true_labels,
                 help_text=f" | test #{test_idx}",
             )
-

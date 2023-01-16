@@ -1,13 +1,21 @@
-import piton
-import pickle
-from typing import List, Callable
-from piton.featurizers.featurizers_notes import NoteFeaturizer
-from piton.datasets import PatientDatabase
-import os
-import time
 import argparse
+import os
+import pickle
+import time
+from typing import Callable, List
+
+import piton
+from piton.datasets import PatientDatabase
+from piton.featurizers.featurizers_notes import NoteFeaturizer
 from piton.labelers.core import LabeledPatients
-from piton.transforms.notes import keep_only_notes_matching_codes, remove_notes_after_label, remove_short_notes, join_all_notes, keep_only_last_n_chars
+from piton.transforms.notes import (
+    join_all_notes,
+    keep_only_last_n_chars,
+    keep_only_notes_matching_codes,
+    remove_notes_after_label,
+    remove_short_notes,
+)
+
 """
 Example running:
 
@@ -31,17 +39,28 @@ python3 3_run_text_featurizer.py \
     --is_force_refresh
 """
 
-EMBEDDER_METHODS = [ 'cls', ]
-NOTE_TYPES = ['discharge', 'procedure', 'progress', 'note', ]
-PREPROCESSOR_TRANFORMATIONS = ['keep_only_notes_matching_codes', 
-                               'remove_notes_after_label',
-                               'remove_short_notes',
-                               'join_all_notes',
-                               'keep_only_last_n_chars']
+EMBEDDER_METHODS = [
+    "cls",
+]
+NOTE_TYPES = [
+    "discharge",
+    "procedure",
+    "progress",
+    "note",
+]
+PREPROCESSOR_TRANFORMATIONS = [
+    "keep_only_notes_matching_codes",
+    "remove_notes_after_label",
+    "remove_short_notes",
+    "join_all_notes",
+    "keep_only_last_n_chars",
+]
+
 
 def get_gpus_with_minimum_free_memory(min_mem: float = 5) -> List[int]:
     """Return a list of GPU devices with at least `min_mem` free memory is in GB."""
     import torch
+
     devices = []
     num_gpus: int = torch.cuda.device_count()
     for i in range(num_gpus):
@@ -50,14 +69,14 @@ def get_gpus_with_minimum_free_memory(min_mem: float = 5) -> List[int]:
             devices.append(i)
     return devices
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     START_TIME = time.time()
+
     def print_log(name: str, content: str):
         print(f"{int(time.time() - START_TIME)} | {name} | {content}")
 
-    parser = argparse.ArgumentParser(
-        description="Run Piton text featurizer"
-    )
+    parser = argparse.ArgumentParser(description="Run Piton text featurizer")
     parser.add_argument(
         "path_to_patient_database",
         type=str,
@@ -105,7 +124,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--preprocessor__transformations",
         type=str,
-        nargs='*',
+        nargs="*",
         choices=PREPROCESSOR_TRANFORMATIONS,
         help="List of transformations to apply to notes (in sequential order) before featurization. Example: 'keep_only_notes_matching_codes remove_notes_after_label remove_short_notes join_all_notes keep_only_last_n_chars'",
         default=[],
@@ -125,7 +144,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--preprocessor__keep_notes_of_type",
         type=str,
-        nargs='*',
+        nargs="*",
         choices=NOTE_TYPES,
         help="Keep only notes that are of this type. If not specified, defaults to keeping all notes. Example: 'discharge nurse'",
         default=[],
@@ -168,7 +187,7 @@ if __name__ == '__main__':
         help="The batch size to use for feeding notes into the HuggingFace Model. Make sure this is small enough to fit onto your GPU.",
         default=None,
     )
-    
+
     # Parse CLI args
     args = parser.parse_args()
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
@@ -177,44 +196,71 @@ if __name__ == '__main__':
     PATH_TO_OUTPUT_DIR: str = args.path_to_save_featurized_notes
     PATH_TO_TEMP_DIR: str = args.path_to_temp_dir
     num_threads: int = args.num_threads
-    gpu_devices: List = args.gpu_devices if len(args.gpu_devices) > 0 else get_gpus_with_minimum_free_memory(10)
+    gpu_devices: List = (
+        args.gpu_devices
+        if len(args.gpu_devices) > 0
+        else get_gpus_with_minimum_free_memory(10)
+    )
     is_force_refresh: bool = args.is_force_refresh
     os.makedirs(PATH_TO_TEMP_DIR, exist_ok=True)
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
     assert num_threads > 0, "ERROR - `num_threads` must be greater than 0"
-    assert len(gpu_devices) > 0, f"ERROR - Not enough GPUs specified. Must specify at least 1."
-    
-    num_patients_per_chunk: int = 20000 # Use 20,000 patients per chunk - TODO: Make this a CLI arg?
-    
+    assert (
+        len(gpu_devices) > 0
+    ), f"ERROR - Not enough GPUs specified. Must specify at least 1."
+
+    num_patients_per_chunk: int = (
+        20000  # Use 20,000 patients per chunk - TODO: Make this a CLI arg?
+    )
+
     # Load code dictionary
     data = PatientDatabase(PATH_TO_PATIENT_DATABASE)
     code_dictionary = data.get_code_dictionary()
-    
+
     # Load LabeledPatients
     with open(PATH_TO_LABELED_PATIENTS, "rb") as fd:
         labeled_patients: LabeledPatients = pickle.load(fd)
-        print_log("LabeledPatients", f"# of loaded labeled patients = {len(labeled_patients)}")
-    
+        print_log(
+            "LabeledPatients",
+            f"# of loaded labeled patients = {len(labeled_patients)}",
+        )
+
     # Filter by note type
     valid_note_source_codes: List[str] = []
     for t in args.preprocessor__keep_notes_of_type:
-        if t == 'discharge':
-            valid_note_source_codes += [  'LOINC/18842-5', ] # 699
-        elif t == 'procedure':
-            valid_note_source_codes += [ 'LOINC/28570-0', ] # 11
-        elif t == 'progress':
-            valid_note_source_codes += [ 'LOINC/11506-3', ] # 10
-        elif t == 'note':
-            valid_note_source_codes += [ 'LOINC/LP173418-7', ] # 19
+        if t == "discharge":
+            valid_note_source_codes += [
+                "LOINC/18842-5",
+            ]  # 699
+        elif t == "procedure":
+            valid_note_source_codes += [
+                "LOINC/28570-0",
+            ]  # 11
+        elif t == "progress":
+            valid_note_source_codes += [
+                "LOINC/11506-3",
+            ]  # 10
+        elif t == "note":
+            valid_note_source_codes += [
+                "LOINC/LP173418-7",
+            ]  # 19
         else:
-            raise NotImplementedError(f"Codes for note type {t} have not been implemented yet.")
-    valid_note_codes: List[int] = [ code_dictionary.index(x) for x in valid_note_source_codes ]
+            raise NotImplementedError(
+                f"Codes for note type {t} have not been implemented yet."
+            )
+    valid_note_codes: List[int] = [
+        code_dictionary.index(x) for x in valid_note_source_codes
+    ]
 
     # Choose embedding method
     if args.embedder__method == "cls":
-        embed_method: Callable = piton.featurizers.featurizers_notes.embed_with_cls
+        embed_method: Callable = (
+            piton.featurizers.featurizers_notes.embed_with_cls
+        )
     else:
-        raise ValueError(f"Invalid `embed_method` ({args.embedder__method}) specified")
+        raise ValueError(
+            f"Invalid `embed_method` ({args.embedder__method}) specified"
+        )
 
     # Set up preprocessing transformations
     preprocess_transformations: List[Callable] = []
@@ -230,43 +276,60 @@ if __name__ == '__main__':
         elif t == "keep_only_last_n_chars":
             preprocess_transformations.append(keep_only_last_n_chars)
         else:
-            raise ValueError(f"Invalid preprocess transformation ({t}) specified")
+            raise ValueError(
+                f"Invalid preprocess transformation ({t}) specified"
+            )
 
     # Logging
-    print_log("ArgParse", f"Keep only notes with these Piton event codes: {valid_note_codes}")
-    print_log("ArgParse", f"    ...which correspond to these source codes: {valid_note_source_codes}")
+    print_log(
+        "ArgParse",
+        f"Keep only notes with these Piton event codes: {valid_note_codes}",
+    )
+    print_log(
+        "ArgParse",
+        f"    ...which correspond to these source codes: {valid_note_source_codes}",
+    )
     print_log("ArgParse", f"Use these GPUs: {gpu_devices}")
-    print_log("ArgParse", f"Use this embedding method: '{embed_method.__name__}'")
-    print_log("ArgParse", f"Apply these transformations in order: {[ x.__name__ for x in preprocess_transformations ]}")
+    print_log(
+        "ArgParse", f"Use this embedding method: '{embed_method.__name__}'"
+    )
+    print_log(
+        "ArgParse",
+        f"Apply these transformations in order: {[ x.__name__ for x in preprocess_transformations ]}",
+    )
 
     # Run note featurizer
-    note_featurizer = NoteFeaturizer(path_to_patient_database=PATH_TO_PATIENT_DATABASE,
-                                    path_to_tokenizer=PATH_TO_HUGGINGFACE_MODEL,
-                                    path_to_embedder=PATH_TO_HUGGINGFACE_MODEL,
-                                    path_to_temp_dir=PATH_TO_TEMP_DIR,
-                                    path_to_output_dir=PATH_TO_OUTPUT_DIR, 
-                                    n_cpu_jobs=num_threads,
-                                    gpu_devices=gpu_devices,
-                                    params_preprocessor = {
-                                        "min_char_count: ": args.preprocessor__min_note_char_count,
-                                        "keep_last_n_chars" : args.preprocessor__keep_last_n_chars,
-                                        "keep_notes_with_codes" : valid_note_codes,
-                                    },
-                                    params_tokenizer = {
-                                        "tokenizer_max_length": args.tokenizer__max_length,
-                                        "tokenizer_padding": args.tokenizer__padding,
-                                        "tokenizer_truncation": args.tokenizer__truncation,
-                                    },
-                                    params_embedder = {
-                                        "embed_method": embed_method,
-                                        "batch_size": 32,
-                                    },
-                                    preprocess_transformations = preprocess_transformations)
+    note_featurizer = NoteFeaturizer(
+        path_to_patient_database=PATH_TO_PATIENT_DATABASE,
+        path_to_tokenizer=PATH_TO_HUGGINGFACE_MODEL,
+        path_to_embedder=PATH_TO_HUGGINGFACE_MODEL,
+        path_to_temp_dir=PATH_TO_TEMP_DIR,
+        path_to_output_dir=PATH_TO_OUTPUT_DIR,
+        n_cpu_jobs=num_threads,
+        gpu_devices=gpu_devices,
+        params_preprocessor={
+            "min_char_count: ": args.preprocessor__min_note_char_count,
+            "keep_last_n_chars": args.preprocessor__keep_last_n_chars,
+            "keep_notes_with_codes": valid_note_codes,
+        },
+        params_tokenizer={
+            "tokenizer_max_length": args.tokenizer__max_length,
+            "tokenizer_padding": args.tokenizer__padding,
+            "tokenizer_truncation": args.tokenizer__truncation,
+        },
+        params_embedder={
+            "embed_method": embed_method,
+            "batch_size": 32,
+        },
+        preprocess_transformations=preprocess_transformations,
+    )
 
     print_log("NoteFeaturizer", "Starting")
-    result_tuple = note_featurizer.featurize(labeled_patients, 
-                                             num_patients_per_chunk=num_patients_per_chunk, 
-                                             is_force_refresh=is_force_refresh,
-                                             is_debug=False)
+    result_tuple = note_featurizer.featurize(
+        labeled_patients,
+        num_patients_per_chunk=num_patients_per_chunk,
+        is_force_refresh=is_force_refresh,
+        is_debug=False,
+    )
     print_log("NoteFeaturizer", "Finished")
     print_log("NoteFeaturizer", f"Result shape: {result_tuple[0].shape}")
