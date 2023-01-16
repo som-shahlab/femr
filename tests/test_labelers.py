@@ -5,81 +5,48 @@ import pickle
 from typing import List, Optional, Tuple, cast
 
 import numpy as np
-import pickle
 
 import piton
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
-from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
+from piton.labelers.omop import CodeLabeler, MortalityCodeLabeler
 
-dummy_events = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
+NUM_PATIENTS = 5
+
+SHARED_EVENTS = [
+    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
     piton.Event(
-        start=datetime.datetime(2010, 1, 3),
+        start=datetime.datetime(2010, 1, 1),
         code=1,
         value="test_value",
     ),
+    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
+    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
+    piton.Event(start=datetime.datetime(2011, 2, 5), code=2, value=None),
+    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
+    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
+    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
     piton.Event(
-        start=datetime.datetime(2010, 1, 5),
-        code=2,
-        value=None,
+        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
+    ),
+    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
+    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
+    piton.Event(
+        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=None
     ),
 ]
 
-all_events: List[Tuple[int, piton.Event]] = []
 
-for patient_id in range(10, 25):
-    all_events.extend((patient_id, event) for event in dummy_events)
-
-
-def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
-    events = piton.datasets.EventCollection(os.path.join(tmp_path, "events"))
-
-    random.shuffle(all_events)
-
-    chunks = 7
-    events_per_chunk = (len(all_events) + chunks - 1) // chunks
-
-    for i in range(7):
-        with contextlib.closing(events.create_writer()) as writer:
-            for patient_id, event in all_events[
-                i * events_per_chunk : (i + 1) * events_per_chunk
-            ]:
-                writer.add_event(patient_id, event)
-
-    return events
-
-
-def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
-    return create_events(tmp_path).to_patient_collection(
-        os.path.join(tmp_path, "patients")
-    )
-
-
-# NUM_PATIENTS = 5
-
-# SHARED_EVENTS = [
-#     piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
-#     piton.Event(
-#         start=datetime.datetime(2010, 1, 1),
-#         code=1,
-#         value="test_value",
-#     ),
-#     piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
-#     piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
-#     piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
-#     piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
-#     piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-#     piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
-#     piton.Event(
-#         start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
-#     ),
-#     piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
-#     piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
-#     piton.Event(
-#         start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=None
-#     ),
-# ]
+def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
+    patients: List[piton.Patient] = []
+    for patient_id in range(NUM_PATIENTS):
+        patients.append(
+            piton.Patient(
+                patient_id,
+                events,
+            )
+        )
+    return patients
 
 
 def save_to_pkl(object_to_save, path_to_file: str):
@@ -87,23 +54,6 @@ def save_to_pkl(object_to_save, path_to_file: str):
     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
     with open(path_to_file, "wb") as fd:
         pickle.dump(object_to_save, fd)
-
-def load_from_pkl(path_to_file: str):
-    """Load object from Pickle file."""
-    with open(path_to_file, "rb") as fd:
-        result = pickle.load(fd)
-    return result
-
-# def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
-#     patients: List[piton.Patient] = []
-#     for patient_id in range(NUM_PATIENTS):
-#         patients.append(
-#             piton.Patient(
-#                 patient_id,
-#                 events,
-#             )
-#         )
-#     return patients
 
 
 def assert_labels_are_accurate(
@@ -166,13 +116,15 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     patients = create_patients(tmp_path)
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
-        True, False, False
+        True,
+        False,
+        False,
     ]
 
     time_horizon_6_months = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(3, 2, time_horizon_6_months)
+    labeler = CodeLabeler(3, 2, time_horizon_6_months)
 
     patients_to_labels = {}
 
@@ -182,7 +134,9 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         if len(labels) > 0:
             patients_to_labels[patient.patient_id] = labels
 
-    labeled_patients = LabeledPatients(patients_to_labels, labeler.get_labeler_type())
+    labeled_patients = LabeledPatients(
+        patients_to_labels, labeler.get_labeler_type()
+    )
 
     # Data representations
     #   Check that label counter is correct
@@ -196,14 +150,14 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     # Saving / Loading
     #   Save labeler results
-    path = "../tmp/test_labelers/CodeLF.pkl"
+    path = "../tmp/test_labelers/CodeLabeler.pkl"
     save_to_pkl(labeled_patients, path)
 
     #   Check that file was created
     assert os.path.exists(path)
 
     #   Read in the output files and check that they're accurate
-    labeled_patients_new = load_from_pkl(path)
+    labeled_patients_new = pickle.load(open(path, "rb"))
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
@@ -219,10 +173,10 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
 
 def test_mortality_lf() -> None:
-    """Creates a MortalityLF for code 3, which corresponds to "Death Type/" """
+    """Creates a MortalityCodeLabeler for code 3, which corresponds to "Death Type/" """
     patients = create_patients(SHARED_EVENTS)
     true_labels = [
-        # Assumes time horizon (0, 180) days + MortalityLF() where code is 3
+        # Assumes time horizon (0, 180) days + MortalityCodeLabeler() where code is 3
         False,
         True,
         True,
@@ -251,7 +205,7 @@ def test_mortality_lf() -> None:
     time_horizon_4_to_12_months = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = MortalityLF(ontology, time_horizon_4_to_12_months)
+    labeler = MortalityCodeLabeler(ontology, time_horizon_4_to_12_months)
     labeled_patients = labeler.apply(patients)
 
     # Selected the right code
@@ -262,10 +216,10 @@ def test_mortality_lf() -> None:
 
 
 def test_code_lf() -> None:
-    """Creates a CodeLF for code '2' with time horizon of (0,180 days)."""
+    """Creates a CodeLabeler for code '2' with time horizon of (0,180 days)."""
     patients = create_patients(SHARED_EVENTS)
     true_labels = [
-        # Assumes time horizon (0, 180) days + CodeLF(2)
+        # Assumes time horizon (0, 180) days + CodeLabeler(2)
         False,
         True,
         True,
@@ -280,13 +234,13 @@ def test_code_lf() -> None:
         True,
     ]
 
-    # Create a CodeLF for Code 2
+    # Create a CodeLabeler for Code 2
     time_horizon_6_months = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon_6_months)
+    labeler = CodeLabeler(2, time_horizon_6_months)
 
-    # Check CodeLF's internal functions
+    # Check CodeLabeler's internal functions
     assert labeler.get_time_horizon() == time_horizon_6_months
     for p in patients:
         assert labeler.get_outcome_times(p) == [
@@ -675,7 +629,7 @@ def test_time_horizons():
     ]
     for test_idx, test in enumerate(tests):
         horizon, patients, true_labels = test
-        labeler = CodeLF(2, horizon)
+        labeler = CodeLabeler(2, horizon)
         labeled_patients = labeler.apply(patients)
         for i in range(len(patients)):
             # all patients have same events
