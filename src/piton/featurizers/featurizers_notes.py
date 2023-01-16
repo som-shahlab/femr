@@ -215,7 +215,7 @@ class NoteFeaturizer:
         )
         notes_for_labels: List[PatientLabelNotesTuple] = []
         # note: need this hacky way of doing tqdm b/c of tqdm's printouts will be ruined by multiprocessing
-        percent_done: float = 0.05  
+        percent_done: float = 0.05
         for patient_idx, patient_id in enumerate(patient_ids):
             patient: Patient = patient_database[patient_id]  # type: ignore
             labels: List[Label] = labeled_patients.get_labels_from_patient_idx(
@@ -343,7 +343,7 @@ class NoteFeaturizer:
                 a = torch.cuda.memory_allocated(device)
                 print_log(
                     "embed",
-                    f"chunk #{chunk_id} | device {device}, total (mem): "\ 
+                    f"chunk #{chunk_id} | device {device}, total (mem): "
                     f"{t}, reserved: {r}, allocated: {a}, free: {t - r - a}",
                 )
 
