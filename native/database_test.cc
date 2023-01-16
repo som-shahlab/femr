@@ -10,14 +10,14 @@
 
 using namespace testing;
 
-TEST(Database, CreateOntology) {
+void create_ontology_helper(bool compressed) {
     boost::filesystem::path root = boost::filesystem::temp_directory_path() /
                                    boost::filesystem::unique_path();
     boost::filesystem::create_directory(root);
 
     boost::filesystem::path concept_root =
         root / boost::filesystem::unique_path();
-    create_ontology_files(concept_root);
+    create_ontology_files(concept_root, compressed);
 
     boost::filesystem::path destination =
         root / boost::filesystem::unique_path();
@@ -43,6 +43,17 @@ TEST(Database, CreateOntology) {
         EXPECT_EQ(ontology.get_dictionary()[2], "bar/parent of foo");
         EXPECT_EQ(ontology.get_dictionary()[3], "bar/grandparent of foo");
 
+        EXPECT_EQ(ontology.get_concept_id_from_code(0), 32);
+        EXPECT_EQ(ontology.get_concept_id_from_code(1), 326);
+        EXPECT_EQ(ontology.get_concept_id_from_code(2), 323);
+        EXPECT_EQ(ontology.get_concept_id_from_code(3), 3235);
+
+        EXPECT_EQ(*ontology.get_code_from_concept_id(32), 0);
+        EXPECT_EQ(*ontology.get_code_from_concept_id(326), 1);
+        EXPECT_EQ(*ontology.get_code_from_concept_id(323), 2);
+        EXPECT_EQ(*ontology.get_code_from_concept_id(3235), 3);
+        EXPECT_EQ((bool)ontology.get_code_from_concept_id(45645), false);
+
         EXPECT_THAT(helper(ontology.get_children(1)), ElementsAre());
         EXPECT_THAT(helper(ontology.get_parents(1)), ElementsAre());
         EXPECT_THAT(helper(ontology.get_all_parents(1)),
@@ -60,6 +71,11 @@ TEST(Database, CreateOntology) {
     boost::filesystem::remove_all(root);
 }
 
+TEST(Database, CreateOntology) {
+    create_ontology_helper(true);
+    create_ontology_helper(false);
+}
+
 TEST(Database, CreateDatabase) {
     boost::filesystem::path root = boost::filesystem::temp_directory_path() /
                                    boost::filesystem::unique_path();
@@ -69,7 +85,7 @@ TEST(Database, CreateDatabase) {
 
     boost::filesystem::path concept_root =
         root / boost::filesystem::unique_path();
-    create_ontology_files(concept_root);
+    create_ontology_files(concept_root, true);
 
     boost::filesystem::path patients = root / boost::filesystem::unique_path();
     create_database_files(patients);
