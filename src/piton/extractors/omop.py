@@ -156,7 +156,7 @@ class _ConceptTableConverter(CSVExtractor):
             visit_id = int(row["visit_occurrence_id"])
         else:
             visit_id = None
-        
+
         if "unit_concept_id" in row and row["unit_concept_id"]:
             unit_concept_id = int(row["unit_concept_id"])
         else:
@@ -180,7 +180,7 @@ class _ConceptTableConverter(CSVExtractor):
 
         if unit is not None:
             metadata["unit"] = unit
-            
+
         if unit_concept_id is not None:
             metadata["unit_concept_id"] = unit_concept_id
 

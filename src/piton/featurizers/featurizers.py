@@ -2,7 +2,17 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple, Collection
+from typing import (
+    Any,
+    Collection,
+    Deque,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+)
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -26,7 +36,7 @@ class AgeFeaturizer(Featurizer):
         """
         Args:
             is_normalize (bool, optional): If TRUE, then normalize a patient's age at each label across their ages at all labels. Defaults to True.
-        """        
+        """
         self.is_normalize = is_normalize
         self.age_statistics = OnlineStatistics()
 
@@ -38,7 +48,9 @@ class AgeFeaturizer(Featurizer):
         if not self.is_needs_preprocessing():
             return
 
-        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
+        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(
+            patient
+        )
         if not patient_birth_date:
             return
 
@@ -47,7 +59,10 @@ class AgeFeaturizer(Featurizer):
             self.age_statistics.add(age_in_yrs)
 
     def featurize(
-        self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology,
+        self,
+        patient: Patient,
+        labels: List[Label],
+        ontology: extension_datasets.Ontology,
     ) -> List[List[ColumnValue]]:
         """Return the age of the patient at each label.
         If `is_normalize`, then normalize each label's age across all patient's ages across all their labels."""
@@ -55,7 +70,9 @@ class AgeFeaturizer(Featurizer):
         # Inner list is the list of features for that label
         all_columns: List[List[ColumnValue]] = []
 
-        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
+        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(
+            patient
+        )
         if not patient_birth_date:
             return all_columns
 
@@ -71,10 +88,10 @@ class AgeFeaturizer(Featurizer):
         return all_columns
 
     def to_dict(self) -> Dict[str, Any]:
-        return { 
-                "age_statistics": self.age_statistics.to_dict(),
-                "is_normalize": self.is_normalize,
-            }
+        return {
+            "age_statistics": self.age_statistics.to_dict(),
+            "is_normalize": self.is_normalize,
+        }
 
     def from_dict(self, data: Mapping[str, Any]):
         self.age_statistics = OnlineStatistics(data["age_statistics"])
@@ -91,10 +108,11 @@ class CountFeaturizer(Featurizer):
     before the corresponding label.
     """
 
-    def __init__(self,
-                 is_ontology_expansion: bool = False,
-                 exclusion_codes: Collection[int] = [],
-                 time_bins: Optional[List[float]] = None,
+    def __init__(
+        self,
+        is_ontology_expansion: bool = False,
+        exclusion_codes: Collection[int] = [],
+        time_bins: Optional[List[float]] = None,
     ):
         """
         Args:
@@ -108,11 +126,16 @@ class CountFeaturizer(Featurizer):
         self.is_ontology_expansion: bool = is_ontology_expansion
 
         if self.time_bins:
-            assert len(set(self.time_bins)) == len(self.time_bins), "Duplicate entires. Please make sure the entries are unique"
-            assert sorted(self.time_bins) == self.time_bins, "Time_bins list must be sorted."
+            assert len(set(self.time_bins)) == len(
+                self.time_bins
+            ), "Duplicate entires. Please make sure the entries are unique"
+            assert (
+                sorted(self.time_bins) == self.time_bins
+            ), "Time_bins list must be sorted."
 
-
-    def get_codes(self, code: int, ontology: extension_datasets.Ontology) -> Iterator[int]:
+    def get_codes(
+        self, code: int, ontology: extension_datasets.Ontology
+    ) -> Iterator[int]:
         if code not in self.exclusion_codes:
             if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(code):
@@ -133,7 +156,10 @@ class CountFeaturizer(Featurizer):
             return len(self.time_bins) * len(self.patient_codes)
 
     def featurize(
-        self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology,
+        self,
+        patient: Patient,
+        labels: List[Label],
+        ontology: extension_datasets.Ontology,
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
@@ -247,12 +273,16 @@ class CountFeaturizer(Featurizer):
             "time_bins": self.time_bins,
             "is_ontology_expansion": self.is_ontology_expansion,
         }
-        
+
     def from_dict(self, data: Mapping[str, Any]):
         self.patient_codes = Dictionary(data["patient_codes"])
-        self.exclusion_codes = data.get("exclusion_codes", {}), # defaults to empty set
-        self.time_bins = data.get("time_bins", None) # defaults to None
-        self.is_ontology_expansion = data.get("is_ontology_expansion", False) # defaults to False
+        self.exclusion_codes = (
+            data.get("exclusion_codes", {}),
+        )  # defaults to empty set
+        self.time_bins = data.get("time_bins", None)  # defaults to None
+        self.is_ontology_expansion = data.get(
+            "is_ontology_expansion", False
+        )  # defaults to False
 
     def is_needs_preprocessing(self) -> bool:
         return True

@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-import struct
-from functools import partial
-from typing import Any, Optional, Sequence, cast, Dict, Tuple
-
-import numpy as np
-import jax
-from jax import core, custom_vjp, grad, lax, nn, debug, vmap
-from jax import numpy as jnp
-from jax import value_and_grad, xla_computation
+import ctypes
 import logging
+import struct
+import warnings
+from functools import partial
+from typing import Any, Dict, Optional, Sequence, Tuple, cast
+
+import jax
+import numpy as np
+from jax import core, custom_vjp, debug, grad, lax, nn
+from jax import numpy as jnp
+from jax import value_and_grad, vmap, xla_computation
 from jax.core import ConcreteArray, ShapedArray
 from jax.interpreters import ad, batching, xla
 from jax.lib import xla_client
-import ctypes
-import warnings
 
 from piton.extension.jax import (
     get_kernels,
-    get_local_attention_shape,
     get_local_attention_data,
+    get_local_attention_shape,
 )
 
 for name, value, platform in get_kernels():
@@ -636,7 +636,7 @@ def local_attention_forward_abstract_eval(
             attention_width,
         )
     )
-    
+
     logging.info("Using temp shape %s", str(attention_shape))
 
     return (
