@@ -10,6 +10,9 @@ import piton
 import piton.datasets
 from piton.labelers.core import LabeledPatients, Label
 
+# 2nd elem of tuple -- 'skip' means no label, None means censored
+EventsWithLabels = List[Tuple[piton.Event, Optional[Union[bool, str]]]]
+
 def event(date: Tuple, code, value, visit_id=None):
     """A terser way to create a Piton Event."""
     hour, minute, seconds = 0, 0, 0

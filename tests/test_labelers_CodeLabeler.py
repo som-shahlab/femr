@@ -3,13 +3,11 @@ from typing import List, Tuple, Optional, Union
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
+from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
-from tools import event, run_test_locally, assert_labels_are_accurate, create_patients
+from tools import event, run_test_locally, assert_labels_are_accurate, create_patients, EventsWithLabels
 
-# 2nd elem of tuple -- 'skip' means no label, None means censored
-EventsWithLabels = List[Tuple[piton.Event, Optional[Union[bool, str]]]]
 
 def _run_test(labeler: CodeLabeler, 
               events_with_labels: EventsWithLabels,

@@ -2,17 +2,15 @@ import datetime
 import os
 import pathlib
 import pickle
-from typing import List, Tuple
-import shutil
+from typing import List, Tuple, Optional
 
 import numpy as np
 
-import piton
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
-from tools import event, run_test_locally, save_to_pkl, create_patients
+from tools import event, run_test_locally, save_to_pkl, create_patients, assert_labels_are_accurate, EventsWithLabels
 
 def assert_tuples_match_labels(labeled_patients: LabeledPatients):
     """Passes if tuples output by `as_list_of_label_tuples()` are the same as the `labels` in `labeled_patients`."""
@@ -48,50 +46,45 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
 
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
-    num_patients: int = 10
-    patients = create_patients(num_patients, [
-        event((1995, 1, 3), 0, 34.5),
-        event((2010, 1, 1), 1, 'test_value'),
-        event((2010, 1, 5), 2, 1), # True
-        event((2010, 6, 5), 3, True),
-        event((2011, 2, 5), 2, None), # False
-        event((2011, 7, 5), 2, None), # False
-        event((2012, 10, 5), 3, None),
-        event((2015, 6, 5, 0), 2, None), # True
-        event((2015, 6, 5, 10, 10), 2, None), # True
-        event((2015, 6, 15, 11), 3, None),
-        event((2016, 1, 1), 2, None), # Censored
-        event((2016, 3, 1, 10, 10, 10), 2, None), # Censored
-    ])
-    true_labels = [
-        # Assumes time horizon (0, 180) days + Code 2
-        True,
-        False,
-        False,
-        True,
-        True,
-        None,
-        None,
+    events_with_labels: EventsWithLabels = [
+        (event((1995, 1, 3), 0, 34.5), 'skip'),
+        (event((2010, 1, 1), 1, 'test_value'), 'skip'),
+        (event((2010, 1, 5), 2, 1), True),
+        (event((2010, 6, 5), 3, True), 'skip'),
+        (event((2011, 2, 5), 2, None), False),
+        (event((2011, 7, 5), 2, None), False),
+        (event((2012, 10, 5), 3, None),'skip'),
+        (event((2015, 6, 5, 0), 2, None), True),
+        (event((2015, 6, 5, 10, 10), 2, None), True),
+        (event((2015, 6, 15, 11), 3, None),'skip'),
+        (event((2016, 1, 1), 2, None), None),
+        (event((2016, 3, 1, 10, 10, 10), 2, None), None),
+    ]
+    patients: List[piton.Patient] = create_patients(10, 
+        [ x[0] for x in events_with_labels ]
+    )
+    true_labels: List[Optional[bool]] = [ 
+        x[1] for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
     ]
 
-    time_horizon_6_months = TimeHorizon(
+    # Create Labeler
+    time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLabeler([3], time_horizon_6_months, [2])
+    labeler = CodeLabeler([3], time_horizon, prediction_codes=[2])
 
+    # Create LabeledPatients
     patients_to_labels = {}
-
     for patient in patients:
         labels = labeler.label(patient)
-
         if len(labels) > 0:
             patients_to_labels[patient.patient_id] = labels
-
-    labeled_patients = LabeledPatients(
-        patients_to_labels, labeler.get_labeler_type()
-    )
+    labeled_patients: LabeledPatients = LabeledPatients(patients_to_labels, labeler.get_labeler_type())
 
     # Data representations
+    #   Check accuracy of Labels
+    for i in range(len(patients)):
+        assert_labels_are_accurate(labeled_patients, i, true_labels)
     #   Check that label counter is correct
     assert labeled_patients.get_num_labels() == len(true_labels) * len(
         labeled_patients
