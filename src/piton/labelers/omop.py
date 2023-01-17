@@ -663,3 +663,6 @@ class IsMaleLabeler(Labeler):
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
+
+if __name__ == '__main__':
+    pass
