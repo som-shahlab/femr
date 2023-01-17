@@ -4,7 +4,7 @@ from __future__ import annotations
 import collections
 import multiprocessing
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, TypeVar
 
 import numpy as np
 import scipy.sparse
@@ -17,7 +17,6 @@ from ..labelers.core import Label, LabeledPatients
 
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
-
 
 ColumnValue = collections.namedtuple("ColumnValue", ["column", "value"])
 """A value for a particular column
@@ -184,6 +183,111 @@ def _run_preprocess_featurizers(
     return featurizers
 
 
+class Featurizer(ABC):
+    """A Featurizer takes a Patient and a list of Labels, then returns a row for each timepoint.
+    Featurizers must be preprocessed before they are used to compute normalization statistics.
+    A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
+    """
+
+    # TODO - rename to 'train' ??
+    def preprocess(self, patient: Patient, labels: List[Label]):
+        """Preprocess the featurizer on the given patient and label indices.
+        This should do nothing if `is_needs_preprocessing()` returns FALSE,
+        i.e. the featurizer doesn't need preprocessing.
+
+        Args:
+            patient (Patient): A patient to preprocess on.
+            labels (List[Label]): The list of labels of this patient to preprocess on.
+        """
+        pass
+
+    @classmethod
+    def aggregate_featurizers(
+        cls, featurizers: List[FeaturizerType]
+    ) -> FeaturizerType:
+        """After preprocessing featurizer using multiprocessing, this method aggregates all
+        those featurizers into one.
+
+        Args:
+            featurizers (List[self]): A list of preprocessed featurizers
+        """
+        return featurizers[0]
+
+    def finalize_preprocessing(self):
+        """Finish the featurizer at the end of preprocessing. This is not needed for every
+        featurizer, but does become necessary for things like verifying counts, etc.
+        """
+        pass
+
+    @abstractmethod
+    def get_num_columns(self) -> int:
+        """Return the number of columns that this featurizer creates."""
+        pass
+
+    @abstractmethod
+    def featurize(
+        self,
+        patient: Patient,
+        labels: List[Label],
+        ontology: Optional[Ontology],
+    ) -> List[List[ColumnValue]]:
+        """Featurize the patient such that each label in `labels` has an associated list of features.
+
+        Example:
+            return [
+                [ ColumnValue(0, 10), ColumnValue(3, 12), ], # features for label 0
+                [ ColumnValue(1, 'hi') ], # features for label 1
+                [ ColumnValue(2, 2), ColumnValue(1, 3), ColumnValue(10, 3), ], # features for label 2
+                ...
+                [ ColumnValue(8, True), ColumnValue(9, False), ], # features for label n
+            ]
+
+        Where each ColumnValue is of the form: (idx of column for this feature, feature value).
+
+        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct
+        Label and each (sparse) column is a feature
+
+        Args:
+            patient (Patient): A patient to featurize.
+            labels (List[Label]): We will generate features for each Label in `labels`.
+            ontology (Optional[Ontology]): Ontology for Event codes.
+
+        Returns:
+             List[List[ColumnValue]]: A list of 'features' (where 'features' is a list itself) for
+             each Label.
+                The length of this list of lists == length of `labels`
+                    [idx] = corresponds to the Label at `labels[idx]`
+                    [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features
+                    for this label
+        """
+        pass
+
+    def get_column_name(self, column_idx: int) -> str:
+        """Enable the user to get the name of a column by its index
+
+        Args:
+            column_idx (int): The index of the column
+        """
+        return "no name"
+
+    def is_needs_preprocessing(self) -> bool:
+        """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()`
+        should do nothing.
+        """
+        return False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return dictionary representation."""
+        return {}
+
+    def from_dict(self, data: Mapping[str, Any]):
+        """Convert dictionary representation of Featurizer to object."""
+        pass
+
+
+FeaturizerType = TypeVar("FeaturizerType", bound=Featurizer)
+
+
 class FeaturizerList:
     """
     FeaturizerList consists of a list of Featurizers that will be used to (sequentially)
@@ -314,103 +418,3 @@ class FeaturizerList:
         raise IndexError(
             f"Column index '{column_idx}' out of bounds for this FeaturizerList"
         )
-
-
-class Featurizer(ABC):
-    """A Featurizer takes a Patient and a list of Labels, then returns a row for each timepoint.
-    Featurizers must be preprocessed before they are used to compute normalization statistics.
-    A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
-    """
-
-    # TODO - rename to 'train' ??
-    def preprocess(self, patient: Patient, labels: List[Label]):
-        """Preprocess the featurizer on the given patient and label indices.
-        This should do nothing if `is_needs_preprocessing()` returns FALSE,
-        i.e. the featurizer doesn't need preprocessing.
-
-        Args:
-            patient (Patient): A patient to preprocess on.
-            labels (List[Label]): The list of labels of this patient to preprocess on.
-        """
-        pass
-
-    @classmethod
-    def aggregate_featurizers(featurizers: List[Featurizer]) -> Featurizer:
-        """After preprocessing featurizer using multiprocessing, this method aggregates all
-        those featurizers into one.
-
-        Args:
-            featurizers (List[self]): A list of preprocessed featurizers
-        """
-        pass
-
-    def finalize_preprocessing(self):
-        """Finish the featurizer at the end of preprocessing. This is not needed for every
-        featurizer, but does become necessary for things like verifying counts, etc.
-        """
-        pass
-
-    @abstractmethod
-    def get_num_columns(self) -> int:
-        """Return the number of columns that this featurizer creates."""
-        pass
-
-    @abstractmethod
-    def featurize(
-        self,
-        patient: Patient,
-        labels: List[Label],
-        ontology: Optional[Ontology],
-    ) -> List[List[ColumnValue]]:
-        """Featurize the patient such that each label in `labels` has an associated list of features.
-
-        Example:
-            return [
-                [ ColumnValue(0, 10), ColumnValue(3, 12), ], # features for label 0
-                [ ColumnValue(1, 'hi') ], # features for label 1
-                [ ColumnValue(2, 2), ColumnValue(1, 3), ColumnValue(10, 3), ], # features for label 2
-                ...
-                [ ColumnValue(8, True), ColumnValue(9, False), ], # features for label n
-            ]
-
-        Where each ColumnValue is of the form: (idx of column for this feature, feature value).
-
-        Thus, the List[List[ColumnValue]] represents a 2D sparse matrix, where each row is a distinct
-        Label and each (sparse) column is a feature
-
-        Args:
-            patient (Patient): A patient to featurize.
-            labels (List[Label]): We will generate features for each Label in `labels`.
-            ontology (Optional[Ontology]): Ontology for Event codes.
-
-        Returns:
-             List[List[ColumnValue]]: A list of 'features' (where 'features' is a list itself) for
-             each Label.
-                The length of this list of lists == length of `labels`
-                    [idx] = corresponds to the Label at `labels[idx]`
-                    [value] = List of :class:`ColumnValues<ColumnValue>` which contain the features
-                    for this label
-        """
-        pass
-
-    def get_column_name(self, column_idx: int) -> str:
-        """Enable the user to get the name of a column by its index
-
-        Args:
-            column_idx (int): The index of the column
-        """
-        return "no name"
-
-    def is_needs_preprocessing(self) -> bool:
-        """Return TRUE if you must run `preprocess()`. If FALSE, then `preprocess()`
-        should do nothing.
-        """
-        return False
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Return dictionary representation."""
-        return {}
-
-    def from_dict(self, data: Mapping[str, Any]):
-        """Convert dictionary representation of Featurizer to object."""
-        pass

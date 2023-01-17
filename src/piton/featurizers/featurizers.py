@@ -3,17 +3,7 @@ from __future__ import annotations
 import datetime
 import itertools
 from collections import defaultdict, deque
-from typing import (
-    Any,
-    Collection,
-    Deque,
-    Dict,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-)
+from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -61,8 +51,8 @@ class AgeFeaturizer(Featurizer):
             self.age_statistics.add(age_in_yrs)
 
     @classmethod
-    def aggregate_featurizers(
-        self, featurizers: List[Featurizer]
+    def aggregate_featurizers(  # type: ignore[override]
+        cls, featurizers: List[AgeFeaturizer]
     ) -> AgeFeaturizer:
         "After preprocessing featurizer using multiprocessing, this method aggregates all those featurizers into one."
         # Aggregating age featurizers
@@ -71,18 +61,22 @@ class AgeFeaturizer(Featurizer):
                 new_featurizer = featurizers[0]
                 new_featurizer.from_dict(featurizer.to_dict())
                 return new_featurizer
+        return featurizers[0]
 
     def featurize(
         self,
         patient: Patient,
         labels: List[Label],
-        ontology: extension_datasets.Ontology,
+        ontology: Optional[extension_datasets.Ontology],
     ) -> List[List[ColumnValue]]:
         """Return the age of the patient at each label.
         If `is_normalize`, then normalize each label's age across all patient's ages across all their labels."""
+        assert (
+            ontology is not None
+        ), "Ontology cannot be `None` for AgeFeaturizer"
+        all_columns: List[List[ColumnValue]] = []
         # Outer list is per label
         # Inner list is the list of features for that label
-        all_columns: List[List[ColumnValue]] = []
 
         patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(
             patient
@@ -125,7 +119,7 @@ class CountFeaturizer(Featurizer):
     def __init__(
         self,
         is_ontology_expansion: bool = False,
-        exclusion_codes: Collection[int] = [],
+        exclusion_codes: List[int] = [],
         time_bins: Optional[List[float]] = None,
     ):
         """
@@ -165,8 +159,8 @@ class CountFeaturizer(Featurizer):
                 self.patient_codes.add(event.code)
 
     @classmethod
-    def aggregate_featurizers(
-        cls, featurizers: List[Featurizer]
+    def aggregate_featurizers(  # type: ignore[override]
+        cls, featurizers: List[CountFeaturizer]
     ) -> CountFeaturizer:
         """After preprocessing featurizer using multiprocessing, this method aggregates all
         those featurizers into one.
@@ -199,8 +193,11 @@ class CountFeaturizer(Featurizer):
         self,
         patient: Patient,
         labels: List[Label],
-        ontology: extension_datasets.Ontology,
+        ontology: Optional[extension_datasets.Ontology],
     ) -> List[List[ColumnValue]]:
+        assert (
+            ontology is not None
+        ), "Ontology cannot be `None` for CountFeaturizer"
         all_columns: List[List[ColumnValue]] = []
 
         if self.time_bins is None:
@@ -236,7 +233,7 @@ class CountFeaturizer(Featurizer):
                         ]
                     )
         else:
-            codes_per_bin: Dict[int, Deque[Tuple[int, datetime.date]]] = {
+            codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
             }
 
@@ -316,13 +313,9 @@ class CountFeaturizer(Featurizer):
 
     def from_dict(self, data: Mapping[str, Any]):
         self.patient_codes = Dictionary(data["patient_codes"])
-        self.exclusion_codes = (
-            data.get("exclusion_codes", {}),
-        )  # defaults to empty set
-        self.time_bins = data.get("time_bins", None)  # defaults to None
-        self.is_ontology_expansion = data.get(
-            "is_ontology_expansion", False
-        )  # defaults to False
+        self.exclusion_codes = data.get("exclusion_codes", set())
+        self.time_bins = data.get("time_bins", None)
+        self.is_ontology_expansion = data.get("is_ontology_expansion", False)
 
     def is_needs_preprocessing(self) -> bool:
         return True

@@ -173,13 +173,11 @@ class HighHbA1cLF(LabelingFunction):
         self.diabetes_codes = _get_all_children(ontology, diabetes_code)
 
     def label(self, patient: Patient) -> List[Label]:
-
         if len(patient.events) == 0:
             return []
 
         labels: List[Label] = []
-        last_trigger: Optional[int] = None
-
+        last_trigger: Optional[datetime.datetime] = None
         first_diabetes_code_date = None
 
         for event in patient.events:
@@ -188,18 +186,19 @@ class HighHbA1cLF(LabelingFunction):
                 break
 
         for event in patient.events:
-
             if (
                 first_diabetes_code_date is not None
                 and event.start > first_diabetes_code_date
             ):
                 break
 
-            if event.value is None or type(event.value) is str:
+            if event.value is None or (
+                not isinstance(event.value, float)
+                and not isinstance(event.value, int)
+            ):
                 continue
 
             if event.code == self.hba1c_lab_code:
-
                 is_diabetes = event.value > 6.5
 
                 if (
