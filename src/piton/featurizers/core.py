@@ -4,11 +4,11 @@ from __future__ import annotations
 import collections
 import multiprocessing
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 import numpy as np
 import scipy.sparse
-from nptyping import NDArray, Shape
+from nptyping import NDArray
 
 from piton.extension import datasets as extension_datasets
 
@@ -114,13 +114,13 @@ def _run_featurizer(
     total_columns: int = sum(x.get_num_columns() for x in featurizers)
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
-    np_data: NDArray[Shape["n_total_features, 1"], np.float32] = np.array(
+    np_data: NDArray[Literal["n_total_features, 1"], np.float32] = np.array(
         data, dtype=np.float32
     )
-    np_indices: NDArray[Shape["n_total_features, 1"], np.int64] = np.array(
+    np_indices: NDArray[Literal["n_total_features, 1"], np.int64] = np.array(
         indices, dtype=np.int64
     )
-    np_indptr: NDArray[Shape["n_labels + 1, 1"], np.int64] = np.array(
+    np_indptr: NDArray[Literal["n_labels + 1, 1"], np.int64] = np.array(
         indptr, dtype=np.int64
     )
 
@@ -134,13 +134,13 @@ def _run_featurizer(
         (np_data, np_indices, np_indptr), shape=(total_rows, total_columns)
     )
 
-    label_pids: NDArray[Shape["n_labels, 1"], np.int64] = np.array(
+    label_pids: NDArray[Literal["n_labels, 1"], np.int64] = np.array(
         [x[0] for x in label_data], dtype=np.int64
     )
-    label_values: NDArray[Shape["n_labels, 1"], Any] = np.array(
+    label_values: NDArray[Literal["n_labels, 1"], Any] = np.array(
         [x[1] for x in label_data]
     )
-    label_times: NDArray[Shape["n_labels, 1"], np.datetime64] = np.array(
+    label_times: NDArray[Literal["n_labels, 1"], np.datetime64] = np.array(
         [x[2] for x in label_data], dtype=np.datetime64
     )
     assert (
@@ -289,14 +289,14 @@ class FeaturizerList:
 
         # Join results
         data_matrix = scipy.sparse.vstack([x[0] for x in results])
-        label_pids: NDArray[Shape["n_labels, 1"], np.int64] = np.concatenate(
+        label_pids: NDArray[Literal["n_labels, 1"], np.int64] = np.concatenate(
             [x[1] for x in results]
         )
-        label_values: NDArray[Shape["n_labels, 1"], Any] = np.concatenate(
+        label_values: NDArray[Literal["n_labels, 1"], Any] = np.concatenate(
             [x[2] for x in results]
         )
         label_times: NDArray[
-            Shape["n_labels, 1"], np.datetime64
+            Literal["n_labels, 1"], np.datetime64
         ] = np.concatenate([x[3] for x in results])
 
         return data_matrix, label_pids, label_values, label_times

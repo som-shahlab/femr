@@ -157,18 +157,20 @@ if __name__ == "__main__":
     # Logistic Regresion
     print_log("Logistic Regression", "Training")
     model = LogisticRegressionCV(n_jobs=num_threads).fit(X_train, y_train)
-    y_train_proba = model.predict_proba(X_train)[::,1]
-    y_test_proba = model.predict_proba(X_test)[::,1]
-    run_analysis('Logistic Regression', y_train, y_train_proba, y_test, y_test_proba)
+    y_train_proba = model.predict_proba(X_train)[::, 1]
+    y_test_proba = model.predict_proba(X_test)[::, 1]
+    run_analysis(
+        "Logistic Regression", y_train, y_train_proba, y_test, y_test_proba
+    )
     print_log("Logistic Regression", "Done")
 
     # XGBoost
     print_log("XGBoost", "Training")
     model = xgb.XGBClassifier()
     model.fit(X_train, y_train)
-    y_train_proba = model.predict_proba(X_train)[::,1]
-    y_test_proba = model.predict_proba(X_test)[::,1]
-    run_analysis('XGBoost', y_train, y_train_proba, y_test, y_test_proba)
+    y_train_proba = model.predict_proba(X_train)[::, 1]
+    y_test_proba = model.predict_proba(X_test)[::, 1]
+    run_analysis("XGBoost", y_train, y_train_proba, y_test, y_test_proba)
     print_log("XGBoost", "Done")
 
     # # LGBM

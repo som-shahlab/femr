@@ -8,6 +8,7 @@ import pytest
 
 import piton
 
+
 def test_helper(tmp_path, capsys):
     with capsys.disabled():
         print("Starting")

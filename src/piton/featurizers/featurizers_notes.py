@@ -4,12 +4,12 @@ import multiprocessing
 import os
 import pickle
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 import torch
 import transformers
-from nptyping import Int, NDArray, Shape
+from nptyping import Int, NDArray
 from torchtyping import TensorType
 from transformers import AutoModel, AutoTokenizer
 
@@ -19,12 +19,12 @@ from ..labelers.core import Label, LabeledPatients
 from .core import ColumnValue
 
 NotesTokenized = Dict[
-    str, TensorType["n_notes", "max_note_token_count", int]
-]  # noqa
+    str, TensorType["n_notes", "max_note_token_count", int]  # noqa
+]
 NotesEmbedded = TensorType["n_notes", "embedding_length"]  # noqa
 NotesEmbeddedByToken = TensorType[
-    "n_notes", "max_note_token_count", "embedding_length"
-]  # noqa
+    "n_notes", "max_note_token_count", "embedding_length"  # noqa
+]
 NotesProcessed = List[Tuple[int, Event]]  # event_idx, event (note)
 PatientLabelNotesTuple = Tuple[
     int, int, NotesProcessed
@@ -388,7 +388,9 @@ class NoteFeaturizer:
                         else None,
                     )
                     result: TensorType[
-                        "batch_size", "max_note_token_count", "embedding_length"
+                        "batch_size",  # noqa
+                        "max_note_token_count",  # noqa
+                        "embedding_length",  # noqa
                     ] = output.last_hidden_state.detach().cpu()
                     outputs.append(result)
 
@@ -479,10 +481,10 @@ class NoteFeaturizer:
         patient_label_notes_tuples: List[PatientLabelNotesTuple] = [
             y for x in preprocess_parallel_result for y in x
         ]
-        np_patient_ids: NDArray[Shape["n_patients,1"], Int] = np.array(
+        np_patient_ids: NDArray[Literal["n_patients,1"], Int] = np.array(
             [x[0] for x in patient_label_notes_tuples]
         )
-        np_label_idxs: NDArray[Shape["n_patients,1"], Any] = np.array(
+        np_label_idxs: NDArray[Literal["n_patients,1"], Any] = np.array(
             [x[1] for x in patient_label_notes_tuples]
         )
         print_log("featurize", "Finished Preprocessing...")
@@ -534,7 +536,7 @@ class NoteFeaturizer:
                 pool.imap(self.embed_parallel, tasks)
             )
         embeddings: NDArray[
-            Shape["n_patients", "embedding_length"], float
+            Literal["n_patients", "embedding_length"], float
         ] = np.vstack(
             [y.numpy() for x in embed_parallel_result for y in x]
         )  # unwrap nested lists

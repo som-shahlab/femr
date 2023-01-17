@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
-from nptyping import NDArray, Shape
+from nptyping import NDArray
 
 from .. import Patient
 from ..datasets import PatientDatabase
@@ -207,9 +207,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     def as_numpy_arrays(
         self,
     ) -> Tuple[
-        NDArray[Shape["n_patients, 1"], np.int64],
-        NDArray[Shape["n_patients, 1"], Any],
-        NDArray[Shape["n_patients, 1"], datetime.datetime],
+        NDArray[Literal["n_patients, 1"], np.int64],
+        NDArray[Literal["n_patients, 1"], Any],
+        NDArray[Literal["n_patients, 1"], datetime.datetime],
     ]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
 
@@ -260,9 +260,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     @classmethod
     def load_from_numpy(
         cls,
-        patient_ids: NDArray[Shape["n_patients, 1"], np.int64],
-        label_values: NDArray[Shape["n_patients, 1"], Any],
-        label_times: NDArray[Shape["n_patients, 1"], datetime.datetime],
+        patient_ids: NDArray[Literal["n_patients, 1"], np.int64],
+        label_values: NDArray[Literal["n_patients, 1"], Any],
+        label_times: NDArray[Literal["n_patients, 1"], datetime.datetime],
         labeler_type: LabelType,
     ) -> LabeledPatients:
         """Create a :class:`LabeledPatients` from NDArray labels.
