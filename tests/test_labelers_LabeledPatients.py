@@ -12,18 +12,7 @@ import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
-from tools import event, run_test_locally, save_to_pkl
-
-def create_patients(num_patients: int, events: List[piton.Event]) -> List[piton.Patient]:
-    patients: List[piton.Patient] = []
-    for patient_id in range(num_patients):
-        patients.append(
-            piton.Patient(
-                patient_id,
-                events,
-            )
-        )
-    return patients
+from tools import event, run_test_locally, save_to_pkl, create_patients
 
 def assert_tuples_match_labels(labeled_patients: LabeledPatients):
     """Passes if tuples output by `as_list_of_label_tuples()` are the same as the `labels` in `labeled_patients`."""
