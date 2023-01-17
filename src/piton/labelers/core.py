@@ -50,23 +50,24 @@ class Label:
     """An individual label for a particular patient at a particular time."""
 
     time: datetime.datetime
-    value: Union[bool, int, float, SurvivalValue]
+    value: Optional[Union[bool, int, float, SurvivalValue]]
 
 
 def _apply_labeling_function(
-    args: Tuple[Labeler, str, List[int]]
+    args: Tuple[Labeler, PatientDatabase, List[int]]
 ) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`.
     """
     labeling_function: Labeler = args[0]
-    database_path: str = args[1]
+    # database_path: str = args[1]
+    patient_database: PatientDatabase = args[1]
     patient_ids: List[int] = args[2]
 
-    database: PatientDatabase = PatientDatabase(database_path)
+    # patient_database: PatientDatabase = PatientDatabase(database_path)
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
-        patient: Patient = database[patient_id]  # type: ignore
+        patient: Patient = patient_database[patient_id]  # type: ignore
         labels: List[Label] = labeling_function.label(patient)
 
         # Only add a patient to the `patient_to_labels` dict if they have at least one label
@@ -274,14 +275,18 @@ class Labeler(ABC):
 
     def apply(
         self,
-        database_path: str,
+        patient_database: Optional[PatientDatabase] = None,
+        path_to_patient_database: Optional[str] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
-            database_path (str): Path to `PatientDatabase` on disk
+            path_to_patient_database (str, optional): Path to `PatientDatabase` on disk. 
+                Must be specified if `patient_database = None`
+            patient_database (PatientDatabase, optional): `PatientDatabase` object.
+                Must be specified if `path_to_patient_database = None`
             num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
             num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
                 If None, use all patients.
@@ -289,14 +294,22 @@ class Labeler(ABC):
         Returns:
             LabeledPatients: Maps patients to labels
         """
+        assert ((patient_database is None) and (path_to_patient_database is not None)
+                or (patient_database is not None) and (path_to_patient_database is None)), (
+            f"Must specify exactly one of `patient_database` or `path_to_patient_database`"
+        )
+
+        if not patient_database and path_to_patient_database:
+            patient_database = PatientDatabase(path_to_patient_database)
+
         # Split patient IDs across parallelized processes
         if num_patients is None:
-            num_patients = len(PatientDatabase(database_path))
+            num_patients = len(patient_database)
         pids = list(range(num_patients))
         pids_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
-        tasks = [(self, database_path, pid_part) for pid_part in pids_parts]
+        tasks = [(self, patient_database, pid_part) for pid_part in pids_parts]
         ctx = multiprocessing.get_context("forkserver")
         with ctx.Pool(num_threads) as pool:
             results: List[Dict[int, List[Label]]] = list(
@@ -418,13 +431,8 @@ class TimeHorizonEventLabeler(Labeler):
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
-        is_infinite_time_horizon: bool = time_horizon.end is None
         time_horizon_start: datetime.timedelta = time_horizon.start
-        time_horizon_end: datetime.timedelta = (
-            time_horizon.end
-            if time_horizon.end is not None
-            else datetime.timedelta.max
-        )
+        time_horizon_end: Optional[datetime.timedelta] = time_horizon.end # `None` if infinite time horizon
 
         results: List[Label] = []
         curr_outcome_idx: int = 0
@@ -432,33 +440,34 @@ class TimeHorizonEventLabeler(Labeler):
         # of the time horizon
         for time in self.get_prediction_times(patient):
             while (
-                curr_outcome_idx < len(outcome_times)
+                curr_outcome_idx < len(outcome_times) - 1
                 and outcome_times[curr_outcome_idx] < time + time_horizon_start
             ):
-                # This is the idx in `outcome_times` that corresponds to the first outcome EQUAL or AFTER
-                # the time horizon for this prediction time starts (if one exists)
+                # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first 
+                # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
                 curr_outcome_idx += 1
 
             # TRUE if an event occurs within the time horizon
-            is_outcome_occurs_in_time_horizon: bool = curr_outcome_idx < len(
-                outcome_times
-            ) and (
-                time + time_horizon_start
-                <= outcome_times[curr_outcome_idx]
-                <= time + time_horizon_end
+            is_outcome_occurs_in_time_horizon: bool = (
+                (time + time_horizon_start <= outcome_times[curr_outcome_idx])
+                and (
+                    (time_horizon_end is None)
+                    or outcome_times[curr_outcome_idx] <= time + time_horizon_end
+                )
             )
             # TRUE if patient is censored (i.e. timeline ends BEFORE this time horizon ends,
             # so we don't know if the outcome happened after the patient timeline ends)
-            is_censored: bool = end_time < time + time_horizon_end
-            if is_infinite_time_horizon:
-                # If infinite time horizon labeler, then assume no censoring
-                is_censored = False
+            # If infinite time horizon labeler, then assume no censoring
+            is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
                 results.append(Label(time=time, value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
+            else:
+                # Is censored
+                results.append(Label(time=time, value=None))
 
         return results
 
@@ -478,3 +487,6 @@ class OneLabelPerPatient(Labeler):
     def get_labeler_type(self) -> LabelType:
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return self.labeling_function.get_labeler_type()
+
+if __name__ == '__main__':
+    pass
