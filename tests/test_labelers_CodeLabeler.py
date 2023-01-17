@@ -6,29 +6,7 @@ import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
-from tools import event, run_test_locally, assert_labels_are_accurate, create_patients, EventsWithLabels
-
-
-def _run_test(labeler: CodeLabeler, 
-              events_with_labels: EventsWithLabels,
-              help_text: str = "",) -> None:
-    patients: List[piton.Patient] = create_patients(10, 
-        [ x[0] for x in events_with_labels ]
-    )
-    true_labels: List[Optional[bool]] = [ 
-        x[1] for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
-    ]
-    labeled_patients: LabeledPatients = labeler.apply(patient_database=patients)
-    
-    # Check accuracy of Labels
-    for i in range(len(patients)):
-        assert_labels_are_accurate(labeled_patients, i, true_labels, help_text=help_text)
-    
-    # Check CodeLabeler's internal functions
-    for p in patients:
-        assert labeler.get_outcome_times(p) == [
-            event.start for event in p.events if event.code in labeler.codes
-        ]
+from tools import event, run_test_locally, assert_labels_are_accurate, create_patients, EventsWithLabels, run_test_for_labeler
 
 def test_prediction_codes():
     # Specify specific event codes at which to make predictions
@@ -54,7 +32,7 @@ def test_prediction_codes():
         (event((2018, 12, 4), 1, None), 'skip'),
         (event((2018, 12, 30), 4, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="prediction_codes")
+    run_test_for_labeler(labeler, events_with_labels, help_text="prediction_codes")
 
 def test_horizon_0_180_days():
     # (0, 180) days
@@ -74,7 +52,7 @@ def test_horizon_0_180_days():
         (event((2018, 5, 4), 1, None), False),
         (event((2018, 12, 4), 1, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_0_180_days")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_180_days")
 
 def test_horizon_1_180_days():
     # (1, 180) days
@@ -94,7 +72,7 @@ def test_horizon_1_180_days():
         (event((2018, 5, 4), 1, None), False),
         (event((2018, 12, 4), 1, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_1_180_days")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_1_180_days")
 
 def test_horizon_180_365_days():
     # (180, 365) days
@@ -114,7 +92,7 @@ def test_horizon_180_365_days():
         (event((2004, 1, 10), 2, None), False),
         (event((2008, 1, 10), 2, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_180_365_days")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_180_365_days")
 
 def test_horizon_0_0_days():
     # (0, 0) days
@@ -130,7 +108,7 @@ def test_horizon_0_0_days():
         (event((2015, 1, 5, 10), 1, None), False),
         (event((2015, 1, 6), 2, None), True),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_0_0_days")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_0_days")
 
 def test_horizon_10_10_days():
     # (10, 10) days
@@ -148,7 +126,7 @@ def test_horizon_10_10_days():
         (event((2015, 3, 29), 2, None), None),
         (event((2015, 3, 30), 1, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_10_10_days")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_10_10_days")
 
 def test_horizon_0_1000000_days():
     # (0, 1000000) days
@@ -165,7 +143,7 @@ def test_horizon_0_1000000_days():
         (event((2051, 1, 10), 1, None), False),
         (event((5000, 1, 10), 1, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_0_1000000_days")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_1000000_days")
 
 def test_horizon_5_10_hours():
     # (5 hours, 10.5 hours)
@@ -197,7 +175,7 @@ def test_horizon_5_10_hours():
         (event((2019, 1, 1, 4, 59, 59), 1, None), None),
         (event((2019, 1, 1, 5), 2, None), None),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_5_10_hours")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_5_10_hours")
 
 def test_horizon_infinite():
     # Infinite horizon
@@ -216,7 +194,7 @@ def test_horizon_infinite():
         (event((2051, 1, 10), 1, None), False),
         (event((5000, 1, 10), 1, None), False),
     ]
-    _run_test(labeler, events_with_labels, help_text="test_horizon_infinite")
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_infinite")
 
 # Local testing
 if __name__ == '__main__':

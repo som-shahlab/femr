@@ -131,18 +131,18 @@ class WithinVisitLabeler(Labeler):
 
 
 class CodeLabeler(TimeHorizonEventLabeler):
-    """Apply a label based on a 1+ codes' occurrence(s) over a fixed time horizon."""
+    """Apply a label based on 1+ outcome_codes' occurrence(s) over a fixed time horizon."""
 
     def __init__(
         self,
-        codes: List[int],
+        outcome_codes: List[int],
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
     ):
-        """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.codes`
+        """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
         Args:
-            ontology (extension_datasets.Ontology): Maps code IDs to concept names
+            prediction_codes (List[int]): Events that count as an occurrence of the outcome.
             time_horizon (TimeHorizon): An interval of time. If the event occurs during this time horizon, then
                 the label is TRUE. Otherwise, FALSE.
             prediction_codes (Optional[List[int]]): If not None, limit events at which you make predictions to these codes.
@@ -150,7 +150,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         Raises:
             ValueError: Raised if there are multiple unique codes that map to the death code
         """
-        self.codes: List[int] = codes
+        self.outcome_codes: List[int] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[int]] = prediction_codes
 
@@ -171,10 +171,10 @@ class CodeLabeler(TimeHorizonEventLabeler):
         return self.time_horizon
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.codes`."""
+        """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.code in self.codes:
+            if event.code in self.outcome_codes:
                 times.append(event.start)
         return times
 
@@ -191,13 +191,13 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]],
+        prediction_codes: Optional[List[int]] = None,
     ):
-        codes: List[int] = map_omop_concept_ids_to_piton_codes(
+        outcome_codes: List[int] = map_omop_concept_ids_to_piton_codes(
             ontology, self.omop_concept_ids
         )
         super().__init__(
-            codes=codes,
+            outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
         )
@@ -219,16 +219,16 @@ class MortalityCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
+        prediction_codes: Optional[List[int]] = None,
     ):
         """Create a Mortality labeler."""
         dictionary = ontology.get_dictionary()
-        admission_codes: List[int] = [ dictionary.index(x) for x in get_inpatient_admission_concepts() ]
         outcome_codes = [ dictionary.index(x) for x in get_death_concepts() ]
 
         super().__init__(
-            codes=outcome_codes,
+            outcome_codes=outcome_codes,
             time_horizon=time_horizon,
-            prediction_codes=admission_codes,
+            prediction_codes=prediction_codes,
         )
 
 
@@ -253,13 +253,13 @@ class LupusDiseaseCodeLabeler(CodeLabeler):
             codes |= _get_all_children(
                 ontology, dictionary.index("ICD10CM/" + code)
             )
-        self.codes: List[int] = list(codes)
+        self.outcome_codes: List[int] = list(codes)
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.codes`."""
+        """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.code in self.codes:
+            if event.code in self.outcome_codes:
                 times.append(event.start)
         return times
 
@@ -567,7 +567,7 @@ class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
         )
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.codes`."""
+        """Return the start times of this patient's events whose `code` is in `self.overdose_codes`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
             if event.code in self.overdose_codes:

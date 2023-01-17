@@ -8,7 +8,7 @@ from inspect import signature
 
 import piton
 import piton.datasets
-from piton.labelers.core import LabeledPatients, Label
+from piton.labelers.core import LabeledPatients, Label, Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
 EventsWithLabels = List[Tuple[piton.Event, Optional[Union[bool, str]]]]
@@ -87,6 +87,27 @@ def assert_labels_are_accurate(
             f"{label.value} (Assigned) != {true_label} (Expected)  |  "
             f"{help_text}"
         )
+
+def run_test_for_labeler(labeler: Labeler, 
+                         events_with_labels: EventsWithLabels,
+                         help_text: str = "",) -> None:
+    patients: List[piton.Patient] = create_patients(10, 
+        [ x[0] for x in events_with_labels ]
+    )
+    true_labels: List[Optional[bool]] = [ 
+        x[1] for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
+    ]
+    labeled_patients: LabeledPatients = labeler.apply(patient_database=patients)
+    
+    # Check accuracy of Labels
+    for i in range(len(patients)):
+        assert_labels_are_accurate(labeled_patients, i, true_labels, help_text=help_text)
+    
+    # Check Labeler's internal functions
+    for p in patients:
+        assert labeler.get_outcome_times(p) == [
+            event.start for event in p.events if event.code in labeler.outcome_codes
+        ]
 
 if __name__ == '__main__':
     pass
