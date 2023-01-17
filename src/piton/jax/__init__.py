@@ -9,11 +9,11 @@ from typing import Any, Dict, Optional, Sequence, Tuple, cast
 
 import jax
 import numpy as np
-from jax import core, custom_vjp, debug, grad, lax, nn
+from jax import core, custom_vjp, grad, nn
 from jax import numpy as jnp
 from jax import value_and_grad, vmap, xla_computation
-from jax.core import ConcreteArray, ShapedArray
-from jax.interpreters import ad, batching, xla
+from jax.core import ShapedArray
+from jax.interpreters import xla
 from jax.lib import xla_client
 
 from piton.extension.jax import (
