@@ -2,15 +2,13 @@ import datetime
 import os
 import pathlib
 import pickle
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Union, Optional
 import shutil
-
-import numpy as np
+from inspect import signature
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
-from piton.labelers.omop import CodeLabeler
+from piton.labelers.core import LabeledPatients, Label
 
 def event(date: Tuple, code, value, visit_id=None):
     """A terser way to create a Piton Event."""
@@ -50,4 +48,42 @@ def run_test_locally(str_path: str, test_func: Callable):
     tmp_path = pathlib.Path(str_path)
     shutil.rmtree(tmp_path)
     os.makedirs(tmp_path, exist_ok=True)
-    test_func(pathlib.Path(tmp_path))
+    if signature(test_func).parameters.get("tmp_path"):
+        test_func(tmp_path)
+    else:
+       test_func()
+
+def create_patients(num_patients: int, events: List[piton.Event]) -> List[piton.Patient]:
+    """Creates a list of patients, each with the same events contained in `events`"""
+    patients: List[piton.Patient] = []
+    for patient_id in range(num_patients):
+        patients.append(
+            piton.Patient(
+                patient_id,
+                events,
+            )
+        )
+    return patients
+
+def assert_labels_are_accurate(
+    labeled_patients: LabeledPatients,
+    patient_id: int,
+    true_labels: Union[List[Optional[bool]], List[bool]],
+    help_text: str = "",
+):
+    """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
+    generated_labels: List[Label] = labeled_patients[patient_id]
+    # Check that length of lists of labels are the same
+    assert len(generated_labels) == len(true_labels), (
+        f"{len(generated_labels)} != {len(true_labels)} | {help_text}" 
+    )
+    # Check that value of labels are the same
+    for idx, (label, true_label) in enumerate(zip(generated_labels, true_labels)):
+        assert label.value == true_label, (
+            f"patient_id={patient_id}, label_idx={idx}, label={label}  |  "
+            f"{label.value} (Assigned) != {true_label} (Expected)  |  "
+            f"{help_text}"
+        )
+
+if __name__ == '__main__':
+    pass
