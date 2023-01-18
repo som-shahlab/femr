@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import List
 
 from .. import Event
@@ -18,10 +19,7 @@ def remove_short_notes(
     min_char_count: int = kwargs.get("min_char_count", 0)
     new_notes: NotesProcessed = []
     for note in notes:
-        if isinstance(note[1].value, memoryview):
-            text: str = bytes(note[1].value).decode("utf8")
-        else:
-            text: str = str(note[1].value)
+        text: str = str(note[1].value)
         if len(text) >= min_char_count:
             new_notes.append(note)
     return new_notes
@@ -57,7 +55,8 @@ def join_all_notes(
 ) -> NotesProcessed:
     """Join all notes from `notes` together into one long string."""
     text: str = " ".join([note[1].value for note in notes])  # type: ignore
-    note = Event(start=None, code=None, value=text)
+    # Give it an arbitrary `start` and `code` (b/c merged notes don't have one)
+    note = Event(start=datetime.datetime(0, 0, 0), code=0, value=text)
     return [(0, note)]
 
 
@@ -70,10 +69,7 @@ def keep_only_last_n_chars(
         return notes
     new_notes: NotesProcessed = []
     for note in notes:
-        if isinstance(note[1].value, memoryview):
-            text: str = bytes(note[1].value).decode("utf8")
-        else:
-            text: str = str(note[1].value)
+        text: str = str(note[1].value)
         event = Event(
             start=note[1].start, code=note[1].code, value=text[:n_chars]
         )

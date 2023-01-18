@@ -2,6 +2,7 @@ import datetime
 import math
 import os
 import pathlib
+from typing import cast
 
 import numpy as np
 import scipy.sparse
@@ -68,10 +69,11 @@ def test_age_featurizer(tmp_path: pathlib.Path):
     labeler = CodeLF(
         piton_admission_code, piton_target_code, time_horizon=time_horizon
     )
-    labels = labeler.label(database[0])
 
+    patient: piton.Patient = cast(piton.Patient, database[0])
+    labels = labeler.label(patient)
     featurizer = AgeFeaturizer(is_normalize=False)
-    patient_features = featurizer.featurize(database[0], labels, ontology)
+    patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert patient_features[0] == [
         ColumnValue(column=0, value=15.43013698630137)
@@ -117,11 +119,12 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     labeler = CodeLF(
         piton_admission_code, piton_target_code, time_horizon=time_horizon
     )
-    labels = labeler.label(database[0])
 
+    patient: piton.Patient = cast(piton.Patient, database[0])
+    labels = labeler.label(patient)
     featurizer = CountFeaturizer()
-    featurizer.preprocess(database[0], labels)
-    patient_features = featurizer.featurize(database[0], labels, ontology)
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert featurizer.get_num_columns() == 3
 
@@ -169,14 +172,15 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     labeler = CodeLF(
         piton_admission_code, piton_target_code, time_horizon=time_horizon
     )
-    labels = labeler.label(database[0])
 
+    patient: piton.Patient = cast(piton.Patient, database[0])
+    labels = labeler.label(patient)
     time_bins = [90, 180, math.inf]
     featurizer = CountFeaturizer(
         is_ontology_expansion=True, time_bins=time_bins
     )
-    featurizer.preprocess(database[0], labels)
-    patient_features = featurizer.featurize(database[0], labels, ontology)
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert featurizer.get_num_columns() == 9
     assert patient_features[0] == [

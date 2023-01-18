@@ -25,12 +25,12 @@ python3 3_run_text_featurizer.py \
     /local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer/ \
     /local-scratch/nigam/projects/mwornow/data/output_mortality_longformer/ \
     /local-scratch/nigam/projects/mwornow/data/temp_mortality_longformer/ \
-    --num_threads 10 \
-    --gpu_devices 1 2 \
+    --num_threads 20 \
+    --gpu_devices 0 1 3 4 5 6 \
     --preprocessor__transformations keep_only_notes_matching_codes remove_notes_after_label remove_short_notes join_all_notes keep_only_last_n_chars \
     --preprocessor__min_note_char_count 100 \
     --preprocessor__keep_last_n_chars 4096 \
-    --preprocessor__keep_notes_of_type discharge \
+    # --preprocessor__keep_notes_of_type discharge \
     --tokenizer__max_length 4096 \
     --tokenizer__padding \
     --tokenizer__truncation \
