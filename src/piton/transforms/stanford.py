@@ -1,10 +1,9 @@
 """Transforms that are unique to STARR OMOP."""
 
 import datetime
-from collections import defaultdict, deque
-from typing import DefaultDict, Deque, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
-from piton import Event, Patient
+from piton import Patient
 from piton.extractors.omop import OMOP_BIRTH
 
 
@@ -99,58 +98,6 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
                 event.end = max(event.start, event.end)
 
     patient.resort()
-
-    return patient
-
-
-def prioritize_visit_events(
-    patient: Patient, priority_list=("visit",)
-) -> Patient:
-    """Sort visit events before synchronous non-visit events
-
-    This function takes a patient with events already sorted by time and,
-    for any subsequence of events with the same start time in the patient
-    event timeline, moves all events derived from OMOP tables in the
-    priority list within that subsequence (by default, all events for whch
-    the `.omop_table` attribute is equal to "visit", i.e., visit events) to the
-    start of the subsequence. The sort order for distinct events not on the
-    priority list but with the same start time is not defined.
-
-    Note: Future work could make this function more flexible by specifying
-    priority functions rather than OMOP tables as the only approach
-    to prioritization.
-    """
-    new_events = []
-    simul_buffers: DefaultDict[str, Deque[Event]] = defaultdict(deque)
-
-    def push_buffers_to_event_timeline():
-        # Move events from simul_buffers to new_events, starting
-        # with priority_list (in order given), then all other events
-        keys_to_process = set(simul_buffers.keys())
-        for p in priority_list:
-            while simul_buffers[p]:
-                new_events.append(simul_buffers[p].popleft())
-            keys_to_process.remove(p)
-        for k in keys_to_process:
-            while simul_buffers[k]:
-                new_events.append(simul_buffers[k].popleft())
-
-    prev_start = patient.events[0].start
-    for event in patient.events:
-        curr_start = event.start
-        # When a new start time is reached, push buffers to new event
-        # timeline, starting first with priority events (e.g., visits
-        # as given in priority_list), then non-priority events
-        if curr_start != prev_start:
-            push_buffers_to_event_timeline()
-        simul_buffers[event.omop_table].append(event)
-        prev_start = curr_start
-
-    # Push all remaining events from the buffers into patient timeline
-    push_buffers_to_event_timeline()
-
-    # Assign the sorted event timeline to patient's event timeline
-    patient.events = new_events
 
     return patient
 

@@ -19,7 +19,6 @@ from piton.transforms.stanford import (
     move_pre_birth,
     move_to_day_end,
     move_visit_start_to_first_event_start,
-    prioritize_visit_events,
 )
 
 
@@ -44,7 +43,6 @@ def _get_stanford_transformations() -> Sequence[
         ),
         delta_encode,
         remove_short_patients,
-        prioritize_visit_events,  # has to appear after all other transforms that sort
     ]
 
     return transforms

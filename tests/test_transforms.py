@@ -11,7 +11,6 @@ from piton.transforms.stanford import (
     move_to_day_end,
     move_visit_start_to_day_start,
     move_visit_start_to_first_event_start,
-    prioritize_visit_events,
 )
 
 
@@ -245,112 +244,6 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
     )
 
     assert move_visit_start_to_first_event_start(patient) == expected
-
-
-def test_prioritize_visit_events() -> None:
-    patient = piton.Patient(
-        patient_id=123,
-        events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=2345, visit_id=9999
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2),
-                code=3456,
-                visit_id=9999,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=6666,
-                visit_id=8888,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=5555,
-                visit_id=8888,
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=4444,
-                visit_id=8888,
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=3333,
-                visit_id=7777,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=2222,
-                visit_id=6666,
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=1111,
-                visit_id=6666,
-                omop_table="visit",
-            ),
-        ],
-    )
-
-    expected = piton.Patient(
-        patient_id=123,
-        events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2),
-                code=3456,
-                visit_id=9999,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=2345, visit_id=9999
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=6666,
-                visit_id=8888,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=3333,
-                visit_id=7777,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=1111,
-                visit_id=6666,
-                omop_table="visit",
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=5555,
-                visit_id=8888,
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=4444,
-                visit_id=8888,
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 11, 59),
-                code=2222,
-                visit_id=6666,
-            ),
-        ],
-    )
-
-    assert prioritize_visit_events(patient) == expected
 
 
 def test_move_to_day_end() -> None:
