@@ -1,9 +1,10 @@
 """Transforms that are unique to STARR OMOP."""
 
 import datetime
-from typing import Dict, Optional, Tuple
+from collections import defaultdict, deque
+from typing import DefaultDict, Deque, Dict, Optional, Tuple
 
-from piton import Patient
+from piton import Event, Patient
 from piton.extractors.omop import OMOP_BIRTH
 
 
@@ -40,29 +41,18 @@ def move_visit_start_to_day_start(patient: Patient) -> Patient:
 
 
 def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
-    """Assign visit start times to be just before the first event
+    """Assign visit start times to equal start time of first event in visit
 
     This function assigns the start time associated with each visit to be
-    either (1) one second before the start time of the first event on the
-    day of the associated with the visit, or (2) 11:58:59 PM if the visit
-    has no associated events or all events associated with the visit have
-    a start time of '00:00:00'. Events that occur on days prior to the
-    visit do not affect the visit start time.
-
-    NOTE: This function assumes that all non-visit events with the same
-    start time as the visit event (e.g., events with a start time at midnight
-    such as billing codes, in the case where visit events also have a midnight
-    start time) are moved to day end, otherwise there may be non-visit events
-    with start times before the visit start time.
-
-    The reason for assigning a start time of 11:58:59 PM is that it makes
-    visit start times fall one second before the 11:59:00 PM start times
-    to which non-visit events with start times of `00:00:00` (such as
-    billing and diagnosis codes) are assigned via `move_to_day_end`.
-
-    Our design choice assumes that temporal granularity in the raw data is
-    at the minute level so that if the first non-visit event was at 12:01 AM
-    then there will be no other events between 12:00 AM and 12:01 AM.
+    the start time of the first event that (1) is associated with the visit
+    (i.e., shares the same visit ID as the visit event), (2) is a non-visit
+    event, and (3) occurs on the same day as the visit event. If the visit
+    has no non-visit events or all events associated with the visit have
+    the same start time as the visit event (e.g., events with a start time
+    of midnight such as billing codes, assuming visit events also have a
+    midnight start time) then the visit start time remains unchanged.
+    Events that occur on days prior to the visit do not affect the visit
+    start time.
 
     Note that not all visit start times are set to 12:00 AM in the raw data.
     STARR-OMOP currently uses the first available value out of (1) hospital
@@ -73,42 +63,94 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
     first_event_starts: Dict[int, datetime.datetime] = {}
     visit_starts: Dict[int, datetime.datetime] = {}
 
-    # Find the given start time for each visit
+    # Find the stated start time for each visit
     for event in patient.events:
         if event.omop_table == "visit":
+            if event.visit_id in visit_starts:
+                raise RuntimeError(
+                    f"Multiple visit events with visit ID {event.visit_id} for patient ID {patient.patient_id}"
+                )
             visit_starts[event.visit_id] = event.start
 
     # Find the minimum start time over all non-visit events associated with each visit
     for event in patient.events:
         if event.visit_id is not None:
-            # Ignore any events for which event start is before the associated visit start
-            # Also ignore non-visit events starting same time as visit (i.e., at midnight)
-            if event.start > visit_starts[event.visit_id]:
-                if event.visit_id in first_event_starts:
-                    first_event_starts[event.visit_id] = min(
-                        event.start, first_event_starts[event.visit_id]
-                    )
-                else:
-                    first_event_starts[event.visit_id] = event.start
+            # Only trigger for non-visit events with start time after associated visit start
+            # Note: ignores non-visit events starting same time as visit (i.e., at midnight)
+            if (
+                event.visit_id in visit_starts
+                and event.start > visit_starts[event.visit_id]
+            ):
+                first_event_starts[event.visit_id] = min(
+                    event.start,
+                    first_event_starts.get(event.visit_id, event.start),
+                )
 
-    # Assign visit start times to be one second before the first event associated with that visit
+    # Assign visit start times to be same as first non-visit event with same visit ID
     for event in patient.events:
         if event.omop_table == "visit":
+            # Triggers if there is a non-visit event associated with the visit ID that has
+            # start time strictly after the recorded visit start
             if event.visit_id in first_event_starts:
-                first_event_time = first_event_starts[event.visit_id]
-                event.start = first_event_time - datetime.timedelta(seconds=1)
-            elif event.start.time() == datetime.time.min:
-                event.start = (
-                    event.start
-                    + datetime.timedelta(days=1)
-                    - datetime.timedelta(seconds=61)
-                )
+                event.start = first_event_starts[event.visit_id]
 
             if event.end is not None:
                 # Reset the visit end to be ≥ the visit start
                 event.end = max(event.start, event.end)
 
     patient.resort()
+
+    return patient
+
+
+def prioritize_visit_events(
+    patient: Patient, priority_list=("visit",)
+) -> Patient:
+    """Sort visit events before synchronous non-visit events
+
+    This function takes a patient with events already sorted by time and,
+    for any subsequence of events with the same start time in the patient
+    event timeline, moves all events derived from OMOP tables in the
+    priority list within that subsequence (by default, all events for whch
+    the `.omop_table` attribute is equal to "visit", i.e., visit events) to the
+    start of the subsequence. The sort order for distinct events not on the
+    priority list but with the same start time is not defined.
+
+    Note: Future work could make this function more flexible by specifying
+    priority functions rather than OMOP tables as the only approach
+    to prioritization.
+    """
+    new_events = []
+    simul_buffers: DefaultDict[str, Deque[Event]] = defaultdict(deque)
+
+    def push_buffers_to_event_timeline():
+        # Move events from simul_buffers to new_events, starting
+        # with priority_list (in order given), then all other events
+        keys_to_process = set(simul_buffers.keys())
+        for p in priority_list:
+            while simul_buffers[p]:
+                new_events.append(simul_buffers[p].popleft())
+            keys_to_process.remove(p)
+        for k in keys_to_process:
+            while simul_buffers[k]:
+                new_events.append(simul_buffers[k].popleft())
+
+    prev_start = patient.events[0].start
+    for event in patient.events:
+        curr_start = event.start
+        # When a new start time is reached, push buffers to new event
+        # timeline, starting first with priority events (e.g., visits
+        # as given in priority_list), then non-priority events
+        if curr_start != prev_start:
+            push_buffers_to_event_timeline()
+        simul_buffers[event.omop_table].append(event)
+        prev_start = curr_start
+
+    # Push all remaining events from the buffers into patient timeline
+    push_buffers_to_event_timeline()
+
+    # Assign the sorted event timeline to patient's event timeline
+    patient.events = new_events
 
     return patient
 
