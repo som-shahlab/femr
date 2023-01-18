@@ -44,8 +44,8 @@ TEST(CountCodesAndValues, TestCountCodesAndValues) {
     size_t entries_per_chunk = (entries.size() + num_chunks - 1) / num_chunks;
 
     for (size_t i = 0; i < num_chunks; i++) {
-        CSVWriter writer((data_path / std::to_string(i)).string(), columns,
-                         ',');
+        CSVWriter<ZstdWriter> writer((data_path / std::to_string(i)).string(),
+                                     columns, ',');
         for (size_t j = 0; j < entries_per_chunk; j++) {
             size_t index = i * entries_per_chunk + j;
             if (index < entries.size()) {

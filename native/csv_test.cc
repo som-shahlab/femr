@@ -3,16 +3,17 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-TEST(CsvTest, TestCsvWriter) {
+template <typename Reader, typename Writer>
+void csv_helper(std::string extension) {
     boost::filesystem::path root = boost::filesystem::temp_directory_path() /
                                    boost::filesystem::unique_path();
     boost::filesystem::create_directories(root);
 
     std::vector<std::string> columns = {"col", "col1", "col\"2"};
 
-    boost::filesystem::path path = root / "test_csv";
+    boost::filesystem::path path = root / absl::StrCat("test_csv", extension);
     {
-        CSVWriter writer(path, columns, ',');
+        CSVWriter<Writer> writer(path, columns, ',');
         writer.add_row({"foo\"whaw\nt", "lol", "bar"});
         writer.add_row({"1", "2", "3"});
     }
@@ -25,7 +26,7 @@ TEST(CsvTest, TestCsvWriter) {
     std::vector<std::string> expected_ro2 = {"3", "1"};
 
     {
-        CSVReader reader(path, remapped_columns, ',');
+        CSVReader<Reader> reader(path, remapped_columns, ',');
         EXPECT_EQ(true, reader.next_row());
         EXPECT_EQ(expected_row, reader.get_row());
         EXPECT_EQ(true, reader.next_row());
@@ -36,14 +37,20 @@ TEST(CsvTest, TestCsvWriter) {
     boost::filesystem::remove_all(root);
 }
 
-TEST(CsvTest, TestZstdWriter) {
+TEST(CsvTest, TestCsvWriter) {
+    csv_helper<TextReader, TextWriter>(".csv");
+    csv_helper<ZstdReader, ZstdWriter>(".csv.zst");
+}
+
+template <typename Reader, typename Writer>
+void raw_helper() {
     boost::filesystem::path root = boost::filesystem::temp_directory_path() /
                                    boost::filesystem::unique_path();
     boost::filesystem::create_directories(root);
 
     boost::filesystem::path path = root / "test_csv";
     {
-        ZstdWriter writer(path);
+        Writer writer(path);
         for (int i = 0; i < 1000000; i++) {
             writer.add_data(std::to_string(i) + ",");
             if ((i + 1) % 1000 == 0) {
@@ -53,7 +60,7 @@ TEST(CsvTest, TestZstdWriter) {
     }
     {
         int next_integer = 0;
-        ZstdReader reader(path);
+        Reader reader(path);
         while (true) {
             auto data = reader.get_data();
             std::string temp = "";
@@ -65,6 +72,8 @@ TEST(CsvTest, TestZstdWriter) {
                     EXPECT_EQ(temp, std::to_string(next_integer));
                     next_integer++;
                     temp = "";
+                } else if (next == '\n') {
+                    last_good++;
                 } else if (next != '\n') {
                     temp.push_back(next);
                 }
@@ -73,8 +82,14 @@ TEST(CsvTest, TestZstdWriter) {
             if (reader.eof()) {
                 break;
             }
+
             reader.seek(last_good);
         }
     }
     boost::filesystem::remove_all(root);
+}
+
+TEST(CsvTest, TestZstdWriter) {
+    raw_helper<TextReader, TextWriter>();
+    raw_helper<ZstdReader, ZstdWriter>();
 }
