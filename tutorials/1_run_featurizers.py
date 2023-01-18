@@ -147,6 +147,9 @@ if __name__ == "__main__":
     )
     save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
+    print("Length of labeled_patients", len(labeled_patients))
+
+    labeling_time = datetime.datetime.now()
 
     # Lets use both age and count featurizer
     age = AgeFeaturizer()
