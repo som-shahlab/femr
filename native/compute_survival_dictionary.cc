@@ -286,7 +286,7 @@ int main() {
 
     for (uint32_t i = 0; i < dictionary_size; i++) {
         auto stats = time_bin_result.times_per_index.find(i);
-        
+
         double frac_events =
             std::get<1>(*stats) / (std::get<1>(*stats) + std::get<2>(*stats));
         double lambda = frac_events / std::get<0>(*stats).get_mean();
