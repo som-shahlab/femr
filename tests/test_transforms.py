@@ -9,6 +9,8 @@ from piton.transforms.stanford import (
     move_billing_codes,
     move_pre_birth,
     move_to_day_end,
+    move_visit_start_to_day_start,
+    move_visit_start_to_first_event_start,
 )
 
 
@@ -56,6 +58,192 @@ def test_remove_small() -> None:
     assert remove_short_patients(patient) == patient
 
     assert remove_short_patients(invalid) is None
+
+
+def test_move_visit_start_to_day_start() -> None:
+    patient = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2),
+                code=1234,
+                omop_table="visit",
+            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
+        ],
+    )
+
+    expected = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 0, 1),
+                code=1234,
+                omop_table="visit",
+            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
+            piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
+        ],
+    )
+
+    assert move_visit_start_to_day_start(patient) == expected
+
+
+def test_move_visit_start_ignores_other_visits() -> None:
+    patient = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(  # A non-visit event with no explicit start time
+                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
+            ),
+            piton.Event(  # A visit event with just date specified
+                start=datetime.datetime(1999, 7, 2),
+                code=4567,
+                omop_table="visit",
+                visit_id=9999,
+            ),
+            piton.Event(  # A non-visit event from a separate visit ID
+                start=datetime.datetime(1999, 7, 2, 11),
+                code=2345,
+                visit_id=8888,
+            ),
+            piton.Event(  # First recorded non-visit event for visit ID 9999
+                start=datetime.datetime(1999, 7, 2, 12),
+                code=3456,
+                visit_id=9999,
+            ),
+        ],
+    )
+
+    # Note that events are implicitly sorted first by start time, then by code:
+    # https://github.com/som-shahlab/piton/blob/main/src/piton/__init__.py#L69
+    expected = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(  # A non-visit event with no explicit start time
+                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
+            ),
+            piton.Event(  # A non-visit event from a separate visit ID
+                start=datetime.datetime(1999, 7, 2, 11),
+                code=2345,
+                visit_id=8888,
+            ),
+            piton.Event(  # First recorded non-visit event for visit ID 9999
+                start=datetime.datetime(1999, 7, 2, 12),
+                code=3456,
+                visit_id=9999,
+            ),
+            piton.Event(  # Now visit event has date and time specified
+                start=datetime.datetime(1999, 7, 2, 12),
+                code=4567,  # Comes after previous event b/c 4567 > 3456
+                omop_table="visit",
+                visit_id=9999,
+            ),
+        ],
+    )
+
+    assert move_visit_start_to_first_event_start(patient) == expected
+
+
+def test_move_visit_start_minute_after_midnight() -> None:
+    patient = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 0, 1),
+                code=2345,
+                visit_id=9999,
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 12),
+                code=4567,
+                visit_id=9999,
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2),
+                code=3456,
+                visit_id=9999,
+                omop_table="visit",
+            ),
+        ],
+    )
+
+    expected = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 0, 1),
+                code=2345,
+                visit_id=9999,
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 0, 1),
+                code=3456,
+                visit_id=9999,
+                omop_table="visit",
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 12),
+                code=4567,
+                visit_id=9999,
+            ),
+        ],
+    )
+
+    assert move_visit_start_to_first_event_start(patient) == expected
+
+
+def test_move_visit_start_doesnt_move_without_event() -> None:
+    patient = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2),
+                code=3456,
+                visit_id=9999,
+                omop_table="visit",
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 0, 0),
+                code=2345,
+                visit_id=9999,
+            ),
+        ],
+    )
+
+    # None of the non-visit events have start time > '00:00:00' so visit event
+    # start time is unchanged, though order changes based on code under resort.
+    expected = piton.Patient(
+        patient_id=123,
+        events=[
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2, 0, 0),
+                code=2345,
+                visit_id=9999,
+            ),
+            piton.Event(
+                start=datetime.datetime(1999, 7, 2),
+                code=3456,
+                visit_id=9999,
+                omop_table="visit",
+            ),
+        ],
+    )
+
+    assert move_visit_start_to_first_event_start(patient) == expected
 
 
 def test_move_to_day_end() -> None:
