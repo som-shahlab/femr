@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
+import copy
 
 T = TypeVar("T")
 
@@ -99,33 +100,43 @@ class Dictionary(Generic[T]):
 class OnlineStatistics:
     """
     A class for computing online statistics such as mean and variance.
-    From https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance.
+    Uses Welford's online algorithm.
+    From https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm.
+    
+    NOTE: The variance we calculate is the sample variance, not the population variance.
     """
 
-    count: int
-    current_mean: float
-    variance: float
-
-    def __init__(self, old_data: Optional[Dict[str, Any]] = None):
+    def __init__(self, 
+                 current_count: int = 0,
+                 current_mean: float = 0,
+                 current_variance: float = 0):
         """
-        Initialize online statistics. Optionally takes the results of self.to_dict() to initialize from old data.
+        Initialize online statistics.
+            `mean` accumulates the mean of the entire dataset
+            `count` aggregates the number of samples seen so far
+            `current_M2` aggregates the squared distances from the mean
         """
-        if old_data is None:
-            old_data = {"count": 0, "current_mean": 0, "variance": 0}
-
-        self.count = old_data["count"]
-        self.current_mean = old_data["current_mean"]
-        self.variance = old_data["variance"]
+        assert current_count >= 0 and current_variance >= 0, "Cannot specify negative values for `current_count` or `current_variance`."
+        self.current_count: int = current_count
+        self.current_mean: float = current_mean
+        if current_count == 0 and current_variance == 0:
+            self.current_M2: float = 0
+        elif current_count > 0:
+            self.current_M2: float = current_variance * (current_count - 1)
+        else:
+            raise ValueError("Cannot specify `current_variance` with a value > 0 without specifying `current_count` with a value > 0.")
 
     def add(self, newValue: float) -> None:
         """
-        Add an observation to the calculation.
+        Add an observation to the calculation using Welford's online algorithm.
+        
+        Taken from: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
         """
-        self.count += 1
-        delta = newValue - self.current_mean
-        self.current_mean += delta / self.count
-        delta2 = newValue - self.current_mean
-        self.variance += delta * delta2
+        self.current_count += 1
+        delta: float = newValue - self.current_mean
+        self.current_mean += delta / self.current_count
+        delta2: float = newValue - self.current_mean
+        self.current_M2 += delta * delta2
 
     def mean(self) -> float:
         """
@@ -133,22 +144,49 @@ class OnlineStatistics:
         """
         return self.current_mean
 
+    def variance(self) -> float:
+        """
+        Return the current sample variance.
+        """
+        if self.current_count < 2:
+            raise ValueError(f"Cannot compute variance with only {self.current_count} observations.")
+
+        return self.current_M2 / (self.current_count - 1)
+
     def standard_deviation(self) -> float:
         """
         Return the current standard devation.
         """
-        if self.count == 1:
-            return math.sqrt(self.variance)
-
-        return math.sqrt(self.variance / (self.count - 1))
-
-    def to_dict(self) -> Dict[str, Any]:
+        return math.sqrt(self.variance())
+    
+    @classmethod
+    def merge_pair(cls, stats1: OnlineStatistics, stats2: OnlineStatistics) -> OnlineStatistics:
         """
-        Serialize the data to a dictionary that can be encoded with JSON.
-        Feed the resulting dictionary back into the constructor of this class to extract information from it.
+        Merge two sets of online statistics using Chan's parallel algorithm.
+        
+        Taken from: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
         """
-        return {
-            "count": self.count,
-            "current_mean": self.current_mean,
-            "variance": self.variance,
-        }
+        if stats1.current_count == 0:
+            return stats2
+        elif stats2.current_count == 0:
+            return stats1
+
+        count: int = stats1.current_count + stats2.current_count
+        delta: float = stats2.current_mean - stats1.current_mean
+        mean: float = stats1.current_mean + delta * stats2.current_count / count
+        M2 = stats1.current_M2 + stats2.current_M2 + delta**2 * stats1.current_count * stats2.current_count / count
+        return OnlineStatistics(count, mean, M2 / (count - 1))
+
+    @classmethod
+    def merge(cls, stats_list: List[OnlineStatistics]) -> OnlineStatistics:
+        """
+        Merge a list of online statistics.
+        """
+        if len(stats_list) == 0:
+            raise ValueError("Cannot merge an empty list of statistics.")
+        unmerged_stats = copy.deepcopy(stats_list)
+        stats1: OnlineStatistics = unmerged_stats.pop(0)
+        while len(unmerged_stats) > 0:
+            stats2: OnlineStatistics = unmerged_stats.pop(0)
+            stats1 = cls.merge_pair(stats1, stats2)
+        return stats1
