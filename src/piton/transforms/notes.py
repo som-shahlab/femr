@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import List
+from typing import List, Optional
 
 from .. import Event
 from ..featurizers.featurizers_notes import NotesProcessed
@@ -11,12 +11,14 @@ from ..labelers.core import Label
 
 
 def remove_short_notes(
-    notes: NotesProcessed, label: Label, **kwargs
+    notes: NotesProcessed, 
+    label: Label, 
+    min_char_count: int = 0,
+    **kwargs
 ) -> NotesProcessed:
     """Remove all notes from `notes` whose character length < `min_char_count`.
     `notes` is a list of tuples, where each tuple is: (event idx of note, Event)
     """
-    min_char_count: int = kwargs.get("min_char_count", 0)
     new_notes: NotesProcessed = []
     for note in notes:
         text: str = str(note[1].value)
@@ -28,19 +30,21 @@ def remove_short_notes(
 def keep_only_notes_matching_codes(
     notes: NotesProcessed,
     label: Label,
+    keep_notes_with_codes: List[int] = [],
     **kwargs,
 ) -> NotesProcessed:
     """Keep only notes that have a `code` contained in `keep_notes_with_codes`."""
-    codes: List[int] = kwargs.get("keep_notes_with_codes", [])
     new_notes: NotesProcessed = []
     for note in notes:
-        if note[1].code in codes:
+        if note[1].code in keep_notes_with_codes:
             new_notes.append(note)
     return new_notes
 
 
 def remove_notes_after_label(
-    notes: NotesProcessed, label: Label, **kwargs
+    notes: NotesProcessed, 
+    label: Label,
+    **kwargs
 ) -> NotesProcessed:
     """Remove all notes whose `start` > `label.time`."""
     new_notes: NotesProcessed = []
@@ -51,7 +55,9 @@ def remove_notes_after_label(
 
 
 def join_all_notes(
-    notes: NotesProcessed, label: Label, **kwargs
+    notes: NotesProcessed, 
+    label: Label, 
+    **kwargs
 ) -> NotesProcessed:
     """Join all notes from `notes` together into one long string."""
     text: str = " ".join([note[1].value for note in notes])  # type: ignore
@@ -61,17 +67,19 @@ def join_all_notes(
 
 
 def keep_only_last_n_chars(
-    notes: NotesProcessed, label: Label, **kwargs
+    notes: NotesProcessed, 
+    label: Label, 
+    keep_last_n_chars: Optional[int] = None,
+    **kwargs
 ) -> NotesProcessed:
     """Keep the last `n_chars` from each note."""
-    n_chars: int = kwargs.get("keep_last_n_chars", None)
-    if n_chars is None:
+    if keep_last_n_chars is None:
         return notes
     new_notes: NotesProcessed = []
     for note in notes:
         text: str = str(note[1].value)
         event = Event(
-            start=note[1].start, code=note[1].code, value=text[:n_chars]
+            start=note[1].start, code=note[1].code, value=text[:keep_last_n_chars]
         )
         new_notes.append((note[0], event))
     return new_notes

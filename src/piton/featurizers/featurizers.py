@@ -14,8 +14,10 @@ from .core import ColumnValue, Featurizer
 
 # TODO - replace this with a more flexible/less hacky way to allow the user to
 # manage patient attributes (like age)
-def get_patient_birthdate(patient: Patient) -> Optional[datetime.datetime]:
-    return patient.events[0].start if len(patient.events) > 0 else None
+def get_patient_birthdate(patient: Patient) -> datetime.datetime:
+    if len(patient.events) > 0:
+        return patient.events[0].start
+    raise ValueError("Couldn't find patient birthdate -- Patient has no events")
 
 
 class AgeFeaturizer(Featurizer):
@@ -285,8 +287,6 @@ class CountFeaturizer(Featurizer):
 
                             code_counts_per_bin[i + 1][next_code] += 1
 
-                # print(codes_per_bin, " | ", code_counts_per_bin)
-                # print()
                 if label_idx == len(labels) - 1:
                     all_columns.append(
                         [

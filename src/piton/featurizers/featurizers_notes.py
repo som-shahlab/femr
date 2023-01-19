@@ -51,7 +51,6 @@ def save_to_pkl(object_to_save, path_to_file: str):
     """Save object to Pickle file."""
     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
     with open(path_to_file, "wb") as fd:
-        print(fd is None, object_to_save is None)
         pickle.dump(object_to_save, fd)
 
 
@@ -292,7 +291,7 @@ class NoteFeaturizer:
         tokenizer = AutoTokenizer.from_pretrained(
             path_to_tokenizer, use_fast=True, batched=True
         )
-        max_length = params.get("tokenizer_max_length", 512)
+        max_length = params.get("tokenizer_max_length", None)
         padding = params.get("tokenizer_padding", True)
         truncation = params.get("tokenizer_truncation", True)
 

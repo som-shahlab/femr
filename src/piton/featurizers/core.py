@@ -202,6 +202,9 @@ class Featurizer(ABC):
     ) -> FeaturizerType:
         """After preprocessing featurizer using multiprocessing, this method aggregates all
         those featurizers into one.
+        
+        NOTE: This only needs to be overwritten if you are using multiprocessing to 
+        distribute featurization across multiple processes.
 
         Args:
             featurizers (List[self]): A list of preprocessed featurizers
@@ -299,8 +302,6 @@ class FeaturizerList:
         """
         self.featurizers: List[Featurizer] = featurizers
 
-    # TODO - restructure code so that multiprocessing happens within the featurizer
-    # (and thus no need to do a bespoke merge of results here)
     def preprocess_featurizers(
         self,
         database_path: str,
