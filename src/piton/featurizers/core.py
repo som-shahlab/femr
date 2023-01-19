@@ -1,4 +1,4 @@
-""" RAHUL """
+"""Core featurizer functionality, shared across Featurizers."""
 from __future__ import annotations
 
 import collections
@@ -43,15 +43,13 @@ def _run_featurizer(
     ontology: Ontology = database.get_ontology()
 
     # Construct CSR sparse matrix
-    data: List[Any] = []  # non-zero entries in sparse matrix
-    indices: List[
-        int
-    ] = []  # maps each element in `data`` to its column in the sparse matrix
-    indptr: List[
-        int
-    ] = (
-        []
-    )  # maps each element in `data` and `indices` to the rows of the sparse matrix
+    #   non-zero entries in sparse matrix
+    data: List[Any] = []  
+    #   maps each element in `data`` to its column in the sparse matrix
+    indices: List[int] = []  
+    #   maps each element in `data` and `indices` to the rows of the sparse matrix
+    indptr: List[int] = []
+    #   tracks Labels
     label_data: List[Tuple] = []
 
     # For each Patient...
@@ -103,9 +101,8 @@ def _run_featurizer(
 
                 # Record what the starting column should be for the next featurizer
                 column_offset += featurizers[j].get_num_columns()
-    indptr.append(
-        len(indices)
-    )  # Need one last `indptr` for end of last row in CSR sparse matrix
+    # Need one last `indptr` for end of last row in CSR sparse matrix
+    indptr.append(len(indices))
 
     # n_rows = number of Labels across all Patients
     total_rows: int = len(label_data)
@@ -145,8 +142,6 @@ def _run_featurizer(
     assert (
         label_pids.shape == label_values.shape == label_times.shape
     ), f"These should all be equal: {label_pids.shape} | {label_values.shape} | {label_times.shape}"
-
-    # data_matrix.check_format() # remove when we think its works
 
     return data_matrix, label_pids, label_values, label_times
 
