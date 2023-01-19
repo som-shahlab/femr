@@ -23,7 +23,7 @@ from piton.transforms.stanford import (
 
 
 def _is_visit_event(e: Event) -> bool:
-    return e.omop_table == "visit"
+    return e.omop_table == "visit_occurrence"
 
 
 def _get_stanford_transformations() -> Sequence[
