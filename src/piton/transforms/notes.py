@@ -11,10 +11,7 @@ from ..labelers.core import Label
 
 
 def remove_short_notes(
-    notes: NotesProcessed, 
-    label: Label, 
-    min_char_count: int = 0,
-    **kwargs
+    notes: NotesProcessed, label: Label, min_char_count: int = 0, **kwargs
 ) -> NotesProcessed:
     """Remove all notes from `notes` whose character length < `min_char_count`.
     `notes` is a list of tuples, where each tuple is: (event idx of note, Event)
@@ -42,9 +39,7 @@ def keep_only_notes_matching_codes(
 
 
 def remove_notes_after_label(
-    notes: NotesProcessed, 
-    label: Label,
-    **kwargs
+    notes: NotesProcessed, label: Label, **kwargs
 ) -> NotesProcessed:
     """Remove all notes whose `start` > `label.time`."""
     new_notes: NotesProcessed = []
@@ -55,9 +50,7 @@ def remove_notes_after_label(
 
 
 def join_all_notes(
-    notes: NotesProcessed, 
-    label: Label, 
-    **kwargs
+    notes: NotesProcessed, label: Label, **kwargs
 ) -> NotesProcessed:
     """Join all notes from `notes` together into one long string."""
     text: str = " ".join([note[1].value for note in notes])  # type: ignore
@@ -67,10 +60,10 @@ def join_all_notes(
 
 
 def keep_only_last_n_chars(
-    notes: NotesProcessed, 
-    label: Label, 
+    notes: NotesProcessed,
+    label: Label,
     keep_last_n_chars: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> NotesProcessed:
     """Keep the last `n_chars` from each note."""
     if keep_last_n_chars is None:
@@ -79,7 +72,9 @@ def keep_only_last_n_chars(
     for note in notes:
         text: str = str(note[1].value)
         event = Event(
-            start=note[1].start, code=note[1].code, value=text[:keep_last_n_chars]
+            start=note[1].start,
+            code=note[1].code,
+            value=text[:keep_last_n_chars],
         )
         new_notes.append((note[0], event))
     return new_notes
