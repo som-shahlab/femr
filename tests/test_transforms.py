@@ -67,7 +67,7 @@ def test_move_visit_start_to_day_start() -> None:
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
                 code=1234,
-                omop_table="visit",
+                omop_table="visit_occurrence",
             ),
             piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
             piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
@@ -80,7 +80,7 @@ def test_move_visit_start_to_day_start() -> None:
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 0, 1),
                 code=1234,
-                omop_table="visit",
+                omop_table="visit_occurrence",
             ),
             piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=4321),
             piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
@@ -100,7 +100,7 @@ def test_move_visit_start_ignores_other_visits() -> None:
             piton.Event(  # A visit event with just date specified
                 start=datetime.datetime(1999, 7, 2),
                 code=4567,
-                omop_table="visit",
+                omop_table="visit_occurrence",
                 visit_id=9999,
             ),
             piton.Event(  # A non-visit event from a separate visit ID
@@ -137,7 +137,7 @@ def test_move_visit_start_ignores_other_visits() -> None:
             piton.Event(  # Now visit event has date and time specified
                 start=datetime.datetime(1999, 7, 2, 12),
                 code=4567,  # Comes after previous event b/c 4567 > 3456
-                omop_table="visit",
+                omop_table="visit_occurrence",
                 visit_id=9999,
             ),
         ],
@@ -167,7 +167,7 @@ def test_move_visit_start_minute_after_midnight() -> None:
                 start=datetime.datetime(1999, 7, 2),
                 code=3456,
                 visit_id=9999,
-                omop_table="visit",
+                omop_table="visit_occurrence",
             ),
         ],
     )
@@ -187,7 +187,7 @@ def test_move_visit_start_minute_after_midnight() -> None:
                 start=datetime.datetime(1999, 7, 2, 0, 1),
                 code=3456,
                 visit_id=9999,
-                omop_table="visit",
+                omop_table="visit_occurrence",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 12),
@@ -211,7 +211,7 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
                 start=datetime.datetime(1999, 7, 2),
                 code=3456,
                 visit_id=9999,
-                omop_table="visit",
+                omop_table="visit_occurrence",
             ),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 0, 0),
@@ -238,7 +238,7 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
                 start=datetime.datetime(1999, 7, 2),
                 code=3456,
                 visit_id=9999,
-                omop_table="visit",
+                omop_table="visit_occurrence",
             ),
         ],
     )

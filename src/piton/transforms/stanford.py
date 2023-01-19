@@ -27,7 +27,7 @@ def move_visit_start_to_day_start(patient: Patient) -> Patient:
             event.start.hour == 0
             and event.start.minute == 0
             and event.start.second == 0
-            and event.omop_table == "visit"
+            and event.omop_table == "visit_occurrence"
         ):
             event.start = event.start + datetime.timedelta(minutes=1)
 
@@ -64,7 +64,7 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
 
     # Find the stated start time for each visit
     for event in patient.events:
-        if event.omop_table == "visit":
+        if event.omop_table == "visit_occurrence":
             if event.visit_id in visit_starts:
                 raise RuntimeError(
                     f"Multiple visit events with visit ID {event.visit_id} for patient ID {patient.patient_id}"
@@ -87,7 +87,7 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
 
     # Assign visit start times to be same as first non-visit event with same visit ID
     for event in patient.events:
-        if event.omop_table == "visit":
+        if event.omop_table == "visit_occurrence":
             # Triggers if there is a non-visit event associated with the visit ID that has
             # start time strictly after the recorded visit start
             if event.visit_id in first_event_starts:
