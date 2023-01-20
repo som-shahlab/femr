@@ -6,6 +6,9 @@ import datetime
 import multiprocessing
 import pprint
 import random
+import struct
+import hashlib
+import math
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
@@ -467,19 +470,3 @@ class OneLabelPerPatient(LabelingFunction):
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return self.labeling_function.get_labeler_type()
 
-
-class NLabelPerPatient(LabelingFunction):
-    # TODO - update
-    def __init__(self, labeling_function, num_labels=1):
-        self.labeling_function = labeling_function
-        self.num_labels = num_labels
-
-    def label(self, patient: Patient) -> List[Label]:
-        labels = self.labeling_function.label(patient)
-        if len(labels) == 0:
-            return labels
-        return [random.choice(labels)]
-
-    def get_labeler_type(self) -> LabelType:
-        """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
-        return self.labeling_function.get_labeler_type()
