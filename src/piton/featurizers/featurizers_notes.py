@@ -10,6 +10,7 @@ from typing import (
     Dict,
     List,
     Literal,
+    NamedTuple,
     Optional,
     Tuple,
     TypeAlias,
@@ -34,10 +35,17 @@ NotesEmbedded: TypeAlias = TensorType["n_notes", "embedding_length"]  # noqa
 NotesEmbeddedByToken: TypeAlias = TensorType[
     "n_notes", "max_note_token_count", "embedding_length"  # noqa
 ]
-NotesProcessed = List[Tuple[int, Event]]  # event_idx, event (note)
-PatientLabelNotesTuple = Tuple[
-    int, int, NotesProcessed
-]  # patient_id, label_idx, notes
+
+
+class Note(NamedTuple):
+    event_idx: int  # idx in patient.events where this note occurs
+    event: Event  # actual note event (.value contains the note's text)
+
+
+class PatientLabelNotesTuple(NamedTuple):
+    patient_id: int
+    label_idx: int
+    notes: List[Note]
 
 
 START_TIME = time.time()
@@ -191,9 +199,6 @@ class NoteFeaturizer:
     def is_needs_preprocessing(self) -> bool:
         return False
 
-    def get_name(self) -> str:
-        return "TextFeaturizer"
-
     def preprocess_parallel(self, args: Tuple) -> List[PatientLabelNotesTuple]:
         """Return a pre-processed version of each note in `notes`.
 
@@ -231,15 +236,17 @@ class NoteFeaturizer:
             )
             for label_idx, label in enumerate(labels):
                 # All events that have a `value` of type `str` are clinical notes
-                notes: NotesProcessed = [
-                    (event_idx, event)
+                notes: List[Note] = [
+                    Note(event_idx, event)
                     for event_idx, event in enumerate(patient.events)
                     if isinstance(event.value, str)
                 ]
                 # Apply transformations sequentially to `notes`
                 for transform in transformations:
                     notes = transform(notes, label, **params)
-                notes_for_labels.append((patient_id, label_idx, notes))
+                notes_for_labels.append(
+                    PatientLabelNotesTuple(patient_id, label_idx, notes)
+                )
             # logging
             if patient_idx / len(patient_ids) > percent_done:
                 print_log(
@@ -297,7 +304,7 @@ class NoteFeaturizer:
 
         # Run notes through an already-trained tokenizer
         text: List = [
-            note[1].value
+            note.event.value
             for (_, _, notes) in notes_for_labels
             for note in notes
         ]
@@ -365,7 +372,7 @@ class NoteFeaturizer:
             print_log("embed", f"chunk #{chunk_id} | device {device}")
 
             # Setup dataloader for model
-            batch_size: int = params.get("batch_size", 4096)
+            batch_size: int = params.get("batch_size", 64)
             train_loader = [
                 {
                     key: notes_tokenized[key][x : x + batch_size]
