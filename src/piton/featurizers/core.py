@@ -4,7 +4,17 @@ from __future__ import annotations
 import collections
 import multiprocessing
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, TypeVar, NamedTuple
+from typing import (
+    Any,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypeVar,
+)
 
 import numpy as np
 import scipy.sparse
@@ -18,11 +28,13 @@ from ..labelers.core import Label, LabeledPatients
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
 
+
 class ColumnValue(NamedTuple):
     """A value for a particular column
-        `column` is the index for the column
-        `value` is the value for that column. Values must be numeric
+    `column` is the index for the column
+    `value` is the value for that column. Values must be numeric
     """
+
     column: int
     value: float | int
 
@@ -278,7 +290,10 @@ class Featurizer(ABC):
         """
         return False
 
+
 FeaturizerType = TypeVar("FeaturizerType", bound=Featurizer)
+
+
 class FeaturizerList:
     """
     FeaturizerList consists of a list of Featurizers that will be used to (sequentially)
@@ -333,10 +348,15 @@ class FeaturizerList:
         # Aggregate featurizers
         for idx, featurizer in enumerate(self.featurizers):
             # Merge all featurizers of the same class as `featurizer`
-            self.featurizers[idx] = featurizer.aggregate_preprocessed_featurizers([ 
-                f for f in preprocessed_featurizers 
-                if f.__class__.__name__ == featurizer.__class__.__name__
-            ])
+            self.featurizers[
+                idx
+            ] = featurizer.aggregate_preprocessed_featurizers(
+                [
+                    f
+                    for f in preprocessed_featurizers
+                    if f.__class__.__name__ == featurizer.__class__.__name__
+                ]
+            )
 
         # Finalize preprocessing
         for featurizer in self.featurizers:

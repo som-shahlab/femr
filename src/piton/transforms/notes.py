@@ -12,8 +12,8 @@ from ..labelers.core import Label
 
 def remove_short_notes(
 <<<<<<< HEAD
-    notes: List[Note], 
-    label: Label, 
+    notes: List[Note],
+    label: Label,
     min_char_count: int = 0,
     **kwargs
 ) -> List[Note]:
@@ -48,7 +48,7 @@ def keep_only_notes_matching_codes(
 
 def remove_notes_after_label(
 <<<<<<< HEAD
-    notes: List[Note], 
+    notes: List[Note],
     label: Label,
     **kwargs
 ) -> List[Note]:
@@ -66,8 +66,8 @@ def remove_notes_after_label(
 
 def join_all_notes(
 <<<<<<< HEAD
-    notes: List[Note], 
-    label: Label, 
+    notes: List[Note],
+    label: Label,
     **kwargs
 ) -> List[Note]:
 =======
@@ -84,8 +84,8 @@ def join_all_notes(
 
 def keep_only_last_n_chars(
 <<<<<<< HEAD
-    notes: List[Note], 
-    label: Label, 
+    notes: List[Note],
+    label: Label,
     keep_last_n_chars: Optional[int] = None,
     **kwargs
 ) -> List[Note]:
