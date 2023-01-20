@@ -4,7 +4,7 @@ from __future__ import annotations
 import collections
 import multiprocessing
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, TypeVar, NamedTuple
 
 import numpy as np
 import scipy.sparse
@@ -18,13 +18,13 @@ from ..labelers.core import Label, LabeledPatients
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
 
-ColumnValue = collections.namedtuple("ColumnValue", ["column", "value"])
-"""A value for a particular column
-.. py:attribute:: column
-    The index for the column
-.. py:attribute:: value
-    The value for that column
-"""
+class ColumnValue(NamedTuple):
+    """A value for a particular column
+        `column` is the index for the column
+        `value` is the value for that column. Values must be numeric
+    """
+    column: int
+    value: float | int
 
 
 def _run_featurizer(
@@ -197,7 +197,7 @@ class Featurizer(ABC):
         pass
 
     @classmethod
-    def aggregate_featurizers(
+    def aggregate_preprocessed_featurizers(
         cls, featurizers: List[FeaturizerType]
     ) -> FeaturizerType:
         """After preprocessing featurizer using multiprocessing, this method aggregates all
@@ -234,10 +234,10 @@ class Featurizer(ABC):
         Example:
             return [
                 [ ColumnValue(0, 10), ColumnValue(3, 12), ], # features for label 0
-                [ ColumnValue(1, 'hi') ], # features for label 1
+                [ ColumnValue(1, 0) ], # features for label 1
                 [ ColumnValue(2, 2), ColumnValue(1, 3), ColumnValue(10, 3), ], # features for label 2
                 ...
-                [ ColumnValue(8, True), ColumnValue(9, False), ], # features for label n
+                [ ColumnValue(8, 1.3), ColumnValue(9, 5), ], # features for label n
             ]
 
         Where each ColumnValue is of the form: (idx of column for this feature, feature value).
@@ -274,18 +274,7 @@ class Featurizer(ABC):
         """
         return False
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Return dictionary representation."""
-        return {}
-
-    def from_dict(self, data: Mapping[str, Any]):
-        """Convert dictionary representation of Featurizer to object."""
-        pass
-
-
 FeaturizerType = TypeVar("FeaturizerType", bound=Featurizer)
-
-
 class FeaturizerList:
     """
     FeaturizerList consists of a list of Featurizers that will be used to (sequentially)
@@ -310,6 +299,7 @@ class FeaturizerList:
     ):
         """Preprocess `self.featurizers` on the provided set of `labeled_patients`."""
 
+        # Check if any featurizers need preprocessing. If not, return early.
         any_needs_preprocessing: bool = any(
             featurizer.is_needs_preprocessing()
             for featurizer in self.featurizers
@@ -317,6 +307,7 @@ class FeaturizerList:
         if not any_needs_preprocessing:
             return
 
+        # Split patients across multiple threads
         patient_ids: List[int] = labeled_patients.get_all_patient_ids()
         patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(
             patient_ids, num_threads
@@ -329,25 +320,21 @@ class FeaturizerList:
         # Preprocess in parallel
         ctx = multiprocessing.get_context("forkserver")
         with ctx.Pool(num_threads) as pool:
-            trained_featurizers: List[Featurizer] = [
+            preprocessed_featurizers: List[Featurizer] = [
                 y
                 for x in pool.imap(_run_preprocess_featurizers, tasks)
                 for y in x
             ]
-        grouped_featurizers: collections.defaultdict = collections.defaultdict(
-            list
-        )
-        for featurizer in trained_featurizers:
-            featurizer_name = featurizer.__class__.__name__
-            grouped_featurizers[featurizer_name].append(featurizer)
 
-        # Aggregating featurizers
+        # Aggregate featurizers
         for idx, featurizer in enumerate(self.featurizers):
-            featurizer_name = featurizer.__class__.__name__
-            self.featurizers[idx] = featurizer.aggregate_featurizers(
-                grouped_featurizers[featurizer_name]
-            )
+            # Merge all featurizers of the same class as `featurizer`
+            self.featurizers[idx] = featurizer.aggregate_preprocessed_featurizers([ 
+                f for f in preprocessed_featurizers 
+                if f.__class__.__name__ == featurizer.__class__.__name__
+            ])
 
+        # Finalize preprocessing
         for featurizer in self.featurizers:
             featurizer.finalize_preprocessing()
 

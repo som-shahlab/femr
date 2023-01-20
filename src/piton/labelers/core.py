@@ -46,7 +46,8 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
 @dataclass
 class Label:
-    """An individual label for a particular patient at a particular time."""
+    """An individual label for a particular patient at a particular time.
+    The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
     value: Union[bool, int, float, SurvivalValue]
@@ -209,7 +210,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     ) -> Tuple[
         NDArray[Literal["n_patients, 1"], np.int64],
         NDArray[Literal["n_patients, 1"], Any],
-        NDArray[Literal["n_patients, 1"], datetime.datetime],
+        NDArray[Shape["n_patients, 1"], np.datetime64],
     ]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
 
@@ -279,7 +280,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             int, List[Label]
         ] = collections.defaultdict(list)
         for patient_id, l_value, l_time in zip(
-            list(patient_ids), list(label_values), list(label_times)
+            patient_ids, label_values, label_times
         ):
             patients_to_labels[patient_id].append(
                 Label(time=l_time, value=l_value)
