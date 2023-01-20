@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 from typing import List
 import copy
@@ -9,21 +10,25 @@ class OnlineStatistics:
     A class for computing online statistics such as mean and variance.
     Uses Welford's online algorithm.
     From https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm.
-    
+
     NOTE: The variance we calculate is the sample variance, not the population variance.
     """
 
-    def __init__(self, 
-                 current_count: int = 0,
-                 current_mean: float = 0,
-                 current_variance: float = 0):
+    def __init__(
+        self,
+        current_count: int = 0,
+        current_mean: float = 0,
+        current_variance: float = 0,
+    ):
         """
         Initialize online statistics.
             `mean` accumulates the mean of the entire dataset
             `count` aggregates the number of samples seen so far
             `current_M2` aggregates the squared distances from the mean
         """
-        assert current_count >= 0 and current_variance >= 0, "Cannot specify negative values for `current_count` or `current_variance`."
+        assert (
+            current_count >= 0 and current_variance >= 0
+        ), "Cannot specify negative values for `current_count` or `current_variance`."
         self.current_count: int = current_count
         self.current_mean: float = current_mean
         if current_count == 0 and current_variance == 0:
@@ -31,12 +36,14 @@ class OnlineStatistics:
         elif current_count > 0:
             self.current_M2: float = current_variance * (current_count - 1)
         else:
-            raise ValueError("Cannot specify `current_variance` with a value > 0 without specifying `current_count` with a value > 0.")
+            raise ValueError(
+                "Cannot specify `current_variance` with a value > 0 without specifying `current_count` with a value > 0."
+            )
 
     def add(self, newValue: float) -> None:
         """
         Add an observation to the calculation using Welford's online algorithm.
-        
+
         Taken from: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
         """
         self.current_count += 1
@@ -56,7 +63,9 @@ class OnlineStatistics:
         Return the current sample variance.
         """
         if self.current_count < 2:
-            raise ValueError(f"Cannot compute variance with only {self.current_count} observations.")
+            raise ValueError(
+                f"Cannot compute variance with only {self.current_count} observations."
+            )
 
         return self.current_M2 / (self.current_count - 1)
 
@@ -65,12 +74,14 @@ class OnlineStatistics:
         Return the current standard devation.
         """
         return math.sqrt(self.variance())
-    
+
     @classmethod
-    def merge_pair(cls, stats1: OnlineStatistics, stats2: OnlineStatistics) -> OnlineStatistics:
+    def merge_pair(
+        cls, stats1: OnlineStatistics, stats2: OnlineStatistics
+    ) -> OnlineStatistics:
         """
         Merge two sets of online statistics using Chan's parallel algorithm.
-        
+
         Taken from: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
         """
         if stats1.current_count == 0:
@@ -81,7 +92,11 @@ class OnlineStatistics:
         count: int = stats1.current_count + stats2.current_count
         delta: float = stats2.current_mean - stats1.current_mean
         mean: float = stats1.current_mean + delta * stats2.current_count / count
-        M2 = stats1.current_M2 + stats2.current_M2 + delta**2 * stats1.current_count * stats2.current_count / count
+        M2 = (
+            stats1.current_M2
+            + stats2.current_M2
+            + delta**2 * stats1.current_count * stats2.current_count / count
+        )
         return OnlineStatistics(count, mean, M2 / (count - 1))
 
     @classmethod

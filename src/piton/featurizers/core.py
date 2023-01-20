@@ -44,9 +44,9 @@ def _run_featurizer(
 
     # Construct CSR sparse matrix
     #   non-zero entries in sparse matrix
-    data: List[Any] = []  
+    data: List[Any] = []
     #   maps each element in `data`` to its column in the sparse matrix
-    indices: List[int] = []  
+    indices: List[int] = []
     #   maps each element in `data` and `indices` to the rows of the sparse matrix
     indptr: List[int] = []
     #   tracks Labels
@@ -202,8 +202,8 @@ class Featurizer(ABC):
     ) -> FeaturizerType:
         """After preprocessing featurizer using multiprocessing, this method aggregates all
         those featurizers into one.
-        
-        NOTE: This only needs to be overwritten if you are using multiprocessing to 
+
+        NOTE: This only needs to be overwritten if you are using multiprocessing to
         distribute featurization across multiple processes.
 
         Args:
