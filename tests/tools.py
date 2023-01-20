@@ -46,7 +46,9 @@ for patient_id in range(10, 10 + NUM_PATIENTS):
 
 
 def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
-    events = piton.datasets.EventCollection(os.path.join(tmp_path, "events"))
+    event_path = os.path.join(tmp_path, "events")
+    os.makedirs(event_path, exist_ok=True)
+    events = piton.datasets.EventCollection(event_path)
     chunks = 7
     events_per_chunk = (len(all_events) + chunks - 1) // chunks
 
@@ -130,7 +132,7 @@ DUMMY_CONCEPTS: List[str] = ["zero", "one", "two", "three", "four"]
 
 
 def create_database(
-    tmp_path: pathlib.Path, dummy_ontology: DummyOntology = dummy_ontology
+    tmp_path: pathlib.Path, dummy_concepts: List[str] = []
 ) -> None:
 
     patient_collection = create_patients(tmp_path)
@@ -138,7 +140,11 @@ def create_database(
         _ = list(reader)
 
     path_to_ontology = os.path.join(tmp_path, "ontology")
-    concept_map = create_ontology(path_to_ontology, DUMMY_CONCEPTS)
+
+    if dummy_concepts == []:
+        dummy_concepts = DUMMY_CONCEPTS
+
+    concept_map = create_ontology(path_to_ontology, dummy_concepts)
 
     path_to_database = os.path.join(tmp_path, "target")
 
@@ -152,8 +158,10 @@ def create_database(
     ).close()
 
 
-def get_piton_codes(ontology, target_code):
-    piton_concept_id = f"dummy/{DummyOntology().get_dictionary()[target_code]}"
+def get_piton_codes(ontology, target_code, dummy_concepts: List[str] = []):
+    if dummy_concepts == []:
+        dummy_concepts = DUMMY_CONCEPTS
+    piton_concept_id = f"dummy/{dummy_concepts[target_code]}"
     piton_target_code = ontology.get_dictionary().index(piton_concept_id)
     return piton_target_code
 

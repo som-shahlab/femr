@@ -22,16 +22,16 @@ Example running:
 
 python3 1_run_featurizers.py \
     /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pickle \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_preprocessed_featurizers.pickle \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
+    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pkl \
+    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_preprocessed_featurizers.pkl \
+    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pkl \
     --labeling_function mortality \
     --num_threads 20
 """
 
 
 def save_to_pkl(object_to_save, path_to_file: str):
-    """Save object to Pickle file."""
+    """Save object to pkl file."""
     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
     with open(path_to_file, "wb") as fd:
         pickle.dump(object_to_save, fd)
@@ -56,19 +56,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_labeled_patients",
         type=str,
-        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pickle'",
+        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pkl'",
     )
 
     parser.add_argument(
         "path_to_save_preprocessed_featurizers",
         type=str,
-        help="Path to file to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pickle'",
+        help="Path to file to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pkl'",
     )
 
     parser.add_argument(
         "path_to_save_featurized_patients",
         type=str,
-        help="Path to file to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
+        help="Path to file to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pkl'",
     )
 
     parser.add_argument(

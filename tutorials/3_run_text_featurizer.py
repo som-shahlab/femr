@@ -21,7 +21,7 @@ Example running:
 
 python3 3_run_text_featurizer.py \
     /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pickle \
+    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pkl \
     /local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer/ \
     /local-scratch/nigam/projects/mwornow/data/output_mortality_longformer/ \
     /local-scratch/nigam/projects/mwornow/data/temp_mortality_longformer/ \
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_labeled_patients",
         type=str,
-        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pickle'",
+        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pkl'",
     )
     parser.add_argument(
         "path_to_huggingface_model",

@@ -7,9 +7,9 @@ import numpy as np
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
+from piton.labelers.core import Label, LabeledPatients, TimeHorizon, NLabelPerPatientLF
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
-from tools import (
+from .tools import (
     create_database,
     create_labeled_patients_list,
     create_patients_list,
@@ -483,3 +483,56 @@ def test_time_horizons():
                 true_labels,
                 help_text=f" | test #{test_idx}",
             )
+
+
+def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
+    """Checks NLabelPerPatient LabelingFunction"""
+
+    time_horizon = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=180)
+    )
+
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = piton.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    piton_target_code = get_piton_codes(ontology, 3)
+    piton_admission_code = get_piton_codes(ontology, 2)
+
+    labeler = CodeLF(
+        piton_admission_code, piton_target_code, time_horizon=time_horizon
+    )
+    patient = database[0]
+    all_labels = labeler.label(patient)
+
+    num_all_labels = len(all_labels)
+
+    seed = 0
+    num_labels = 6
+    n_labeler = NLabelPerPatientLF(labeling_function=labeler, num_labels=num_labels, seed=seed)
+    n_labels = n_labeler.label(patient)
+
+    assert len(n_labels) == num_all_labels
+
+    seeds = [0, 10, 30, 40]
+    num_labels = 3
+
+    n_labels_list = []
+    for seed in seeds:
+        n_labeler = NLabelPerPatientLF(labeling_function=labeler, num_labels=num_labels, seed=seed)
+        n_labels = n_labeler.label(patient)
+        n_labels_list.append(n_labels)
+
+    assert n_labels_list[0] == n_labels_list[0]
+
+    for i in range(len(n_labels_list)):
+        for j in range(i+1, len(n_labels_list)):
+            assert n_labels_list[i] != n_labels_list[j]
+
+    
+
+
+
+

@@ -5,10 +5,6 @@ import collections
 import datetime
 import multiprocessing
 import pprint
-import random
-import struct
-import hashlib
-import math
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
@@ -19,6 +15,7 @@ from nptyping import NDArray
 
 from .. import Patient
 from ..datasets import PatientDatabase
+from . import compute_random_num
 
 
 @dataclass(frozen=True)
@@ -454,19 +451,27 @@ class FixedTimeHorizonEventLF(LabelingFunction):
         return "boolean"
 
 
-class OneLabelPerPatient(LabelingFunction):
+class NLabelPerPatientLF(LabelingFunction):
     # TODO - update
-    def __init__(self, labeling_function, seed=10):
-        self.labeling_function = labeling_function
-        self.seed = seed
+    def __init__(
+        self, 
+        labeling_function: LabelingFunction, 
+        num_labels: int = 1, 
+        seed: int = 1
+    ):
+        self.labeling_function: LabelingFunction = labeling_function
+        self.num_labels: int = num_labels
+        self.seed: int = seed
 
     def label(self, patient: Patient) -> List[Label]:
-        labels = self.labeling_function.label(patient)
-        if len(labels) == 0:
+        labels: List[Label] = self.labeling_function.label(patient)
+        if len(labels) <= self.num_labels:
             return labels
-        return [random.choice(labels)]
+        hash_to_label: List[Tuple[int, Label]] = [(compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))]
+        hash_to_label.sort(key=lambda a:a[0])
+        n_labels: List[Label] = [x[1] for x in hash_to_label[:self.num_labels]]
+        return n_labels
 
     def get_labeler_type(self) -> LabelType:
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return self.labeling_function.get_labeler_type()
-

@@ -22,7 +22,7 @@ Note: Please make sure to install xgboost. `pip install xgboost`
 
 python3 2_train_baseline_models.py \
     /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
+    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pkl \
     --percent_train 0.8 \
     --split_seed 0 \
     --num_threads 10
@@ -30,7 +30,7 @@ python3 2_train_baseline_models.py \
 
 
 def load_from_pkl(path_to_file: str):
-    """Load object from Pickle file."""
+    """Load object from pkl file."""
     with open(path_to_file, "rb") as fd:
         result = pickle.load(fd)
     return result
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_featurized_patients",
         type=str,
-        help="Path to the file containing features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
+        help="Path to the file containing features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pkl'",
     )
 
     parser.add_argument(
