@@ -156,7 +156,7 @@ class NoteFeaturizer:
         path_to_embedder: str = "",
         path_to_temp_dir: str = "",
         path_to_output_dir: str = "",
-        preprocess_transformations: List = [],
+        preprocess_transformations: List[Callable] = [],
         params_preprocessor: Optional[dict] = None,
         params_tokenizer: Optional[dict] = None,
         params_embedder: Optional[dict] = None,

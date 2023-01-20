@@ -308,7 +308,7 @@ if __name__ == "__main__":
         n_cpu_jobs=num_threads,
         gpu_devices=gpu_devices,
         params_preprocessor={
-            "min_char_count: ": args.preprocessor__min_note_char_count,
+            "min_char_count": args.preprocessor__min_note_char_count,
             "keep_last_n_chars": args.preprocessor__keep_last_n_chars,
             "keep_notes_with_codes": valid_note_codes,
         },
