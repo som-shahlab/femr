@@ -126,12 +126,7 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
     return concept_map
 
 
-class DummyOntology:
-    def get_dictionary(self):
-        return ["zero", "one", "two", "three", "four"]
-
-
-dummy_ontology = DummyOntology()
+DUMMY_CONCEPTS: List[str] = ["zero", "one", "two", "three", "four"]
 
 
 def create_database(
@@ -143,9 +138,7 @@ def create_database(
         _ = list(reader)
 
     path_to_ontology = os.path.join(tmp_path, "ontology")
-    concepts = [str(x) for x in dummy_ontology.get_dictionary()]
-    concept_map = create_ontology(path_to_ontology, concepts)
-    print(concept_map)
+    concept_map = create_ontology(path_to_ontology, DUMMY_CONCEPTS)
 
     path_to_database = os.path.join(tmp_path, "target")
 
