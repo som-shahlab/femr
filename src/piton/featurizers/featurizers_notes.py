@@ -10,10 +10,10 @@ from typing import (
     Dict,
     List,
     Literal,
+    NamedTuple,
     Optional,
     Tuple,
     TypeAlias,
-    NamedTuple
 )
 
 import numpy as np
@@ -36,16 +36,20 @@ NotesEmbeddedByToken: TypeAlias = TensorType[
     "n_notes", "max_note_token_count", "embedding_length"  # noqa
 ]
 
+
 class Note(NamedTuple):
-    event_idx: int # idx in patient.events where this note occurs
-    event: Event # actual note event (.value contains the note's text)
+    event_idx: int  # idx in patient.events where this note occurs
+    event: Event  # actual note event (.value contains the note's text)
+
 
 class PatientLabelNotesTuple(NamedTuple):
     patient_id: int
     label_idx: int
     notes: List[Note]
 
+
 START_TIME = time.time()
+
 
 def print_log(name: str, content: str):
     print(f"{int(time.time() - START_TIME)} | {name} | {content}")
@@ -240,7 +244,9 @@ class NoteFeaturizer:
                 # Apply transformations sequentially to `notes`
                 for transform in transformations:
                     notes = transform(notes, label, **params)
-                notes_for_labels.append(PatientLabelNotesTuple(patient_id, label_idx, notes))
+                notes_for_labels.append(
+                    PatientLabelNotesTuple(patient_id, label_idx, notes)
+                )
             # logging
             if patient_idx / len(patient_ids) > percent_done:
                 print_log(
