@@ -114,11 +114,12 @@ class AgeFeaturizer(Featurizer):
     def is_needs_preprocessing(self) -> bool:
         return self.is_normalize
 
+
 def _reshuffle(
-    time_bins: List[datetime.timedelta], 
-    codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]], 
-    code_counts_per_bin: Dict[int, Dict[int, int]], 
-    label: Label
+    time_bins: List[datetime.timedelta],
+    codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]],
+    code_counts_per_bin: Dict[int, Dict[int, int]],
+    label: Label,
 ):
     # From closest bin to prediction time -> farthest bin
     for bin_idx, bin_end in enumerate(time_bins):
@@ -130,9 +131,7 @@ def _reshuffle(
             # from the currently processed label)
             oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
 
-            if (
-                label.time - oldest_event_start
-            ) <= bin_end:
+            if (label.time - oldest_event_start) <= bin_end:
                 # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
                 # bin to our label's prediction time, so all events will be within this bin,
                 # so we don't have to worry about shifting events into farther bins (as the code
@@ -151,18 +150,11 @@ def _reshuffle(
                 # Remove oldest_event_code from current (closer to prediction time) bin `bin_idx`
                 code_counts_per_bin[bin_idx][oldest_event_code] -= 1
                 # Add oldest_event_code to the (farther from prediction time) bin `bin_idx + 11
-                code_counts_per_bin[bin_idx + 1][
-                    oldest_event_code
-                ] += 1
+                code_counts_per_bin[bin_idx + 1][oldest_event_code] += 1
 
                 # Clear out ColumnValues with a value of 0 to preserve sparsity of matrix
-                if (
-                    code_counts_per_bin[bin_idx][oldest_event_code]
-                    == 0
-                ):
-                    del code_counts_per_bin[bin_idx][
-                        oldest_event_code
-                    ]
+                if code_counts_per_bin[bin_idx][oldest_event_code] == 0:
+                    del code_counts_per_bin[bin_idx][oldest_event_code]
 
 
 class CountFeaturizer(Featurizer):
@@ -393,7 +385,12 @@ class CountFeaturizer(Featurizer):
             for event in patient.events:
                 code: int = event.code  # type: ignore
                 while event.start > labels[label_idx].time:
-                    _reshuffle(time_bins, codes_per_bin, code_counts_per_bin, labels[label_idx])
+                    _reshuffle(
+                        time_bins,
+                        codes_per_bin,
+                        code_counts_per_bin,
+                        labels[label_idx],
+                    )
                     label_idx += 1
                     # Create all features for label at index `label_idx`
                     all_columns.append(
@@ -420,8 +417,13 @@ class CountFeaturizer(Featurizer):
                     if code in self.included_codes:
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1
-                    
-                _reshuffle(time_bins, codes_per_bin, code_counts_per_bin, labels[label_idx])
+
+                _reshuffle(
+                    time_bins,
+                    codes_per_bin,
+                    code_counts_per_bin,
+                    labels[label_idx],
+                )
 
                 if label_idx == len(labels) - 1:
                     all_columns.append(

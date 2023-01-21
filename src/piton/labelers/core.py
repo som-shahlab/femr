@@ -472,9 +472,13 @@ class NLabelPerPatientLF(LabelingFunction):
             for i in range(len(labels))
         ]
         hash_to_label_List.sort(key=lambda a: a[1])
-        n_hash_to_label_list: List[Tuple[int, int, Label]] = [x for x in hash_to_label_List[: self.num_labels]]
+        n_hash_to_label_list: List[Tuple[int, int, Label]] = [
+            x for x in hash_to_label_List[: self.num_labels]
+        ]
         n_hash_to_label_list.sort(key=lambda a: a[0])
-        n_labels: List[Label] = [hash_to_label[2] for hash_to_label in n_hash_to_label_list]
+        n_labels: List[Label] = [
+            hash_to_label[2] for hash_to_label in n_hash_to_label_list
+        ]
         return n_labels
 
     def get_labeler_type(self) -> LabelType:
