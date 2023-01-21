@@ -210,7 +210,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     ) -> Tuple[
         NDArray[Literal["n_patients, 1"], np.int64],
         NDArray[Literal["n_patients, 1"], Any],
-        NDArray[Shape["n_patients, 1"], np.datetime64],
+        NDArray[Literal["n_patients, 1"], np.datetime64],
     ]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
 

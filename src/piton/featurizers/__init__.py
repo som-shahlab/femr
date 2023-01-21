@@ -32,12 +32,13 @@ class OnlineStatistics:
         self.current_count: int = current_count
         self.current_mean: float = current_mean
         if current_count == 0 and current_variance == 0:
-            self.current_M2: float = 0
+            self.current_M2 = 0.0
         elif current_count > 0:
-            self.current_M2: float = current_variance * (current_count - 1)
+            self.current_M2 = current_variance * (current_count - 1)
         else:
             raise ValueError(
-                "Cannot specify `current_variance` with a value > 0 without specifying `current_count` with a value > 0."
+                "Cannot specify `current_variance` with a value > 0"
+                "without specifying `current_count` with a value > 0."
             )
 
     def add(self, newValue: float) -> None:

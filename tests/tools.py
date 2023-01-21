@@ -13,7 +13,7 @@ import piton
 import piton.datasets
 from piton.labelers.core import LabeledPatients, LabelingFunction
 
-dummy_events = [
+DUMMY_EVENTS = [
     piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
     piton.Event(
         start=datetime.datetime(2010, 1, 1),
@@ -36,13 +36,13 @@ dummy_events = [
     ),
 ]
 
-NUM_EVENTS = len(dummy_events)
+NUM_EVENTS = len(DUMMY_EVENTS)
 NUM_PATIENTS = 10
 
 all_events: List[Tuple[int, piton.Event]] = []
 
-for patient_id in range(10, 10 + NUM_PATIENTS):
-    all_events.extend((patient_id, event) for event in dummy_events)
+for patient_id in range(NUM_PATIENTS):
+    all_events.extend((patient_id, event) for event in DUMMY_EVENTS)
 
 
 def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
@@ -158,7 +158,7 @@ def create_database(
     ).close()
 
 
-def get_piton_codes(ontology, target_code, dummy_concepts: List[str] = []):
+def get_piton_code(ontology, target_code, dummy_concepts: List[str] = []):
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
     piton_concept_id = f"dummy/{dummy_concepts[target_code]}"

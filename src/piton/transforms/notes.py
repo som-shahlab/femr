@@ -11,16 +11,8 @@ from ..labelers.core import Label
 
 
 def remove_short_notes(
-<<<<<<< HEAD
-    notes: List[Note],
-    label: Label,
-    min_char_count: int = 0,
-    **kwargs
+    notes: List[Note], label: Label, min_char_count: int = 0, **kwargs
 ) -> List[Note]:
-=======
-    notes: NotesProcessed, label: Label, min_char_count: int = 0, **kwargs
-) -> NotesProcessed:
->>>>>>> 21e40a24609fe60359780a7e9c436b8c6a62db73
     """Remove all notes from `notes` whose character length < `min_char_count`.
     `notes` is a list of tuples, where each tuple is: (event idx of note, Event)
     """
@@ -47,15 +39,8 @@ def keep_only_notes_matching_codes(
 
 
 def remove_notes_after_label(
-<<<<<<< HEAD
-    notes: List[Note],
-    label: Label,
-    **kwargs
+    notes: List[Note], label: Label, **kwargs
 ) -> List[Note]:
-=======
-    notes: NotesProcessed, label: Label, **kwargs
-) -> NotesProcessed:
->>>>>>> 21e40a24609fe60359780a7e9c436b8c6a62db73
     """Remove all notes whose `start` > `label.time`."""
     new_notes: List[Note] = []
     for note in notes:
@@ -64,16 +49,7 @@ def remove_notes_after_label(
     return new_notes
 
 
-def join_all_notes(
-<<<<<<< HEAD
-    notes: List[Note],
-    label: Label,
-    **kwargs
-) -> List[Note]:
-=======
-    notes: NotesProcessed, label: Label, **kwargs
-) -> NotesProcessed:
->>>>>>> 21e40a24609fe60359780a7e9c436b8c6a62db73
+def join_all_notes(notes: List[Note], label: Label, **kwargs) -> List[Note]:
     """Join all notes from `notes` together into one long string."""
     text: str = " ".join([note[1].value for note in notes])  # type: ignore
     # Give it an arbitrary `start` and `code` (b/c merged notes don't have one)
@@ -83,19 +59,11 @@ def join_all_notes(
 
 
 def keep_only_last_n_chars(
-<<<<<<< HEAD
     notes: List[Note],
     label: Label,
     keep_last_n_chars: Optional[int] = None,
-    **kwargs
-) -> List[Note]:
-=======
-    notes: NotesProcessed,
-    label: Label,
-    keep_last_n_chars: Optional[int] = None,
     **kwargs,
-) -> NotesProcessed:
->>>>>>> 21e40a24609fe60359780a7e9c436b8c6a62db73
+) -> List[Note]:
     """Keep the last `n_chars` from each note."""
     if keep_last_n_chars is None:
         return notes
@@ -103,13 +71,9 @@ def keep_only_last_n_chars(
     for note in notes:
         text: str = str(note.event.value)
         event = Event(
-<<<<<<< HEAD
-            start=note.event.start, code=note.event.code, value=text[-keep_last_n_chars:]
-=======
-            start=note[1].start,
-            code=note[1].code,
-            value=text[:keep_last_n_chars],
->>>>>>> 21e40a24609fe60359780a7e9c436b8c6a62db73
+            start=note.event.start,
+            code=note.event.code,
+            value=text[-keep_last_n_chars:],
         )
         new_notes.append(Note(note.event_idx, event))
     return new_notes
