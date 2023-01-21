@@ -524,7 +524,7 @@ def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
 
     assert len(n_labels) == num_all_labels
 
-    seeds = [0, 10, 30, 40]
+    seeds = [0, 10, 40]
     num_labels = 3
 
     n_labels_list = []

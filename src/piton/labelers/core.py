@@ -467,12 +467,14 @@ class NLabelPerPatientLF(LabelingFunction):
         labels: List[Label] = self.labeling_function.label(patient)
         if len(labels) <= self.num_labels:
             return labels
-        hash_to_label: List[Tuple[int, Label]] = [
-            (compute_random_num(self.seed, patient.patient_id, i), labels[i])
+        hash_to_label_List: List[Tuple[int, int, Label]] = [
+            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i])
             for i in range(len(labels))
         ]
-        hash_to_label.sort(key=lambda a: a[0])
-        n_labels: List[Label] = [x[1] for x in hash_to_label[: self.num_labels]]
+        hash_to_label_List.sort(key=lambda a: a[1])
+        n_hash_to_label_list: List[Tuple[int, int, Label]] = [x for x in hash_to_label_List[: self.num_labels]]
+        n_hash_to_label_list.sort(key=lambda a: a[0])
+        n_labels: List[Label] = [hash_to_label[2] for hash_to_label in n_hash_to_label_list]
         return n_labels
 
     def get_labeler_type(self) -> LabelType:
