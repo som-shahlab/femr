@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import datetime
-import itertools
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Union, Deque, Dict, Iterator, List, Optional, Tuple
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
 from ..labelers.core import Label
-from . import Dictionary, OnlineStatistics
+from . import OnlineStatistics
 from .core import ColumnValue, Featurizer
 
 
@@ -31,8 +30,8 @@ class AgeFeaturizer(Featurizer):
             is_normalize (bool, optional): If TRUE, then normalize a patient's age at each
             label across their ages at all labels. Defaults to True.
         """
-        self.is_normalize = is_normalize
-        self.age_statistics = OnlineStatistics()
+        self.is_normalize: bool = is_normalize
+        self.age_statistics: OnlineStatistics = OnlineStatistics()
 
     def get_num_columns(self) -> int:
         return 1
@@ -53,17 +52,26 @@ class AgeFeaturizer(Featurizer):
             self.age_statistics.add(age_in_yrs)
 
     @classmethod
-    def aggregate_featurizers(  # type: ignore[override]
+    def aggregate_preprocessed_featurizers(  # type: ignore[override]
         cls, featurizers: List[AgeFeaturizer]
     ) -> AgeFeaturizer:
-        "After preprocessing featurizer using multiprocessing, this method aggregates all those featurizers into one."
-        # Aggregating age featurizers
-        for featurizer in featurizers:
-            if featurizer.to_dict()["age_statistics"]["current_mean"] != 0:
-                new_featurizer = featurizers[0]
-                new_featurizer.from_dict(featurizer.to_dict())
-                return new_featurizer
-        return featurizers[0]
+        """After preprocessing an AgeFeaturizer using multiprocessing (resulting in the list of featurizers
+            contained in `featurizers`), this method aggregates all those featurizers into one AgeFeaturizer.
+            
+            We need to collect all the means and variances calculated by each individual featurizer, 
+            then recompute the mean and variance to get an overall mean/variance for the total patient population.
+            This is handled by the OnlineStatistics.merge() method.
+        """
+        if len(featurizers) == 0:
+            raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
+        
+        # Calculate merged mean/variance/count across each individual featurizer
+        merged_stats: OnlineStatistics = OnlineStatistics.merge([ f.age_statistics for f in featurizers ])
+        # Create new featurizer with merged mean/variance/count
+        template_featurizer: AgeFeaturizer = featurizers[0]
+        aggregated_featurizer: AgeFeaturizer = AgeFeaturizer(template_featurizer.is_normalize)
+        aggregated_featurizer.age_statistics = merged_stats
+        return aggregated_featurizer
 
     def featurize(
         self,
@@ -97,16 +105,6 @@ class AgeFeaturizer(Featurizer):
 
         return all_columns
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "age_statistics": self.age_statistics.to_dict(),
-            "is_normalize": self.is_normalize,
-        }
-
-    def from_dict(self, data: Mapping[str, Any]):
-        self.age_statistics = OnlineStatistics(data["age_statistics"])
-        self.is_normalize = data["is_normalize"]
-
     def is_needs_preprocessing(self) -> bool:
         return self.is_normalize
 
@@ -121,33 +119,58 @@ class CountFeaturizer(Featurizer):
     def __init__(
         self,
         is_ontology_expansion: bool = False,
-        exclusion_codes: List[int] = [],
-        time_bins: Optional[List[float]] = None,
+        excluded_codes: Union[set, List[int]] = [],
+        included_codes: List[int] = [],
+        time_bins: Optional[List[Optional[datetime.timedelta]]] = None,
+        is_keep_only_none_valued_events: bool = True,
     ):
         """
         Args:
-            is_ontology_expansion (bool, optional): _description_. Defaults to False.
-            exclusion_codes (List[int], optional): _description_. Defaults to [].
-            time_bins (Optional[List[float]], optional): [90, 180] refers to [0-90, 90-180];
-                                                         [90, 180, math.inf] refers to [0-90, 90-180, 180-inf]
+            is_ontology_expansion (bool, optional): If TRUE, then do ontology expansion when counting codes.
+                
+                Example:
+                    If `is_ontology_expansion=True` and your ontology is: 
+                        Code A -> Code B -> Code C
+                    Where "->" denotes "is a parent of" relationship (i.e. A is a parent of B, B is a parent of C).
+                    Then if we see 2 occurrences of Code "C", we will count 2 occurrences of Code "B" and Code "A" as well.
+            
+            excluded_codes (List[int], optional): A list of Piton codes that we will ignore. Defaults to [].
+            
+            included_codes (List[int], optional): A list of all unique event codes that we will include in our count. Defaults to [].
+            
+            time_bins (Optional[List[Optional[datetime.timedelta]]], optional): Group counts into buckets. Starts from the prediction time, 
+                and works backwards according to each successive value in `time_bins`.
+                NOTE: These timedeltas should be positive values, and they will be converted to negative values internally.
+                NOTE: If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the 
+                    start of the patient's first event.
+                
+                Examples: 
+                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180)]` will create the following buckets: 
+                        [label time, -90 days], [-90 days, -180 days]; 
+                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(years=100)]` will create the following buckets: 
+                        [label time, -90 days], [-90 days, -180 days], [-180 days, -100 years];] 
+            
+            is_keep_only_none_valued_events (bool): If TRUE, then only keep events that have no value (i.e. `event.value is None`). Defaults to True.
+                Setting this to FALSE will include all events, including those with values (e.g. lab values), which will make
+                this run slower.
         """
-        self.patient_codes: Dictionary = Dictionary()
-        self.exclusion_codes = set(exclusion_codes)
-        self.time_bins: Optional[List[float]] = time_bins
         self.is_ontology_expansion: bool = is_ontology_expansion
+        self.included_codes: List[int] = included_codes
+        self.excluded_codes: set = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
+        self.time_bins: Optional[List[datetime.timedelta]] = time_bins
+        self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
+        
+        # map code to its feature's corresponding column index
+        self.code_to_column_index: Dict[int, int] = { code: idx for idx, code in enumerate(self.included_codes) }
 
         if self.time_bins:
-            assert len(set(self.time_bins)) == len(
-                self.time_bins
-            ), "Duplicate entires. Please make sure the entries are unique"
-            assert (
-                sorted(self.time_bins) == self.time_bins
-            ), "Time_bins list must be sorted."
+            assert len(set(self.time_bins)) == len(self.time_bins), \
+                f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
     def get_codes(
         self, code: int, ontology: extension_datasets.Ontology
     ) -> Iterator[int]:
-        if code not in self.exclusion_codes:
+        if code not in self.excluded_codes:
             if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(code):
                     yield subcode
@@ -155,41 +178,49 @@ class CountFeaturizer(Featurizer):
                 yield code
 
     def preprocess(self, patient: Patient, labels: List[Label]):
-        """Adds every event code in this patient's timeline to `patient_codes`"""
+        """Add every event code in this patient's timeline to `codes`.
+        
+        If `self.is_keep_only_none_valued_events` is TRUE, then only add events that have no value (i.e. `event.value is None`).
+        """
         for event in patient.events:
-            if event.value is None:
-                self.patient_codes.add(event.code)
+            if self.is_keep_only_none_valued_events and event.value is not None:
+                # If we only want to keep events with no value, then skip this event
+                # because it has a non-None value
+                continue
+            self.included_codes.append(event.code)
+            self.code_to_column_index[event.code] = len(self.included_codes)
 
     @classmethod
-    def aggregate_featurizers(  # type: ignore[override]
+    def aggregate_preprocessed_featurizers(  # type: ignore[override]
         cls, featurizers: List[CountFeaturizer]
     ) -> CountFeaturizer:
-        """After preprocessing featurizer using multiprocessing, this method aggregates all
-        those featurizers into one.
+        """After preprocessing a CountFeaturizer using multiprocessing (resulting in the list of featurizers
+            contained in `featurizers`), this method aggregates all those featurizers into one CountFeaturizer.
+            
+            We need to collect all the unique event codes identified by each featurizer, and then create a new
+            featurizer that combines all these codes
         """
-
+        if len(featurizers) == 0:
+            raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
+        
         # Aggregating count featurizers
-        patient_codes_dict_list = [
-            featurizer.to_dict()["patient_codes"]["values"]
-            for featurizer in featurizers
-        ]
-        patient_codes = list(
-            itertools.chain.from_iterable(patient_codes_dict_list)
+        all_codes: List[int] = [ c for f in featurizers for c in f.included_codes ]
+
+        template_featurizer: CountFeaturizer = featurizers[0]
+        new_featurizer: CountFeaturizer = CountFeaturizer(
+            is_ontology_expansion=template_featurizer.is_ontology_expansion,
+            excluded_codes=template_featurizer.excluded_codes,
+            included_codes=all_codes,
+            time_bins=template_featurizer.time_bins,
+            is_keep_only_none_valued_events=template_featurizer.is_keep_only_none_valued_events
         )
-
-        featurizer_dict = featurizers[0].to_dict()
-        featurizer_dict["patient_codes"] = {"values": patient_codes}
-
-        new_featurizer = featurizers[0]
-        new_featurizer.from_dict(featurizer_dict)
-
         return new_featurizer
 
     def get_num_columns(self) -> int:
         if self.time_bins is None:
-            return len(self.patient_codes)
+            return len(self.included_codes)
         else:
-            return len(self.time_bins) * len(self.patient_codes)
+            return len(self.time_bins) * len(self.included_codes)
 
     def featurize(
         self,
@@ -197,44 +228,61 @@ class CountFeaturizer(Featurizer):
         labels: List[Label],
         ontology: Optional[extension_datasets.Ontology],
     ) -> List[List[ColumnValue]]:
-        assert (
-            ontology is not None
-        ), "Ontology cannot be `None` for CountFeaturizer"
+        
+        if ontology is None:
+            raise ValueError("`ontology` can't be `None` for CountFeaturizer")
+            
         all_columns: List[List[ColumnValue]] = []
 
         if self.time_bins is None:
-            current_codes: Dict[int, int] = defaultdict(int)
-
-            label_idx = 0
+            # Count the number of times each code appears in the patient's timeline
+            # [key] = column idx
+            # [value] = count of occurrences of events with that code (up to the label at `label_idx`)
+            code_counter: Dict[int, int] = defaultdict(int)
+            
+            label_idx: int = 0
             for event in patient.events:
                 while event.start > labels[label_idx].time:
                     label_idx += 1
+                    # Create all features for label at index `label_idx`
                     all_columns.append(
                         [
-                            ColumnValue(column, count)
-                            for column, count in current_codes.items()
+                            ColumnValue(self.code_to_column_index[code], count)
+                            for code, count in code_counter.items()
                         ]
                     )
-
                     if label_idx >= len(labels):
+                        # We've reached the end of the labels for this patient, 
+                        # so no point in continuing to count events past this point. 
+                        # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
-                if event.value is not None:
+                if self.is_keep_only_none_valued_events and event.value is not None:
+                    # If we only want to keep events with no value, then skip this event
+                    # because it has a non-None value
                     continue
-
+                
                 for code in self.get_codes(event.code, ontology):
-                    if code in self.patient_codes:
-                        current_codes[self.patient_codes.transform(code)] += 1
+                    # Increment the count for this event's code (plus any parent codes
+                    # if we are doing ontology expansion, as handled in `self.get_codes`)
+                    if code in self.included_codes:
+                        code_counter[code] += 1
 
             if label_idx < len(labels):
+                # For all labels that occur past the last event, add all 
+                # events' total counts as these labels' feature values (basically,
+                # the featurization of these labels is the count of every single event)
                 for label in labels[label_idx:]:
                     all_columns.append(
                         [
-                            ColumnValue(column, count)
-                            for column, count in current_codes.items()
+                            ColumnValue(self.code_to_column_index[code], count)
+                            for code, count in code_counter.items()
                         ]
                     )
         else:
+            # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
+            time_bins: List[datetime.timedelta] = sorted([ x for x in self.time_bins if x is not None ])
+
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
             }
@@ -243,79 +291,85 @@ class CountFeaturizer(Featurizer):
                 i: defaultdict(int) for i in range(len(self.time_bins) + 1)
             }
 
-            label_idx = 0
+            label_idx: int = 0
             for event in patient.events:
-                code = event.code
-                while (
-                    label_idx < len(labels)
-                    and event.start > labels[label_idx].time
-                ):
+                code: int = event.code
+                while event.start > labels[label_idx].time:
                     label_idx += 1
+                    # Create all features for label at index `label_idx`
                     all_columns.append(
                         [
                             ColumnValue(
-                                self.patient_codes.transform(code)
-                                + i * len(self.patient_codes),
+                                self.code_to_column_index[code]
+                                + i * len(self.included_codes),
                                 count,
                             )
                             for i in range(len(self.time_bins))
                             for code, count in code_counts_per_bin[i].items()
                         ]
                     )
+                    if label_idx >= len(labels):
+                        # We've reached the end of the labels for this patient, 
+                        # so no point in continuing to count events past this point. 
+                        # Instead, we just return the counts of all events up to this point.
+                        return all_columns
+
                 for code in self.get_codes(code, ontology):
-                    if code in self.patient_codes:
+                    # Increment the count for this event's code (plus any parent codes
+                    # if we are doing ontology expansion, as handled in `self.get_codes`)
+                    if code in self.included_codes:
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1
 
-                for i, max_time in enumerate(self.time_bins):
+                # From closest bin to prediction time -> farthest bin
+                for bin_idx, bin_end in enumerate(time_bins):
                     # if i + 1 == len(self.time_bins):
                     #     continue
 
-                    while len(codes_per_bin[i]) > 0:
-                        next_code, next_date = codes_per_bin[i][0]
+                    while len(codes_per_bin[bin_idx]) > 0:
+                        # Get the least recently added event (i.e. farthest back in patient's timeline
+                        # from the currently processed label)
+                        oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
 
-                        if (event.start - next_date).days <= max_time:
+                        if (labels[label_idx].time - oldest_event_start) <= bin_end:
+                            # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
+                            # bin to our label's prediction time, so all events will be within this bin, so we don't have to
+                            # worry about shifting events into farther bins (as the code in the `else` clause does)
                             break
                         else:
-                            codes_per_bin[i + 1].append(
-                                codes_per_bin[i].popleft()
+                            # Goal: Readjust codes so that they fall under the proper time bin
+                            # Move (oldest_event_code, oldest_event_start) from entry @ `bin_idx` to entry @ `bin_idx + 1`
+                            # Basically, move this code from the bin that is closer to the prediction time (`bin_idx`)
+                            # to a bin that is further away from the prediction time (`bin_idx + 1`)
+                            codes_per_bin[bin_idx + 1].append(
+                                codes_per_bin[bin_idx].popleft()
                             )
 
-                            code_counts_per_bin[i][next_code] -= 1
-                            if code_counts_per_bin[i][next_code] == 0:
-                                del code_counts_per_bin[i][next_code]
+                            # Remove oldest_event_code from current (closer to prediction time) bin `bin_idx`
+                            code_counts_per_bin[bin_idx][oldest_event_code] -= 1
+                            # Add oldest_event_code to the (farther from prediction time) bin `bin_idx + 11
+                            code_counts_per_bin[bin_idx + 1][oldest_event_code] += 1
+                            
+                            # Clear out ColumnValues with a value of 0 to preserve sparsity of matrix
+                            if code_counts_per_bin[bin_idx][oldest_event_code] == 0:
+                                del code_counts_per_bin[bin_idx][oldest_event_code]
 
-                            code_counts_per_bin[i + 1][next_code] += 1
 
                 if label_idx == len(labels) - 1:
                     all_columns.append(
                         [
                             ColumnValue(
-                                self.patient_codes.transform(code)
-                                + i * len(self.patient_codes),
+                                self.code_to_column_index[code]
+                                + i * len(self.included_codes),
                                 count,
                             )
-                            for i in range(len(self.time_bins) - 1)
+                            for i in range(len(self.time_bins))
                             for code, count in code_counts_per_bin[i].items()
                         ]
                     )
                     break
 
         return all_columns
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "patient_codes": self.patient_codes.to_dict(),
-            "exclusion_codes": self.exclusion_codes,
-            "time_bins": self.time_bins,
-            "is_ontology_expansion": self.is_ontology_expansion,
-        }
-
-    def from_dict(self, data: Mapping[str, Any]):
-        self.patient_codes = Dictionary(data["patient_codes"])
-        self.exclusion_codes = data.get("exclusion_codes", set())
-        self.time_bins = data.get("time_bins", None)
-        self.is_ontology_expansion = data.get("is_ontology_expansion", False)
 
     def is_needs_preprocessing(self) -> bool:
         return True
