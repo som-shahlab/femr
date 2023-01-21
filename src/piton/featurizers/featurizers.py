@@ -138,27 +138,40 @@ class CountFeaturizer(Featurizer):
                     If `is_ontology_expansion=True` and your ontology is:
                         Code A -> Code B -> Code C
                     Where "->" denotes "is a parent of" relationship (i.e. A is a parent of B, B is a parent of C).
-                    Then if we see 2 occurrences of Code "C", we will count 2 occurrences of Code "B" and Code "A" as well.
+                    Then if we see 2 occurrences of Code "C", we count 2 occurrences of Code "B" and Code "A".
 
             excluded_codes (List[int], optional): A list of Piton codes that we will ignore. Defaults to [].
 
-            included_codes (List[int], optional): A list of all unique event codes that we will include in our count. Defaults to [].
+            included_codes (List[int], optional): A list of all unique event codes that we will include in our count.
 
-            time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets. Starts from the prediction time,
-                and works backwards according to each successive value in `time_bins`.
-                NOTE: These timedeltas should be positive values, and they will be converted to negative values internally.
-                NOTE: If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the
+            time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets.
+                Starts from the label time, and works backwards according to each successive value in `time_bins`.
+
+                These timedeltas should be positive values, and will be internally converted to negative values
+
+                If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the
                     start of the patient's first event.
 
                 Examples:
-                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180)]` will create the following buckets:
-                        [label time, -90 days], [-90 days, -180 days];
-                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(years=100)]` will create the following buckets:
-                        [label time, -90 days], [-90 days, -180 days], [-180 days, -100 years];]
+                    `time_bins = [
+                        datetime.timedelta(days=90),
+                        datetime.timedelta(days=180)
+                    ]`
+                        will create the following buckets:
+                            [label time, -90 days], [-90 days, -180 days];
+                    `time_bins = [
+                        datetime.timedelta(days=90),
+                        datetime.timedelta(days=180),
+                        datetime.timedelta(years=100)
+                    ]`
+                        will create the following buckets:
+                            [label time, -90 days], [-90 days, -180 days], [-180 days, -100 years];]
 
-            is_keep_only_none_valued_events (bool): If TRUE, then only keep events that have no value (i.e. `event.value is None`). Defaults to True.
-                Setting this to FALSE will include all events, including those with values (e.g. lab values), which will make
-                this run slower.
+            is_keep_only_none_valued_events (bool): If TRUE, then only keep events that have no value
+                (i.e. `event.value is None`). Defaults to True.
+
+                Setting this to FALSE will include all events, including those with values (e.g. lab values),
+                which will make this run slower.
         """
         self.is_ontology_expansion: bool = is_ontology_expansion
         self.included_codes: set = (
@@ -200,7 +213,8 @@ class CountFeaturizer(Featurizer):
     def preprocess(self, patient: Patient, labels: List[Label]):
         """Add every event code in this patient's timeline to `codes`.
 
-        If `self.is_keep_only_none_valued_events` is TRUE, then only add events that have no value (i.e. `event.value is None`).
+        If `self.is_keep_only_none_valued_events` is TRUE, then only add events that
+        have no value (i.e. `event.value is None`).
         """
         for event in patient.events:
             if self.is_keep_only_none_valued_events and event.value is not None:
@@ -269,7 +283,7 @@ class CountFeaturizer(Featurizer):
             # [value] = count of occurrences of events with that code (up to the label at `label_idx`)
             code_counter: Dict[int, int] = defaultdict(int)
 
-            label_idx: int = 0
+            label_idx = 0
             for event in patient.events:
                 while event.start > labels[label_idx].time:
                     label_idx += 1
@@ -325,9 +339,9 @@ class CountFeaturizer(Featurizer):
                 i: defaultdict(int) for i in range(len(self.time_bins) + 1)
             }
 
-            label_idx: int = 0
+            label_idx = 0
             for event in patient.events:
-                code: int = event.code
+                code: int = event.code  # type: ignore
                 while event.start > labels[label_idx].time:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
@@ -371,12 +385,14 @@ class CountFeaturizer(Featurizer):
                             labels[label_idx].time - oldest_event_start
                         ) <= bin_end:
                             # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
-                            # bin to our label's prediction time, so all events will be within this bin, so we don't have to
-                            # worry about shifting events into farther bins (as the code in the `else` clause does)
+                            # bin to our label's prediction time, so all events will be within this bin,
+                            # so we don't have to worry about shifting events into farther bins (as the code
+                            # in the `else` clause does)
                             break
                         else:
                             # Goal: Readjust codes so that they fall under the proper time bin
-                            # Move (oldest_event_code, oldest_event_start) from entry @ `bin_idx` to entry @ `bin_idx + 1`
+                            # Move (oldest_event_code, oldest_event_start) from entry @ `bin_idx`
+                            # to entry @ `bin_idx + 1`.
                             # Basically, move this code from the bin that is closer to the prediction time (`bin_idx`)
                             # to a bin that is further away from the prediction time (`bin_idx + 1`)
                             codes_per_bin[bin_idx + 1].append(

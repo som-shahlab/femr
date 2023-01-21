@@ -1,20 +1,9 @@
 """Core featurizer functionality, shared across Featurizers."""
 from __future__ import annotations
 
-import collections
 import multiprocessing
 from abc import ABC, abstractmethod
-from typing import (
-    Any,
-    Dict,
-    List,
-    Literal,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import Any, List, Literal, NamedTuple, Optional, Tuple, TypeVar
 
 import numpy as np
 import scipy.sparse

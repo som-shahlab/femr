@@ -1,5 +1,4 @@
 import datetime
-import math
 import os
 import pathlib
 from typing import cast
@@ -13,14 +12,7 @@ from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF
-from tools import (
-    DUMMY_EVENTS,
-    NUM_PATIENTS,
-    create_database,
-    get_piton_code,
-    load_from_pkl,
-    save_to_pkl,
-)
+from tools import create_database, get_piton_code, load_from_pkl, save_to_pkl
 
 
 def _assert_featurized_patients_structure(

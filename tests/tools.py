@@ -145,6 +145,7 @@ def create_database(
     path_to_ontology = os.path.join(tmp_path, "ontology")
     concepts = [str(x) for x in dummy_ontology.get_dictionary()]
     concept_map = create_ontology(path_to_ontology, concepts)
+    print("Concept map:", concept_map)
 
     path_to_database = os.path.join(tmp_path, "target")
 
