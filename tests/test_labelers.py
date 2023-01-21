@@ -13,8 +13,8 @@ from tools import (
     create_database,
     create_labeled_patients_list,
     create_patients_list,
-    dummy_events,
-    get_piton_codes,
+    DUMMY_EVENTS,
+    get_piton_code,
     load_from_pkl,
     save_to_pkl,
 )
@@ -88,8 +88,8 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     database = piton.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_target_code = get_piton_codes(ontology, 2)
-    piton_admission_code = get_piton_codes(ontology, 3)
+    piton_target_code = get_piton_code(ontology, 2)
+    piton_admission_code = get_piton_code(ontology, 3)
 
     labeler = CodeLF(
         piton_admission_code, piton_target_code, time_horizon=time_horizon
@@ -139,7 +139,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
 def test_mortality_lf() -> None:
     """Creates a MortalityLF for code 3, which corresponds to "Death Type/" """
-    patients = create_patients_list(dummy_events)
+    patients = create_patients_list(DUMMY_EVENTS)
     true_labels = [
         # Assumes time horizon (0, 180) days + MortalityLF() where code is 3
         False,
@@ -176,7 +176,7 @@ def test_mortality_lf() -> None:
 
 def test_code_lf() -> None:
     """Creates a CodeLF for code '2' with time horizon of (0,180 days)."""
-    patients = create_patients_list(dummy_events)
+    patients = create_patients_list(DUMMY_EVENTS)
     true_labels = [
         # Assumes time horizon (0, 180) days + Code 2
         True,

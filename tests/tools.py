@@ -13,7 +13,7 @@ import piton
 import piton.datasets
 from piton.labelers.core import LabeledPatients, LabelingFunction
 
-dummy_events = [
+DUMMY_EVENTS = [
     piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
     piton.Event(
         start=datetime.datetime(2010, 1, 1),
@@ -36,13 +36,13 @@ dummy_events = [
     ),
 ]
 
-NUM_EVENTS = len(dummy_events)
+NUM_EVENTS = len(DUMMY_EVENTS)
 NUM_PATIENTS = 10
 
 all_events: List[Tuple[int, piton.Event]] = []
 
-for patient_id in range(10, 10 + NUM_PATIENTS):
-    all_events.extend((patient_id, event) for event in dummy_events)
+for patient_id in range(NUM_PATIENTS):
+    all_events.extend((patient_id, event) for event in DUMMY_EVENTS)
 
 
 def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
@@ -133,7 +133,6 @@ class DummyOntology:
 
 dummy_ontology = DummyOntology()
 
-
 def create_database(
     tmp_path: pathlib.Path, dummy_ontology: DummyOntology = dummy_ontology
 ) -> None:
@@ -145,7 +144,6 @@ def create_database(
     path_to_ontology = os.path.join(tmp_path, "ontology")
     concepts = [str(x) for x in dummy_ontology.get_dictionary()]
     concept_map = create_ontology(path_to_ontology, concepts)
-    print(concept_map)
 
     path_to_database = os.path.join(tmp_path, "target")
 
@@ -157,9 +155,9 @@ def create_database(
         path_to_ontology,  # concept.csv
         num_threads=2,
     ).close()
+    
 
-
-def get_piton_codes(ontology, target_code):
+def get_piton_code(ontology, target_code: int) -> int:
     piton_concept_id = f"dummy/{DummyOntology().get_dictionary()[target_code]}"
     piton_target_code = ontology.get_dictionary().index(piton_concept_id)
     return piton_target_code
