@@ -144,7 +144,7 @@ def create_database(
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
 
-    concept_map = create_ontology(path_to_ontology, dummy_concepts)
+    _ = create_ontology(path_to_ontology, dummy_concepts)
 
     path_to_database = os.path.join(tmp_path, "target")
 

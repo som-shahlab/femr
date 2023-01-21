@@ -505,6 +505,7 @@ def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
         piton_admission_code, piton_target_code, time_horizon=time_horizon
     )
     patient = database[0]
+    patient = cast(piton.Patient, patient)
     all_labels = labeler.label(patient)
 
     num_all_labels = len(all_labels)
