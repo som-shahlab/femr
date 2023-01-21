@@ -219,7 +219,7 @@ class Featurizer(ABC):
         distribute featurization across multiple processes.
 
         Note: This runs BEFORE `aggregate_preprocessed_featurizers()`.
-        
+
         Args:
             featurizers (List[self]): A list of preprocessed featurizers
         """
@@ -228,7 +228,7 @@ class Featurizer(ABC):
     def finalize_preprocessing(self):
         """Finish the featurizer at the end of preprocessing. This is not needed for every
         featurizer, but does become necessary for things like verifying counts, etc.
-        
+
         Note: This runs AFTER `aggregate_preprocessed_featurizers()`.
         """
         pass

@@ -185,11 +185,11 @@ class NoteFeaturizer:
             params_embedder (Optional[dict], optional): _description_. Defaults to None.
             n_cpu_jobs (int, optional): _description_. Defaults to 1.
             gpu_devices (List[int], optional): _description_. Defaults to [].
-        """        
+        """
         self.path_to_patient_database: str = path_to_patient_database
         self.path_to_temp_dir: str = path_to_temp_dir
         self.path_to_tokenizer: str = path_to_tokenizer
-        self.path_to_embedder: str = path_to_embedder  
+        self.path_to_embedder: str = path_to_embedder
         self.path_to_output_dir: str = path_to_output_dir
         self.params_preprocessor = params_preprocessor
         self.params_tokenizer = params_tokenizer
