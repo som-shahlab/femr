@@ -9,7 +9,7 @@ import piton
 import piton.datasets
 from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import OneLabelPerPatient, TimeHorizon
+from piton.labelers.core import NLabelPerPatientLF, TimeHorizon
 from piton.labelers.omop_labeling_functions import (
     DiabetesLF,
     HighHbA1cLF,
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         )
 
     # grabbing just one label at random from all the labels
-    one_label_labeler = OneLabelPerPatient(labeler)
+    one_label_labeler = NLabelPerPatientLF(labeler, seed=0, num_labels=1)
     print_log("Labeler", "Instantiated Labeler: " + args.labeling_function)
 
     print_log("Labeling Patients", "Starting")
