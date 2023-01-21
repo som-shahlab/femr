@@ -33,6 +33,7 @@ build = [
     "nptyping == 2.4.1",
     "torchtyping == 0.1.4",
     "transformers == 4.25.1",
+    "nptyping == 2.4.1"
 ]
 
 [tool.isort]
