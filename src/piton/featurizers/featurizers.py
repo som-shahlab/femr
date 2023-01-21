@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Union, Deque, Dict, Iterator, List, Optional, Tuple
+from typing import Deque, Dict, Iterator, List, Optional, Tuple, Union
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -56,20 +56,26 @@ class AgeFeaturizer(Featurizer):
         cls, featurizers: List[AgeFeaturizer]
     ) -> AgeFeaturizer:
         """After preprocessing an AgeFeaturizer using multiprocessing (resulting in the list of featurizers
-            contained in `featurizers`), this method aggregates all those featurizers into one AgeFeaturizer.
-            
-            We need to collect all the means and variances calculated by each individual featurizer, 
-            then recompute the mean and variance to get an overall mean/variance for the total patient population.
-            This is handled by the OnlineStatistics.merge() method.
+        contained in `featurizers`), this method aggregates all those featurizers into one AgeFeaturizer.
+
+        We need to collect all the means and variances calculated by each individual featurizer,
+        then recompute the mean and variance to get an overall mean/variance for the total patient population.
+        This is handled by the OnlineStatistics.merge() method.
         """
         if len(featurizers) == 0:
-            raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
-        
+            raise ValueError(
+                "You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`"
+            )
+
         # Calculate merged mean/variance/count across each individual featurizer
-        merged_stats: OnlineStatistics = OnlineStatistics.merge([ f.age_statistics for f in featurizers ])
+        merged_stats: OnlineStatistics = OnlineStatistics.merge(
+            [f.age_statistics for f in featurizers]
+        )
         # Create new featurizer with merged mean/variance/count
         template_featurizer: AgeFeaturizer = featurizers[0]
-        aggregated_featurizer: AgeFeaturizer = AgeFeaturizer(template_featurizer.is_normalize)
+        aggregated_featurizer: AgeFeaturizer = AgeFeaturizer(
+            template_featurizer.is_normalize
+        )
         aggregated_featurizer.age_statistics = merged_stats
         return aggregated_featurizer
 
@@ -127,46 +133,59 @@ class CountFeaturizer(Featurizer):
         """
         Args:
             is_ontology_expansion (bool, optional): If TRUE, then do ontology expansion when counting codes.
-                
+
                 Example:
-                    If `is_ontology_expansion=True` and your ontology is: 
+                    If `is_ontology_expansion=True` and your ontology is:
                         Code A -> Code B -> Code C
                     Where "->" denotes "is a parent of" relationship (i.e. A is a parent of B, B is a parent of C).
                     Then if we see 2 occurrences of Code "C", we will count 2 occurrences of Code "B" and Code "A" as well.
-            
+
             excluded_codes (List[int], optional): A list of Piton codes that we will ignore. Defaults to [].
-            
+
             included_codes (List[int], optional): A list of all unique event codes that we will include in our count. Defaults to [].
-            
-            time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets. Starts from the prediction time, 
+
+            time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets. Starts from the prediction time,
                 and works backwards according to each successive value in `time_bins`.
                 NOTE: These timedeltas should be positive values, and they will be converted to negative values internally.
-                NOTE: If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the 
+                NOTE: If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the
                     start of the patient's first event.
-                
-                Examples: 
-                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180)]` will create the following buckets: 
-                        [label time, -90 days], [-90 days, -180 days]; 
-                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(years=100)]` will create the following buckets: 
-                        [label time, -90 days], [-90 days, -180 days], [-180 days, -100 years];] 
-            
+
+                Examples:
+                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180)]` will create the following buckets:
+                        [label time, -90 days], [-90 days, -180 days];
+                    `time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(years=100)]` will create the following buckets:
+                        [label time, -90 days], [-90 days, -180 days], [-180 days, -100 years];]
+
             is_keep_only_none_valued_events (bool): If TRUE, then only keep events that have no value (i.e. `event.value is None`). Defaults to True.
                 Setting this to FALSE will include all events, including those with values (e.g. lab values), which will make
                 this run slower.
         """
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.included_codes: set = set(included_codes) if not isinstance(included_codes, set) else included_codes
-        self.excluded_codes: set = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
+        self.included_codes: set = (
+            set(included_codes)
+            if not isinstance(included_codes, set)
+            else included_codes
+        )
+        self.excluded_codes: set = (
+            set(excluded_codes)
+            if not isinstance(excluded_codes, set)
+            else excluded_codes
+        )
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
-        self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
-        
+        self.is_keep_only_none_valued_events: bool = (
+            is_keep_only_none_valued_events
+        )
+
         # Map code to its feature's corresponding column index
         # NOTE: Must be sorted to preserve set ordering across instantiations
-        self.code_to_column_index: Dict[int, int] = { code: idx for idx, code in enumerate(sorted(self.included_codes)) }
+        self.code_to_column_index: Dict[int, int] = {
+            code: idx for idx, code in enumerate(sorted(self.included_codes))
+        }
 
         if self.time_bins is not None:
-            assert len(set(self.time_bins)) == len(self.time_bins), \
-                f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
+            assert len(set(self.time_bins)) == len(
+                self.time_bins
+            ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
     def get_codes(
         self, code: int, ontology: extension_datasets.Ontology
@@ -180,7 +199,7 @@ class CountFeaturizer(Featurizer):
 
     def preprocess(self, patient: Patient, labels: List[Label]):
         """Add every event code in this patient's timeline to `codes`.
-        
+
         If `self.is_keep_only_none_valued_events` is TRUE, then only add events that have no value (i.e. `event.value is None`).
         """
         for event in patient.events:
@@ -191,7 +210,9 @@ class CountFeaturizer(Featurizer):
             # If we haven't seen this code before, then add it to our list of included codes
             if event.code not in self.included_codes:
                 # NOTE: Ordering of below two lines is important if want column indexes to start at 0
-                self.code_to_column_index[event.code] = len(self.code_to_column_index)
+                self.code_to_column_index[event.code] = len(
+                    self.code_to_column_index
+                )
                 self.included_codes.add(event.code)
 
     @classmethod
@@ -199,16 +220,20 @@ class CountFeaturizer(Featurizer):
         cls, featurizers: List[CountFeaturizer]
     ) -> CountFeaturizer:
         """After preprocessing a CountFeaturizer using multiprocessing (resulting in the list of featurizers
-            contained in `featurizers`), this method aggregates all those featurizers into one CountFeaturizer.
-            
-            We need to collect all the unique event codes identified by each featurizer, and then create a new
-            featurizer that combines all these codes
+        contained in `featurizers`), this method aggregates all those featurizers into one CountFeaturizer.
+
+        We need to collect all the unique event codes identified by each featurizer, and then create a new
+        featurizer that combines all these codes
         """
         if len(featurizers) == 0:
-            raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
-        
+            raise ValueError(
+                "You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`"
+            )
+
         # Aggregating count featurizers
-        all_codes: List[int] = [ c for f in featurizers for c in f.included_codes ]
+        all_codes: List[int] = [
+            c for f in featurizers for c in f.included_codes
+        ]
 
         template_featurizer: CountFeaturizer = featurizers[0]
         new_featurizer: CountFeaturizer = CountFeaturizer(
@@ -216,7 +241,7 @@ class CountFeaturizer(Featurizer):
             excluded_codes=template_featurizer.excluded_codes,
             included_codes=all_codes,
             time_bins=template_featurizer.time_bins,
-            is_keep_only_none_valued_events=template_featurizer.is_keep_only_none_valued_events
+            is_keep_only_none_valued_events=template_featurizer.is_keep_only_none_valued_events,
         )
         return new_featurizer
 
@@ -232,10 +257,10 @@ class CountFeaturizer(Featurizer):
         labels: List[Label],
         ontology: Optional[extension_datasets.Ontology],
     ) -> List[List[ColumnValue]]:
-        
+
         if ontology is None:
             raise ValueError("`ontology` can't be `None` for CountFeaturizer")
-            
+
         all_columns: List[List[ColumnValue]] = []
 
         if self.time_bins is None:
@@ -243,7 +268,7 @@ class CountFeaturizer(Featurizer):
             # [key] = column idx
             # [value] = count of occurrences of events with that code (up to the label at `label_idx`)
             code_counter: Dict[int, int] = defaultdict(int)
-            
+
             label_idx: int = 0
             for event in patient.events:
                 while event.start > labels[label_idx].time:
@@ -256,16 +281,19 @@ class CountFeaturizer(Featurizer):
                         ]
                     )
                     if label_idx >= len(labels):
-                        # We've reached the end of the labels for this patient, 
-                        # so no point in continuing to count events past this point. 
+                        # We've reached the end of the labels for this patient,
+                        # so no point in continuing to count events past this point.
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
-                if self.is_keep_only_none_valued_events and event.value is not None:
+                if (
+                    self.is_keep_only_none_valued_events
+                    and event.value is not None
+                ):
                     # If we only want to keep events with no value, then skip this event
                     # because it has a non-None value
                     continue
-                
+
                 for code in self.get_codes(event.code, ontology):
                     # Increment the count for this event's code (plus any parent codes
                     # if we are doing ontology expansion, as handled in `self.get_codes`)
@@ -273,7 +301,7 @@ class CountFeaturizer(Featurizer):
                         code_counter[code] += 1
 
             if label_idx < len(labels):
-                # For all labels that occur past the last event, add all 
+                # For all labels that occur past the last event, add all
                 # events' total counts as these labels' feature values (basically,
                 # the featurization of these labels is the count of every single event)
                 for label in labels[label_idx:]:
@@ -285,7 +313,9 @@ class CountFeaturizer(Featurizer):
                     )
         else:
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
-            time_bins: List[datetime.timedelta] = sorted([ x for x in self.time_bins if x is not None ])
+            time_bins: List[datetime.timedelta] = sorted(
+                [x for x in self.time_bins if x is not None]
+            )
 
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
@@ -313,8 +343,8 @@ class CountFeaturizer(Featurizer):
                         ]
                     )
                     if label_idx >= len(labels):
-                        # We've reached the end of the labels for this patient, 
-                        # so no point in continuing to count events past this point. 
+                        # We've reached the end of the labels for this patient,
+                        # so no point in continuing to count events past this point.
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
@@ -333,9 +363,13 @@ class CountFeaturizer(Featurizer):
                     while len(codes_per_bin[bin_idx]) > 0:
                         # Get the least recently added event (i.e. farthest back in patient's timeline
                         # from the currently processed label)
-                        oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
-                        
-                        if (labels[label_idx].time - oldest_event_start) <= bin_end:
+                        oldest_event_code, oldest_event_start = codes_per_bin[
+                            bin_idx
+                        ][0]
+
+                        if (
+                            labels[label_idx].time - oldest_event_start
+                        ) <= bin_end:
                             # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
                             # bin to our label's prediction time, so all events will be within this bin, so we don't have to
                             # worry about shifting events into farther bins (as the code in the `else` clause does)
@@ -352,12 +386,18 @@ class CountFeaturizer(Featurizer):
                             # Remove oldest_event_code from current (closer to prediction time) bin `bin_idx`
                             code_counts_per_bin[bin_idx][oldest_event_code] -= 1
                             # Add oldest_event_code to the (farther from prediction time) bin `bin_idx + 11
-                            code_counts_per_bin[bin_idx + 1][oldest_event_code] += 1
-                            
-                            # Clear out ColumnValues with a value of 0 to preserve sparsity of matrix
-                            if code_counts_per_bin[bin_idx][oldest_event_code] == 0:
-                                del code_counts_per_bin[bin_idx][oldest_event_code]
+                            code_counts_per_bin[bin_idx + 1][
+                                oldest_event_code
+                            ] += 1
 
+                            # Clear out ColumnValues with a value of 0 to preserve sparsity of matrix
+                            if (
+                                code_counts_per_bin[bin_idx][oldest_event_code]
+                                == 0
+                            ):
+                                del code_counts_per_bin[bin_idx][
+                                    oldest_event_code
+                                ]
 
                 if label_idx == len(labels) - 1:
                     all_columns.append(
