@@ -133,6 +133,7 @@ class DummyOntology:
 
 dummy_ontology = DummyOntology()
 
+
 def create_database(
     tmp_path: pathlib.Path, dummy_ontology: DummyOntology = dummy_ontology
 ) -> None:
@@ -155,7 +156,7 @@ def create_database(
         path_to_ontology,  # concept.csv
         num_threads=2,
     ).close()
-    
+
 
 def get_piton_code(ontology, target_code: int) -> int:
     piton_concept_id = f"dummy/{DummyOntology().get_dictionary()[target_code]}"

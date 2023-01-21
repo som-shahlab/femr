@@ -14,8 +14,8 @@ from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF
 from tools import (
-    NUM_PATIENTS,
     DUMMY_EVENTS,
+    NUM_PATIENTS,
     create_database,
     get_piton_code,
     load_from_pkl,
@@ -33,24 +33,28 @@ def _assert_featurized_patients_structure(
     assert featurized_patients[2].dtype == "bool"
     assert featurized_patients[3].dtype == "datetime64[us]"
 
-    assert len(featurized_patients[1]) == len(labeled_patients) * len(labels_per_patient), f"len(featurized_patients[1]) = {len(featurized_patients[1])}"
+    assert len(featurized_patients[1]) == len(labeled_patients) * len(
+        labels_per_patient
+    ), f"len(featurized_patients[1]) = {len(featurized_patients[1])}"
 
     patient_ids = np.array(
-        sorted([i for i in range(len(labeled_patients))] * len(labels_per_patient))
+        sorted(
+            [i for i in range(len(labeled_patients))] * len(labels_per_patient)
+        )
     )
-    assert np.sum(featurized_patients[1] == patient_ids) == len(labeled_patients) * len(
-        labels_per_patient
-    )
+    assert np.sum(featurized_patients[1] == patient_ids) == len(
+        labeled_patients
+    ) * len(labels_per_patient)
 
     all_labels = np.array(labels_per_patient * len(labeled_patients))
-    assert np.sum(featurized_patients[2] == all_labels) == len(labeled_patients) * len(
-        labels_per_patient
-    )
+    assert np.sum(featurized_patients[2] == all_labels) == len(
+        labeled_patients
+    ) * len(labels_per_patient)
 
     label_time = labeled_patients.as_numpy_arrays()[2]
-    assert np.sum(featurized_patients[3] == label_time) == len(labeled_patients) * len(
-        labels_per_patient
-    )
+    assert np.sum(featurized_patients[3] == label_time) == len(
+        labeled_patients
+    ) * len(labels_per_patient)
 
 
 def test_age_featurizer(tmp_path: pathlib.Path):
@@ -96,7 +100,10 @@ def test_age_featurizer(tmp_path: pathlib.Path):
     )
 
     labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (len(labeled_patients) * len(labels_per_patient), 1)
+    assert featurized_patients[0].shape == (
+        len(labeled_patients) * len(labels_per_patient),
+        1,
+    )
     _assert_featurized_patients_structure(
         labeled_patients, featurized_patients, labels_per_patient
     )
@@ -126,9 +133,13 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     featurizer.preprocess(patient, labels)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
-    assert featurizer.get_num_columns() == 3, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+    assert (
+        featurizer.get_num_columns() == 3
+    ), f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
-    assert patient_features[0] == [ ColumnValue(column=0, value=1) ], f"patient_features[0] = {patient_features[0]}"
+    assert patient_features[0] == [
+        ColumnValue(column=0, value=1)
+    ], f"patient_features[0] = {patient_features[0]}"
     assert patient_features[1] == [
         ColumnValue(column=0, value=2),
         ColumnValue(column=1, value=2),
@@ -146,9 +157,12 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     featurized_patients = featurizer_list.featurize(
         database_path, labeled_patients
     )
-    
+
     labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (len(labeled_patients) * len(labels_per_patient), 3)
+    assert featurized_patients[0].shape == (
+        len(labeled_patients) * len(labels_per_patient),
+        3,
+    )
     _assert_featurized_patients_structure(
         labeled_patients, featurized_patients, labels_per_patient
     )
@@ -174,20 +188,28 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
 
     patient: piton.Patient = cast(piton.Patient, database[0])
     labels = labeler.label(patient)
-    time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(weeks=1e4), ]
+    time_bins = [
+        datetime.timedelta(days=90),
+        datetime.timedelta(days=180),
+        datetime.timedelta(weeks=1e4),
+    ]
     featurizer = CountFeaturizer(
-        is_ontology_expansion=True, 
+        is_ontology_expansion=True,
         time_bins=time_bins,
-        is_keep_only_none_valued_events=True
+        is_keep_only_none_valued_events=True,
     )
     featurizer.preprocess(patient, labels)
     patient_features = featurizer.featurize(patient, labels, ontology)
-    
-    included_codes = set([ e.code for e in patient.events if e.value is None ])
-    
-    assert featurizer.included_codes == included_codes, f"featurizer.included_codes = {featurizer.included_codes}"
-    assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
-    
+
+    included_codes = set([e.code for e in patient.events if e.value is None])
+
+    assert (
+        featurizer.included_codes == included_codes
+    ), f"featurizer.included_codes = {featurizer.included_codes}"
+    assert (
+        featurizer.get_num_columns() == 9
+    ), f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+
     assert patient_features[0] == [
         ColumnValue(column=0, value=1),
         ColumnValue(column=4, value=1),
@@ -206,17 +228,19 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     labeled_patients = labeler.apply(database_path)
 
     featurizer = CountFeaturizer(
-        is_ontology_expansion=True, 
-        time_bins=time_bins
+        is_ontology_expansion=True, time_bins=time_bins
     )
     featurizer_list = FeaturizerList([featurizer])
     featurizer_list.preprocess_featurizers(database_path, labeled_patients)
     featurized_patients = featurizer_list.featurize(
         database_path, labeled_patients
     )
-    
+
     labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (len(labeled_patients) * len(labels_per_patient), 9), f"featurized_patients[0].shape = {featurized_patients[0].shape}"
+    assert featurized_patients[0].shape == (
+        len(labeled_patients) * len(labels_per_patient),
+        9,
+    ), f"featurized_patients[0].shape = {featurized_patients[0].shape}"
     _assert_featurized_patients_structure(
         labeled_patients, featurized_patients, labels_per_patient
     )
@@ -248,7 +272,11 @@ def test_complete_featurization(tmp_path: pathlib.Path):
         database_path, labeled_patients
     )
 
-    time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(weeks=1e5), ]
+    time_bins = [
+        datetime.timedelta(days=90),
+        datetime.timedelta(days=180),
+        datetime.timedelta(weeks=1e5),
+    ]
     count_featurizer = CountFeaturizer(
         is_ontology_expansion=True, time_bins=time_bins
     )
@@ -261,7 +289,11 @@ def test_complete_featurization(tmp_path: pathlib.Path):
     )
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
-    time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(weeks=1e5), ]
+    time_bins = [
+        datetime.timedelta(days=90),
+        datetime.timedelta(days=180),
+        datetime.timedelta(weeks=1e5),
+    ]
     count_featurizer = CountFeaturizer(
         is_ontology_expansion=True, time_bins=time_bins
     )
@@ -302,7 +334,11 @@ def test_serialization_and_deserialization(tmp_path: pathlib.Path):
     )
     labeled_patients = labeler.apply(database_path)
 
-    time_bins = [datetime.timedelta(days=90), datetime.timedelta(days=180), datetime.timedelta(weeks=1e5), ]
+    time_bins = [
+        datetime.timedelta(days=90),
+        datetime.timedelta(days=180),
+        datetime.timedelta(weeks=1e5),
+    ]
     count_featurizer = CountFeaturizer(
         is_ontology_expansion=True, time_bins=time_bins
     )

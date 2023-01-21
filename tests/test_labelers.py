@@ -10,10 +10,10 @@ import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 from tools import (
+    DUMMY_EVENTS,
     create_database,
     create_labeled_patients_list,
     create_patients_list,
-    DUMMY_EVENTS,
     get_piton_code,
     load_from_pkl,
     save_to_pkl,
