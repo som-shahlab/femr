@@ -7,7 +7,12 @@ import numpy as np
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon, NLabelPerPatientLF
+from piton.labelers.core import (
+    Label,
+    LabeledPatients,
+    NLabelPerPatientLF,
+    TimeHorizon,
+)
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 from tools import (
     DUMMY_EVENTS,
@@ -511,7 +516,9 @@ def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
 
     seed = 0
     num_labels = 6
-    n_labeler = NLabelPerPatientLF(labeling_function=labeler, num_labels=num_labels, seed=seed)
+    n_labeler = NLabelPerPatientLF(
+        labeling_function=labeler, num_labels=num_labels, seed=seed
+    )
     n_labels = n_labeler.label(patient)
 
     assert len(n_labels) == num_all_labels
@@ -521,18 +528,14 @@ def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
 
     n_labels_list = []
     for seed in seeds:
-        n_labeler = NLabelPerPatientLF(labeling_function=labeler, num_labels=num_labels, seed=seed)
+        n_labeler = NLabelPerPatientLF(
+            labeling_function=labeler, num_labels=num_labels, seed=seed
+        )
         n_labels = n_labeler.label(patient)
         n_labels_list.append(n_labels)
 
     assert n_labels_list[0] == n_labels_list[0]
 
     for i in range(len(n_labels_list)):
-        for j in range(i+1, len(n_labels_list)):
+        for j in range(i + 1, len(n_labels_list)):
             assert n_labels_list[i] != n_labels_list[j]
-
-    
-
-
-
-

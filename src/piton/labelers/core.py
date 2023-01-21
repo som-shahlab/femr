@@ -454,10 +454,10 @@ class FixedTimeHorizonEventLF(LabelingFunction):
 class NLabelPerPatientLF(LabelingFunction):
     # TODO - update
     def __init__(
-        self, 
-        labeling_function: LabelingFunction, 
-        num_labels: int = 1, 
-        seed: int = 1
+        self,
+        labeling_function: LabelingFunction,
+        num_labels: int = 1,
+        seed: int = 1,
     ):
         self.labeling_function: LabelingFunction = labeling_function
         self.num_labels: int = num_labels
@@ -467,9 +467,12 @@ class NLabelPerPatientLF(LabelingFunction):
         labels: List[Label] = self.labeling_function.label(patient)
         if len(labels) <= self.num_labels:
             return labels
-        hash_to_label: List[Tuple[int, Label]] = [(compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))]
-        hash_to_label.sort(key=lambda a:a[0])
-        n_labels: List[Label] = [x[1] for x in hash_to_label[:self.num_labels]]
+        hash_to_label: List[Tuple[int, Label]] = [
+            (compute_random_num(self.seed, patient.patient_id, i), labels[i])
+            for i in range(len(labels))
+        ]
+        hash_to_label.sort(key=lambda a: a[0])
+        n_labels: List[Label] = [x[1] for x in hash_to_label[: self.num_labels]]
         return n_labels
 
     def get_labeler_type(self) -> LabelType:
