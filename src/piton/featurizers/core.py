@@ -367,10 +367,12 @@ class FeaturizerList:
         database_path: str,
         labeled_patients: LabeledPatients,
         num_threads: int = 1,
-    ) -> Tuple[Any, 
-               NDArray[Literal["n_labels, 1"], np.int64], 
-               NDArray[Literal["n_labels, 1"], Any], 
-               NDArray[Literal["n_labels, 1"], np.datetime64]]:
+    ) -> Tuple[
+        Any,
+        NDArray[Literal["n_labels, 1"], np.int64],
+        NDArray[Literal["n_labels, 1"], Any],
+        NDArray[Literal["n_labels, 1"], np.datetime64],
+    ]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
 
