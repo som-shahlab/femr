@@ -120,8 +120,8 @@ class CountFeaturizer(Featurizer):
         self,
         is_ontology_expansion: bool = False,
         excluded_codes: Union[set, List[int]] = [],
-        included_codes: List[int] = [],
-        time_bins: Optional[List[Optional[datetime.timedelta]]] = None,
+        included_codes: Union[set, List[int]] = [],
+        time_bins: Optional[List[datetime.timedelta]] = None,
         is_keep_only_none_valued_events: bool = True,
     ):
         """
@@ -138,7 +138,7 @@ class CountFeaturizer(Featurizer):
             
             included_codes (List[int], optional): A list of all unique event codes that we will include in our count. Defaults to [].
             
-            time_bins (Optional[List[Optional[datetime.timedelta]]], optional): Group counts into buckets. Starts from the prediction time, 
+            time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets. Starts from the prediction time, 
                 and works backwards according to each successive value in `time_bins`.
                 NOTE: These timedeltas should be positive values, and they will be converted to negative values internally.
                 NOTE: If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the 
@@ -155,15 +155,16 @@ class CountFeaturizer(Featurizer):
                 this run slower.
         """
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.included_codes: List[int] = included_codes
+        self.included_codes: set = set(included_codes) if not isinstance(included_codes, set) else included_codes
         self.excluded_codes: set = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
         self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
         
-        # map code to its feature's corresponding column index
-        self.code_to_column_index: Dict[int, int] = { code: idx for idx, code in enumerate(self.included_codes) }
+        # Map code to its feature's corresponding column index
+        # NOTE: Must be sorted to preserve set ordering across instantiations
+        self.code_to_column_index: Dict[int, int] = { code: idx for idx, code in enumerate(sorted(self.included_codes)) }
 
-        if self.time_bins:
+        if self.time_bins is not None:
             assert len(set(self.time_bins)) == len(self.time_bins), \
                 f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
@@ -187,8 +188,11 @@ class CountFeaturizer(Featurizer):
                 # If we only want to keep events with no value, then skip this event
                 # because it has a non-None value
                 continue
-            self.included_codes.append(event.code)
-            self.code_to_column_index[event.code] = len(self.included_codes)
+            # If we haven't seen this code before, then add it to our list of included codes
+            if event.code not in self.included_codes:
+                # NOTE: Ordering of below two lines is important if want column indexes to start at 0
+                self.code_to_column_index[event.code] = len(self.code_to_column_index)
+                self.included_codes.add(event.code)
 
     @classmethod
     def aggregate_preprocessed_featurizers(  # type: ignore[override]
@@ -330,7 +334,7 @@ class CountFeaturizer(Featurizer):
                         # Get the least recently added event (i.e. farthest back in patient's timeline
                         # from the currently processed label)
                         oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
-
+                        
                         if (labels[label_idx].time - oldest_event_start) <= bin_end:
                             # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
                             # bin to our label's prediction time, so all events will be within this bin, so we don't have to
