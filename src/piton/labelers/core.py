@@ -8,7 +8,17 @@ import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, DefaultDict, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import (
+    Any,
+    DefaultDict,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 import numpy as np
 from nptyping import NDArray
@@ -233,9 +243,16 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             # If SurvivalValue labeler, then label value is a tuple of (time to event, is censored)
             for patient_id, labels in self.patients_to_labels.items():
                 for label in labels:
-                    survival_value: SurvivalValue = cast(SurvivalValue, label.value)
+                    survival_value: SurvivalValue = cast(
+                        SurvivalValue, label.value
+                    )
                     patient_ids.append(patient_id)
-                    label_values.append([survival_value.time_to_event, survival_value.is_censored])
+                    label_values.append(
+                        [
+                            survival_value.time_to_event,
+                            survival_value.is_censored,
+                        ]
+                    )
                     label_times.append(label.time)
         else:
             raise ValueError(
@@ -284,7 +301,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             label_times (NDArray): Times that the corresponding label occurs.
             labeler_type (LabelType): LabelType of the corresponding labels.
         """
-        patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)
+        patients_to_labels: DefaultDict[
+            int, List[Label]
+        ] = collections.defaultdict(list)
         for patient_id, l_value, l_time in zip(
             patient_ids, label_values, label_times
         ):
@@ -294,7 +313,12 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                 )
             elif labeler_type in ["survival"]:
                 patients_to_labels[patient_id].append(
-                    Label(time=l_time, value=SurvivalValue(time_to_event=l_value[0], is_censored= l_value[1]))
+                    Label(
+                        time=l_time,
+                        value=SurvivalValue(
+                            time_to_event=l_value[0], is_censored=l_value[1]
+                        ),
+                    )
                 )
             else:
                 raise ValueError(
