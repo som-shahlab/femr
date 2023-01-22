@@ -1,19 +1,28 @@
-import pathlib
 import math
-import pytest
+import pathlib
+
 import numpy as np
+import pytest
 
 from piton.featurizers import OnlineStatistics
 
+
 def _assert_correct_stats(stat: OnlineStatistics, values: list):
-    TOLERANCE = 1e-6 # Allow for some floating point error
+    TOLERANCE = 1e-6  # Allow for some floating point error
     true_mean = np.mean(values)
     true_sample_variance = np.var(values, ddof=1)
     true_m2 = true_sample_variance * (len(values) - 1)
-    assert stat.current_count == len(values), f"{stat.current_count} != {len(values)}"
+    assert stat.current_count == len(
+        values
+    ), f"{stat.current_count} != {len(values)}"
     assert np.isclose(stat.mean(), true_mean), f"{stat.mean()} != {true_mean}"
-    assert np.isclose(stat.variance(), true_sample_variance, atol=TOLERANCE), f"{stat.variance()} != {true_sample_variance}"
-    assert np.isclose(stat.current_M2, true_m2, atol=TOLERANCE), f"{stat.current_M2} != {true_m2}"
+    assert np.isclose(
+        stat.variance(), true_sample_variance, atol=TOLERANCE
+    ), f"{stat.variance()} != {true_sample_variance}"
+    assert np.isclose(
+        stat.current_M2, true_m2, atol=TOLERANCE
+    ), f"{stat.current_M2} != {true_m2}"
+
 
 def test_add():
     # Test adding things to the statistics
@@ -22,6 +31,7 @@ def test_add():
         for i in values:
             stat.add(i)
         _assert_correct_stats(stat, values)
+
     # Positive integers
     _run_test(range(51))
     _run_test(range(10, 10000, 3))
@@ -36,47 +46,59 @@ def test_add():
     # Small lists
     _run_test([0, 1])
     _run_test([-1, 1])
-    
+
+
 def test_constructor():
     # Test default
     stat = OnlineStatistics()
-    assert stat.current_count == 0 
-    assert stat.current_mean == stat.mean() == 0 
+    assert stat.current_count == 0
+    assert stat.current_mean == stat.mean() == 0
     assert stat.current_M2 == 0
-    
+
     # Test explicitly setting args
-    stat = OnlineStatistics(current_count = 1, current_mean = 2, current_variance = 3)
-    assert stat.current_count == 1 
-    assert stat.current_mean == stat.mean() == 2 
+    stat = OnlineStatistics(current_count=1, current_mean=2, current_variance=3)
+    assert stat.current_count == 1
+    assert stat.current_mean == stat.mean() == 2
     assert stat.current_M2 == 0
-    
+
     # Test M2
-    stat = OnlineStatistics(current_count = 10, current_mean = 20, current_variance = 30)
-    assert stat.current_count == 10 
-    assert stat.current_mean == 20 
+    stat = OnlineStatistics(
+        current_count=10, current_mean=20, current_variance=30
+    )
+    assert stat.current_count == 10
+    assert stat.current_mean == 20
     assert stat.current_M2 == 30 * (10 - 1)
-    
+
     # Test getters/setters
-    stat = OnlineStatistics(current_count = 10, current_mean = 20, current_variance = 30)
-    assert stat.mean() == 20 
-    assert stat.variance() == 30 
+    stat = OnlineStatistics(
+        current_count=10, current_mean=20, current_variance=30
+    )
+    assert stat.mean() == 20
+    assert stat.variance() == 30
     assert stat.standard_deviation() == math.sqrt(30)
-    
+
     # Test fail case
     with pytest.raises(ValueError) as e:
         # Negative count
-        stat = OnlineStatistics(current_count = -1, current_mean = 2, current_variance = 3)
+        stat = OnlineStatistics(
+            current_count=-1, current_mean=2, current_variance=3
+        )
     with pytest.raises(ValueError) as e:
         # Negative variance
-        stat = OnlineStatistics(current_count = 1, current_mean = 2, current_variance = -3)
+        stat = OnlineStatistics(
+            current_count=1, current_mean=2, current_variance=-3
+        )
     with pytest.raises(ValueError) as e:
         # Positive variance with 0 count
-        stat = OnlineStatistics(current_count = 0, current_mean = 2, current_variance = 1)
+        stat = OnlineStatistics(
+            current_count=0, current_mean=2, current_variance=1
+        )
     with pytest.raises(ValueError) as e:
         # Can only compute variance with >1 observation
         stat = OnlineStatistics()
         stat.add(1)
         stat.variance()
+
 
 def test_merge_pair():
     # Simulate two statistics being merged via `merge_pair``
@@ -92,12 +114,13 @@ def test_merge_pair():
     merged_stat_values = values1 + values2
     _assert_correct_stats(merged_stat, merged_stat_values)
 
+
 def test_merge():
     # Simulate parallel statistics being merged via `merge`
     stats = []
-    values = [ 
-        np.linspace(-100, 100, 50), 
-        np.linspace(100, 200, 50), 
+    values = [
+        np.linspace(-100, 100, 50),
+        np.linspace(100, 200, 50),
         np.linspace(100, 150, 100),
         np.linspace(-10, 100, 100),
         np.linspace(10, 200, 3),
