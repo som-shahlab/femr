@@ -26,8 +26,8 @@ class OnlineStatistics:
             `count` aggregates the number of samples seen so far
             `current_M2` aggregates the squared distances from the mean
         """
-        if current_count >= 0 and current_variance >= 0:
-            raise ValueError("Cannot specify negative values for `current_count` or `current_variance`.")
+        if not (current_count >= 0 and current_variance >= 0):
+            raise ValueError(f"Must set `current_count` and `current_variance` to be non-negative. You specified `current_count` = {current_count} and `current_variance` = {current_variance}.")
         self.current_count: int = current_count
         self.current_mean: float = current_mean
         if current_count == 0 and current_variance == 0:
@@ -37,7 +37,8 @@ class OnlineStatistics:
         else:
             raise ValueError(
                 "Cannot specify `current_variance` with a value > 0"
-                "without specifying `current_count` with a value > 0."
+                "without specifying `current_count` with a value > 0. "
+                f"You specified `current_count` = {current_count} and `current_variance` = {current_variance}."
             )
 
     def add(self, newValue: float) -> None:
