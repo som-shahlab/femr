@@ -49,15 +49,13 @@ class OutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
         at severity level `self.severity`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.value is not None:
-                value: float = self.normalize_value_with_units(
-                    float(event.value), event.unit_concept_id
-                )
-                if (
-                    event.code in self.codes
-                    and self.value_to_label(value) == self.severity
-                ):
-                    times.append(event.start)
+            if event.code in self.codes:
+                if event.value is not None:
+                    value: float = self.normalize_value_with_units(
+                        float(event.value), event.unit_concept_id
+                    )
+                    if self.value_to_label(value) == self.severity:
+                        times.append(event.start)
         return times
 
     @abstractmethod
@@ -281,16 +279,20 @@ class NeutropeniaLabValueLabeler(OutcomeFromLabValueLabeler):
 
     # TODO
 
-    wbc_concept_ids = [
+    original_wbc_concept_ids = [
         3000905,
         4298431,
         3010813,
     ]
-    band_concept_ids = [
+    wbc_concept_ids = original_wbc_concept_ids
+    original_band_concept_ids = [
         3035839,
         3018199,
     ]
-    original_neutrophil_concept_ids = [37045722, 37049637]
+    band_concept_ids = original_band_concept_ids
+    original_neutrophil_concept_ids = [
+        37045722, 37049637
+    ]
     neutrophil_concept_ids = [
         37045722,
         37049637,
@@ -301,70 +303,6 @@ class NeutropeniaLabValueLabeler(OutcomeFromLabValueLabeler):
         3013650,
         3017732,
     ]
-
-    def get_label_wrapper(self, neutrophil: float, bands: float, wbc: float):
-        if neutrophil is not None or bands is not None:
-            return self.value_to_label((neutrophil or 0) + (bands or 0))
-        elif wbc is not None:
-            return self.value_to_label(wbc)
-        assert False, "No valid values found"
-
-    def value_to_label(self, value: float) -> str:
-        if value < 1.5:
-            return "mild"
-        elif value < 1:
-            return "moderate"
-        elif value < 0.5:
-            return "severe"
-        return "normal"
-
-    def wbc_normalize_value_with_units(
-        self, value: float, unit_concept_id: int
-    ) -> float:
-        if unit_concept_id == 8848:
-            # 1000/uL
-            return value
-        elif unit_concept_id == 8961:
-            # 1000/mm^3, equivalent to 8848
-            return value
-        elif unit_concept_id == 8647:
-            # /uL - divide by 1000 to convert to 1000/uL
-            return value / 1000
-        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
-
-    def band_convert(
-        self,
-        unit_concept_id: int,
-        value: float,
-        measurement_concept_id: int,
-        wbc: float,
-    ):
-        if measurement_concept_id == 3035839 and value <= 100:
-            # band form /100 leukocytes (%)
-            return value / 100 * wbc
-        elif measurement_concept_id == 3018199 and unit_concept_id == 8784:
-            # band form neutrophils in blood (count)
-            return value / 1000
-        raise ValueError(
-            f"Unknown combination of: unit_concept_id {unit_concept_id}, measurement_concept_id {measurement_concept_id}"
-        )
-
-    def neutrophil_convert(
-        self,
-        unit_concept_id: int,
-        value: float,
-        measurement_concept_id: int,
-        wbc: float,
-    ):
-        if unit_concept_id == 8554 and value <= 100:
-            # neutrophils /100 leukocytes
-            return value / 100 * wbc
-        elif unit_concept_id == 8554 and value > 100:
-            return None
-        elif unit_concept_id == 8784:
-            return value / 1000
-        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
-
 
 class AcuteKidneyInjuryLabValueLabeler(OutcomeFromLabValueLabeler):
     # TODO - very complicated

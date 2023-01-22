@@ -4,19 +4,12 @@ from typing import List, Optional, Union, cast
 import piton
 import piton.datasets
 from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import MortalityCodeLabeler, get_death_concepts
+from piton.labelers.omop import LupusCodeLabeler
 
 from tools import event, run_test_locally, EventsWithLabels, run_test_for_labeler
 
-def test_death_concepts() -> None:
-    expected_death_concepts = set([
-        'Death Type/OMOP generated', 
-        "Condition Type/OMOP4822053", 
-    ])
-    assert set(get_death_concepts()) == expected_death_concepts
-    
-def test_MortalityCodeLabeler() -> None:
-    """Create a MortalityCodeLabeler for codes 3 and 6"""
+def test_LupusCodeLabeler() -> None:
+    """Create a LupusCodeLabeler for codes 3 and 6"""
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
@@ -43,22 +36,33 @@ def test_MortalityCodeLabeler() -> None:
                 'zero',
                 'one',
                 'Visit/IP',
-                'Condition Type/OMOP4822053',
+                'ICD10CM/M32',
                 'four',
                 'five',
-                'Death Type/OMOP generated',
+                'ICD9CM/710.0',
+                'Lupus_child_seven',
+                'eight',
+                'Lupus_child_nine',
+                'Lupus_child_ten',
             ]]
+        def get_children(self, parent_code: int) -> List[int]:
+            if parent_code == 3:
+                return [7]
+            elif parent_code == 6:
+                return [9, 10]
+            else:
+                return []
+            
     ontology = cast(piton.datasets.Ontology, DummyOntology())
     
     # Run labeler
-    labeler = MortalityCodeLabeler(ontology, time_horizon)
+    labeler = LupusCodeLabeler(ontology, time_horizon)
     run_test_for_labeler(labeler, events_with_labels)
 
     # Check that we selected the right codes
-    assert set(labeler.outcome_codes) == set([ 3, 6, ])
+    assert set(labeler.outcome_codes) == set([ 3, 6, 7, 9, 10 ])
 
 # Local testing
 if __name__ == '__main__':
-    run_test_locally('../ignore/test_labelers/', test_MortalityCodeLabeler)
-    run_test_locally('../ignore/test_labelers/', test_death_concepts)
+    run_test_locally('../ignore/test_labelers/', test_LupusCodeLabeler)
     

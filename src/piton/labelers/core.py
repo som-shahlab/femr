@@ -47,7 +47,8 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 
 @dataclass
 class Label:
-    """An individual label for a particular patient at a particular time."""
+    """An individual label for a particular patient at a particular time.
+        The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
     value: Optional[Union[bool, int, float, SurvivalValue]]
@@ -117,7 +118,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     ) -> Tuple[
         NDArray[Shape["n_patients, 1"], np.int64],
         NDArray[Shape["n_patients, 1"], Any],
-        NDArray[Shape["n_patients, 1"], datetime.datetime],
+        NDArray[Shape["n_patients, 1"], np.datetime64],
     ]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
 
@@ -186,8 +187,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         patients_to_labels: DefaultDict[
             int, List[Label]
         ] = collections.defaultdict(list)
+        # TODO - does replacing zip with dstack improve speed?
         for patient_id, l_value, l_time in zip(
-            list(patient_ids), list(label_values), list(label_times)
+            patient_ids, label_values, label_times
         ):
             patients_to_labels[patient_id].append(
                 Label(time=l_time, value=l_value)
@@ -275,7 +277,7 @@ class Labeler(ABC):
 
     def apply(
         self,
-        patient_database: Optional[PatientDatabase] = None,
+        patient_list: Optional[List[Patient]] = None,
         path_to_patient_database: Optional[str] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
@@ -284,8 +286,8 @@ class Labeler(ABC):
 
         Args:
             path_to_patient_database (str, optional): Path to `PatientDatabase` on disk. 
-                Must be specified if `patient_database = None`
-            patient_database (PatientDatabase, optional): `PatientDatabase` object.
+                Must be specified if `patient_list = None`
+            patient_list (List[Patient], optional): List of `Patient`.
                 Must be specified if `path_to_patient_database = None`
             num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
             num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
@@ -472,21 +474,18 @@ class TimeHorizonEventLabeler(Labeler):
         return results
 
 
-class OneLabelPerPatient(Labeler):
-    # TODO - update
-    def __init__(self, labeling_function, seed=10):
-        self.labeling_function = labeling_function
+class KLabelsPerPatient(Labeler):
+    """Restricts `self.labeler` to returning a max of `self.k` labels per patient."""
+    def __init__(self, labeler: Labeler, k: int = 1, seed=10):
+        self.labeler: Labeler = labeler
+        self.k = k # number of labels per patient
         self.seed = seed
 
     def label(self, patient: Patient) -> List[Label]:
-        labels = self.labeling_function.label(patient)
+        labels = self.labeler.label(patient)
         if len(labels) == 0:
             return labels
-        return [random.choice(labels)]
-
-    def get_labeler_type(self) -> LabelType:
-        """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
-        return self.labeling_function.get_labeler_type()
+        return random.choice(labels, size=self.k, replace=False)
 
 if __name__ == '__main__':
     pass

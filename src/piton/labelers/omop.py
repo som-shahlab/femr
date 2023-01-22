@@ -44,7 +44,7 @@ def _get_all_children(
     parent_deque = deque([code])
 
     while len(parent_deque) > 0:
-        temp_parent_code = parent_deque.popleft()
+        temp_parent_code: int = parent_deque.popleft()
         for temp_child_code in ontology.get_children(temp_parent_code):
             children_code_set.add(temp_child_code)
             parent_deque.append(temp_child_code)
@@ -232,14 +232,17 @@ class MortalityCodeLabeler(CodeLabeler):
         )
 
 
-class LupusDiseaseCodeLabeler(CodeLabeler):
-    # TODO - check
+class LupusCodeLabeler(CodeLabeler):
     """
-    Label if patient is ever diagnosed with Lupus at any time in the future.
-    Make prediction at every event
+    Label if patient is diagnosed with Lupus.
     """
 
-    def __init__(self, ontology: extension_datasets.Ontology):
+    def __init__(
+        self,
+        ontology: extension_datasets.Ontology,
+        time_horizon: TimeHorizon,
+        prediction_codes: Optional[List[int]] = None,
+    ):
         dictionary = ontology.get_dictionary()
 
         icd9_codes: List[str] = ["710.0"]
@@ -253,7 +256,12 @@ class LupusDiseaseCodeLabeler(CodeLabeler):
             codes |= _get_all_children(
                 ontology, dictionary.index("ICD10CM/" + code)
             )
-        self.outcome_codes: List[int] = list(codes)
+
+        super().__init__(
+            outcome_codes=list(codes),
+            time_horizon=time_horizon,
+            prediction_codes=prediction_codes,
+        )
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
