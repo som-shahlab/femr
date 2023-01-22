@@ -27,11 +27,9 @@ Example running:
 
     # /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
 
-python3 1_run_featurizers.py \
+python3 tutorials/1_run_featurizers.py \
     /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
-    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/labeled_patients.pkl \
-    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/preprocessed_featurizers.pkl \
-    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/featurized_patients.pkl \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/ \
     --labeling_function lupus \
     --num_threads 20
 """
@@ -50,7 +48,8 @@ LABELING_FUNCTIONS: List[str] = [
     "lupus",
     "high_hba1c",
     "thrombocytopenia",
-    "hyperkalemia" "hypoglycemia",
+    "hyperkalemia",
+    "hypoglycemia",
 ]
 
 if __name__ == "__main__":
@@ -66,23 +65,14 @@ if __name__ == "__main__":
         type=str,
         help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5/'",
     )
-
+    
     parser.add_argument(
-        "path_to_labeled_patients",
+        "path_to_output_dir",
         type=str,
-        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pkl'",
-    )
-
-    parser.add_argument(
-        "path_to_save_preprocessed_featurizers",
-        type=str,
-        help="Path to file to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pkl'",
-    )
-
-    parser.add_argument(
-        "path_to_save_featurized_patients",
-        type=str,
-        help="Path to file to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pkl'",
+        help=("Path to save files output by featurizer."
+              " This folder will contain these files: labeled_patients.pkl, preprocessed_featurizers.pkl, and featurized_patients.pkl."
+              " Example: '/local-scratch/nigam/projects/rthapa84/data/mortality/'"
+        )
     )
 
     parser.add_argument(
@@ -110,25 +100,15 @@ if __name__ == "__main__":
     # Parse CLI args
     args = parser.parse_args()
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
-    PATH_TO_LABELED_PATIENTS: str = args.path_to_labeled_patients
-    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = (
-        args.path_to_save_preprocessed_featurizers
-    )
-    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = (
-        args.path_to_save_featurized_patients
-    )
-    num_threads: int = args.num_threads
-    num_patients: Optional[int] = args.num_patients
+    PATH_TO_OUTPUT_DIR: str = args.path_to_output_dir
+    NUM_THREADS: int = args.num_threads
+    NUM_PATIENTS: Optional[int] = args.num_patients
 
     # create directories to save files
-    os.makedirs(
-        os.path.dirname(os.path.abspath(PATH_TO_SAVE_PREPROCESSED_FEATURIZERS)),
-        exist_ok=True,
-    )
-    os.makedirs(
-        os.path.dirname(os.path.abspath(PATH_TO_SAVE_FEATURIZED_PATIENTS)),
-        exist_ok=True,
-    )
+    PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'labeled_patients.pkl')
+    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'preprocessed_featurizers.pkl')
+    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'featurized_patients.pkl')
+    os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
 
     # Load PatientDatabase + Ontology
     database = piton.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
@@ -138,6 +118,8 @@ if __name__ == "__main__":
     # Define the labeling function.
     if args.labeling_function == "high_hba1c":
         labeler = HighHbA1cCodeLabeler(ontology)
+    elif args.labeling_function == "is_male":
+        labeler = IsMaleLabeler(ontology)
     elif args.labeling_function == "mortality":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
@@ -148,8 +130,6 @@ if __name__ == "__main__":
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
         labeler = LupusCodeLabeler(ontology, time_horizon)
-    elif args.labeling_function == "is_male":
-        labeler = IsMaleLabeler(ontology)
     elif args.labeling_function == "thrombocytopenia":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
@@ -161,12 +141,16 @@ if __name__ == "__main__":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
-        labeler = HyperkalemiaLabValueLabeler(ontology, time_horizon, "severe")
+        labeler = HyperkalemiaLabValueLabeler(
+            ontology, time_horizon, "severe"
+        )
     elif args.labeling_function == "hypoglycemia":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
-        labeler = HypoglycemiaLabValueLabeler(ontology, time_horizon, "severe")
+        labeler = HypoglycemiaLabValueLabeler(
+            ontology, time_horizon, "severe"
+        )
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."
@@ -179,10 +163,10 @@ if __name__ == "__main__":
     print_log("Labeling Patients", "Starting")
     labeled_patients = one_label_labeler.apply(
         path_to_patient_database=PATH_TO_PATIENT_DATABASE,
-        num_threads=num_threads,
-        num_patients=num_patients,
+        num_threads=NUM_THREADS,
+        num_patients=NUM_PATIENTS,
     )
-    save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
+    save_to_pkl(labeled_patients, PATH_TO_SAVE_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
     print("Length of labeled_patients", len(labeled_patients))
 
@@ -194,14 +178,14 @@ if __name__ == "__main__":
     # Preprocessing the featurizers, which includes processes such as normalizing age.
     print_log("Preprocessing Featurizer", "Starting")
     featurizer_age_count.preprocess_featurizers(
-        PATH_TO_PATIENT_DATABASE, labeled_patients, num_threads
+        PATH_TO_PATIENT_DATABASE, labeled_patients, NUM_THREADS
     )
     save_to_pkl(featurizer_age_count, PATH_TO_SAVE_PREPROCESSED_FEATURIZERS)
     print_log("Preprocessing Featurizer", "Finished")
 
     print_log("Featurize Patients", "Starting")
     results = featurizer_age_count.featurize(
-        PATH_TO_PATIENT_DATABASE, labeled_patients, num_threads
+        PATH_TO_PATIENT_DATABASE, labeled_patients, NUM_THREADS
     )
     save_to_pkl(results, PATH_TO_SAVE_FEATURIZED_PATIENTS)
     print_log("Featurize Patients", "Finished")
