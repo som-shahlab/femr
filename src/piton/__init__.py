@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 @dataclass
@@ -78,11 +78,11 @@ class Event:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
         return f"Event({val_str})"
 
-    def __getstate__(self) -> dict:
+    def __getstate__(self) -> Dict[str, Any]:
         """Make this object pickleable (write)"""
         return self.__dict__
 
-    def __setstate__(self, d):
+    def __setstate__(self, d: Dict[str, Any]) -> None:
         """Make this object pickleable (read)"""
         for a, b in d.items():
             self.__dict__[a] = b

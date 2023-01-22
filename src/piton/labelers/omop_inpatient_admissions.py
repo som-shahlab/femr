@@ -9,7 +9,8 @@ from ..extension import datasets as extension_datasets
 from .omop import (
     WithinVisitLabeler,
     get_inpatient_admission_concepts,
-    get_death_concepts
+    get_death_concepts,
+    get_inpatient_admission_events
 )
 from .core import (
     TimeHorizonEventLabeler,
@@ -19,14 +20,6 @@ from .core import (
     TimeHorizon,
 )
 
-def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
-    dictionary = ontology.get_dictionary()
-    admission_codes: List[int] = [ dictionary.index(x) for x in get_inpatient_admission_concepts() ]
-    admissions: List[Event] = []
-    for e in patient.events:
-        if e.code in admission_codes:
-            admissions.append(e)
-    return admissions
 
 class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     """

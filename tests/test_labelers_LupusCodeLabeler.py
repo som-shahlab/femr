@@ -17,22 +17,23 @@ def test_LupusCodeLabeler() -> None:
         (event((1995, 1, 3), 0, 34.5), False),
         (event((2000, 1, 1), 1, 'test_value'), True),
         (event((2000, 1, 5), 2, 1), True),
-        (event((2000, 6, 5), 3, True), True),
+        (event((2000, 5, 5), 3, None), True),
         (event((2005, 2, 5), 2, None), False),
         (event((2005, 7, 5), 2, None), False),
-        (event((2010, 10, 5), 1, None), False),
+        (event((2010, 10, 5), 1, None), True),
+        (event((2010, 10, 8), 7, None), True),
         (event((2015, 2, 5, 0), 2, None), False),
         (event((2015, 7, 5, 0), 0, None), True),
         (event((2015, 11, 5, 10, 10), 2, None), True),
         (event((2015, 11, 15, 11), 6, None), True),
-        (event((2020, 1, 1), 2, None), None),
+        (event((2020, 1, 1), 10, None), True),
         (event((2020, 3, 1, 10, 10, 10), 2, None), None),
     ]
     
     # Create `Ontology` stub
     class DummyOntology:
         def get_dictionary(self):
-            return [ x for x in [
+            return [
                 'zero',
                 'one',
                 'Visit/IP',
@@ -44,7 +45,7 @@ def test_LupusCodeLabeler() -> None:
                 'eight',
                 'Lupus_child_nine',
                 'Lupus_child_ten',
-            ]]
+            ]
         def get_children(self, parent_code: int) -> List[int]:
             if parent_code == 3:
                 return [7]
@@ -57,7 +58,7 @@ def test_LupusCodeLabeler() -> None:
     
     # Run labeler
     labeler = LupusCodeLabeler(ontology, time_horizon)
-    run_test_for_labeler(labeler, events_with_labels)
+    run_test_for_labeler(labeler, events_with_labels, help_text='LupusCodeLabeler')
 
     # Check that we selected the right codes
     assert set(labeler.outcome_codes) == set([ 3, 6, 7, 9, 10 ])

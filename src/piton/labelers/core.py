@@ -4,19 +4,30 @@ from __future__ import annotations
 import collections
 import datetime
 import multiprocessing
-import os
 import pprint
 import random
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, DefaultDict, Dict, List, Literal, Optional, Tuple, Union
+from typing import (
+    Any,
+    DefaultDict,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    Sequence,
+    cast,
+)
 
 import numpy as np
-from nptyping import NDArray, Shape
+from nptyping import NDArray
 
 from .. import Patient
 from ..datasets import PatientDatabase
+from . import compute_random_num
 
 
 @dataclass(frozen=True)
@@ -31,7 +42,7 @@ class TimeHorizon:
 class SurvivalValue:
     """Used for survival tasks."""
 
-    event_time: int  # TODO - rename
+    time_to_event: datetime.timedelta
     is_censored: bool  # TRUE if this patient was censored
 
 
@@ -48,35 +59,29 @@ VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
 @dataclass
 class Label:
     """An individual label for a particular patient at a particular time.
-        The prediction for this label is made with all data <= time."""
+    The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
     value: Optional[Union[bool, int, float, SurvivalValue]]
 
 
 def _apply_labeling_function(
-    args: Tuple[Labeler, PatientDatabase, List[int]]
+    args: Tuple[Labeler, Optional[Sequence], Optional[str], List[int]]
 ) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
-    Gets called as a parallelized subprocess of the .apply() method of `Labeler`.
-    """
+    Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
     labeling_function: Labeler = args[0]
-    # database_path: str = args[1]
-    patient_database: PatientDatabase = args[1]
-    patient_ids: List[int] = args[2]
+    patients: Optional[Sequence[Patient]] = args[1]
+    path_to_patient_database: Optional[str] = args[2]
+    patient_ids: List[int] = args[3]
+    if path_to_patient_database is not None:
+        patients = PatientDatabase(path_to_patient_database)
 
-    # patient_database: PatientDatabase = PatientDatabase(database_path)
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
-        patient: Patient = patient_database[patient_id]  # type: ignore
+        patient: Patient = patients[patient_id]  # type: ignore
         labels: List[Label] = labeling_function.label(patient)
-
-        # Only add a patient to the `patient_to_labels` dict if they have at least one label
-        # This allows for faster iteration over the .keys() of this dict, since we know
-        # that each patient in this dict must have a label (which is faster than iterating over each
-        # patient and checking len(labels) > 0).
-        if len(labels) > 0:
-            patients_to_labels[patient_id] = labels
+        patients_to_labels[patient_id] = labels
 
     return patients_to_labels
 
@@ -116,9 +121,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     def as_numpy_arrays(
         self,
     ) -> Tuple[
-        NDArray[Shape["n_patients, 1"], np.int64],
-        NDArray[Shape["n_patients, 1"], Any],
-        NDArray[Shape["n_patients, 1"], np.datetime64],
+        NDArray[Literal["n_patients, 1"], np.int64],
+        NDArray[Literal["n_patients, 1 or 2"], Any],
+        NDArray[Literal["n_patients, 1"], np.datetime64],
     ]:
         """Convert `patients_to_labels` to a tuple of NDArray's.
 
@@ -136,6 +141,21 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                 for label in labels:
                     patient_ids.append(patient_id)
                     label_values.append(label.value)
+                    label_times.append(label.time)
+        elif self.labeler_type in ["survival"]:
+            # If SurvivalValue labeler, then label value is a tuple of (time to event, is censored)
+            for patient_id, labels in self.patients_to_labels.items():
+                for label in labels:
+                    survival_value: SurvivalValue = cast(
+                        SurvivalValue, label.value
+                    )
+                    patient_ids.append(patient_id)
+                    label_values.append(
+                        [
+                            survival_value.time_to_event,
+                            survival_value.is_censored,
+                        ]
+                    )
                     label_times.append(label.time)
         else:
             raise ValueError(
@@ -169,9 +189,9 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     @classmethod
     def load_from_numpy(
         cls,
-        patient_ids: NDArray[Shape["n_patients, 1"], np.int64],
-        label_values: NDArray[Shape["n_patients, 1"], Any],
-        label_times: NDArray[Shape["n_patients, 1"], datetime.datetime],
+        patient_ids: NDArray[Literal["n_patients, 1"], np.int64],
+        label_values: NDArray[Literal["n_patients, 1 or 2"], Any],
+        label_times: NDArray[Literal["n_patients, 1"], datetime.datetime],
         labeler_type: LabelType,
     ) -> LabeledPatients:
         """Create a :class:`LabeledPatients` from NDArray labels.
@@ -191,9 +211,23 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         for patient_id, l_value, l_time in zip(
             patient_ids, label_values, label_times
         ):
-            patients_to_labels[patient_id].append(
-                Label(time=l_time, value=l_value)
-            )
+            if labeler_type in ["boolean", "numerical", "categorical"]:
+                patients_to_labels[patient_id].append(
+                    Label(time=l_time, value=l_value)
+                )
+            elif labeler_type in ["survival"]:
+                patients_to_labels[patient_id].append(
+                    Label(
+                        time=l_time,
+                        value=SurvivalValue(
+                            time_to_event=l_value[0], is_censored=l_value[1]
+                        ),
+                    )
+                )
+            else:
+                raise ValueError(
+                    "Other label types are not implemented yet for this method"
+                )
         return LabeledPatients(dict(patients_to_labels), labeler_type)
 
     def __str__(self):
@@ -277,7 +311,7 @@ class Labeler(ABC):
 
     def apply(
         self,
-        patient_list: Optional[List[Patient]] = None,
+        patients: Optional[Sequence[Patient]] = None,
         path_to_patient_database: Optional[str] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
@@ -286,9 +320,10 @@ class Labeler(ABC):
 
         Args:
             path_to_patient_database (str, optional): Path to `PatientDatabase` on disk. 
-                Must be specified if `patient_list = None`
-            patient_list (List[Patient], optional): List of `Patient`.
+                Must be specified if `patients = None`
+            patients (Sequence[Patient], optional): An Sequence (i.e. list) of `Patient` objects.
                 Must be specified if `path_to_patient_database = None`
+                Typically this will be a `PatientDatabase` object.
             num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
             num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
                 If None, use all patients.
@@ -296,22 +331,32 @@ class Labeler(ABC):
         Returns:
             LabeledPatients: Maps patients to labels
         """
-        assert ((patient_database is None) and (path_to_patient_database is not None)
-                or (patient_database is not None) and (path_to_patient_database is None)), (
+        assert ((patients is None) and (path_to_patient_database is not None)
+                or (patients is not None) and (path_to_patient_database is None)), (
             f"Must specify exactly one of `patient_database` or `path_to_patient_database`"
         )
-
-        if not patient_database and path_to_patient_database:
+        
+        # Load patientdatabase if specified
+        if path_to_patient_database:
             patient_database = PatientDatabase(path_to_patient_database)
+            
+        if num_patients is not None:
+            num_patients = num_patients
+        elif path_to_patient_database is not None:
+            num_patients = len(patient_database)
+        elif patients is not None:
+            num_patients = len(patients)
 
         # Split patient IDs across parallelized processes
-        if num_patients is None:
-            num_patients = len(patient_database)
-        pids = list(range(num_patients))
+        if path_to_patient_database is None:
+            # if specified a list of patients, iterate over them to get their specific IDs
+            pids = [ p.patient_id for p in patients ]
+        else:
+            pids = list(range(num_patients))
         pids_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
-        tasks = [(self, patient_database, pid_part) for pid_part in pids_parts]
+        tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pids_parts]
         ctx = multiprocessing.get_context("forkserver")
         with ctx.Pool(num_threads) as pool:
             results: List[Dict[int, List[Label]]] = list(
@@ -471,21 +516,35 @@ class TimeHorizonEventLabeler(Labeler):
                 # Is censored
                 results.append(Label(time=time, value=None))
 
+
+        # checks that we have a label for each prediction time (even if `None``)
+        assert len(results) == len(self.get_prediction_times(patient))
         return results
 
-
-class KLabelsPerPatient(Labeler):
+class NLabelsPerPatientLabeler(Labeler):
     """Restricts `self.labeler` to returning a max of `self.k` labels per patient."""
-    def __init__(self, labeler: Labeler, k: int = 1, seed=10):
+    def __init__(self, labeler: Labeler, num_labels: int = 1, seed: int = 1):
         self.labeler: Labeler = labeler
-        self.k = k # number of labels per patient
-        self.seed = seed
+        self.num_labels: int = num_labels # number of labels per patient
+        self.seed: int = seed
 
     def label(self, patient: Patient) -> List[Label]:
-        labels = self.labeler.label(patient)
-        if len(labels) == 0:
+        labels: List[Label] = self.labeler.label(patient)
+        if len(labels) <= self.num_labels:
             return labels
-        return random.choice(labels, size=self.k, replace=False)
+        hash_to_label_List: List[Tuple[int, int, Label]] = [
+            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i])
+            for i in range(len(labels))
+        ]
+        hash_to_label_List.sort(key=lambda a: a[1])
+        n_hash_to_label_list: List[Tuple[int, int, Label]] = [
+            x for x in hash_to_label_List[: self.num_labels]
+        ]
+        n_hash_to_label_list.sort(key=lambda a: a[0])
+        n_labels: List[Label] = [
+            hash_to_label[2] for hash_to_label in n_hash_to_label_list
+        ]
+        return n_labels
 
-if __name__ == '__main__':
-    pass
+    def get_labeler_type(self) -> LabelType:
+        return self.labeler.get_labeler_type()

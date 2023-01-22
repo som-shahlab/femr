@@ -52,7 +52,7 @@ def test_MortalityCodeLabeler() -> None:
     
     # Run labeler
     labeler = MortalityCodeLabeler(ontology, time_horizon)
-    run_test_for_labeler(labeler, events_with_labels)
+    run_test_for_labeler(labeler, events_with_labels, help_text='MortalityLabeler')
 
     # Check that we selected the right codes
     assert set(labeler.outcome_codes) == set([ 3, 6, ])

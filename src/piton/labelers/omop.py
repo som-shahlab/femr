@@ -24,6 +24,15 @@ def get_inpatient_admission_concepts() -> List[str]:
 def get_death_concepts() -> List[str]:
     return [ 'Death Type/OMOP generated', "Condition Type/OMOP4822053", ]
 
+def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
+    dictionary = ontology.get_dictionary()
+    admission_codes: List[int] = [ dictionary.index(x) for x in get_inpatient_admission_concepts() ]
+    admissions: List[Event] = []
+    for e in patient.events:
+        if e.code in admission_codes:
+            admissions.append(e)
+    return admissions
+
 def map_omop_concept_ids_to_piton_codes(
     ontology: extension_datasets.Ontology, omop_concept_ids: List[int]
 ) -> List[int]:
@@ -245,16 +254,22 @@ class LupusCodeLabeler(CodeLabeler):
     ):
         dictionary = ontology.get_dictionary()
 
-        icd9_codes: List[str] = ["710.0"]
-        icd10_codes: List[str] = ["M32"]
+        # icd9_codes: List[str] = ["710.0"]
+        # icd10_codes: List[str] = ["M32"]
+        # codes = set()
+        # for code in icd9_codes:
+        #     codes |= _get_all_children(
+        #         ontology, dictionary.index("ICD9CM/" + code)
+        #     )
+        # for code in icd10_codes:
+        #     codes |= _get_all_children(
+        #         ontology, dictionary.index("ICD10CM/" + code)
+        #     )
         codes = set()
-        for code in icd9_codes:
+        snomed_codes: List[str] = ['55464009', '201436003' ]
+        for code in snomed_codes:
             codes |= _get_all_children(
-                ontology, dictionary.index("ICD9CM/" + code)
-            )
-        for code in icd10_codes:
-            codes |= _get_all_children(
-                ontology, dictionary.index("ICD10CM/" + code)
+                ontology, dictionary.index("SNOMED/" + code)
             )
 
         super().__init__(
@@ -262,26 +277,6 @@ class LupusCodeLabeler(CodeLabeler):
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
         )
-
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
-        times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.outcome_codes:
-                times.append(event.start)
-        return times
-
-    def get_time_horizon(self) -> TimeHorizon:
-        # Infinite time horizon
-        return TimeHorizon(start=datetime.timedelta(0), end=None)  # type: ignore
-
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        # TODO - Return a sorted list containing the datetimes at which we'll make a prediction.
-        return []
-
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
-
 
 class HighHbA1cCodeLabeler(Labeler):
     """

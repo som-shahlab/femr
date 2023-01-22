@@ -3,27 +3,32 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import List
+from typing import List, Set
 
-from .. import Patient
+from .. import Patient, Event
 from ..extension import datasets as extension_datasets
 from .core import TimeHorizon, TimeHorizonEventLabeler
+from .omop import get_inpatient_admission_events, _get_all_children
 
 ##########################################################
-# Labeling functions based on Lab Values.
+# Labelers based on Lab Values.
 #
-# The difference between these LFs and the ones in `omop.py`
-# is that these LFs are based on lab values, not coded
+# The difference between these Labelers and the ones in `omop.py`
+# is that these Labelers are based on lab values, not coded
 # diagnoses. Thus, they may catch more cases of a given
 # condition due to under-coding, but they are also more
 # likely to be noisy.
 ##########################################################
 
 
-class OutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
+class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
     """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value over a time horizon."""
 
+    # parent OMOP concept IDs, from which `omop_concept_ids` are derived
     original_omop_concept_ids: List[int] = []
+    # names for OMOP concept IDs
+    original_omop_concept_codes: List[str] = []
+    # parent OMOP concept IDs + all their children
     omop_concept_ids: List[int] = []
 
     def __init__(
@@ -34,12 +39,28 @@ class OutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
     ):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
+        self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
         self.severity: str = severity
-        self.codes = []
-        for omop_concept_id in self.omop_concept_ids:
-            piton_code: int = ontology.get_code_from_concept_id(omop_concept_id)
-            self.codes.append(piton_code)
+        self.outcome_codes: List[int] = []
+        
+        if hasattr(self, 'original_omop_concept_codes'):
+            # We need to traverse through the ontology ourselves using 
+            # OMOP Concept Codes (e.g. "LOINC/123") instead of pre-specified
+            # OMOP Concept IDs (e.g. 3939430) to get all revelant children
+            for omop_concept_code in self.original_omop_concept_codes:
+                piton_code: int = ontology.get_dictionary().index(omop_concept_code)
+                all_children: Set[int] = _get_all_children(ontology, piton_code)
+                self.outcome_codes += [ code for code in all_children ]
+        else:
+            # This Labeler explicitly specifies the list of OMOP Concept IDs that
+            # corresopnd to this label, so use those directly.
+            # This relies on the `ontology` class having a `get_code_from_concept_id()`
+            # method implemented.
+            for omop_concept_id in self.omop_concept_ids:
+                piton_code: int = ontology.get_code_from_concept_id(omop_concept_id)
+                self.outcome_codes.append(piton_code)
+        self.outcome_codes = list(set(self.outcome_codes))
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
@@ -49,20 +70,21 @@ class OutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
         at severity level `self.severity`."""
         times: List[datetime.datetime] = []
         for event in patient.events:
-            if event.code in self.codes:
+            if event.code in self.outcome_codes:
                 if event.value is not None:
+                    # `unit` is string of form "mg/dL", "ounces", etc.
+                    unit: str = event.unit 
                     value: float = self.normalize_value_with_units(
-                        float(event.value), event.unit_concept_id
+                        float(event.value), unit
                     )
                     if self.value_to_label(value) == self.severity:
                         times.append(event.start)
         return times
 
-    @abstractmethod
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return each event's start time as the time to make a prediction.
-        Default to all events whose `code` is in `self.prediction_codes`."""
-        return []
+        """Default to making prediction at admission time"""
+        admission_events: List[Event] = get_inpatient_admission_events(patient, self.ontology)
+        return [ x.start for x in admission_events ]
 
     @abstractmethod
     def value_to_label(self, value: float) -> str:
@@ -71,19 +93,26 @@ class OutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
 
     @abstractmethod
     def normalize_value_with_units(
-        self, value: float, unit_concept_id: int
+        self, value: float, unit: str
     ) -> float:
-        """Convert `value` to a float in the same units as the thresholds in `self.value_to_label`."""
+        """Convert `value` to a float in the same units as the thresholds in `self.value_to_label`.
+        
+        NOTE: Some units have the form 'mg/dL (See scan or EMR data for detail)', so you
+        need to use `.startswith()` to check for the unit you want."""
         return value
 
 
-class ThrombocytopeniaLabValueLabeler(OutcomeFromLabValueLabeler):
+class ThrombocytopeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L). Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
 
     original_omop_concept_ids = [
         37037425,
         40654106,
-    ]  # parent OMOP concept IDs, from which `omop_concept_ids`` are derived
+    ]  
+    original_omop_concept_codes = [
+        'LOINC/LP393218-5',
+        'LOINC/LG32892-8',
+    ]
     omop_concept_ids = [
         37037425,
         40654106,
@@ -96,28 +125,33 @@ class ThrombocytopeniaLabValueLabeler(OutcomeFromLabValueLabeler):
     ]
 
     def value_to_label(self, value: float) -> str:
-        if value < 150:
-            return "mild"
+        if value < 50:
+            return "severe"
         elif value < 100:
             return "moderate"
-        elif value < 50:
-            return "severe"
+        elif value < 150:
+            return "mild"
         return "normal"
 
     def normalize_value_with_units(
-        self, value: float, unit_concept_id: int
+        self, value: float, unit: str
     ) -> float:
         return value
 
 
-class HyperkalemiaLabValueLabeler(OutcomeFromLabValueLabeler):
+class HyperkalemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for hyperkalemia using blood potassium concentration (mmol/L). Thresholds: mild(>5.5),moderate(>6),severe(>7), and abnormal range."""
 
     original_omop_concept_ids = [
         40653595,
         37074594,
         40653596,
-    ]  # parent OMOP concept IDs, from which `omop_concept_ids`` are derived
+    ]
+    original_omop_concept_codes = [
+        'LOINC/LG7931-1',
+        'LOINC/LP386618-5',
+        'LOINC/40653596',
+    ]
     omop_concept_ids = [
         40653596,
         40653595,
@@ -136,40 +170,44 @@ class HyperkalemiaLabValueLabeler(OutcomeFromLabValueLabeler):
         3040893,
     ]
 
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        return []
-
     def value_to_label(self, value: float) -> str:
-        if value > 5.5:
-            return "mild"
+        if value > 7:
+            return "severe"
         elif value > 6.0:
             return "moderate"
-        elif value > 7:
-            return "severe"
+        elif value > 5.5:
+            return "mild"
         return "normal"
 
     def normalize_value_with_units(
-        self, value: float, unit_concept_id: int
+        self, value: float, unit: str
     ) -> float:
-        if unit_concept_id == 8753:
+        if unit == 'mmol/L':
             # mmol/L
+            # Original OMOP concept ID: 8753
             return value
-        elif unit_concept_id == 9557:
+        elif unit == 'mEq/L':
             # mEq/L (1-to-1 -> mmol/L)
+            # Original OMOP concept ID: 9557
             return value
-        elif unit_concept_id == 8840:
+        elif unit == 'mg/dL':
             # mg / dL (divide by 18 to get mmol/L)
+            # Original OMOP concept ID: 8840
             return value / 18
-        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
+        raise ValueError(f"Unknown unit: {unit}")
 
 
-class HypoglycemiaLabValueLabeler(OutcomeFromLabValueLabeler):
+class HypoglycemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for hypoglycemia using blood glucose concentration (mmol/L). Thresholds: mild(<3), moderate(<3.5), severe(<=3.9), and abnormal range."""
 
     original_omop_concept_ids = [
         4144235,
         1002597,
-    ]  # parent OMOP IDs, `from`` which omop_
+    ]
+    original_omop_concept_codes = [
+        'SNOMED/33747003',
+        'LOINC/LP416145-3',
+    ]
     concept_ids = [
         3009397,
         3040694,
@@ -178,35 +216,37 @@ class HypoglycemiaLabValueLabeler(OutcomeFromLabValueLabeler):
     ]
 
     def value_to_label(self, value: float) -> str:
-        if value <= 3.9:
-            return "mild"
+        if value < 3:
+            return "severe"
         elif value < 3.5:
             return "moderate"
-        elif value < 3:
-            return "severe"
+        elif value <= 3.9:
+            return "mild"
         return "normal"
 
     def normalize_value_with_units(
-        self, value: float, unit_concept_id: int
+        self, value: float, unit: str
     ) -> float:
-        if unit_concept_id == 8840:
+        if unit.startswith('mg/dL'):
             # mg / dL
+            # Original OMOP concept ID: 8840, 9028
             return value / 18
-        elif unit_concept_id == 9028:
-            # mg / dL calculated
-            return value / 18
-        elif unit_concept_id == 8753:
+        elif unit.startswith('mmol/L'):
             # mmol / L (x 18 to get mg/dl)
+            # Original OMOP concept ID: 8753
             return value
-        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
+        raise ValueError(f"Unknown unit: {unit}")
 
 
-class HyponatremiaLabValueLabeler(OutcomeFromLabValueLabeler):
+class HyponatremiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for hyponatremia based on blood sodium concentration (mmol/L). Thresholds: mild (<=135),moderate(<130),severe(<125), and abnormal range."""
 
     original_omop_concept_ids = [
         40653762
-    ]  # parent OMOP IDs, `from`` which omop_
+    ]
+    original_omop_concept_codes = [
+        'LOINC/LG11363-5',
+    ]
     concept_ids = [
         40653762,
         3038702,
@@ -219,26 +259,29 @@ class HyponatremiaLabValueLabeler(OutcomeFromLabValueLabeler):
     ]
 
     def value_to_label(self, value: float) -> str:
-        if value <= 135:
-            return "mild"
+        if value < 125:
+            return "severe"
         elif value < 130:
             return "moderate"
-        elif value < 125:
-            return "severe"
+        elif value <= 135:
+            return "mild"
         return "normal"
 
     def normalize_value_with_units(
-        self, value: float, unit_concept_id: int
+        self, value: float, unit: str
     ) -> float:
         return value
 
 
-class AnemiaLabValueLabeler(OutcomeFromLabValueLabeler):
+class AnemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for anemia based on hemoglobin levels (g/L). Thresholds: mild(<120),moderate(<110),severe(<70), and reference range"""
 
     original_omop_concept_ids = [
         37072252
-    ]  # parent OMOP IDs, `from`` which omop_
+    ]
+    original_omop_concept_codes = [
+        'LOINC/LP392452-1',
+    ]
     concept_ids = [
         37072252,
         3048275,
@@ -250,31 +293,31 @@ class AnemiaLabValueLabeler(OutcomeFromLabValueLabeler):
     ]
 
     def value_to_label(self, value: float) -> str:
-        if value < 120:
-            return "mild"
+        if value < 70:
+            return "severe"
         elif value < 110:
             return "moderate"
-        elif value < 70:
-            return "severe"
+        elif value < 120:
+            return "mild"
         return "normal"
 
     def normalize_value_with_units(
-        self, value: float, unit_concept_id: int
+        self, value: float, unit: str
     ) -> float:
-        if unit_concept_id == 8713:
+        if unit.startswith('g/dL'):
             # g / dL
-            return (
-                value * 10
-            )  # NOTE: This weird *10 / 100 is how Lawrence did it
-        elif unit_concept_id == 8840:
+            # Original OMOP concept ID: 8713
+            # NOTE: This weird *10 / 100 is how Lawrence did it
+            return (value * 10)
+        elif unit.startswith('mg/dL'):
             # mg / dL (divide by 1000 to get g/dL)
-            return (
-                value / 100
-            )  # NOTE: This weird *10 / 100 is how Lawrence did it
-        raise ValueError(f"Unknown unit_concept_id: {unit_concept_id}")
+            # Original OMOP concept ID: 8840
+            # NOTE: This weird *10 / 100 is how Lawrence did it
+            return (value / 100)
+        raise ValueError(f"Unknown unit: {unit}")
 
 
-class NeutropeniaLabValueLabeler(OutcomeFromLabValueLabeler):
+class NeutropeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for neutropenia based on neutrophils count (thousands/uL). Thresholds: mild(<1.5), moderate(<1), severe(<0.5)"""
 
     # TODO
@@ -304,7 +347,7 @@ class NeutropeniaLabValueLabeler(OutcomeFromLabValueLabeler):
         3017732,
     ]
 
-class AcuteKidneyInjuryLabValueLabeler(OutcomeFromLabValueLabeler):
+class AcuteKidneyInjuryLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     # TODO - very complicated
     """lab-based definition for acute kidney injury based on blood creatinine levels (umol/L) according to KDIGO (stages 1,2, and 3), and abnormal range."""
     concept_ids = [

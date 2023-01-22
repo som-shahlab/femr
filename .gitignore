@@ -3,5 +3,5 @@ __pycache__
 *.so
 bazel-*
 *.egg-info
-ignore/
-# tutorials/*
+tutorials/*
+ignore/*

@@ -1,12 +1,10 @@
 import datetime
-from typing import List, Tuple, Optional, Union
 
-import piton
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
-from tools import event, run_test_locally, assert_labels_are_accurate, create_patients, EventsWithLabels, run_test_for_labeler
+from tools import event, run_test_locally, EventsWithLabels, run_test_for_labeler
 
 def test_prediction_codes():
     # Specify specific event codes at which to make predictions

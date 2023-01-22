@@ -168,7 +168,7 @@ class _ConceptTableConverter(CSVExtractor):
             unit = None
 
         metadata: Dict[str, Any] = {
-            "omop_table": self.prefix,
+            "omop_table": self.get_file_prefix(),
             "clarity_table": row["load_table_id"],
         }
 

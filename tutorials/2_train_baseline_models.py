@@ -22,15 +22,15 @@ Note: Please make sure to install xgboost. `pip install xgboost`
 
 python3 2_train_baseline_models.py \
     /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
-    --percent_train 0.7 \
+    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pkl \
+    --percent_train 0.8 \
     --split_seed 0 \
-    --num_threads 2
+    --num_threads 10
 """
 
 
 def load_from_pkl(path_to_file: str):
-    """Load object from Pickle file."""
+    """Load object from pkl file."""
     with open(path_to_file, "rb") as fd:
         result = pickle.load(fd)
     return result
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_featurized_patients",
         type=str,
-        help="Path to the file containing features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
+        help="Path to the file containing features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pkl'",
     )
 
     parser.add_argument(
@@ -155,19 +155,23 @@ if __name__ == "__main__":
         print("\tAccuracy:", accuracy)
 
     # Logistic Regresion
+    print_log("Logistic Regression", "Training")
     model = LogisticRegressionCV(n_jobs=num_threads).fit(X_train, y_train)
     y_train_proba = model.predict_proba(X_train)[::, 1]
     y_test_proba = model.predict_proba(X_test)[::, 1]
     run_analysis(
         "Logistic Regression", y_train, y_train_proba, y_test, y_test_proba
     )
+    print_log("Logistic Regression", "Done")
 
     # XGBoost
+    print_log("XGBoost", "Training")
     model = xgb.XGBClassifier()
     model.fit(X_train, y_train)
     y_train_proba = model.predict_proba(X_train)[::, 1]
     y_test_proba = model.predict_proba(X_test)[::, 1]
     run_analysis("XGBoost", y_train, y_train_proba, y_test, y_test_proba)
+    print_log("XGBoost", "Done")
 
     # # LGBM
     # model = lgbm.LGBMClassifier()

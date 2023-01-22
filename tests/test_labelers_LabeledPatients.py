@@ -10,7 +10,7 @@ import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
-from tools import event, run_test_locally, save_to_pkl, create_patients, assert_labels_are_accurate, EventsWithLabels
+from tools import event, run_test_locally, save_to_pkl, create_patients_list, assert_labels_are_accurate, EventsWithLabels
 
 def assert_tuples_match_labels(labeled_patients: LabeledPatients):
     """Passes if tuples output by `as_list_of_label_tuples()` are the same as the `labels` in `labeled_patients`."""
@@ -60,7 +60,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         (event((2016, 1, 1), 2, None), None),
         (event((2016, 3, 1, 10, 10, 10), 2, None), None),
     ]
-    patients: List[piton.Patient] = create_patients(10, 
+    patients: List[piton.Patient] = create_patients_list(10, 
         [ x[0] for x in events_with_labels ]
     )
     true_labels: List[Optional[bool]] = [ 

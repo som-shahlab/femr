@@ -9,36 +9,50 @@ import piton
 import piton.datasets
 from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import OneLabelPerPatient, TimeHorizon
-from piton.labelers.omop_labeling_functions import (
-    DiabetesLF,
-    HighHbA1cLF,
-    IsMaleLF,
-    MortalityLF,
+from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
+from piton.labelers.omop import (
+    HighHbA1cCodeLabeler,
+    IsMaleLabeler,
+    MortalityCodeLabeler,
+    LupusCodeLabeler,
+)
+from piton.labelers.omop_lab_values import (
+    ThrombocytopeniaLabValueLabeler,
+    HyperkalemiaLabValueLabeler,
+    HypoglycemiaLabValueLabeler,
 )
 
 """
 Example running:
 
+    # /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+
 python3 1_run_featurizers.py \
-    /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pickle \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_preprocessed_featurizers.pickle \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pickle \
-    --labeling_function is_male \
-    --num_threads 10 \
-    --num_patients 10000
+    /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/labeled_patients.pkl \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/preprocessed_featurizers.pkl \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/featurized_patients.pkl \
+    --labeling_function lupus \
+    --num_threads 20
 """
 
 
 def save_to_pkl(object_to_save, path_to_file: str):
-    """Save object to Pickle file."""
+    """Save object to pkl file."""
     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
     with open(path_to_file, "wb") as fd:
         pickle.dump(object_to_save, fd)
 
 
-LABELING_FUNCTIONS: List[str] = ["mortality", "is_male", "high_hba1c"]
+LABELING_FUNCTIONS: List[str] = [
+    "mortality", 
+    "is_male", 
+    "lupus",
+    "high_hba1c",
+    "thrombocytopenia",
+    "hyperkalemia"
+    "hypoglycemia",
+]
 
 if __name__ == "__main__":
     START_TIME = time.time()
@@ -57,19 +71,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_labeled_patients",
         type=str,
-        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pickle'",
+        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_labeled_patients_test.pkl'",
     )
 
     parser.add_argument(
         "path_to_save_preprocessed_featurizers",
         type=str,
-        help="Path to file to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pickle'",
+        help="Path to file to save preprocessed Featurizers. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_preprocessed_featurizers_test.pkl'",
     )
 
     parser.add_argument(
         "path_to_save_featurized_patients",
         type=str,
-        help="Path to file to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pickle'",
+        help="Path to file to save features for patients. Example: '/local-scratch/nigam/projects/rthapa84/data/mortality_featurized_patients_test.pkl'",
     )
 
     parser.add_argument(
@@ -124,29 +138,56 @@ if __name__ == "__main__":
 
     # Define the labeling function.
     if args.labeling_function == "high_hba1c":
-        labeler = HighHbA1cLF(ontology)
+        labeler = HighHbA1cCodeLabeler(ontology)
     elif args.labeling_function == "mortality":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
-        labeler = MortalityLF(ontology, time_horizon)
+        labeler = MortalityCodeLabeler(ontology, time_horizon)
+    elif args.labeling_function == "lupus":
+        time_horizon = TimeHorizon(
+            datetime.timedelta(days=0), datetime.timedelta(days=365)
+        )
+        labeler = LupusCodeLabeler(ontology, time_horizon)
     elif args.labeling_function == "is_male":
-        labeler = IsMaleLF(ontology)
+        labeler = IsMaleLabeler(ontology)
+    elif args.labeling_function == "thrombocytopenia":
+        time_horizon = TimeHorizon(
+            datetime.timedelta(days=0), datetime.timedelta(days=365)
+        )
+        labeler = ThrombocytopeniaLabValueLabeler(ontology,
+                                                  time_horizon,
+                                                  'severe')
+    elif args.labeling_function == "hyperkalemia":
+        time_horizon = TimeHorizon(
+            datetime.timedelta(days=0), datetime.timedelta(days=365)
+        )
+        labeler = HyperkalemiaLabValueLabeler(ontology,
+                                                  time_horizon,
+                                                  'severe')
+    elif args.labeling_function == "hypoglycemia":
+        time_horizon = TimeHorizon(
+            datetime.timedelta(days=0), datetime.timedelta(days=365)
+        )
+        labeler = HypoglycemiaLabValueLabeler(ontology,
+                                                  time_horizon,
+                                                  'severe')
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."
         )
 
     # grabbing just one label at random from all the labels
-    one_label_labeler = OneLabelPerPatient(labeler)
+    one_label_labeler = NLabelsPerPatientLabeler(labeler, seed=0, num_labels=1)
     print_log("Labeler", "Instantiated Labeler: " + args.labeling_function)
 
     print_log("Labeling Patients", "Starting")
     labeled_patients = one_label_labeler.apply(
-        PATH_TO_PATIENT_DATABASE, num_threads, num_patients=num_patients
+        path_to_patient_database=PATH_TO_PATIENT_DATABASE, num_threads=num_threads, num_patients=num_patients
     )
     save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
+    print("Length of labeled_patients", len(labeled_patients))
 
     # Lets use both age and count featurizer
     age = AgeFeaturizer()
