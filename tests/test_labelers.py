@@ -10,8 +10,11 @@ import piton.datasets
 from piton.labelers.core import (
     Label,
     LabeledPatients,
+    LabelType,
     NLabelPerPatientLF,
     TimeHorizon,
+    LabelingFunction,
+    SurvivalValue
 )
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
 from tools import (
@@ -71,13 +74,27 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
     )
     for i in range(label_numpy[0].shape[0]):
         patient_id = label_numpy[0][i]
-        assert (
-            Label(
-                value=bool(label_numpy[1][i]),
-                time=label_numpy[2][i],
+        if labeled_patients.labeler_type in [ 'boolean', 'numeric', 'categorical']:
+            assert (
+                Label(
+                    value=label_numpy[1][i],
+                    time=label_numpy[2][i],
+                )
+                in labeled_patients[patient_id]
             )
-            in labeled_patients[patient_id]
-        )
+        elif labeled_patients.labeler_type in ['survival']:
+            assert (
+                Label(
+                    value=SurvivalValue(
+                        time_to_event=label_numpy[1][i][0],
+                        is_censored=label_numpy[1][i][1],
+                    ),
+                    time=label_numpy[2][i],
+                )
+                in labeled_patients[patient_id]
+            )
+        else:
+            assert False
 
 
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
@@ -488,6 +505,70 @@ def test_time_horizons():
                 true_labels,
                 help_text=f" | test #{test_idx}",
             )
+
+class DummySurvivalLabeler(LabelingFunction):
+    def label(self, patient: piton.Patient) -> List[Label]:
+        return [
+            Label(time=datetime.datetime(2000, 1, 1), value=SurvivalValue(datetime.timedelta(days=10), 0)),
+            Label(time=datetime.datetime(2000, 4, 1), value=SurvivalValue(datetime.timedelta(days=15), 0)),
+            Label(time=datetime.datetime(2000, 4, 1), value=SurvivalValue(datetime.timedelta(days=15, hours=10), 0)),
+            Label(time=datetime.datetime(2000, 10, 1), value=SurvivalValue(datetime.timedelta(days=100), 1)),
+        ]
+    def get_labeler_type(self) -> LabelType:
+        return "survival"
+
+def test_survival_labels(tmp_path: pathlib.Path) -> None:
+
+    create_database(tmp_path)
+    database_path = os.path.join(tmp_path, "target")
+    database = piton.datasets.PatientDatabase(database_path)
+
+    labeler = DummySurvivalLabeler()
+    patient = database[0]
+    patient = cast(piton.Patient, patient)
+
+    labeled_patients = labeler.apply(database_path)
+
+    true_labels = [
+        SurvivalValue(datetime.timedelta(days=10), 0), 
+        SurvivalValue(datetime.timedelta(days=15), 0),
+        SurvivalValue(datetime.timedelta(days=15, hours=10), 0),
+        SurvivalValue(datetime.timedelta(days=100), 1),
+    ]
+
+    # Data representations
+    #   Check that label counter is correct
+    assert labeled_patients.get_num_labels() == len(true_labels) * len(labeled_patients), \
+        f"{labeled_patients.get_num_labels()} != {len(true_labels)} * {len(labeled_patients)}"
+    #   Check that tuples are correct
+    assert_tuples_match_labels(labeled_patients)
+    #   Check that numpy are correct
+    assert_np_arrays_match_labels(labeled_patients)
+
+    # Saving / Loading
+    #   Save labeler results
+    path = os.path.join(tmp_path, "labeled_patients.pkl")
+    save_to_pkl(labeled_patients, path)
+
+    #   Check that file was created
+    assert os.path.exists(path)
+
+    #   Read in the output files and check that they're accurate
+    labeled_patients_new = load_from_pkl(path)
+
+    #   Check that we successfully saved / loaded file contents
+    assert labeled_patients_new == labeled_patients
+    assert (
+        labeled_patients_new.as_list_of_label_tuples()
+        == labeled_patients.as_list_of_label_tuples()
+    )
+    for (orig, new) in zip(
+        labeled_patients.as_numpy_arrays(),
+        labeled_patients_new.as_numpy_arrays(),
+    ):
+        assert np.sum(orig != new) == 0
+    
+    
 
 
 def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
