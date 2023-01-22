@@ -26,9 +26,8 @@ class OnlineStatistics:
             `count` aggregates the number of samples seen so far
             `current_M2` aggregates the squared distances from the mean
         """
-        assert (
-            current_count >= 0 and current_variance >= 0
-        ), "Cannot specify negative values for `current_count` or `current_variance`."
+        if current_count >= 0 and current_variance >= 0:
+            raise ValueError("Cannot specify negative values for `current_count` or `current_variance`.")
         self.current_count: int = current_count
         self.current_mean: float = current_mean
         if current_count == 0 and current_variance == 0:
@@ -107,9 +106,19 @@ class OnlineStatistics:
         """
         if len(stats_list) == 0:
             raise ValueError("Cannot merge an empty list of statistics.")
-        unmerged_stats = copy.deepcopy(stats_list)
-        stats1: OnlineStatistics = unmerged_stats.pop(0)
-        while len(unmerged_stats) > 0:
-            stats2: OnlineStatistics = unmerged_stats.pop(0)
-            stats1 = cls.merge_pair(stats1, stats2)
-        return stats1
+        unmerged_stats: List[OnlineStatistics] = copy.deepcopy(stats_list)
+        # Run tree reduction to merge together all pairs of statistics
+        # in a numerically stable way
+        #   Example: 1 2 3 4 5 -> 3 7 5 -> 10 5 -> 15
+        while len(unmerged_stats) > 1:
+            merged_stats: List[OnlineStatistics] = []
+            for i in range(0, len(unmerged_stats), 2):
+                if i + 1 < len(unmerged_stats):
+                    # If there's another stat after this one, merge them
+                    merged_stats.append(cls.merge_pair(unmerged_stats[i], unmerged_stats[i + 1]))
+                else:
+                    # We've reached the end of our list, so just add the last stat back
+                    merged_stats.append(unmerged_stats[i])
+            unmerged_stats = merged_stats
+        assert len(unmerged_stats) == 1, f"Should only have one stat left after merging, not ({len(unmerged_stats)})."
+        return unmerged_stats[0]
