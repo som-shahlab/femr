@@ -37,20 +37,18 @@ def test_LupusCodeLabeler() -> None:
                 'zero',
                 'one',
                 'Visit/IP',
-                'ICD10CM/M32',
+                'SNOMED/201436003',
                 'four',
                 'five',
-                'ICD9CM/710.0',
+                'SNOMED/55464009',
                 'Lupus_child_seven',
                 'eight',
                 'Lupus_child_nine',
                 'Lupus_child_ten',
             ]
         def get_children(self, parent_code: int) -> List[int]:
-            if parent_code == 3:
-                return [7]
-            elif parent_code == 6:
-                return [9, 10]
+            if parent_code == 6:
+                return [7, 9, 10]
             else:
                 return []
             
@@ -66,4 +64,3 @@ def test_LupusCodeLabeler() -> None:
 # Local testing
 if __name__ == '__main__':
     run_test_locally('../ignore/test_labelers/', test_LupusCodeLabeler)
-    

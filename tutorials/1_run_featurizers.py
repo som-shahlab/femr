@@ -163,15 +163,15 @@ if __name__ == "__main__":
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
         labeler = HyperkalemiaLabValueLabeler(ontology,
-                                                  time_horizon,
-                                                  'severe')
+                                                time_horizon,
+                                                'severe')
     elif args.labeling_function == "hypoglycemia":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
         labeler = HypoglycemiaLabValueLabeler(ontology,
-                                                  time_horizon,
-                                                  'severe')
+                                                time_horizon,
+                                                'severe')
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."

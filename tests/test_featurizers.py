@@ -12,7 +12,7 @@ from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop import CodeLabeler
-from tools import create_database, get_piton_code, load_from_pkl, save_to_pkl
+from tools import create_database, get_piton_code, load_from_pkl, save_to_pkl, run_test_locally
 
 
 def _assert_featurized_patients_structure(
@@ -60,11 +60,11 @@ def test_age_featurizer(tmp_path: pathlib.Path):
     database = piton.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_target_code = get_piton_code(ontology, 2)
+    piton_outcome_code = get_piton_code(ontology, 2)
     piton_admission_code = get_piton_code(ontology, 3)
 
     labeler = CodeLabeler(
-        [piton_admission_code], time_horizon, [piton_target_code]
+        [piton_outcome_code], time_horizon, [piton_admission_code]
     )
 
     patient: piton.Patient = cast(piton.Patient, database[0])
@@ -82,7 +82,7 @@ def test_age_featurizer(tmp_path: pathlib.Path):
         ColumnValue(column=0, value=20.46027397260274)
     ]
 
-    labeled_patients = labeler.apply(database_path)
+    labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     featurizer = AgeFeaturizer(is_normalize=True)
     featurizer_list = FeaturizerList([featurizer])
@@ -112,11 +112,11 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     database = piton.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_target_code = get_piton_code(ontology, 2)
+    piton_outcome_code = get_piton_code(ontology, 2)
     piton_admission_code = get_piton_code(ontology, 3)
 
     labeler = CodeLabeler(
-        [piton_admission_code], time_horizon, [piton_target_code]
+        [piton_outcome_code], time_horizon, [piton_admission_code]
     )
 
     patient: piton.Patient = cast(piton.Patient, database[0])
@@ -141,7 +141,7 @@ def test_count_featurizer(tmp_path: pathlib.Path):
         ColumnValue(column=1, value=4),
     ]
 
-    labeled_patients = labeler.apply(database_path)
+    labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     featurizer = CountFeaturizer(is_ontology_expansion=True)
     featurizer_list = FeaturizerList([featurizer])
@@ -171,11 +171,11 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     database = piton.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_target_code = get_piton_code(ontology, 2)
+    piton_outcome_code = get_piton_code(ontology, 2)
     piton_admission_code = get_piton_code(ontology, 3)
 
     labeler = CodeLabeler(
-        [piton_admission_code], time_horizon, [piton_target_code]
+        [piton_outcome_code], time_horizon, [piton_admission_code]
     )
 
     patient: piton.Patient = cast(piton.Patient, database[0])
@@ -217,7 +217,7 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
         ColumnValue(column=6, value=2),
     ], f"patient_features[2] = {patient_features[2]}"
 
-    labeled_patients = labeler.apply(database_path)
+    labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     featurizer = CountFeaturizer(
         is_ontology_expansion=True, time_bins=time_bins
@@ -249,13 +249,13 @@ def test_complete_featurization(tmp_path: pathlib.Path):
     database = piton.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_target_code = get_piton_code(ontology, 2)
+    piton_outcome_code = get_piton_code(ontology, 2)
     piton_admission_code = get_piton_code(ontology, 3)
 
     labeler = CodeLabeler(
-        [piton_admission_code], time_horizon, [piton_target_code]
+        [piton_outcome_code], time_horizon, [piton_admission_code]
     )
-    labeled_patients = labeler.apply(database_path)
+    labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
     age_featurizer_list = FeaturizerList([age_featurizer])
@@ -318,13 +318,13 @@ def test_serialization_and_deserialization(tmp_path: pathlib.Path):
     database = piton.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_target_code = get_piton_code(ontology, 2)
+    piton_outcome_code = get_piton_code(ontology, 2)
     piton_admission_code = get_piton_code(ontology, 3)
 
     labeler = CodeLabeler(
-        [piton_admission_code], time_horizon, [piton_target_code]
+        [piton_outcome_code], time_horizon, [piton_admission_code]
     )
-    labeled_patients = labeler.apply(database_path)
+    labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     time_bins = [
         datetime.timedelta(days=90),
@@ -368,3 +368,6 @@ def test_serialization_and_deserialization(tmp_path: pathlib.Path):
     assert (
         count_featurized_patient_loaded[3] == count_featurized_patient[3]
     ).all()
+
+if __name__ == '__main__':
+    run_test_locally('../ignore/test_labelers/', test_complete_featurization)

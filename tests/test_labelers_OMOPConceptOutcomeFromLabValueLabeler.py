@@ -160,6 +160,7 @@ def test_labeling():
                          help_text='test_labeling')
     
 def test_units():
+    # TODO: test unit normalization
     pass
 
 # Local testing

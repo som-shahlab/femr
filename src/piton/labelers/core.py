@@ -311,8 +311,8 @@ class Labeler(ABC):
 
     def apply(
         self,
-        patients: Optional[Sequence[Patient]] = None,
         path_to_patient_database: Optional[str] = None,
+        patients: Optional[Sequence[Patient]] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
     ) -> LabeledPatients:
@@ -331,28 +331,25 @@ class Labeler(ABC):
         Returns:
             LabeledPatients: Maps patients to labels
         """
-        assert ((patients is None) and (path_to_patient_database is not None)
-                or (patients is not None) and (path_to_patient_database is None)), (
-            f"Must specify exactly one of `patient_database` or `path_to_patient_database`"
-        )
+        if (
+            (patients is None and path_to_patient_database is None)
+            or (patients is not None and path_to_patient_database is not None)
+        ):
+            raise ValueError("Must specify exactly one of `patient_database` or `path_to_patient_database`")
         
-        # Load patientdatabase if specified
         if path_to_patient_database:
+            # Load patientdatabase if specified
+            assert patients is None
             patient_database = PatientDatabase(path_to_patient_database)
-            
-        if num_patients is not None:
-            num_patients = num_patients
-        elif path_to_patient_database is not None:
-            num_patients = len(patient_database)
-        elif patients is not None:
-            num_patients = len(patients)
+            num_patients = len(patient_database) if not num_patients else num_patients
+            pids = list(range(num_patients))
+        else:
+            assert patients is not None
+            # Use `patients` if specified
+            num_patients = len(patients) if not num_patients else num_patients
+            pids = [ p.patient_id for p in patients ]
 
         # Split patient IDs across parallelized processes
-        if path_to_patient_database is None:
-            # if specified a list of patients, iterate over them to get their specific IDs
-            pids = [ p.patient_id for p in patients ]
-        else:
-            pids = list(range(num_patients))
         pids_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
@@ -496,8 +493,17 @@ class TimeHorizonEventLabeler(Labeler):
 
             # TRUE if an event occurs within the time horizon
             is_outcome_occurs_in_time_horizon: bool = (
-                (time + time_horizon_start <= outcome_times[curr_outcome_idx])
+                (
+                    # ensure there is an outcome 
+                    # (needed in case there are 0 outcomes)
+                    curr_outcome_idx < len(outcome_times)
+                ) 
                 and (
+                    # outcome occurs after time horizon starts
+                    time + time_horizon_start <= outcome_times[curr_outcome_idx]
+                )
+                and (
+                    # outcome occurs before time horizon ends (if there is an end)
                     (time_horizon_end is None)
                     or outcome_times[curr_outcome_idx] <= time + time_horizon_end
                 )

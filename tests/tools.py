@@ -150,20 +150,14 @@ def create_database(
 ) -> None:
 
     patient_collection = create_patients(tmp_path)
-    with patient_collection.reader() as reader:
-        _ = list(reader)
-
+    
     path_to_ontology = os.path.join(tmp_path, "ontology")
-
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
-
-    _ = create_ontology(path_to_ontology, dummy_concepts)
-
+    create_ontology(path_to_ontology, dummy_concepts)
+    
     path_to_database = os.path.join(tmp_path, "target")
-
-    if not os.path.exists(path_to_database):
-        os.mkdir(path_to_database)
+    os.makedirs(path_to_database, exist_ok=True)
 
     patient_collection.to_patient_database(
         path_to_database,

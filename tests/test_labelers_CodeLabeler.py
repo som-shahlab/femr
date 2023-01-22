@@ -32,6 +32,27 @@ def test_prediction_codes():
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="prediction_codes")
 
+def test_no_outcomes():
+    # No outcomes occur in this patient's timeline
+    time_horizon = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=180)
+    )
+    labeler = CodeLabeler([100], time_horizon, prediction_codes=None)
+    events_with_labels: EventsWithLabels = [
+        (event((2015, 1, 3), 2, None), False),
+        (event((2015, 1, 3), 1, None), False),
+        (event((2015, 1, 3), 3, None), False),
+        (event((2015, 10, 5), 1, None), False),
+        (event((2018, 1, 3), 2, None), False),
+        (event((2018, 3, 3), 1, None), False),
+        (event((2018, 5, 3), 2, None), False),
+        (event((2018, 5, 3, 11), 1, None), False),
+        (event((2018, 5, 4), 1, None), False),
+        (event((2018, 12, 4), 1, None), None),
+    ]
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_no_outcomes")
+
+
 def test_horizon_0_180_days():
     # (0, 180) days
     time_horizon = TimeHorizon(
@@ -205,3 +226,4 @@ if __name__ == '__main__':
     run_test_locally('../ignore/test_labelers/', test_horizon_0_1000000_days)
     run_test_locally('../ignore/test_labelers/', test_horizon_5_10_hours)
     run_test_locally('../ignore/test_labelers/', test_horizon_infinite)
+    run_test_locally('../ignore/test_labelers/', test_no_outcomes)
