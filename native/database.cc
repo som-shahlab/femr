@@ -215,8 +215,8 @@ void read_patient_from_buffer(Patient& current_patient,
 
         if (index != count) {
             throw std::runtime_error(
-                absl::StrCat("Did not read through the entire patient record? ",
-                             index, " ", buffer.size()));
+                absl::StrCat("v0 - Did not read through the entire patient record? ",
+                             index, " ", count, " ", buffer.size()));
         }
     } else if (version == 1) {
         size_t index = 0;
@@ -271,8 +271,8 @@ void read_patient_from_buffer(Patient& current_patient,
 
         if (index != count) {
             throw std::runtime_error(
-                absl::StrCat("Did not read through the entire patient record? ",
-                             index, " ", buffer.size()));
+                absl::StrCat("v1 - Did not read through the entire patient record? ",
+                             index, " ", count, " ", buffer.size()));
         }
     } else if (version == 2) {
         size_t index = 0;
@@ -332,8 +332,8 @@ void read_patient_from_buffer(Patient& current_patient,
 
         if (index != count) {
             throw std::runtime_error(
-                absl::StrCat("Did not read through the entire patient record? ",
-                             index, " ", buffer.size()));
+                absl::StrCat("v2 - Did not read through the entire patient record? ",
+                             index, " ", count, " ", buffer.size()));
         }
     } else {
         throw std::runtime_error(absl::StrCat(
