@@ -27,7 +27,10 @@ class OnlineStatistics:
             `current_M2` aggregates the squared distances from the mean
         """
         if not (current_count >= 0 and current_variance >= 0):
-            raise ValueError(f"Must set `current_count` and `current_variance` to be non-negative. You specified `current_count` = {current_count} and `current_variance` = {current_variance}.")
+            raise ValueError(
+                "Must set `current_count` and `current_variance` to be non-negative."
+                f"You specified `current_count` = {current_count} and `current_variance` = {current_variance}."
+            )
         self.current_count: int = current_count
         self.current_mean: float = current_mean
         if current_count == 0 and current_variance == 0:

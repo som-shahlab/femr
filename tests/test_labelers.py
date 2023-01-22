@@ -516,19 +516,21 @@ class DummySurvivalLabeler(LabelingFunction):
         return [
             Label(
                 time=datetime.datetime(2000, 1, 1),
-                value=SurvivalValue(datetime.timedelta(days=10), 0),
+                value=SurvivalValue(datetime.timedelta(days=10), False),
             ),
             Label(
                 time=datetime.datetime(2000, 4, 1),
-                value=SurvivalValue(datetime.timedelta(days=15), 0),
+                value=SurvivalValue(datetime.timedelta(days=15), False),
             ),
             Label(
                 time=datetime.datetime(2000, 4, 1),
-                value=SurvivalValue(datetime.timedelta(days=15, hours=10), 0),
+                value=SurvivalValue(
+                    datetime.timedelta(days=15, hours=10), False
+                ),
             ),
             Label(
                 time=datetime.datetime(2000, 10, 1),
-                value=SurvivalValue(datetime.timedelta(days=100), 1),
+                value=SurvivalValue(datetime.timedelta(days=100), True),
             ),
         ]
 
@@ -549,10 +551,10 @@ def test_survival_labels(tmp_path: pathlib.Path) -> None:
     labeled_patients = labeler.apply(database_path)
 
     true_labels = [
-        SurvivalValue(datetime.timedelta(days=10), 0),
-        SurvivalValue(datetime.timedelta(days=15), 0),
-        SurvivalValue(datetime.timedelta(days=15, hours=10), 0),
-        SurvivalValue(datetime.timedelta(days=100), 1),
+        SurvivalValue(datetime.timedelta(days=10), False),
+        SurvivalValue(datetime.timedelta(days=15), False),
+        SurvivalValue(datetime.timedelta(days=15, hours=10), False),
+        SurvivalValue(datetime.timedelta(days=100), True),
     ]
 
     # Data representations
