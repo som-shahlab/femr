@@ -15,23 +15,35 @@ from .core import (
     TimeHorizonEventLabeler,
 )
 
+
 def get_visit_concepts() -> List[str]:
     return ["Visit/IP"]
 
+
 def get_inpatient_admission_concepts() -> List[str]:
-    return [ 'Visit/IP' ]
+    return ["Visit/IP"]
+
 
 def get_death_concepts() -> List[str]:
-    return [ 'Death Type/OMOP generated', "Condition Type/OMOP4822053", ]
+    return [
+        "Death Type/OMOP generated",
+        "Condition Type/OMOP4822053",
+    ]
 
-def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
+
+def get_inpatient_admission_events(
+    patient: Patient, ontology: extension_datasets.Ontology
+) -> List[Event]:
     dictionary = ontology.get_dictionary()
-    admission_codes: List[int] = [ dictionary.index(x) for x in get_inpatient_admission_concepts() ]
+    admission_codes: List[int] = [
+        dictionary.index(x) for x in get_inpatient_admission_concepts()
+    ]
     admissions: List[Event] = []
     for e in patient.events:
         if e.code in admission_codes:
             admissions.append(e)
     return admissions
+
 
 def map_omop_concept_ids_to_piton_codes(
     ontology: extension_datasets.Ontology, omop_concept_ids: List[int]
@@ -39,7 +51,9 @@ def map_omop_concept_ids_to_piton_codes(
     codes: List[int] = []
     for omop_concept_id in omop_concept_ids:
         try:
-            piton_code: int = ontology.get_code_from_concept_id(omop_concept_id)
+            piton_code: int = ontology.get_code_from_concept_id(  # type:ignore
+                omop_concept_id
+            )
             codes.append(piton_code)
         except Exception as e:
             print(f"code {omop_concept_id} not found", e)
@@ -95,9 +109,9 @@ class WithinVisitLabeler(Labeler):
         ] = prediction_adjustment_timedelta
 
     def label(self, patient: Patient) -> List[Label]:
-        """Label all visits with whether the patient experiences outcomes 
-            in `self.outcome_codes` during each visit."""
-        # Loop through all visits in patient, check if outcome, if so, mark 
+        """Label all visits with whether the patient experiences outcomes
+        in `self.outcome_codes` during each visit."""
+        # Loop through all visits in patient, check if outcome, if so, mark
         # that it occurred in `visit_to_outcome_count`.
         # NOTE: `visit_to_outcome_count` and `visits` are kept in sync with each other
         # Contains all events whose `event.visit_id`` is referenced in `visit_to_outcome_count`
@@ -111,9 +125,10 @@ class WithinVisitLabeler(Labeler):
                 visit_to_outcome_count[event.visit_id] = 0
                 visits.append(event)
             elif event.code in self.outcome_codes:
-                assert event.visit_id in visit_to_outcome_count, \
-                    (f"Outcome event ({event.code}) at {event.start} for patient {patient.patient_id}" 
-                    f"occurred before its corresponding admission event with visit_id {event.visit_id}")
+                assert event.visit_id in visit_to_outcome_count, (
+                    f"Outcome event ({event.code}) at {event.start} for patient {patient.patient_id}"
+                    f"occurred before its corresponding admission event with visit_id {event.visit_id}"
+                )
                 visit_to_outcome_count[event.visit_id] += 1
 
         # Generate labels
@@ -154,7 +169,8 @@ class CodeLabeler(TimeHorizonEventLabeler):
             prediction_codes (List[int]): Events that count as an occurrence of the outcome.
             time_horizon (TimeHorizon): An interval of time. If the event occurs during this time horizon, then
                 the label is TRUE. Otherwise, FALSE.
-            prediction_codes (Optional[List[int]]): If not None, limit events at which you make predictions to these codes.
+            prediction_codes (Optional[List[int]]): If not None, limit events at which you make predictions to
+                only events with an `event.code` in these codes.
 
         Raises:
             ValueError: Raised if there are multiple unique codes that map to the death code
@@ -173,7 +189,8 @@ class CodeLabeler(TimeHorizonEventLabeler):
             # )
             e.start
             for e in patient.events
-            if (self.prediction_codes is None) or (e.code in self.prediction_codes)
+            if (self.prediction_codes is None)
+            or (e.code in self.prediction_codes)
         ]
 
     def get_time_horizon(self) -> TimeHorizon:
@@ -221,7 +238,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
 
 class MortalityCodeLabeler(CodeLabeler):
     """Apply a label for whether or not a patient dies within the `time_horizon`.
-        Make prediction at admission time.
+    Make prediction at admission time.
     """
 
     def __init__(
@@ -232,7 +249,7 @@ class MortalityCodeLabeler(CodeLabeler):
     ):
         """Create a Mortality labeler."""
         dictionary = ontology.get_dictionary()
-        outcome_codes = [ dictionary.index(x) for x in get_death_concepts() ]
+        outcome_codes = [dictionary.index(x) for x in get_death_concepts()]
 
         super().__init__(
             outcome_codes=outcome_codes,
@@ -266,7 +283,7 @@ class LupusCodeLabeler(CodeLabeler):
         #         ontology, dictionary.index("ICD10CM/" + code)
         #     )
         codes = set()
-        snomed_codes: List[str] = ['55464009', '201436003' ]
+        snomed_codes: List[str] = ["55464009", "201436003"]
         for code in snomed_codes:
             codes |= _get_all_children(
                 ontology, dictionary.index("SNOMED/" + code)
@@ -278,6 +295,7 @@ class LupusCodeLabeler(CodeLabeler):
             prediction_codes=prediction_codes,
         )
 
+
 class HighHbA1cCodeLabeler(Labeler):
     """
     The high HbA1c labeler tries to predict whether a non-diabetic patient will test as diabetic.
@@ -287,10 +305,12 @@ class HighHbA1cCodeLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        last_trigger_days: int = 180,
+        last_trigger_timedelta: datetime.timedelta = datetime.timedelta(
+            days=180
+        ),
     ):
         """Create a High HbA1c (i.e. diabetes) labeler."""
-        self.last_trigger_days = last_trigger_days
+        self.last_trigger_timedelta = last_trigger_timedelta
 
         HbA1c_str: str = "LOINC/4548-4"
         self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_str)
@@ -305,7 +325,7 @@ class HighHbA1cCodeLabeler(Labeler):
 
         high_cutoff_threshold: float = 6.5
         labels: List[Label] = []
-        last_trigger: Optional[int] = None
+        last_trigger: Optional[datetime.datetime] = None
 
         first_diabetes_code_date = None
         for event in patient.events:
@@ -326,12 +346,8 @@ class HighHbA1cCodeLabeler(Labeler):
 
             if event.code == self.hba1c_lab_code:
                 is_diabetes = float(event.value) > high_cutoff_threshold
-                # TODO - Type mismatch between `last_trigger` (int) and `event.start` (datetime)
-                # TODO - maybe change `last_trigger` to be a datetime.timedelta(days=last_trigger) ??
-                if (
-                    last_trigger is None
-                    or (event.start - last_trigger).days
-                    > self.last_trigger_days
+                if last_trigger is None or (
+                    event.start - last_trigger > self.last_trigger_timedelta
                 ):
                     labels.append(
                         Label(
@@ -359,7 +375,8 @@ class HighHbA1cCodeLabeler(Labeler):
 
 class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
     # TODO - check
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of Hypoglycemia in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of Hypoglycemia in `time_horizon`."""
     # fmt: off
     original_omop_concept_ids = [
         380688, 4226798, 36714116, 24609, 4029423, 45757363, 4096804, 4048805, 4228112, 23034, 4029424, 45769876,
@@ -373,11 +390,13 @@ class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
     ]
     # fmt: on
 
+
 class AKICodeLabeler(OMOPConceptCodeLabeler):
     # TODO - check
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of AKI in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of AKI in `time_horizon`."""
     # fmt: off
-    original_omop_concept_ids =  [
+    original_omop_concept_ids = [
         197320, 432961, 444044
     ]
     omop_concept_ids = [
@@ -395,7 +414,8 @@ class AKICodeLabeler(OMOPConceptCodeLabeler):
 
 class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
     # TODO - check
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of Anemia in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of Anemia in `time_horizon`."""
     # fmt: off
     original_omop_concept_ids = [
         439777, 37018722, 37017132, 35624756, 4006467, 37398911, 37395652,
@@ -460,33 +480,37 @@ class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
     # TODO - check
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of Hyperkalemia in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of Hyperkalemia in `time_horizon`."""
     # fmt: off
     original_omop_concept_ids = [
         434610
     ]
     omop_concept_ids = [
-        434610, 4030355, 4185833, 4183002, 4028948, 4029592, 4201725, 4029591, 4071744, 4236458, 4146120, 
+        434610, 4030355, 4185833, 4183002, 4028948, 4029592, 4201725, 4029591, 4071744, 4236458, 4146120,
     ]
     # fmt: on
 
 
 class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
     # TODO - check
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of Hyponatremia in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of Hyponatremia in `time_horizon`."""
     # fmt: off
     original_omop_concept_ids = [
         435515, 4232311
     ]
     omop_concept_ids: List[int] = [
-        435515, 4232311, 4029590, 4028947, 4225276, 4227093, 4252414, 4164126, 4175012, 4177324, 4048926, 4253214, 4139394, 4215499, 4028946,
+        435515, 4232311, 4029590, 4028947, 4225276, 4227093, 4252414, 4164126, 4175012, 4177324, 4048926,
+        4253214, 4139394, 4215499, 4028946,
     ]
     # fmt: on
 
 
 class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
     # TODO - check
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
     # fmt: off
     original_omop_concept_ids = [
         432870,
@@ -512,7 +536,9 @@ class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class NeutropeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly coded occurrence(s) of Neutkropenia in `time_horizon`."""
+    """Apply a label for whether a patient has at 1+ explicitly
+    coded occurrence(s) of Neutkropenia in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_ids = [
         301794, 320073,
@@ -655,8 +681,8 @@ class IsMaleLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:
         """Label this patient as Male (TRUE) or not (FALSE)."""
         # Determine if patient is male
-        is_male: bool = self.male_code in [ e.code for e in patient.events ]
-        
+        is_male: bool = self.male_code in [e.code for e in patient.events]
+
         # Apply `is_male` label to every admission
         labels: List[Label] = []
         for event in patient.events:
@@ -667,5 +693,6 @@ class IsMaleLabeler(Labeler):
     def get_labeler_type(self) -> LabelType:
         return "boolean"
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     pass

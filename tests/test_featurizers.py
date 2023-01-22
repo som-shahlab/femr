@@ -12,7 +12,13 @@ from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop import CodeLabeler
-from tools import create_database, get_piton_code, load_from_pkl, save_to_pkl, run_test_locally
+from tools import (
+    create_database,
+    get_piton_code,
+    load_from_pkl,
+    run_test_locally,
+    save_to_pkl,
+)
 
 
 def _assert_featurized_patients_structure(
@@ -369,5 +375,6 @@ def test_serialization_and_deserialization(tmp_path: pathlib.Path):
         count_featurized_patient_loaded[3] == count_featurized_patient[3]
     ).all()
 
-if __name__ == '__main__':
-    run_test_locally('../ignore/test_labelers/', test_complete_featurization)
+
+if __name__ == "__main__":
+    run_test_locally("../ignore/test_labelers/", test_complete_featurization)

@@ -2,15 +2,22 @@ import datetime
 import os
 import pathlib
 import pickle
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
+from tools import (
+    EventsWithLabels,
+    assert_labels_are_accurate,
+    create_patients_list,
+    event,
+    run_test_locally,
+    save_to_pkl,
+)
 
-from tools import event, run_test_locally, save_to_pkl, create_patients_list, assert_labels_are_accurate, EventsWithLabels
 
 def assert_tuples_match_labels(labeled_patients: LabeledPatients):
     """Passes if tuples output by `as_list_of_label_tuples()` are the same as the `labels` in `labeled_patients`."""
@@ -22,6 +29,7 @@ def assert_tuples_match_labels(labeled_patients: LabeledPatients):
         patient_id = lt[0]
         label = lt[1]
         assert label in labeled_patients[patient_id]
+
 
 def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
     """Passes if np.arrays output by `as_numpy_arrays()` are the same as the `labels` in `labeled_patients`."""
@@ -38,33 +46,38 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
         patient_id = label_numpy[0][i]
         assert (
             Label(
-                value=bool(label_numpy[1][i]) if label_numpy[1][i] is not None else None,
+                value=bool(label_numpy[1][i])
+                if label_numpy[1][i] is not None
+                else None,
                 time=label_numpy[2][i],
             )
             in labeled_patients[patient_id]
         ), f"{Label(value=bool(label_numpy[1][i]), time=label_numpy[2][i])} not in {labeled_patients[patient_id]}"
 
+
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
     events_with_labels: EventsWithLabels = [
-        (event((1995, 1, 3), 0, 34.5), 'skip'),
-        (event((2010, 1, 1), 1, 'test_value'), 'skip'),
+        (event((1995, 1, 3), 0, 34.5), "skip"),
+        (event((2010, 1, 1), 1, "test_value"), "skip"),
         (event((2010, 1, 5), 2, 1), True),
-        (event((2010, 6, 5), 3, True), 'skip'),
+        (event((2010, 6, 5), 3, True), "skip"),
         (event((2011, 2, 5), 2, None), False),
         (event((2011, 7, 5), 2, None), False),
-        (event((2012, 10, 5), 3, None),'skip'),
+        (event((2012, 10, 5), 3, None), "skip"),
         (event((2015, 6, 5, 0), 2, None), True),
         (event((2015, 6, 5, 10, 10), 2, None), True),
-        (event((2015, 6, 15, 11), 3, None),'skip'),
+        (event((2015, 6, 15, 11), 3, None), "skip"),
         (event((2016, 1, 1), 2, None), None),
         (event((2016, 3, 1, 10, 10, 10), 2, None), None),
     ]
-    patients: List[piton.Patient] = create_patients_list(10, 
-        [ x[0] for x in events_with_labels ]
+    patients: List[piton.Patient] = create_patients_list(
+        10, [x[0] for x in events_with_labels]
     )
-    true_labels: List[Optional[bool]] = [ 
-        x[1] for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
+    true_labels: List[Optional[bool]] = [
+        x[1]
+        for x in events_with_labels
+        if isinstance(x[1], bool) or (x[1] is None)
     ]
 
     # Create Labeler
@@ -79,7 +92,9 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         labels = labeler.label(patient)
         if len(labels) > 0:
             patients_to_labels[patient.patient_id] = labels
-    labeled_patients: LabeledPatients = LabeledPatients(patients_to_labels, labeler.get_labeler_type())
+    labeled_patients: LabeledPatients = LabeledPatients(
+        patients_to_labels, labeler.get_labeler_type()
+    )
 
     # Data representations
     #   Check accuracy of Labels
@@ -88,7 +103,10 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     #   Check that label counter is correct
     assert labeled_patients.get_num_labels() == len(true_labels) * len(
         labeled_patients
-    ), f"Number of labels in LabeledPatients ({labeled_patients.get_num_labels()}) != Expected number of labels ({len(true_labels)} * {len(labeled_patients)})"
+    ), (
+        f"Number of labels in LabeledPatients ({labeled_patients.get_num_labels()}) "
+        f"!= Expected number of labels ({len(true_labels)} * {len(labeled_patients)})"
+    )
     #   Check that tuples are correct
     assert_tuples_match_labels(labeled_patients)
     #   Check that numpy are correct
@@ -117,4 +135,5 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     ):
         assert np.sum(orig != new) == 0
 
-run_test_locally('../ignore/test_labelers/', test_labeled_patients)
+
+run_test_locally("../ignore/test_labelers/", test_labeled_patients)

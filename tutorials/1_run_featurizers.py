@@ -13,13 +13,13 @@ from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
 from piton.labelers.omop import (
     HighHbA1cCodeLabeler,
     IsMaleLabeler,
-    MortalityCodeLabeler,
     LupusCodeLabeler,
+    MortalityCodeLabeler,
 )
 from piton.labelers.omop_lab_values import (
-    ThrombocytopeniaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
+    ThrombocytopeniaLabValueLabeler,
 )
 
 """
@@ -45,13 +45,12 @@ def save_to_pkl(object_to_save, path_to_file: str):
 
 
 LABELING_FUNCTIONS: List[str] = [
-    "mortality", 
-    "is_male", 
+    "mortality",
+    "is_male",
     "lupus",
     "high_hba1c",
     "thrombocytopenia",
-    "hyperkalemia"
-    "hypoglycemia",
+    "hyperkalemia" "hypoglycemia",
 ]
 
 if __name__ == "__main__":
@@ -155,23 +154,19 @@ if __name__ == "__main__":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
-        labeler = ThrombocytopeniaLabValueLabeler(ontology,
-                                                  time_horizon,
-                                                  'severe')
+        labeler = ThrombocytopeniaLabValueLabeler(
+            ontology, time_horizon, "severe"
+        )
     elif args.labeling_function == "hyperkalemia":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
-        labeler = HyperkalemiaLabValueLabeler(ontology,
-                                                time_horizon,
-                                                'severe')
+        labeler = HyperkalemiaLabValueLabeler(ontology, time_horizon, "severe")
     elif args.labeling_function == "hypoglycemia":
         time_horizon = TimeHorizon(
             datetime.timedelta(days=0), datetime.timedelta(days=365)
         )
-        labeler = HypoglycemiaLabValueLabeler(ontology,
-                                                time_horizon,
-                                                'severe')
+        labeler = HypoglycemiaLabValueLabeler(ontology, time_horizon, "severe")
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."
@@ -183,7 +178,9 @@ if __name__ == "__main__":
 
     print_log("Labeling Patients", "Starting")
     labeled_patients = one_label_labeler.apply(
-        path_to_patient_database=PATH_TO_PATIENT_DATABASE, num_threads=num_threads, num_patients=num_patients
+        path_to_patient_database=PATH_TO_PATIENT_DATABASE,
+        num_threads=num_threads,
+        num_patients=num_patients,
     )
     save_to_pkl(labeled_patients, PATH_TO_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
