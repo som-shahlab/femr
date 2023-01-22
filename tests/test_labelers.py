@@ -1,52 +1,31 @@
 import datetime
 import os
 import pathlib
-import pickle
 from typing import List, Optional, Tuple, cast
 
 import numpy as np
 
 import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
+from piton.labelers.core import (
+    Label,
+    LabeledPatients,
+    LabelingFunction,
+    LabelType,
+    NLabelPerPatientLF,
+    SurvivalValue,
+    TimeHorizon,
+)
 from piton.labelers.omop_labeling_functions import CodeLF, MortalityLF
-
-NUM_PATIENTS = 5
-
-SHARED_EVENTS = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
-    piton.Event(
-        start=datetime.datetime(2010, 1, 1),
-        code=1,
-        value="test_value",
-    ),
-    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
-    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=True),
-    piton.Event(start=datetime.datetime(2011, 2, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
-    ),
-    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
-    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=2, value=None
-    ),
-]
-
-
-def create_patients(events: List[piton.Event]) -> List[piton.Patient]:
-    patients: List[piton.Patient] = []
-    for patient_id in range(NUM_PATIENTS):
-        patients.append(
-            piton.Patient(
-                patient_id,
-                events,
-            )
-        )
-    return patients
+from tools import (
+    DUMMY_EVENTS,
+    create_database,
+    create_labeled_patients_list,
+    create_patients_list,
+    get_piton_code,
+    load_from_pkl,
+    save_to_pkl,
+)
 
 
 def assert_labels_are_accurate(
@@ -95,39 +74,60 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
     )
     for i in range(label_numpy[0].shape[0]):
         patient_id = label_numpy[0][i]
-        assert (
-            Label(
-                value=bool(label_numpy[1][i]),
-                time=label_numpy[2][i],
+        if labeled_patients.labeler_type in [
+            "boolean",
+            "numeric",
+            "categorical",
+        ]:
+            assert (
+                Label(
+                    value=label_numpy[1][i],
+                    time=label_numpy[2][i],
+                )
+                in labeled_patients[patient_id]
             )
-            in labeled_patients[patient_id]
-        )
+        elif labeled_patients.labeler_type in ["survival"]:
+            assert (
+                Label(
+                    value=SurvivalValue(
+                        time_to_event=label_numpy[1][i][0],
+                        is_censored=label_numpy[1][i][1],
+                    ),
+                    time=label_numpy[2][i],
+                )
+                in labeled_patients[patient_id]
+            )
+        else:
+            assert False
 
 
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
-    patients = create_patients(SHARED_EVENTS)
-    true_labels = [
-        # Assumes time horizon (0, 180) days + Code 2
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-    ]
 
-    time_horizon_6_months = TimeHorizon(
+    time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon_6_months)
-    labeled_patients = labeler.apply(patients)
+
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = piton.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    piton_target_code = get_piton_code(ontology, 2)
+    piton_admission_code = get_piton_code(ontology, 3)
+
+    labeler = CodeLF(
+        piton_admission_code, piton_target_code, time_horizon=time_horizon
+    )
+    labeled_patients = labeler.apply(database_path)
+
+    true_labels = [
+        # Assumes time horizon (0, 180) days + Code 2
+        True,
+        False,
+        False,
+    ]
 
     # Data representations
     #   Check that label counter is correct
@@ -141,16 +141,14 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     # Saving / Loading
     #   Save labeler results
-    path = tmp_path / "CodeLF.pkl"
-    with open(path, "wb") as of:
-        pickle.dump(labeled_patients, of)
+    path = os.path.join(tmp_path, "CodeLF.pkl")
+    save_to_pkl(labeled_patients, path)
 
     #   Check that file was created
     assert os.path.exists(path)
 
     #   Read in the output files and check that they're accurate
-    with open(path, "rb") as f:
-        labeled_patients_new = pickle.load(f)
+    labeled_patients_new = load_from_pkl(path)
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
@@ -167,21 +165,12 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
 def test_mortality_lf() -> None:
     """Creates a MortalityLF for code 3, which corresponds to "Death Type/" """
-    patients = create_patients(SHARED_EVENTS)
+    patients = create_patients_list(DUMMY_EVENTS)
     true_labels = [
         # Assumes time horizon (0, 180) days + MortalityLF() where code is 3
         False,
-        True,
-        True,
-        True,
-        False,
         False,
         True,
-        True,
-        True,
-        True,
-        None,
-        None,
     ]
 
     # 6. Create `Ontology` stub and run `MortalityPredictor`
@@ -191,20 +180,21 @@ def test_mortality_lf() -> None:
                 "zero",
                 "one",
                 "two",
-                "Death Type/",
-                "four",
+                "Visit/IP",
+                "Condition Type/OMOP4822053",
             ]
 
     dummy_ontology = DummyOntology()
     ontology = cast(piton.datasets.Ontology, dummy_ontology)
-    time_horizon_4_to_12_months = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=180)
+    time_horizon_12_months = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=365)
     )
-    labeler = MortalityLF(ontology, time_horizon_4_to_12_months)
-    labeled_patients = labeler.apply(patients)
+    labeler = MortalityLF(ontology, time_horizon_12_months)
+
+    labeled_patients = create_labeled_patients_list(labeler, patients)
 
     # Selected the right code
-    assert labeler.code == 3
+    assert labeler.code == 4
     # All label values are correct -- assumes all patients have same events
     for patient_id in labeled_patients.keys():
         assert_labels_are_accurate(labeled_patients, patient_id, true_labels)
@@ -212,28 +202,19 @@ def test_mortality_lf() -> None:
 
 def test_code_lf() -> None:
     """Creates a CodeLF for code '2' with time horizon of (0,180 days)."""
-    patients = create_patients(SHARED_EVENTS)
+    patients = create_patients_list(DUMMY_EVENTS)
     true_labels = [
-        # Assumes time horizon (0, 180) days + CodeLF(2)
-        False,
-        True,
+        # Assumes time horizon (0, 180) days + Code 2
         True,
         False,
-        True,
-        True,
         False,
-        True,
-        True,
-        False,
-        True,
-        True,
     ]
 
     # Create a CodeLF for Code 2
     time_horizon_6_months = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLF(2, time_horizon_6_months)
+    labeler = CodeLF(3, 2, time_horizon_6_months)
 
     # Check CodeLF's internal functions
     assert labeler.get_time_horizon() == time_horizon_6_months
@@ -243,7 +224,7 @@ def test_code_lf() -> None:
         ]
 
     # Label patients and check that they're correct
-    labeled_patients: LabeledPatients = labeler.apply(patients)
+    labeled_patients = create_labeled_patients_list(labeler, patients)
 
     # All label values are correct -- assumes all patients have same events
     for patient_id in labeled_patients.keys():
@@ -258,7 +239,7 @@ def test_time_horizons():
             TimeHorizon(
                 datetime.timedelta(days=0), datetime.timedelta(days=180)
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 3), code=2, value=None
@@ -273,7 +254,7 @@ def test_time_horizons():
                         start=datetime.datetime(2018, 1, 3), code=2, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 3, 3), code=2, value=None
+                        start=datetime.datetime(2018, 3, 3), code=3, value=None
                     ),
                     piton.Event(
                         start=datetime.datetime(2018, 5, 3), code=2, value=None
@@ -284,102 +265,46 @@ def test_time_horizons():
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 5, 4), code=1, value=None
+                        start=datetime.datetime(2018, 5, 4), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 12, 4), code=1, value=None
+                        start=datetime.datetime(2018, 12, 4), code=2, value=None
                     ),
                 ]
             ),
             [
                 True,
-                True,
                 False,
-                True,
-                True,
-                True,
-                False,
-                False,
-                None,
             ],
         ],
         [
             # Test #1
-            # (1, 180) days
-            TimeHorizon(
-                datetime.timedelta(days=1), datetime.timedelta(days=180)
-            ),
-            create_patients(
-                [
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 10, 5), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 1, 3), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 3, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 3, 11),
-                        code=2,
-                        value=None,
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 5, 4), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2018, 12, 4), code=1, value=None
-                    ),
-                ]
-            ),
-            [
-                False,
-                False,
-                False,
-                True,
-                True,
-                False,
-                False,
-                False,
-                None,
-            ],
-        ],
-        [
-            # Test #2
             # (180, 365) days
             TimeHorizon(
                 datetime.timedelta(days=180), datetime.timedelta(days=365)
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2000, 1, 3), code=2, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2000, 10, 5), code=2, value=None
+                        start=datetime.datetime(2000, 10, 5), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2002, 1, 5), code=2, value=None
+                        start=datetime.datetime(2000, 10, 10),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2002, 4, 5), code=2, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2002, 12, 5), code=2, value=None
+                        start=datetime.datetime(2002, 12, 5), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2002, 12, 10),
-                        code=1,
+                        start=datetime.datetime(2003, 11, 1),
+                        code=2,
                         value=None,
                     ),
                     piton.Event(
@@ -388,33 +313,30 @@ def test_time_horizons():
                 ]
             ),
             [
-                True,
                 False,
                 True,
-                True,
-                False,
-                False,
-                None,
             ],
         ],
         [
-            # Test #3
+            # Test #2
             # (0, 0) days
             TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=0)),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
+                        start=datetime.datetime(2015, 1, 3), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 4), code=1, value=None
+                        start=datetime.datetime(2015, 1, 3, 23, 59),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 5), code=2, value=None
+                        start=datetime.datetime(2015, 1, 5), code=1, value=None
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 5, 10),
-                        code=1,
+                        code=3,
                         value=None,
                     ),
                     piton.Event(
@@ -422,30 +344,34 @@ def test_time_horizons():
                     ),
                 ]
             ),
-            [True, False, True, False, True],
+            [True, False],
         ],
         [
-            # Test #4
+            # Test #3
             # (10, 10) days
             TimeHorizon(
                 datetime.timedelta(days=10), datetime.timedelta(days=10)
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 3), code=2, value=None
+                        start=datetime.datetime(2015, 1, 3), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 13), code=1, value=None
+                        start=datetime.datetime(2015, 1, 13, 23, 59),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 23), code=2, value=None
+                        start=datetime.datetime(2015, 1, 23), code=1, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 2, 2), code=2, value=None
+                        start=datetime.datetime(2015, 2, 2), code=3, value=None
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 3, 10), code=1, value=None
+                        start=datetime.datetime(2015, 2, 15, 11, 59),
+                        code=2,
+                        value=None,
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 3, 20), code=2, value=None
@@ -458,57 +384,16 @@ def test_time_horizons():
                     ),
                 ]
             ),
-            [False, True, True, False, True, False, None, None],
+            [True, False],
         ],
         [
-            # Test #5
-            # (0, 1e6) days
-            TimeHorizon(
-                datetime.timedelta(days=0), datetime.timedelta(days=1e6)
-            ),
-            create_patients(
-                [
-                    piton.Event(
-                        start=datetime.datetime(2000, 1, 3), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2001, 10, 5), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2020, 10, 5), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2021, 10, 5), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2050, 1, 10), code=2, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2051, 1, 10), code=1, value=None
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(5000, 1, 10), code=1, value=None
-                    ),
-                ]
-            ),
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                None,
-            ],
-        ],
-        [
-            # Test #6
+            # Test #4
             # (5 hours, 10.5 hours)
             TimeHorizon(
                 datetime.timedelta(hours=5),
                 datetime.timedelta(hours=10, minutes=30),
             ),
-            create_patients(
+            create_patients_list(
                 [
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 0, 0),
@@ -517,16 +402,16 @@ def test_time_horizons():
                     ),
                     piton.Event(
                         start=datetime.datetime(2015, 1, 1, 10, 29),
+                        code=3,
+                        value=None,
+                    ),
+                    piton.Event(
+                        start=datetime.datetime(2015, 1, 2, 0, 0),
                         code=2,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2015, 1, 1, 10, 30),
-                        code=1,
-                        value=None,
-                    ),
-                    piton.Event(
-                        start=datetime.datetime(2015, 1, 1, 10, 31),
+                        start=datetime.datetime(2015, 1, 2, 6, 0),
                         code=1,
                         value=None,
                     ),
@@ -564,22 +449,22 @@ def test_time_horizons():
                     ),
                     piton.Event(
                         start=datetime.datetime(2017, 1, 1, 10, 30),
-                        code=1,
+                        code=3,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2017, 1, 1, 10, 31),
+                        start=datetime.datetime(2017, 1, 2, 7, 31),
                         code=2,
                         value=None,
                     ),
                     #
                     piton.Event(
-                        start=datetime.datetime(2018, 1, 1, 0, 0),
+                        start=datetime.datetime(2017, 1, 2, 7, 31),
                         code=1,
                         value=None,
                     ),
                     piton.Event(
-                        start=datetime.datetime(2018, 1, 1, 4, 59, 59),
+                        start=datetime.datetime(2017, 1, 2, 20, 31),
                         code=2,
                         value=None,
                     ),
@@ -607,31 +492,15 @@ def test_time_horizons():
                 ]
             ),
             [
-                True,
-                False,
-                False,
                 False,
                 True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-                None,
-                None,
             ],
         ],
     ]
     for test_idx, test in enumerate(tests):
         horizon, patients, true_labels = test
-        labeler = CodeLF(2, horizon)
-        labeled_patients = labeler.apply(patients)
+        labeler = CodeLF(3, 2, horizon)
+        labeled_patients = create_labeled_patients_list(labeler, patients)
         for i in range(len(patients)):
             # all patients have same events
             assert_labels_are_accurate(
@@ -642,12 +511,133 @@ def test_time_horizons():
             )
 
 
-# # `LabeledPatients` class
-# test_labeled_patients()
+class DummySurvivalLabeler(LabelingFunction):
+    def label(self, patient: piton.Patient) -> List[Label]:
+        return [
+            Label(
+                time=datetime.datetime(2000, 1, 1),
+                value=SurvivalValue(datetime.timedelta(days=10), False),
+            ),
+            Label(
+                time=datetime.datetime(2000, 4, 1),
+                value=SurvivalValue(datetime.timedelta(days=15), False),
+            ),
+            Label(
+                time=datetime.datetime(2000, 4, 1),
+                value=SurvivalValue(
+                    datetime.timedelta(days=15, hours=10), False
+                ),
+            ),
+            Label(
+                time=datetime.datetime(2000, 10, 1),
+                value=SurvivalValue(datetime.timedelta(days=100), True),
+            ),
+        ]
 
-# # Labeling functions
-# test_code_lf()
-# test_mortality_lf()
+    def get_labeler_type(self) -> LabelType:
+        return "survival"
 
-# # Time Horizons
-# test_time_horizons()
+
+def test_survival_labels(tmp_path: pathlib.Path) -> None:
+
+    create_database(tmp_path)
+    database_path = os.path.join(tmp_path, "target")
+    database = piton.datasets.PatientDatabase(database_path)
+
+    labeler = DummySurvivalLabeler()
+    patient = database[0]
+    patient = cast(piton.Patient, patient)
+
+    labeled_patients = labeler.apply(database_path)
+
+    true_labels = [
+        SurvivalValue(datetime.timedelta(days=10), False),
+        SurvivalValue(datetime.timedelta(days=15), False),
+        SurvivalValue(datetime.timedelta(days=15, hours=10), False),
+        SurvivalValue(datetime.timedelta(days=100), True),
+    ]
+
+    # Data representations
+    #   Check that label counter is correct
+    assert labeled_patients.get_num_labels() == len(true_labels) * len(
+        labeled_patients
+    ), f"{labeled_patients.get_num_labels()} != {len(true_labels)} * {len(labeled_patients)}"
+    #   Check that tuples are correct
+    assert_tuples_match_labels(labeled_patients)
+    #   Check that numpy are correct
+    assert_np_arrays_match_labels(labeled_patients)
+
+    # Saving / Loading
+    #   Save labeler results
+    path = os.path.join(tmp_path, "labeled_patients.pkl")
+    save_to_pkl(labeled_patients, path)
+
+    #   Check that file was created
+    assert os.path.exists(path)
+
+    #   Read in the output files and check that they're accurate
+    labeled_patients_new = load_from_pkl(path)
+
+    #   Check that we successfully saved / loaded file contents
+    assert labeled_patients_new == labeled_patients
+    assert (
+        labeled_patients_new.as_list_of_label_tuples()
+        == labeled_patients.as_list_of_label_tuples()
+    )
+    for (orig, new) in zip(
+        labeled_patients.as_numpy_arrays(),
+        labeled_patients_new.as_numpy_arrays(),
+    ):
+        assert np.sum(orig != new) == 0
+
+
+def test_NLabelPerPatientLF(tmp_path: pathlib.Path) -> None:
+    """Checks NLabelPerPatient LabelingFunction"""
+
+    time_horizon = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=180)
+    )
+
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = piton.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    piton_target_code = get_piton_code(ontology, 3)
+    piton_admission_code = get_piton_code(ontology, 2)
+
+    labeler = CodeLF(
+        piton_admission_code, piton_target_code, time_horizon=time_horizon
+    )
+    patient = database[0]
+    patient = cast(piton.Patient, patient)
+    all_labels = labeler.label(patient)
+
+    num_all_labels = len(all_labels)
+
+    seed = 0
+    num_labels = 6
+    n_labeler = NLabelPerPatientLF(
+        labeling_function=labeler, num_labels=num_labels, seed=seed
+    )
+    n_labels = n_labeler.label(patient)
+
+    assert len(n_labels) == num_all_labels
+
+    seeds = [0, 10, 40]
+    num_labels = 3
+
+    n_labels_list = []
+    for seed in seeds:
+        n_labeler = NLabelPerPatientLF(
+            labeling_function=labeler, num_labels=num_labels, seed=seed
+        )
+        n_labels = n_labeler.label(patient)
+        n_labels_list.append(n_labels)
+
+    assert n_labels_list[0] == n_labels_list[0]
+
+    for i in range(len(n_labels_list)):
+        for j in range(i + 1, len(n_labels_list)):
+            assert n_labels_list[i] != n_labels_list[j]
