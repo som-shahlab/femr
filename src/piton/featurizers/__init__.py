@@ -116,10 +116,14 @@ class OnlineStatistics:
             for i in range(0, len(unmerged_stats), 2):
                 if i + 1 < len(unmerged_stats):
                     # If there's another stat after this one, merge them
-                    merged_stats.append(cls.merge_pair(unmerged_stats[i], unmerged_stats[i + 1]))
+                    merged_stats.append(
+                        cls.merge_pair(unmerged_stats[i], unmerged_stats[i + 1])
+                    )
                 else:
                     # We've reached the end of our list, so just add the last stat back
                     merged_stats.append(unmerged_stats[i])
             unmerged_stats = merged_stats
-        assert len(unmerged_stats) == 1, f"Should only have one stat left after merging, not ({len(unmerged_stats)})."
+        assert (
+            len(unmerged_stats) == 1
+        ), f"Should only have one stat left after merging, not ({len(unmerged_stats)})."
         return unmerged_stats[0]
