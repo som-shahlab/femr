@@ -3,5 +3,5 @@ __pycache__
 *.so
 bazel-*
 *.egg-info
-tutorials/*
 ignore/*
+.ipynb_checkpoints/
