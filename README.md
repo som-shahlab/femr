@@ -96,17 +96,21 @@ zstd -1 --rm $OMOP_SOURCE/**/*.csv
 ## Generating extract
 
 ```
-# Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
+# Set up environment variables
+#   Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
 export OMOP_SOURCE=/path/to/omop/folder...
-# Path to any arbitrary folder where you want to store your Piton extract
+#   Path to any arbitrary folder where you want to store your Piton extract
 export EXTRACT_DESTINATION=/path/to/piton/extract/folder...
-# Path to any arbitrary folder where you want to store your Piton extract logs
+#   Path to any arbitrary folder where you want to store your Piton extract logs
 export EXTRACT_LOGS=/path/to/piton/extract/logs...
 
+# Do some data preprocessing with Stanford-specific helper scripts
+#   Extract data from flowsheets
 python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
-
+#   Normalize visits
 python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
 
+# Run actual Piton extraction
 etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
 
@@ -116,6 +120,9 @@ Example usage:
 export OMOP_SOURCE=/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_11_09
 export EXTRACT_DESTINATION=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
 export EXTRACT_LOGS=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
+
+python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
+python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
 
 etl_stanford_omop $OMOP_SOURCE $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
