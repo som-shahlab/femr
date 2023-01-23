@@ -12,9 +12,7 @@ from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
 from piton.labelers.omop import (
     HighHbA1cCodeLabeler,
-    IsMaleLabeler,
     LupusCodeLabeler,
-    MortalityCodeLabeler,
 )
 from piton.labelers.omop_inpatient_admissions import (
     _30DayReadmissionLabeler,
@@ -33,11 +31,23 @@ Example running:
 
     # /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
 
-python3 tutorials/1_run_featurizers.py \
-    /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
-    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/ \
-    --labeling_function lupus \
-    --num_threads 20
+To generate admission/discharge placeholder labels on 1% extract:
+
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
+        --labeling_function admission_discharge \
+        --num_threads 20
+
+To run a real labeler:
+
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/ \
+        --labeling_function lupus \
+        --max_labels_per_patient 5 \
+        --num_threads 20
+
 """
 
 
@@ -49,6 +59,8 @@ def save_to_pkl(object_to_save, path_to_file: str):
 
 
 LABELING_FUNCTIONS: List[str] = [
+    # All admission/discharge times
+    "admission_discharge",
     # CLMBR code-based tasks
     "mortality",
     "long_los",
@@ -101,11 +113,19 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--max_labels_per_patient",
+        type=int,
+        help="Max number of labels to keep per patient (excess labels are randomly discarded)",
+        default=None,
+    )
+
+    parser.add_argument(
         "--num_patients",
         type=int,
         help="Number of patients to use (used for DEBUGGING)",
         default=None,
     )
+
 
     # Parse CLI args
     args = parser.parse_args()
@@ -113,6 +133,7 @@ if __name__ == "__main__":
     PATH_TO_OUTPUT_DIR: str = args.path_to_output_dir
     NUM_THREADS: int = args.num_threads
     NUM_PATIENTS: Optional[int] = args.num_patients
+    MAX_LABELS_PER_PATIENT: int = args.max_labels_per_patient
 
     # create directories to save files
     PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'labeled_patients.pkl')
@@ -127,7 +148,9 @@ if __name__ == "__main__":
 
     # Define the labeling function.
     year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
-    if args.labeling_function == "mortality":
+    if args.labeling_function == "admission_discharge":
+        labeler = AdmissionDischargePlaceholderLabeler(ontology)
+    elif args.labeling_function == "mortality":
         labeler = InpatientMortalityLabeler(ontology)
     elif args.labeling_function == "long_los":
         labeler = _1WeekLongLOSLabeler(ontology)
@@ -151,13 +174,19 @@ if __name__ == "__main__":
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."
         )
+    print_log("Labeler", f"Using Labeler `{args.labeling_function}`")
 
-    # grabbing just one label at random from all the labels
-    one_label_labeler = NLabelsPerPatientLabeler(labeler, seed=0, num_labels=1)
-    print_log("Labeler", "Instantiated Labeler: " + args.labeling_function)
-
+    # Determine how many labels to keep per patient
+    if not args.labeling_function == "admission_discharge":
+        # Don't throw out labels for admission/discharge placeholder, otherwise
+        # defeats the purpose of this labeler
+        labeler = NLabelsPerPatientLabeler(labeler, seed=0, num_labels=MAX_LABELS_PER_PATIENT)
+        print_log("Labeler", f"Keeping max of {MAX_LABELS_PER_PATIENT} labels per patient")
+    else:
+        print_log("Labeler", f"Keeping ALL labels per patient")
+        
     print_log("Labeling Patients", "Starting")
-    labeled_patients = one_label_labeler.apply(
+    labeled_patients = labeler.apply(
         path_to_patient_database=PATH_TO_PATIENT_DATABASE,
         num_threads=NUM_THREADS,
         num_patients=NUM_PATIENTS,
