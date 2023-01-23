@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import List, Set
+from typing import List, Set, Optional
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -73,7 +73,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
             if event.code in self.outcome_codes:
                 if event.value is not None:
                     # `unit` is string of form "mg/dL", "ounces", etc.
-                    unit: str = event.unit
+                    unit: Optional[str] = event.unit
                     value: float = self.normalize_value_with_units(
                         float(event.value), unit
                     )
@@ -94,7 +94,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
         return "normal"
 
     @abstractmethod
-    def normalize_value_with_units(self, value: float, unit: str) -> float:
+    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
         """Convert `value` to a float in the same units as the thresholds in `self.value_to_label`.
 
         NOTE: Some units have the form 'mg/dL (See scan or EMR data for detail)', so you
@@ -134,7 +134,7 @@ class ThrombocytopeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: str) -> float:
+    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
         return value
 
 
@@ -179,19 +179,20 @@ class HyperkalemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: str) -> float:
-        if unit == "mmol/L":
-            # mmol/L
-            # Original OMOP concept ID: 8753
-            return value
-        elif unit == "mEq/L":
-            # mEq/L (1-to-1 -> mmol/L)
-            # Original OMOP concept ID: 9557
-            return value
-        elif unit == "mg/dL":
-            # mg / dL (divide by 18 to get mmol/L)
-            # Original OMOP concept ID: 8840
-            return value / 18
+    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+        if unit is not None:
+            if unit.startswith("mmol/L"):
+                # mmol/L
+                # Original OMOP concept ID: 8753
+                return value
+            elif unit.startswith("mEq/L"):
+                # mEq/L (1-to-1 -> mmol/L)
+                # Original OMOP concept ID: 9557
+                return value
+            elif unit.startswith("mg/dL"):
+                # mg / dL (divide by 18 to get mmol/L)
+                # Original OMOP concept ID: 8840
+                return value / 18
         raise ValueError(f"Unknown unit: {unit}")
 
 
@@ -223,15 +224,16 @@ class HypoglycemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: str) -> float:
-        if unit.startswith("mg/dL"):
-            # mg / dL
-            # Original OMOP concept ID: 8840, 9028
-            return value / 18
-        elif unit.startswith("mmol/L"):
-            # mmol / L (x 18 to get mg/dl)
-            # Original OMOP concept ID: 8753
-            return value
+    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+        if unit is not None:
+            if unit.startswith("mg/dL"):
+                # mg / dL
+                # Original OMOP concept ID: 8840, 9028
+                return value / 18
+            elif unit.startswith("mmol/L"):
+                # mmol / L (x 18 to get mg/dl)
+                # Original OMOP concept ID: 8753
+                return value
         raise ValueError(f"Unknown unit: {unit}")
 
 
@@ -263,7 +265,7 @@ class HyponatremiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: str) -> float:
+    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
         return value
 
 
@@ -294,17 +296,18 @@ class AnemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: str) -> float:
-        if unit.startswith("g/dL"):
-            # g / dL
-            # Original OMOP concept ID: 8713
-            # NOTE: This weird *10 / 100 is how Lawrence did it
-            return value * 10
-        elif unit.startswith("mg/dL"):
-            # mg / dL (divide by 1000 to get g/dL)
-            # Original OMOP concept ID: 8840
-            # NOTE: This weird *10 / 100 is how Lawrence did it
-            return value / 100
+    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+        if unit is not None:
+            if unit.startswith("g/dL"):
+                # g / dL
+                # Original OMOP concept ID: 8713
+                # NOTE: This weird *10 / 100 is how Lawrence did it
+                return value * 10
+            elif unit.startswith("mg/dL"):
+                # mg / dL (divide by 1000 to get g/dL)
+                # Original OMOP concept ID: 8840
+                # NOTE: This weird *10 / 100 is how Lawrence did it
+                return value / 100
         raise ValueError(f"Unknown unit: {unit}")
 
 

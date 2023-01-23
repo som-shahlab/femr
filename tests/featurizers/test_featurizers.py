@@ -12,6 +12,11 @@ from piton.featurizers.core import ColumnValue, FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop import CodeLabeler
+
+# Needed to import `tools` for local testing
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import (
     create_database,
     get_piton_code,

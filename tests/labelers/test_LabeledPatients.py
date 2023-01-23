@@ -9,6 +9,11 @@ import numpy as np
 import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
+
+# Needed to import `tools` for local testing
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import (
     EventsWithLabels,
     assert_labels_are_accurate,

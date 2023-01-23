@@ -1,8 +1,14 @@
 import datetime
 import pathlib
 
-from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import CodeLabeler
+from typing import List
+from piton import Patient
+from piton.labelers.core import TimeHorizon, TimeHorizonEventLabeler
+
+# Needed to import `tools` for local testing
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import (
     EventsWithLabels,
     event,
@@ -11,33 +17,28 @@ from tools import (
 )
 
 
-def test_prediction_codes(tmp_path: pathlib.Path):
-    # Specify specific event codes at which to make predictions
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=10)
-    )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=[4, 5])
-    events_with_labels: EventsWithLabels = [
-        (event((2015, 1, 3), 2, None), "skip"),
-        (event((2015, 1, 3), 4, None), True),
-        (event((2015, 1, 3), 1, None), "skip"),
-        (event((2015, 1, 3), 3, None), "skip"),
-        (event((2015, 10, 5), 1, None), "skip"),
-        (event((2018, 1, 3), 2, None), "skip"),
-        (event((2018, 3, 1), 4, None), False),
-        (event((2018, 3, 3), 1, None), "skip"),
-        (event((2018, 5, 2), 5, None), True),
-        (event((2018, 5, 3), 2, None), "skip"),
-        (event((2018, 5, 4), 4, None), False),
-        (event((2018, 5, 3, 11), 1, None), "skip"),
-        (event((2018, 5, 4), 1, None), "skip"),
-        (event((2018, 11, 1), 5, None), False),
-        (event((2018, 12, 4), 1, None), "skip"),
-        (event((2018, 12, 30), 4, None), None),
-    ]
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="prediction_codes"
-    )
+class DummyLabeler(TimeHorizonEventLabeler):
+    """Dummy labeler that returns True if the event's `code` is in `self.outcome_codes`."""
+    def __init__(
+        self,
+        outcome_codes: List[int],
+        time_horizon: TimeHorizon,
+    ):
+        self.outcome_codes: List[int] = outcome_codes
+        self.time_horizon: TimeHorizon = time_horizon
+
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        return [ e.start for e in patient.events ]
+
+    def get_time_horizon(self) -> TimeHorizon:
+        return self.time_horizon
+
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        times: List[datetime.datetime] = []
+        for event in patient.events:
+            if event.code in self.outcome_codes:
+                times.append(event.start)
+        return times
 
 
 def test_no_outcomes(tmp_path: pathlib.Path):
@@ -45,7 +46,7 @@ def test_no_outcomes(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLabeler([100], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([100], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 3), 2, None), False),
         (event((2015, 1, 3), 1, None), False),
@@ -68,7 +69,7 @@ def test_horizon_0_180_days(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 3), 2, None), True),
         (event((2015, 1, 3), 1, None), True),
@@ -91,7 +92,7 @@ def test_horizon_1_180_days(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=1), datetime.timedelta(days=180)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 3), 2, None), False),
         (event((2015, 1, 3), 1, None), False),
@@ -114,7 +115,7 @@ def test_horizon_180_365_days(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=180), datetime.timedelta(days=365)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2000, 1, 3), 2, None), True),
         (event((2000, 10, 5), 2, None), False),
@@ -137,7 +138,7 @@ def test_horizon_0_0_days(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=0)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 3), 2, None), True),
         (event((2015, 1, 3), 1, None), True),
@@ -156,7 +157,7 @@ def test_horizon_10_10_days(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=10), datetime.timedelta(days=10)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 3), 2, None), False),
         (event((2015, 1, 13), 1, None), True),
@@ -177,7 +178,7 @@ def test_horizon_0_1000000_days(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=1000000)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2000, 1, 3), 2, None), True),
         (event((2001, 10, 5), 1, None), True),
@@ -197,7 +198,7 @@ def test_horizon_5_10_hours(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(
         datetime.timedelta(hours=5), datetime.timedelta(hours=10, minutes=30)
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 1, 0, 0), 1, None), True),
         (event((2015, 1, 1, 10, 29), 2, None), False),
@@ -233,7 +234,7 @@ def test_horizon_infinite(tmp_path: pathlib.Path):
         datetime.timedelta(days=10),
         None,
     )
-    labeler = CodeLabeler([2], time_horizon, prediction_codes=None)
+    labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         (event((1950, 1, 3), 1, None), True),
         (event((2000, 1, 3), 1, None), True),
@@ -252,7 +253,6 @@ def test_horizon_infinite(tmp_path: pathlib.Path):
 
 # Local testing
 if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/", test_prediction_codes)
     run_test_locally("../ignore/test_labelers/", test_horizon_0_180_days)
     run_test_locally("../ignore/test_labelers/", test_horizon_1_180_days)
     run_test_locally("../ignore/test_labelers/", test_horizon_180_365_days)

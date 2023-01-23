@@ -15,6 +15,10 @@ from piton.labelers.omop_inpatient_admissions import (
     _1WeekLongLOSLabeler
 )
 
+# Needed to import `tools` for local testing
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import event, run_test_locally, EventsWithLabels, run_test_for_labeler
 
 class DummyReadmissionOntology:

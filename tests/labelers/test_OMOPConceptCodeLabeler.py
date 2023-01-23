@@ -5,6 +5,10 @@ import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
+# Needed to import `tools` for local testing
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import event, run_test_locally, EventsWithLabels, run_test_for_labeler
 
 # TODO

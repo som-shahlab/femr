@@ -250,7 +250,8 @@ def run_test_for_labeler(
         for p in patients:
             if true_outcome_times:
                 # If manually specified outcome times, check that they are correct
-                assert labeler.get_outcome_times(p) == true_outcome_times
+                assert labeler.get_outcome_times(p) == true_outcome_times, \
+                    f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
             else:
                 # Otherwise, assume that outcome times are simply the start times of
                 # events with codes in `outcome_codes`
@@ -261,7 +262,7 @@ def run_test_for_labeler(
                     event.start
                     for event in p.events
                     if event.code in labeler.outcome_codes
-                ]
+                ], f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
 
 
 def create_labeled_patients_list(
