@@ -8,24 +8,23 @@ import numpy as np
 import xgboost as xgb
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import auc, f1_score, precision_recall_curve
+from sklearn.metrics import auc, precision_recall_curve
+from sklearn.preprocessing import MaxAbsScaler
 
 import piton
 import piton.datasets
 
-# import lightgbm as lgbm
-
 """
 Example running:
 
-Note: Please make sure to install xgboost. `pip install xgboost`
+Note: Please make sure to first install xgboost. `pip install xgboost`
 
-python3 2_train_baseline_models.py \
-    /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/featurizer_branch/mortality_featurized_patients.pkl \
+python3 tutorials/2_train_baseline_models.py \
+    /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/featurized_patients.pkl \
     --percent_train 0.8 \
     --split_seed 0 \
-    --num_threads 10
+    --num_threads 20
 """
 
 
@@ -105,15 +104,30 @@ if __name__ == "__main__":
     print_log(
         "Featurized Patients", f"Loaded from: {PATH_TO_FEATURIZED_PATIENTS}"
     )
-    print_log("Featurized Patients", f"Number of patients: {len(patient_ids)}")
     print_log(
         "Featurized Patients", f"Feature matrix shape: {feature_matrix.shape}"
     )
+    print_log(
+        "Featurized Patients", f"Patient IDs shape: {len(patient_ids)}"
+    )
+    print_log(
+        "Featurized Patients", f"Label values shape: {label_values.shape}"
+    )
+    print_log(
+        "Featurized Patients", f"Label times shape: {label_times.shape}"
+    )
+    
+    # Ignore all censored data
+    label_values = label_values.astype(np.float32)
+    feature_matrix = feature_matrix[~np.isnan(label_values)]
+    patient_ids = patient_ids[~np.isnan(label_values)]
+    label_times = label_times[~np.isnan(label_values)]
+    label_values = label_values[~np.isnan(label_values)]
 
     # Train/test splits
     print_log(
         "Dataset Split",
-        f"Splitting dataset {round(percent_train, 3)} / {round(1 - percent_train, 3)} train / test, with seed {split_seed}",
+        f"Splitting dataset ({round(percent_train, 3)} / {round(1 - percent_train, 3)}) (train / test), with seed {split_seed}",
     )
     hashed_pids = np.array(
         [database.compute_split(split_seed, pid) for pid in patient_ids]
@@ -134,7 +148,11 @@ if __name__ == "__main__":
     )
     print_log(
         "Dataset Split",
-        f"Prevalence: Total = {round(np.mean(label_values), 3)}, Train = {round(np.mean(y_train), 3)}, Test = {round(np.mean(y_test), 3)}",
+        f"Prevalence: Total = {round(float(np.mean(label_values)), 3)}, Train = {round(float(np.mean(y_train)), 3)}, Test = {round(float(np.mean(y_test)), 3)}",
+    )
+    print_log(
+        "Dataset Split",
+        f"# of Positives: Total = {int(np.sum(label_values))}, Train = {int(np.sum(y_train))}, Test = {int(np.sum(y_test))}",
     )
 
     def run_analysis(title: str, y_train, y_train_proba, y_test, y_test_proba):
@@ -150,15 +168,20 @@ if __name__ == "__main__":
         precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
         auprc = auc(recall, precision)
         accuracy = metrics.accuracy_score(y_true, y_pred)
+        f1 = metrics.f1_score(y_true, y_pred)
         print("\tAUROC:", auroc)
         print("\tAUPRC:", auprc)
         print("\tAccuracy:", accuracy)
+        print("\tF1 Score:", f1)
 
     # Logistic Regresion
     print_log("Logistic Regression", "Training")
-    model = LogisticRegressionCV(n_jobs=num_threads).fit(X_train, y_train)
-    y_train_proba = model.predict_proba(X_train)[::, 1]
-    y_test_proba = model.predict_proba(X_test)[::, 1]
+    scaler = MaxAbsScaler().fit(X_train) # best for sparse data: see https://scikit-learn.org/stable/modules/preprocessing.html#scaling-sparse-data
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    model = LogisticRegressionCV(n_jobs=num_threads, penalty='l2', solver='liblinear').fit(X_train_scaled, y_train)
+    y_train_proba = model.predict_proba(X_train_scaled)[::, 1]
+    y_test_proba = model.predict_proba(X_test_scaled)[::, 1]
     run_analysis(
         "Logistic Regression", y_train, y_train_proba, y_test, y_test_proba
     )
@@ -172,10 +195,3 @@ if __name__ == "__main__":
     y_test_proba = model.predict_proba(X_test)[::, 1]
     run_analysis("XGBoost", y_train, y_train_proba, y_test, y_test_proba)
     print_log("XGBoost", "Done")
-
-    # # LGBM
-    # model = lgbm.LGBMClassifier()
-    # model.fit(X_train, y_train)
-    # y_train_proba = model.predict_proba(X_train)[::,1]
-    # y_test_proba = model.predict_proba(X_test)[::,1]
-    # run_analysis('LGBM', y_train, y_train_proba, y_test, y_test_proba)
