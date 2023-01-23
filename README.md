@@ -96,9 +96,22 @@ zstd -1 --rm $OMOP_SOURCE/**/*.csv
 ## Generating extract
 
 ```
-export OMOP_SOURCE=/share/pi/nigam...
-export EXTRACT_DESTINATION=/share/pi/nigam...
-export EXTRACT_LOGS=/share/pi/nigam...
+# Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
+export OMOP_SOURCE=/path/to/omop/folder...
+# Path to any arbitrary folder where you want to store your Piton extract
+export EXTRACT_DESTINATION=/path/to/piton/extract/folder...
+# Path to any arbitrary folder where you want to store your Piton extract logs
+export EXTRACT_LOGS=/path/to/piton/extract/logs...
+
+etl_stanford_omop $OMOP_SOURCE $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
+```
+
+Example usage:
+
+```
+export OMOP_SOURCE=/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_11_09
+export EXTRACT_DESTINATION=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
+export EXTRACT_LOGS=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
 
 etl_stanford_omop $OMOP_SOURCE $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
