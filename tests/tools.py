@@ -205,8 +205,9 @@ def assert_labels_are_accurate(
     ), f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
     # Check that length of lists of labels are the same
-    assert len(generated_labels) == len(true_labels), \
-        f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
+    assert len(generated_labels) == len(
+        true_labels
+    ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
     # Check that value of labels are the same
     for idx, (label, true_label) in enumerate(
         zip(generated_labels, true_labels)
@@ -237,7 +238,9 @@ def run_test_for_labeler(
     if true_prediction_times is not None:
         # If manually specified prediction times, adjust labels from occurring at `event.start`
         # e.g. we may make predictions at `event.end` or `event.start + 1 day`
-        true_labels = [ (tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times) ]
+        true_labels = [
+            (tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)
+        ]
     labeled_patients: LabeledPatients = labeler.apply(patients=patients)
 
     # Check accuracy of Labels
@@ -254,8 +257,9 @@ def run_test_for_labeler(
         for p in patients:
             if true_outcome_times:
                 # If manually specified outcome times, check that they are correct
-                assert labeler.get_outcome_times(p) == true_outcome_times, \
-                    f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
+                assert (
+                    labeler.get_outcome_times(p) == true_outcome_times
+                ), f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
             else:
                 # Otherwise, assume that outcome times are simply the start times of
                 # events with codes in `outcome_codes`

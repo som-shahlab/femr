@@ -15,16 +15,16 @@ from .core import (
 )
 from .omop import (
     WithinVisitLabeler,
+    _get_all_children,
     get_death_concepts,
     get_inpatient_admission_concepts,
     get_inpatient_admission_events,
-    _get_all_children,
 )
 
 
 class AdmissionDischargePlaceholderLabeler(Labeler):
-    """Generate a placeholder Label at every admission and discharge time for this patient.
-    """
+    """Generate a placeholder Label at every admission and discharge time for this patient."""
+
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
@@ -42,12 +42,14 @@ class AdmissionDischargePlaceholderLabeler(Labeler):
                 labels.append(Label(time=e.start, value=True))
                 # Record label at discharge time
                 if e.end is None:
-                    raise RuntimeError(f"Event {e} cannot have `None` as its `end` attribute.")
+                    raise RuntimeError(
+                        f"Event {e} cannot have `None` as its `end` attribute."
+                    )
                 labels.append(Label(time=e.end, value=True))
         return labels
 
     def get_labeler_type(self) -> LabelType:
-        return 'boolean'
+        return "boolean"
 
 
 class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
@@ -74,7 +76,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         times: List[datetime.datetime] = []
         for x in admission_events:
             if x.start is None:
-                raise ValueError(f"Admission {x} cannot have the value `None` as its start time")
+                raise ValueError(
+                    f"Admission {x} cannot have the value `None` as its start time"
+                )
             times.append(x.start)
         return times
 
@@ -86,7 +90,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         times: List[datetime.datetime] = []
         for x in admission_events:
             if x.end is None:
-                raise ValueError(f"Admission {x} cannot have the value `None` as its end time")
+                raise ValueError(
+                    f"Admission {x} cannot have the value `None` as its end time"
+                )
             times.append(x.end)
         return times
 
@@ -118,7 +124,9 @@ class InpatientLongAdmissionLabeler(Labeler):
         for event in patient.events:
             if event.code in self.admission_codes:
                 if event.end is None:
-                    raise RuntimeError(f"Admission {event} cannot have the value `None` as its end time")
+                    raise RuntimeError(
+                        f"Admission {event} cannot have the value `None` as its end time"
+                    )
                 is_long_admission: bool = (
                     event.end - event.start
                 ) >= self.long_time
@@ -128,10 +136,11 @@ class InpatientLongAdmissionLabeler(Labeler):
     def get_labeler_type(self) -> LabelType:
         return "boolean"
 
+
 class InpatientMortalityLabeler(WithinVisitLabeler):
     """
     The inpatient labeler predicts whether or not a patient will die within the current admission.
-    
+
     Prediction time: At time of inpatient admission.
     Time horizon: (1 second, end of admission [variable])
     Label: TRUE if patient dies within visit
@@ -144,14 +153,8 @@ class InpatientMortalityLabeler(WithinVisitLabeler):
         dictionary = ontology.get_dictionary()
         piton_codes = set()
         for code in get_death_concepts():
-            piton_codes |= _get_all_children(
-                ontology, dictionary.index(code)
-            )
-        super().__init__(
-            ontology=ontology,
-            outcome_codes=list(piton_codes)
-        )
-
+            piton_codes |= _get_all_children(ontology, dictionary.index(code))
+        super().__init__(ontology=ontology, outcome_codes=list(piton_codes))
 
 
 ##########################################################
@@ -163,24 +166,23 @@ class InpatientMortalityLabeler(WithinVisitLabeler):
 
 class _30DayReadmissionLabeler(InpatientReadmissionLabeler):
     """Predict if patient will be readmitted to hospital within 30 days of discharge.
-    
+
     Prediction time: At discharge from an inpatient admission.
     Time horizon: (1 second, 30 days)
     Label: TRUE if patient has an inpatient admission within time horizon
     """
+
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
     ):
-        time_horizon = TimeHorizon(datetime.timedelta(seconds=1), datetime.timedelta(days=30)) # type: ignore
-        super().__init__(
-            ontology=ontology,
-            time_horizon=time_horizon
-        )
+        time_horizon = TimeHorizon(datetime.timedelta(seconds=1), datetime.timedelta(days=30))  # type: ignore
+        super().__init__(ontology=ontology, time_horizon=time_horizon)
+
 
 class _1WeekLongLOSLabeler(InpatientLongAdmissionLabeler):
     """Predict if inpatient visit is >= 7 days.
-    
+
     Prediction time: At time of inpatient admission.
     Time horizon: Till the end of the visit
     Label: TRUE if visit length is >= 7 days (i.e. `visit.end - visit.start >= 7 days`)
@@ -191,8 +193,4 @@ class _1WeekLongLOSLabeler(InpatientLongAdmissionLabeler):
         ontology: extension_datasets.Ontology,
     ):
         long_time: datetime.timedelta = datetime.timedelta(days=7)
-        super().__init__(
-            ontology=ontology,
-            long_time=long_time
-        )
-
+        super().__init__(ontology=ontology, long_time=long_time)

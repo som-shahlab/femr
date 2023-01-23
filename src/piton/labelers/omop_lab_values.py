@@ -3,12 +3,22 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import List, Set, Optional
+from typing import List, Optional, Set
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import TimeHorizon, TimeHorizonEventLabeler, Labeler, Label
-from .omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_ids_to_piton_codes
+from .core import (
+    Label,
+    Labeler,
+    LabelType,
+    TimeHorizon,
+    TimeHorizonEventLabeler,
+)
+from .omop import (
+    _get_all_children,
+    get_inpatient_admission_events,
+    map_omop_concept_ids_to_piton_codes,
+)
 
 ##########################################################
 ##########################################################
@@ -59,7 +69,9 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
             # corresopnd to this label, so use those directly.
             # This relies on the `ontology` class having a `get_code_from_concept_id()`
             # method implemented.
-            self.outcome_codes = map_omop_concept_ids_to_piton_codes(ontology, self.omop_concept_ids)
+            self.outcome_codes = map_omop_concept_ids_to_piton_codes(
+                ontology, self.omop_concept_ids
+            )
         self.outcome_codes = list(set(self.outcome_codes))
 
     def get_time_horizon(self) -> TimeHorizon:
@@ -94,7 +106,9 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
         return "normal"
 
     @abstractmethod
-    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+    def normalize_value_with_units(
+        self, value: float, unit: Optional[str]
+    ) -> float:
         """Convert `value` to a float in the same units as the thresholds in `self.value_to_label`.
 
         NOTE: Some units have the form 'mg/dL (See scan or EMR data for detail)', so you
@@ -134,7 +148,9 @@ class ThrombocytopeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+    def normalize_value_with_units(
+        self, value: float, unit: Optional[str]
+    ) -> float:
         return value
 
 
@@ -179,7 +195,9 @@ class HyperkalemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+    def normalize_value_with_units(
+        self, value: float, unit: Optional[str]
+    ) -> float:
         if unit is not None:
             if unit.startswith("mmol/L"):
                 # mmol/L
@@ -224,7 +242,9 @@ class HypoglycemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+    def normalize_value_with_units(
+        self, value: float, unit: Optional[str]
+    ) -> float:
         if unit is not None:
             if unit.startswith("mg/dL"):
                 # mg / dL
@@ -265,7 +285,9 @@ class HyponatremiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+    def normalize_value_with_units(
+        self, value: float, unit: Optional[str]
+    ) -> float:
         return value
 
 
@@ -296,7 +318,9 @@ class AnemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(self, value: float, unit: Optional[str]) -> float:
+    def normalize_value_with_units(
+        self, value: float, unit: Optional[str]
+    ) -> float:
         if unit is not None:
             if unit.startswith("g/dL"):
                 # g / dL
@@ -356,14 +380,11 @@ class AcuteKidneyInjuryLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     ]
 
 
-
-
 ##########################################################
 ##########################################################
 # Other lab value related labelers
 ##########################################################
 ##########################################################
-
 
 
 class CeliacTestLabeler(Labeler):

@@ -10,15 +10,12 @@ import piton.datasets
 from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
-from piton.labelers.omop import (
-    HighHbA1cCodeLabeler,
-    LupusCodeLabeler,
-)
+from piton.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
 from piton.labelers.omop_inpatient_admissions import (
-    _30DayReadmissionLabeler,
-    _1WeekLongLOSLabeler,
-    InpatientMortalityLabeler,
     AdmissionDischargePlaceholderLabeler,
+    InpatientMortalityLabeler,
+    _1WeekLongLOSLabeler,
+    _30DayReadmissionLabeler,
 )
 from piton.labelers.omop_lab_values import (
     HyperkalemiaLabValueLabeler,
@@ -87,14 +84,15 @@ if __name__ == "__main__":
         type=str,
         help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5/'",
     )
-    
+
     parser.add_argument(
         "path_to_output_dir",
         type=str,
-        help=("Path to save files output by featurizer."
-              " This folder will contain these files: labeled_patients.pkl, preprocessed_featurizers.pkl, and featurized_patients.pkl."
-              " Example: '/local-scratch/nigam/projects/rthapa84/data/mortality/'"
-        )
+        help=(
+            "Path to save files output by featurizer."
+            " This folder will contain these files: labeled_patients.pkl, preprocessed_featurizers.pkl, and featurized_patients.pkl."
+            " Example: '/local-scratch/nigam/projects/rthapa84/data/mortality/'"
+        ),
     )
 
     parser.add_argument(
@@ -126,7 +124,6 @@ if __name__ == "__main__":
         default=None,
     )
 
-
     # Parse CLI args
     args = parser.parse_args()
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
@@ -136,9 +133,15 @@ if __name__ == "__main__":
     MAX_LABELS_PER_PATIENT: int = args.max_labels_per_patient
 
     # create directories to save files
-    PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'labeled_patients.pkl')
-    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'preprocessed_featurizers.pkl')
-    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, 'featurized_patients.pkl')
+    PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(
+        PATH_TO_OUTPUT_DIR, "labeled_patients.pkl"
+    )
+    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = os.path.join(
+        PATH_TO_OUTPUT_DIR, "preprocessed_featurizers.pkl"
+    )
+    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = os.path.join(
+        PATH_TO_OUTPUT_DIR, "featurized_patients.pkl"
+    )
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
 
     # Load PatientDatabase + Ontology
@@ -147,7 +150,9 @@ if __name__ == "__main__":
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
     # Define the labeling function.
-    year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
+    year_time_horizon: TimeHorizon = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=365)
+    )
     if args.labeling_function == "admission_discharge":
         labeler = AdmissionDischargePlaceholderLabeler(ontology)
     elif args.labeling_function == "mortality":
@@ -180,11 +185,16 @@ if __name__ == "__main__":
     if not args.labeling_function == "admission_discharge":
         # Don't throw out labels for admission/discharge placeholder, otherwise
         # defeats the purpose of this labeler
-        labeler = NLabelsPerPatientLabeler(labeler, seed=0, num_labels=MAX_LABELS_PER_PATIENT)
-        print_log("Labeler", f"Keeping max of {MAX_LABELS_PER_PATIENT} labels per patient")
+        labeler = NLabelsPerPatientLabeler(
+            labeler, seed=0, num_labels=MAX_LABELS_PER_PATIENT
+        )
+        print_log(
+            "Labeler",
+            f"Keeping max of {MAX_LABELS_PER_PATIENT} labels per patient",
+        )
     else:
         print_log("Labeler", f"Keeping ALL labels per patient")
-        
+
     print_log("Labeling Patients", "Starting")
     labeled_patients = labeler.apply(
         path_to_patient_database=PATH_TO_PATIENT_DATABASE,

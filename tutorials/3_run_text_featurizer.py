@@ -35,7 +35,7 @@ python3 tutorials/3_run_text_featurizer.py \
     --embedder__method cls \
     --embedder__batch_size 32 \
     --is_force_refresh
-    
+
     # --preprocessor__keep_notes_of_type discharge \
 """
 
@@ -95,10 +95,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_output_dir",
         type=str,
-        help=("Path to save files output by featurizer."
-              " This folder will contain these files: labeled_patients.pkl, preprocessed_featurizers.pkl, and featurized_patients.pkl."
-              " Example: '/local-scratch/nigam/projects/rthapa84/data/mortality/'"
-        )
+        help=(
+            "Path to save files output by featurizer."
+            " This folder will contain these files: labeled_patients.pkl, preprocessed_featurizers.pkl, and featurized_patients.pkl."
+            " Example: '/local-scratch/nigam/projects/rthapa84/data/mortality/'"
+        ),
     )
     parser.add_argument(
         "--num_threads",

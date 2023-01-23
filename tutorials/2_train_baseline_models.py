@@ -107,16 +107,12 @@ if __name__ == "__main__":
     print_log(
         "Featurized Patients", f"Feature matrix shape: {feature_matrix.shape}"
     )
-    print_log(
-        "Featurized Patients", f"Patient IDs shape: {len(patient_ids)}"
-    )
+    print_log("Featurized Patients", f"Patient IDs shape: {len(patient_ids)}")
     print_log(
         "Featurized Patients", f"Label values shape: {label_values.shape}"
     )
-    print_log(
-        "Featurized Patients", f"Label times shape: {label_times.shape}"
-    )
-    
+    print_log("Featurized Patients", f"Label times shape: {label_times.shape}")
+
     # Ignore all censored data
     label_values = label_values.astype(np.float32)
     feature_matrix = feature_matrix[~np.isnan(label_values)]
@@ -176,10 +172,14 @@ if __name__ == "__main__":
 
     # Logistic Regresion
     print_log("Logistic Regression", "Training")
-    scaler = MaxAbsScaler().fit(X_train) # best for sparse data: see https://scikit-learn.org/stable/modules/preprocessing.html#scaling-sparse-data
+    scaler = MaxAbsScaler().fit(
+        X_train
+    )  # best for sparse data: see https://scikit-learn.org/stable/modules/preprocessing.html#scaling-sparse-data
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
-    model = LogisticRegressionCV(n_jobs=num_threads, penalty='l2', solver='liblinear').fit(X_train_scaled, y_train)
+    model = LogisticRegressionCV(
+        n_jobs=num_threads, penalty="l2", solver="liblinear"
+    ).fit(X_train_scaled, y_train)
     y_train_proba = model.predict_proba(X_train_scaled)[::, 1]
     y_test_proba = model.predict_proba(X_test_scaled)[::, 1]
     run_analysis(

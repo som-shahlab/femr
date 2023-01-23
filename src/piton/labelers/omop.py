@@ -81,6 +81,7 @@ def _get_all_children(
 ##########################################################
 ##########################################################
 
+
 class WithinVisitLabeler(Labeler):
     # TODO - check
     """
@@ -131,10 +132,11 @@ class WithinVisitLabeler(Labeler):
                 visit_to_outcome_count[event.visit_id] = 0
                 visits.append(event)
             elif event.code in self.outcome_codes:
-                if not event.visit_id in visit_to_outcome_count:
+                if event.visit_id not in visit_to_outcome_count:
                     raise RuntimeError(
-                        f"Outcome event with code={event.code} at time={event.start} for patient id={patient.patient_id}"
-                        f" occurred before its corresponding admission event with visit_id {event.visit_id}"
+                        f"Outcome event with code={event.code} at time={event.start}"
+                        f" for patient id={patient.patient_id} occurred before its"
+                        f" corresponding admission event with visit_id {event.visit_id}"
                     )
                 visit_to_outcome_count[event.visit_id] += 1
 
@@ -222,7 +224,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
     original_omop_concept_ids: List[int] = []
     # parent OMOP concept IDs + all their children
     omop_concept_ids: List[int] = []
-    
+
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
@@ -243,7 +245,9 @@ class OMOPConceptCodeLabeler(CodeLabeler):
             # corresopnd to this label, so use those directly.
             # This relies on the `ontology` class having a `get_code_from_concept_id()`
             # method implemented.
-            outcome_codes = map_omop_concept_ids_to_piton_codes(ontology, self.omop_concept_ids)
+            outcome_codes = map_omop_concept_ids_to_piton_codes(
+                ontology, self.omop_concept_ids
+            )
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
@@ -386,15 +390,16 @@ class HighHbA1cCodeLabeler(Labeler):
 class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hypoglycemia in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_codes = [
-        'SNOMED/267384006', 'SNOMED/421725003', 'SNOMED/719216001', 
-        'SNOMED/302866003', 'SNOMED/237633009', 'SNOMED/120731000119103', 
-        'SNOMED/190448007', 'SNOMED/230796005', 'SNOMED/421437000', 
+        'SNOMED/267384006', 'SNOMED/421725003', 'SNOMED/719216001',
+        'SNOMED/302866003', 'SNOMED/237633009', 'SNOMED/120731000119103',
+        'SNOMED/190448007', 'SNOMED/230796005', 'SNOMED/421437000',
         'SNOMED/52767006', 'SNOMED/237637005', 'SNOMED/84371000119108'
     ]
     original_omop_concept_ids = [
-        380688, 4226798, 36714116, 24609, 4029423, 45757363, 4096804, 
+        380688, 4226798, 36714116, 24609, 4029423, 45757363, 4096804,
         4048805, 4228112, 23034, 4029424, 45769876,
     ]
     omop_concept_ids = [
@@ -410,6 +415,7 @@ class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
 class AKICodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of AKI in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_codes = [
         'SNOMED/14669001', 'SNOMED/298015003', 'SNOMED/35455006',
@@ -433,9 +439,10 @@ class AKICodeLabeler(OMOPConceptCodeLabeler):
 class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Anemia in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_codes = [
-        'SNOMED/271737000', 'SNOMED/713496008', 'SNOMED/713349004', 'SNOMED/767657005', 
+        'SNOMED/271737000', 'SNOMED/713496008', 'SNOMED/713349004', 'SNOMED/767657005',
         'SNOMED/111570005', 'SNOMED/691401000119104', 'SNOMED/691411000119101',
     ]
     original_omop_concept_ids = [
@@ -502,6 +509,7 @@ class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
 class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hyperkalemia in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_codes = [
         'SNOMED/14140009',
@@ -518,6 +526,7 @@ class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
 class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hyponatremia in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_codes = [
         'SNOMED/267447008', 'SNOMED/89627008'
@@ -535,6 +544,7 @@ class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
 class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
+
     # fmt: off
     original_omop_concept_codes = [
         'SNOMED/267447008', 'SNOMED/89627008',

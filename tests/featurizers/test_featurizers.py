@@ -1,6 +1,8 @@
+# flake8: noqa: E402
 import datetime
 import os
 import pathlib
+import sys
 from typing import cast
 
 import numpy as np
@@ -14,8 +16,6 @@ from piton.labelers.core import TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
-import sys
-import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import (
     create_database,

@@ -1,13 +1,14 @@
+# flake8: noqa: E402
 import datetime
+import os
 import pathlib
-
+import sys
 from typing import List
+
 from piton import Patient
 from piton.labelers.core import TimeHorizon, TimeHorizonEventLabeler
 
 # Needed to import `tools` for local testing
-import sys
-import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import (
     EventsWithLabels,
@@ -19,6 +20,7 @@ from tools import (
 
 class DummyLabeler(TimeHorizonEventLabeler):
     """Dummy labeler that returns True if the event's `code` is in `self.outcome_codes`."""
+
     def __init__(
         self,
         outcome_codes: List[int],
@@ -28,16 +30,16 @@ class DummyLabeler(TimeHorizonEventLabeler):
         self.time_horizon: TimeHorizon = time_horizon
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        return [ e.start for e in patient.events ]
+        return [e.start for e in patient.events]
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.outcome_codes:
-                times.append(event.start)
+        for e in patient.events:
+            if e.code in self.outcome_codes:
+                times.append(e.start)
         return times
 
 
@@ -48,6 +50,7 @@ def test_no_outcomes(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([100], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2015, 1, 3), 2, None), False),
         (event((2015, 1, 3), 1, None), False),
         (event((2015, 1, 3), 3, None), False),
@@ -58,6 +61,7 @@ def test_no_outcomes(tmp_path: pathlib.Path):
         (event((2018, 5, 3, 11), 1, None), False),
         (event((2018, 5, 4), 1, None), False),
         (event((2018, 12, 4), 1, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_no_outcomes"
@@ -71,6 +75,7 @@ def test_horizon_0_180_days(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2015, 1, 3), 2, None), True),
         (event((2015, 1, 3), 1, None), True),
         (event((2015, 1, 3), 3, None), True),
@@ -81,6 +86,7 @@ def test_horizon_0_180_days(tmp_path: pathlib.Path):
         (event((2018, 5, 3, 11), 1, None), False),
         (event((2018, 5, 4), 1, None), False),
         (event((2018, 12, 4), 1, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_0_180_days"
@@ -94,6 +100,7 @@ def test_horizon_1_180_days(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2015, 1, 3), 2, None), False),
         (event((2015, 1, 3), 1, None), False),
         (event((2015, 1, 3), 3, None), False),
@@ -104,6 +111,7 @@ def test_horizon_1_180_days(tmp_path: pathlib.Path):
         (event((2018, 5, 3, 11), 1, None), False),
         (event((2018, 5, 4), 1, None), False),
         (event((2018, 12, 4), 1, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_1_180_days"
@@ -117,6 +125,7 @@ def test_horizon_180_365_days(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2000, 1, 3), 2, None), True),
         (event((2000, 10, 5), 2, None), False),
         (event((2002, 1, 5), 2, None), True),
@@ -127,6 +136,7 @@ def test_horizon_180_365_days(tmp_path: pathlib.Path):
         (event((2002, 12, 10), 1, None), False),
         (event((2004, 1, 10), 2, None), False),
         (event((2008, 1, 10), 2, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_180_365_days"
@@ -140,12 +150,14 @@ def test_horizon_0_0_days(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2015, 1, 3), 2, None), True),
         (event((2015, 1, 3), 1, None), True),
         (event((2015, 1, 4), 1, None), False),
         (event((2015, 1, 5), 2, None), True),
         (event((2015, 1, 5, 10), 1, None), False),
         (event((2015, 1, 6), 2, None), True),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_0_0_days"
@@ -159,6 +171,7 @@ def test_horizon_10_10_days(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2015, 1, 3), 2, None), False),
         (event((2015, 1, 13), 1, None), True),
         (event((2015, 1, 23), 2, None), True),
@@ -167,6 +180,7 @@ def test_horizon_10_10_days(tmp_path: pathlib.Path):
         (event((2015, 3, 20), 2, None), False),
         (event((2015, 3, 29), 2, None), None),
         (event((2015, 3, 30), 1, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_10_10_days"
@@ -180,6 +194,7 @@ def test_horizon_0_1000000_days(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2000, 1, 3), 2, None), True),
         (event((2001, 10, 5), 1, None), True),
         (event((2020, 10, 5), 2, None), True),
@@ -187,6 +202,7 @@ def test_horizon_0_1000000_days(tmp_path: pathlib.Path):
         (event((2050, 1, 10), 2, None), True),
         (event((2051, 1, 10), 1, None), False),
         (event((5000, 1, 10), 1, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_0_1000000_days"
@@ -200,6 +216,7 @@ def test_horizon_5_10_hours(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((2015, 1, 1, 0, 0), 1, None), True),
         (event((2015, 1, 1, 10, 29), 2, None), False),
         (event((2015, 1, 1, 10, 30), 1, None), False),
@@ -222,6 +239,7 @@ def test_horizon_5_10_hours(tmp_path: pathlib.Path):
         (event((2019, 1, 1, 0, 0), 1, None), True),
         (event((2019, 1, 1, 4, 59, 59), 1, None), None),
         (event((2019, 1, 1, 5), 2, None), None),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_5_10_hours"
@@ -236,6 +254,7 @@ def test_horizon_infinite(tmp_path: pathlib.Path):
     )
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((1950, 1, 3), 1, None), True),
         (event((2000, 1, 3), 1, None), True),
         (event((2001, 10, 5), 1, None), True),
@@ -245,6 +264,7 @@ def test_horizon_infinite(tmp_path: pathlib.Path):
         (event((2050, 1, 20), 2, None), False),
         (event((2051, 1, 10), 1, None), False),
         (event((5000, 1, 10), 1, None), False),
+        # fmt: on
     ]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_horizon_infinite"

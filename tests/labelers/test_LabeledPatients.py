@@ -1,7 +1,9 @@
+# flake8: noqa: E402
 import datetime
 import os
 import pathlib
 import pickle
+import sys
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -11,8 +13,6 @@ from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
-import sys
-import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import (
     EventsWithLabels,
@@ -27,9 +27,12 @@ from tools import (
 def assert_tuples_match_labels(labeled_patients: LabeledPatients):
     """Passes if tuples output by `as_list_of_label_tuples()` are the same as the `labels` in `labeled_patients`."""
     label_tuples = labeled_patients.as_list_of_label_tuples()
+
+    # Needed in case `label_tuples = []`
     assert (
         len(label_tuples) == labeled_patients.get_num_labels()
-    ), f"{len(label_tuples)} != {labeled_patients.get_num_labels()}"  # Needed in case `label_tuples = []`
+    ), f"{len(label_tuples)} != {labeled_patients.get_num_labels()}"
+
     for lt in label_tuples:
         patient_id = lt[0]
         label = lt[1]
@@ -63,6 +66,7 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
 def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     """Checks internal methods of `LabeledPatient`"""
     events_with_labels: EventsWithLabels = [
+        # fmt: off
         (event((1995, 1, 3), 0, 34.5), "skip"),
         (event((2010, 1, 1), 1, "test_value"), "skip"),
         (event((2010, 1, 5), 2, 1), True),
@@ -75,6 +79,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         (event((2015, 6, 15, 11), 3, None), "skip"),
         (event((2016, 1, 1), 2, None), None),
         (event((2016, 3, 1, 10, 10, 10), 2, None), None),
+        # fmt: on
     ]
     patients: List[piton.Patient] = create_patients_list(
         10, [x[0] for x in events_with_labels]
