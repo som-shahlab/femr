@@ -103,7 +103,11 @@ export EXTRACT_DESTINATION=/path/to/piton/extract/folder...
 # Path to any arbitrary folder where you want to store your Piton extract logs
 export EXTRACT_LOGS=/path/to/piton/extract/logs...
 
-etl_stanford_omop $OMOP_SOURCE $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
+python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
+
+python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
+
+etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
 
 Example usage:
