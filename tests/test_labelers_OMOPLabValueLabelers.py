@@ -4,7 +4,16 @@ from typing import List
 
 import piton.datasets
 from piton.labelers.core import TimeHorizon
-from piton.labelers.omop_lab_values import OMOPConceptOutcomeFromLabValueLabeler
+from piton.labelers.omop_lab_values import (
+    OMOPConceptOutcomeFromLabValueLabeler,
+    ThrombocytopeniaLabValueLabeler,
+    HyperkalemiaLabValueLabeler,
+    HypoglycemiaLabValueLabeler,
+    HyponatremiaLabValueLabeler,
+    AnemiaLabValueLabeler,
+    NeutropeniaLabValueLabeler,
+    AcuteKidneyInjuryLabValueLabeler,
+)
 from tools import (
     EventsWithLabels,
     event,
@@ -44,7 +53,7 @@ class DummyOntology:
             return []
 
 
-class DummyThrombocytopeniaLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class DummyLabeler1(OMOPConceptOutcomeFromLabValueLabeler):
     original_omop_concept_codes = [
         "OMOP_CONCEPT_A",
         "OMOP_CONCEPT_B",
@@ -93,19 +102,10 @@ def test_constructor():
         datetime.timedelta(days=0), datetime.timedelta(days=10)
     )
     ontology = DummyOntology()
-    labeler = DummyThrombocytopeniaLabeler(ontology, time_horizon, "severe")  # type: ignore
+    labeler = DummyLabeler1(ontology, time_horizon, "severe")  # type: ignore
     assert labeler.get_time_horizon() == time_horizon
     assert labeler.severity == "severe"
-    assert set(labeler.outcome_codes) == set(
-        [
-            3,
-            4,
-            7,
-            8,
-            12,
-            13,
-        ]
-    )
+    assert set(labeler.outcome_codes) == {3,4,7,8,12,13}
 
     # Constructor 2
     time_horizon = TimeHorizon(
@@ -114,7 +114,7 @@ def test_constructor():
     labeler = DummyLabeler2(ontology, time_horizon, "normal")
     assert labeler.get_time_horizon() == time_horizon
     assert labeler.severity == "normal"
-    assert set(labeler.outcome_codes) == set([4, 12])
+    assert set(labeler.outcome_codes) == {4,12}
 
 
 def test_labeling(tmp_path: pathlib.Path):
@@ -184,8 +184,62 @@ def test_units(tmp_path: pathlib.Path):
     # TODO: test unit normalization
     pass
 
+def test_thrombocytopenia(tmp_path: pathlib.Path):
+    # TODO
+    return
+    class DummyOntology:
+        def get_dictionary(self):
+            return [
+                "zero",
+                "Visit/IP",
+                "OMOP_CONCEPT_A",
+            ]
+        def get_children(self, parent_code: int) -> List[int]:
+            return [7, 13] if parent_code in [] else []
+
+    time_horizon = TimeHorizon(
+        datetime.timedelta(days=0), datetime.timedelta(days=10)
+    )
+    ontology = DummyOntology()
+    labeler = ThrombocytopeniaLabeler(ontology, time_horizon, "severe")  # type: ignore
+
+    # Create patient
+    events_with_labels: EventsWithLabels = [
+        (event((2000, 1, 4), 7, None), "skip"),  # lab test
+    ]
+    true_outcome_times: List[datetime.datetime] = [
+        events_with_labels[7][0].start,
+        events_with_labels[10][0].start,
+        events_with_labels[20][0].start,
+    ]
+    run_test_for_labeler(
+        labeler,
+        events_with_labels,
+        true_outcome_times=true_outcome_times,
+        help_text="test_thrombocytopenia",
+    )
+
+def test_hyperkalemia(tmp_path: pathlib.Path):
+    # TODO
+    pass
+def test_hypoglycemia(tmp_path: pathlib.Path):
+    # TODO
+    pass
+def test_hyponatremia(tmp_path: pathlib.Path):
+    # TODO
+    pass
+def test_anemia(tmp_path: pathlib.Path):
+    # TODO
+    pass
+def test_neutropenia(tmp_path: pathlib.Path):
+    # TODO
+    pass
+def test_acuteKidneyInjury(tmp_path: pathlib.Path):
+    # TODO
+    pass
 
 # Local testing
 if __name__ == "__main__":
     run_test_locally("../ignore/test_labelers/", test_constructor)
     run_test_locally("../ignore/test_labelers/", test_labeling)
+    run_test_locally("../ignore/test_labelers/", test_units)
