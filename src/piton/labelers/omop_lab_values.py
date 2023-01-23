@@ -7,9 +7,10 @@ from typing import List, Set, Optional
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import TimeHorizon, TimeHorizonEventLabeler
-from .omop import _get_all_children, get_inpatient_admission_events
+from .core import TimeHorizon, TimeHorizonEventLabeler, Labeler, Label
+from .omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_ids_to_piton_codes
 
+##########################################################
 ##########################################################
 # Labelers based on Lab Values.
 #
@@ -18,6 +19,7 @@ from .omop import _get_all_children, get_inpatient_admission_events
 # diagnoses. Thus, they may catch more cases of a given
 # condition due to under-coding, but they are also more
 # likely to be noisy.
+##########################################################
 ##########################################################
 
 
@@ -57,9 +59,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
             # corresopnd to this label, so use those directly.
             # This relies on the `ontology` class having a `get_code_from_concept_id()`
             # method implemented.
-            for omop_concept_id in self.omop_concept_ids:
-                piton_code = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
-                self.outcome_codes.append(piton_code)
+            self.outcome_codes = map_omop_concept_ids_to_piton_codes(ontology, self.omop_concept_ids)
         self.outcome_codes = list(set(self.outcome_codes))
 
     def get_time_horizon(self) -> TimeHorizon:
@@ -354,3 +354,61 @@ class AcuteKidneyInjuryLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         3040495,
         3016723,
     ]
+
+
+
+
+##########################################################
+##########################################################
+# Other lab value related labelers
+##########################################################
+##########################################################
+
+
+
+class CeliacTestLabeler(Labeler):
+    # TODO - check
+    """
+    The Celiac test labeler predicts whether or not a celiac test will be positive or negative.
+    The prediction time is 24 hours before the lab results come in.
+    Note: This labeler excludes patients who either already had a celiac test or were previously diagnosed.
+    """
+
+    def __init__(
+        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
+    ):
+        dictionary = ontology.get_dictionary()
+        self.lab_codes = _get_all_children(
+            ontology, dictionary.index("LNC/31017-7")
+        )
+        self.celiac_codes = _get_all_children(
+            ontology, dictionary.index("ICD9CM/579.0")
+        ) | _get_all_children(ontology, dictionary.index("ICD10CM/K90.0"))
+
+        self.pos_value = "Positive"
+        self.neg_value = "Negative"
+
+    def label(self, patient: Patient) -> List[Label]:
+        if len(patient.events) == 0:
+            return []
+
+        for event in patient.events:
+            if event.code in self.celiac_codes:
+                # This patient already has Celiacs
+                return []
+            if event.code in self.lab_codes and event.value in [
+                self.pos_value,
+                self.neg_value,
+            ]:
+                # This patient got a Celiac lab test result
+                # We'll return the Label 24 hours prior
+                return [
+                    Label(
+                        event.start - datetime.timedelta(hours=24),
+                        event.value == self.pos_value,
+                    )
+                ]
+        return []
+
+    def get_labeler_type(self) -> LabelType:
+        return "boolean"

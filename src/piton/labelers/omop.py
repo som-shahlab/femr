@@ -57,7 +57,7 @@ def map_omop_concept_ids_to_piton_codes(
             codes.append(piton_code)
         except Exception as e:
             print(f"code {omop_concept_id} not found", e)
-    return codes
+    return list(set(codes))
 
 
 def _get_all_children(
@@ -214,22 +214,37 @@ class CodeLabeler(TimeHorizonEventLabeler):
 
 
 class OMOPConceptCodeLabeler(CodeLabeler):
-    # TODO - check
     """Same as CodeLabeler, but add the extra step of mapping OMOP concept IDs
     (stored in `omop_concept_ids`) to Piton codes (stored in `codes`)."""
 
+    # names for OMOP concept IDs
+    original_omop_concept_codes: List[str] = []
+    # parent OMOP concept IDs, from which `omop_concept_ids` are derived
     original_omop_concept_ids: List[int] = []
+    # parent OMOP concept IDs + all their children
     omop_concept_ids: List[int] = []
-
+    
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
     ):
-        outcome_codes: List[int] = map_omop_concept_ids_to_piton_codes(
-            ontology, self.omop_concept_ids
-        )
+        outcome_codes: List[int] = []
+        if hasattr(self, "original_omop_concept_codes"):
+            # We need to traverse through the ontology ourselves using
+            # OMOP Concept Codes (e.g. "LOINC/123") instead of pre-specified
+            # OMOP Concept IDs (e.g. 3939430) to get all revelant children
+            for omop_concept_code in self.original_omop_concept_codes:
+                piton_code = ontology.get_dictionary().index(omop_concept_code)
+                all_children: Set[int] = _get_all_children(ontology, piton_code)
+                outcome_codes += [code for code in all_children]
+        else:
+            # This Labeler explicitly specifies the list of OMOP Concept IDs that
+            # corresopnd to this label, so use those directly.
+            # This relies on the `ontology` class having a `get_code_from_concept_id()`
+            # method implemented.
+            outcome_codes = map_omop_concept_ids_to_piton_codes(ontology, self.omop_concept_ids)
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
@@ -370,12 +385,18 @@ class HighHbA1cCodeLabeler(Labeler):
 
 
 class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
-    # TODO - check
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hypoglycemia in `time_horizon`."""
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/267384006', 'SNOMED/421725003', 'SNOMED/719216001', 
+        'SNOMED/302866003', 'SNOMED/237633009', 'SNOMED/120731000119103', 
+        'SNOMED/190448007', 'SNOMED/230796005', 'SNOMED/421437000', 
+        'SNOMED/52767006', 'SNOMED/237637005', 'SNOMED/84371000119108'
+    ]
     original_omop_concept_ids = [
-        380688, 4226798, 36714116, 24609, 4029423, 45757363, 4096804, 4048805, 4228112, 23034, 4029424, 45769876,
+        380688, 4226798, 36714116, 24609, 4029423, 45757363, 4096804, 
+        4048805, 4228112, 23034, 4029424, 45769876,
     ]
     omop_concept_ids = [
         45769876, 23034, 4029423, 4226798, 24609, 380688, 4228112, 36714116, 4048805, 44789318,
@@ -388,10 +409,12 @@ class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class AKICodeLabeler(OMOPConceptCodeLabeler):
-    # TODO - check
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of AKI in `time_horizon`."""
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/14669001', 'SNOMED/298015003', 'SNOMED/35455006',
+    ]
     original_omop_concept_ids = [
         197320, 432961, 444044
     ]
@@ -409,10 +432,13 @@ class AKICodeLabeler(OMOPConceptCodeLabeler):
 
 
 class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
-    # TODO - check
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Anemia in `time_horizon`."""
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/271737000', 'SNOMED/713496008', 'SNOMED/713349004', 'SNOMED/767657005', 
+        'SNOMED/111570005', 'SNOMED/691401000119104', 'SNOMED/691411000119101',
+    ]
     original_omop_concept_ids = [
         439777, 37018722, 37017132, 35624756, 4006467, 37398911, 37395652,
     ]
@@ -475,10 +501,12 @@ class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
-    # TODO - check
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hyperkalemia in `time_horizon`."""
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/14140009',
+    ]
     original_omop_concept_ids = [
         434610
     ]
@@ -489,10 +517,12 @@ class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
-    # TODO - check
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hyponatremia in `time_horizon`."""
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/267447008', 'SNOMED/89627008'
+    ]
     original_omop_concept_ids = [
         435515, 4232311
     ]
@@ -504,10 +534,12 @@ class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
-    # TODO - check
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/267447008', 'SNOMED/89627008',
+    ]
     original_omop_concept_ids = [
         432870,
     ]
@@ -536,6 +568,9 @@ class NeutropeniaCodeLabeler(OMOPConceptCodeLabeler):
     coded occurrence(s) of Neutkropenia in `time_horizon`."""
 
     # fmt: off
+    original_omop_concept_codes = [
+        'SNOMED/165517008',
+    ]
     original_omop_concept_ids = [
         301794, 320073,
     ]
@@ -609,54 +644,6 @@ class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
-
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
-
-
-class CeliacTestLabeler(Labeler):
-    # TODO - check
-    """
-    The Celiac test labeler predicts whether or not a celiac test will be positive or negative.
-    The prediction time is 24 hours before the lab results come in.
-    Note: This labeler excludes patients who either already had a celiac test or were previously diagnosed.
-    """
-
-    def __init__(
-        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
-    ):
-        dictionary = ontology.get_dictionary()
-        self.lab_codes = _get_all_children(
-            ontology, dictionary.index("LNC/31017-7")
-        )
-        self.celiac_codes = _get_all_children(
-            ontology, dictionary.index("ICD9CM/579.0")
-        ) | _get_all_children(ontology, dictionary.index("ICD10CM/K90.0"))
-
-        self.pos_value = "Positive"
-        self.neg_value = "Negative"
-
-    def label(self, patient: Patient) -> List[Label]:
-        if len(patient.events) == 0:
-            return []
-
-        for event in patient.events:
-            if event.code in self.celiac_codes:
-                # This patient already has Celiacs
-                return []
-            if event.code in self.lab_codes and event.value in [
-                self.pos_value,
-                self.neg_value,
-            ]:
-                # This patient got a Celiac lab test result
-                # We'll return the Label 24 hours prior
-                return [
-                    Label(
-                        event.start - datetime.timedelta(hours=24),
-                        event.value == self.pos_value,
-                    )
-                ]
-        return []
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"

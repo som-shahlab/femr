@@ -13,6 +13,7 @@ from piton.labelers.omop_lab_values import (
     HypoglycemiaLabValueLabeler,
     HyponatremiaLabValueLabeler,
     AnemiaLabValueLabeler,
+    CeliacTestLabeler,
     NeutropeniaLabValueLabeler,
     AcuteKidneyInjuryLabValueLabeler,
 )
@@ -30,7 +31,11 @@ from tools import (
 
 
 #############################################
-# Generic CodeLabeler
+#############################################
+#
+# Generic OMOPConceptOutcomeFromLabValueLabeler
+#
+# #############################################
 #############################################
 
 class DummyOntology_Generic:
@@ -201,8 +206,13 @@ def test_units(tmp_path: pathlib.Path):
 
 
 #############################################
-# ThrombocytopeniaLabValueLabeler
 #############################################
+#
+# Specific instances of OMOPConceptOutcomeFromLabValueLabeler
+#
+#############################################
+#############################################
+
 
 def _assert_value_to_label_correct(labeler: OMOPConceptOutcomeFromLabValueLabeler, severe: float, moderate: float, mild: float, normal: float):
     assert labeler.value_to_label(severe) == "severe"
@@ -418,7 +428,21 @@ def test_anemia(tmp_path: pathlib.Path):
 def test_neutropenia(tmp_path: pathlib.Path):
     # TODO
     pass
-def test_acuteKidneyInjury(tmp_path: pathlib.Path):
+
+def test_aki(tmp_path: pathlib.Path):
+    # TODO
+    pass
+
+
+#############################################
+#############################################
+#
+# Other lab value related labelers
+#
+#############################################
+#############################################
+
+def test_celiac_test(tmp_path: pathlib.Path):
     # TODO
     pass
 
@@ -433,4 +457,5 @@ if __name__ == "__main__":
     run_test_locally("../ignore/test_labelers/", test_hyponatremia)
     run_test_locally("../ignore/test_labelers/", test_anemia)
     run_test_locally("../ignore/test_labelers/", test_neutropenia)
-    run_test_locally("../ignore/test_labelers/", test_acuteKidneyInjury)
+    run_test_locally("../ignore/test_labelers/", test_aki)
+    run_test_locally("../ignore/test_labelers/", test_celiac_test)
