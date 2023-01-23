@@ -282,17 +282,6 @@ class Labeler(ABC):
         """
         pass
 
-    def get_required_codes(self) -> List[int]:  # type: ignore
-        """Return the set of codes that a patient must have at least one to qualify for this labeler.
-
-        This allows us to only extract patients from the :class:`PatientDatabase` who have a code
-        that matches one of these "required codes."
-
-        Returns:
-            List[int]: List of applicable OMOP codes
-        """
-        return []
-
     def get_patient_start_end_times(
         self, patient: Patient
     ) -> Tuple[datetime.datetime, datetime.datetime]:

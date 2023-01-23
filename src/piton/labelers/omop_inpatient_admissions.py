@@ -22,6 +22,34 @@ from .omop import (
 )
 
 
+class AdmissionDischargePlaceholderLabeler(Labeler):
+    """Generate a placeholder Label at every admission and discharge time for this patient.
+    """
+    def __init__(
+        self,
+        ontology: extension_datasets.Ontology,
+    ):
+        dictionary = ontology.get_dictionary()
+        self.prediction_codes: List[int] = [
+            dictionary.index(x) for x in get_inpatient_admission_concepts()
+        ]
+
+    def label(self, patient: Patient) -> List[Label]:
+        labels: List[Label] = []
+        for e in patient.events:
+            if e.code in self.prediction_codes:
+                # Record label at admission time
+                labels.append(Label(time=e.start, value=True))
+                # Record label at discharge time
+                if e.end is None:
+                    raise RuntimeError(f"Event {e} cannot have `None` as its `end` attribute.")
+                labels.append(Label(time=e.end, value=True))
+        return labels
+
+    def get_labeler_type(self) -> LabelType:
+        return 'boolean'
+
+
 class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     """
     This labeler is designed to predict whether a patient will be readmitted within `time_horizon`

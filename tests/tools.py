@@ -196,7 +196,7 @@ def get_piton_code(ontology, target_code, dummy_concepts: List[str] = []):
 def assert_labels_are_accurate(
     labeled_patients: LabeledPatients,
     patient_id: int,
-    true_labels: Union[List[Optional[bool]], List[bool]],
+    true_labels: List[Tuple[datetime.datetime, Optional[bool]]],
     help_text: str = "",
 ):
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
@@ -205,14 +205,13 @@ def assert_labels_are_accurate(
     ), f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
     # Check that length of lists of labels are the same
-    assert len(generated_labels) == len(
-        true_labels
-    ), f"{len(generated_labels)} != {len(true_labels)} | {help_text}"
+    assert len(generated_labels) == len(true_labels), \
+        f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
     # Check that value of labels are the same
     for idx, (label, true_label) in enumerate(
         zip(generated_labels, true_labels)
     ):
-        assert label.value == true_label, (
+        assert label.value == true_label[1] and label.time == true_label[0], (
             f"patient_id={patient_id}, label_idx={idx}, label={label}  |  "
             f"{label.value} (Assigned) != {true_label} (Expected)  |  "
             f"{help_text}"
@@ -223,17 +222,22 @@ def run_test_for_labeler(
     labeler: Labeler,
     events_with_labels: EventsWithLabels,
     true_outcome_times: Optional[List[datetime.datetime]] = None,
+    true_prediction_times: Optional[List[datetime.datetime]] = None,
     help_text: str = "",
 ) -> None:
 
     patients: List[piton.Patient] = create_patients_list(
         10, [x[0] for x in events_with_labels]
     )
-    true_labels: List[Optional[bool]] = [
-        x[1]
+    true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
+        (x[0].start, x[1])
         for x in events_with_labels
         if isinstance(x[1], bool) or (x[1] is None)
     ]
+    if true_prediction_times is not None:
+        # If manually specified prediction times, adjust labels from occurring at `event.start`
+        # e.g. we may make predictions at `event.end` or `event.start + 1 day`
+        true_labels = [ (tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times) ]
     labeled_patients: LabeledPatients = labeler.apply(patients=patients)
 
     # Check accuracy of Labels

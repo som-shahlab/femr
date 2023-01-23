@@ -16,6 +16,12 @@ from piton.labelers.omop import (
     LupusCodeLabeler,
     MortalityCodeLabeler,
 )
+from piton.labelers.omop_inpatient_admissions import (
+    _30DayReadmissionLabeler,
+    _1WeekLongLOSLabeler,
+    InpatientMortalityLabeler,
+    AdmissionDischargePlaceholderLabeler,
+)
 from piton.labelers.omop_lab_values import (
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
@@ -43,13 +49,17 @@ def save_to_pkl(object_to_save, path_to_file: str):
 
 
 LABELING_FUNCTIONS: List[str] = [
+    # CLMBR code-based tasks
     "mortality",
-    "is_male",
+    "long_los",
+    "readmission",
+    # Other code-based tasks
     "lupus",
     "high_hba1c",
-    "thrombocytopenia",
-    "hyperkalemia",
-    "hypoglycemia",
+    # Lab-value tasks
+    "thrombocytopenia_lab",
+    "hyperkalemia_lab",
+    "hypoglycemia_lab",
 ]
 
 if __name__ == "__main__":
@@ -116,40 +126,26 @@ if __name__ == "__main__":
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
     # Define the labeling function.
-    if args.labeling_function == "high_hba1c":
-        labeler = HighHbA1cCodeLabeler(ontology)
-    elif args.labeling_function == "is_male":
-        labeler = IsMaleLabeler(ontology)
-    elif args.labeling_function == "mortality":
-        time_horizon = TimeHorizon(
-            datetime.timedelta(days=0), datetime.timedelta(days=365)
-        )
-        labeler = MortalityCodeLabeler(ontology, time_horizon)
+    year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
+    if args.labeling_function == "mortality":
+        labeler = InpatientMortalityLabeler(ontology)
+    elif args.labeling_function == "long_los":
+        labeler = _1WeekLongLOSLabeler(ontology)
+    elif args.labeling_function == "readmission":
+        labeler = _30DayReadmissionLabeler(ontology)
     elif args.labeling_function == "lupus":
-        time_horizon = TimeHorizon(
-            datetime.timedelta(days=0), datetime.timedelta(days=365)
-        )
-        labeler = LupusCodeLabeler(ontology, time_horizon)
-    elif args.labeling_function == "thrombocytopenia":
-        time_horizon = TimeHorizon(
-            datetime.timedelta(days=0), datetime.timedelta(days=365)
-        )
+        labeler = LupusCodeLabeler(ontology, year_time_horizon)
+    elif args.labeling_function == "thrombocytopenia_lab":
         labeler = ThrombocytopeniaLabValueLabeler(
-            ontology, time_horizon, "severe"
+            ontology, year_time_horizon, "severe"
         )
-    elif args.labeling_function == "hyperkalemia":
-        time_horizon = TimeHorizon(
-            datetime.timedelta(days=0), datetime.timedelta(days=365)
-        )
+    elif args.labeling_function == "hyperkalemia_lab":
         labeler = HyperkalemiaLabValueLabeler(
-            ontology, time_horizon, "severe"
+            ontology, year_time_horizon, "severe"
         )
-    elif args.labeling_function == "hypoglycemia":
-        time_horizon = TimeHorizon(
-            datetime.timedelta(days=0), datetime.timedelta(days=365)
-        )
+    elif args.labeling_function == "hypoglycemia_lab":
         labeler = HypoglycemiaLabValueLabeler(
-            ontology, time_horizon, "severe"
+            ontology, year_time_horizon, "severe"
         )
     else:
         raise ValueError(

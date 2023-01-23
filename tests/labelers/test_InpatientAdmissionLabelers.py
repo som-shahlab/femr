@@ -1,25 +1,132 @@
-"""TODO"""
+"""Test Labelers that involve inpatient admissions"""
 import datetime
 import pytest
 
-from typing import List
+from typing import List, Tuple, Optional
 
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop import CodeLabeler
 from piton.labelers.omop_inpatient_admissions import (
+    AdmissionDischargePlaceholderLabeler,
     InpatientReadmissionLabeler,
     InpatientMortalityLabeler,
     InpatientLongAdmissionLabeler,
     _30DayReadmissionLabeler,
-    _1WeekLongLOSLabeler
+    _1WeekLongLOSLabeler,
 )
 
 # Needed to import `tools` for local testing
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import event, run_test_locally, EventsWithLabels, run_test_for_labeler
+from tools import event, run_test_locally, EventsWithLabels, run_test_for_labeler, assert_labels_are_accurate, create_patients_list
+
+
+
+#############################################
+#############################################
+#
+# Admission Discharge Placeholder Labeler 
+#
+#############################################
+#############################################
+
+class DummyAdmissionDischargeOntology:
+    def get_dictionary(self):
+        return [
+            "zero",
+            "Visit/IP",
+            "two",
+            "three",
+        ]
+
+    def get_children(self, *args) -> List[int]:
+        return []
+
+def _run_test_admission_discharge_placeholder(labeler, events_with_labels: EventsWithLabels, help_text: str = ''):
+    assert labeler.prediction_codes == [1]
+    # Check Labels match admission start/end times
+    true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
+        y
+        for x in events_with_labels
+        for y in [ (x[0].start, x[1]), (x[0].end, x[1]) ]
+        if x[0].code in [1]
+    ]
+    patients: List[piton.Patient] = create_patients_list(
+        10, [x[0] for x in events_with_labels]
+    )
+    labeled_patients: LabeledPatients = labeler.apply(patients=patients)
+    for patient in patients:
+        assert_labels_are_accurate(
+            labeled_patients,
+            patient.patient_id,
+            true_labels,
+            help_text=help_text,
+        )
+
+def test_admission_discharge_placeholder():
+    ontology = DummyAdmissionDischargeOntology()
+    labeler = AdmissionDischargePlaceholderLabeler(ontology) # type: ignore
+    # Multiple admission/discharges
+    events_with_labels: EventsWithLabels = [
+        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 2)), True), # admission
+        (event((2000, 1, 31), 3), 'skip'),
+        (event((2000, 1, 31), 1, end=datetime.datetime(2000, 1, 31)), True), # admission
+        #
+        (event((2005, 1, 1), 1, end=datetime.datetime(2005, 1, 2)), True), # admission
+        (event((2005, 1, 15), 2), 'skip'),
+        #
+        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 3, 1)), True), # admission
+        (event((2010, 3, 10), 0), 'skip'),
+        (event((2010, 3, 30, 23, 59), 1, end=datetime.datetime(2010, 4, 1)), True), # admission
+        (event((2010, 4, 10), 4), 'skip'),
+        #
+        (event((2015, 1, 1), 1, end=datetime.datetime(2015, 1, 2)), True), # admission
+        (event((2015, 1, 10), 0), 'skip'),
+        (event((2015, 1, 10), 3), 'skip'),
+        (event((2015, 1, 20), 2), 'skip'),
+        (event((2015, 3, 1), 1, end=datetime.datetime(2015, 3, 2)), True), # admission
+        #
+        (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 3)), True), # admission
+        (event((2020, 1, 10), 1, end=datetime.datetime(2020, 1, 20)), True), # admission
+    ]
+    _run_test_admission_discharge_placeholder(labeler, events_with_labels, help_text='test_admission_discharge_placeholder_multiple')
+    
+    # Zero admission/discharges
+    events_with_labels = [
+        (event((2000, 1, 1), 0, end=datetime.datetime(2000, 1, 2)), 'skip'),
+        (event((2000, 1, 31), 3), 'skip'),
+        (event((2000, 1, 31), 4, end=datetime.datetime(2000, 1, 31)), 'skip'),
+    ]
+    _run_test_admission_discharge_placeholder(labeler, events_with_labels, help_text='test_admission_discharge_placeholder_zero')
+    
+    # Overlapping admission/discharges
+    events_with_labels = [
+        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 30)), True),
+        (event((2000, 1, 15), 1, end=datetime.datetime(2000, 2, 10)), True),
+        (event((2000, 1, 29), 1, end=datetime.datetime(2000, 2, 4)), True),
+    ]
+    _run_test_admission_discharge_placeholder(labeler, events_with_labels, help_text='test_admission_discharge_placeholder_overlap')
+    
+    # Test fail cases
+    with pytest.raises(RuntimeError):
+        # Every admission must have an `end` time
+        events_with_labels = [
+            (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 30)), True),
+            (event((2000, 1, 15), 1, end=datetime.datetime(2000, 2, 10)), True),
+            (event((2000, 1, 29), 1), True),
+        ]
+        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        labeler.label(patient)
+
+#############################################
+#############################################
+#
+# Readmission Labeler 
+#
+#############################################
+#############################################
 
 class DummyReadmissionOntology:
     def get_dictionary(self):
@@ -75,6 +182,7 @@ def test_readmission():
     run_test_for_labeler(labeler, 
                          events_with_labels, 
                          true_outcome_times=true_outcome_times,
+                         true_prediction_times=true_prediction_times,
                          help_text="test_readmission_general")
 
     # Confirm 30-day readmission labeler matches this
@@ -85,6 +193,7 @@ def test_readmission():
     run_test_for_labeler(labeler2, 
                          events_with_labels, 
                          true_outcome_times=true_outcome_times,
+                         true_prediction_times=true_prediction_times,
                          help_text="test_readmission_30_day")
     
     # Test fail cases
@@ -96,6 +205,15 @@ def test_readmission():
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         labeler.get_prediction_times(patient)
     
+
+#############################################
+#############################################
+#
+# Inpatient Mortality Labeler
+#
+#############################################
+#############################################
+
 class DummyMortalityOntology:
     def get_dictionary(self):
         return [
@@ -166,6 +284,17 @@ def test_mortality():
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
 
+
+
+#############################################
+#############################################
+#
+# Long Length of Stay Labeler 
+#
+#############################################
+#############################################
+
+
 class DummyLOSOntology:
     def get_dictionary(self):
         return [
@@ -215,6 +344,7 @@ def test_long_admission():
 
 # Local testing
 if __name__ == '__main__':
+    run_test_locally('../ignore/test_labelers/', test_admission_discharge_placeholder)
     run_test_locally('../ignore/test_labelers/', test_readmission)
     run_test_locally('../ignore/test_labelers/', test_mortality)
     run_test_locally('../ignore/test_labelers/', test_long_admission)

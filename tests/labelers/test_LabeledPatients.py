@@ -79,8 +79,8 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     patients: List[piton.Patient] = create_patients_list(
         10, [x[0] for x in events_with_labels]
     )
-    true_labels: List[Optional[bool]] = [
-        x[1]
+    true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
+        (x[0].start, x[1])
         for x in events_with_labels
         if isinstance(x[1], bool) or (x[1] is None)
     ]
