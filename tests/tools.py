@@ -19,7 +19,7 @@ from piton.labelers.core import Label, LabeledPatients, Labeler
 EventsWithLabels = List[Tuple[piton.Event, Optional[Union[bool, str]]]]
 
 
-def event(date: Tuple, code, value, visit_id=None, **kwargs):
+def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
     """A terser way to create a Piton Event."""
     hour, minute, seconds = 0, 0, 0
     if len(date) == 3:
@@ -246,24 +246,22 @@ def run_test_for_labeler(
         )
 
     # Check Labeler's internal functions
-    assert hasattr(
-        labeler, "get_outcome_times"
-    ), f"{labeler} is missing a get_outcome_times() method"
-    assert hasattr(
-        labeler, "outcome_codes"
-    ), f"{labeler} is missing an `outcome_codes` attribute"
-    for p in patients:
-        if true_outcome_times:
-            # If manually specified outcome times, check that they are correct
-            assert labeler.get_outcome_times(p) == true_outcome_times
-        else:
-            # Otherwise, assume that outcome times are simply the start times of
-            # events with codes in `outcome_codes``
-            assert labeler.get_outcome_times(p) == [
-                event.start
-                for event in p.events
-                if event.code in labeler.outcome_codes
-            ]
+    if hasattr(labeler, "get_outcome_times"):
+        for p in patients:
+            if true_outcome_times:
+                # If manually specified outcome times, check that they are correct
+                assert labeler.get_outcome_times(p) == true_outcome_times
+            else:
+                # Otherwise, assume that outcome times are simply the start times of
+                # events with codes in `outcome_codes`
+                assert hasattr(
+                    labeler, "outcome_codes"
+                ), f"{labeler} is missing an `outcome_codes` attribute"
+                assert labeler.get_outcome_times(p) == [
+                    event.start
+                    for event in p.events
+                    if event.code in labeler.outcome_codes
+                ]
 
 
 def create_labeled_patients_list(

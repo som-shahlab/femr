@@ -19,24 +19,24 @@ from piton.transforms.notes import (
 """
 Example running:
 
-python3 3_run_text_featurizer.py \
-    /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-    /local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pkl \
+python3 tutorials/3_run_text_featurizer.py \
+    /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/labeled_patients.pkl \
     /local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer/ \
-    /local-scratch/nigam/projects/mwornow/data/output_mortality_longformer/ \
-    /local-scratch/nigam/projects/mwornow/data/temp_mortality_longformer/ \
+    /local-scratch/nigam/projects/clmbr_text_assets/data/longformer_features/lupus/ \
     --num_threads 20 \
-    --gpu_devices 0 1 3 4 5 6 \
+    --gpu_devices 5 6 7 \
     --preprocessor__transformations keep_only_notes_matching_codes remove_notes_after_label remove_short_notes join_all_notes keep_only_last_n_chars \
     --preprocessor__min_note_char_count 100 \
     --preprocessor__keep_last_n_chars 4096 \
-    # --preprocessor__keep_notes_of_type discharge \
     --tokenizer__max_length 4096 \
     --tokenizer__padding \
     --tokenizer__truncation \
     --embedder__method cls \
     --embedder__batch_size 32 \
     --is_force_refresh
+    
+    # --preprocessor__keep_notes_of_type discharge \
 """
 
 EMBEDDER_METHODS = [
@@ -93,14 +93,12 @@ if __name__ == "__main__":
         help="Path of folder containing the HuggingFace model for text featurization. Example: '/local-scratch/nigam/projects/clmbr_text_assets/models/Clinical-Longformer/'",
     )
     parser.add_argument(
-        "path_to_save_featurized_notes",
+        "path_to_output_dir",
         type=str,
-        help="Path to folder to save features for notes. Example: '/local-scratch/nigam/projects/mwornow/data/output_mortality_longformer/'",
-    )
-    parser.add_argument(
-        "path_to_temp_dir",
-        type=str,
-        help="Path to folder where temporary files will be written. Example: '/local-scratch/nigam/projects/mwornow/data/temp_mortality_longformer/'",
+        help=("Path to save files output by featurizer."
+              " This folder will contain these files: labeled_patients.pkl, preprocessed_featurizers.pkl, and featurized_patients.pkl."
+              " Example: '/local-scratch/nigam/projects/rthapa84/data/mortality/'"
+        )
     )
     parser.add_argument(
         "--num_threads",
@@ -193,8 +191,7 @@ if __name__ == "__main__":
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
     PATH_TO_LABELED_PATIENTS: str = args.path_to_labeled_patients
     PATH_TO_HUGGINGFACE_MODEL: str = args.path_to_huggingface_model
-    PATH_TO_OUTPUT_DIR: str = args.path_to_save_featurized_notes
-    PATH_TO_TEMP_DIR: str = args.path_to_temp_dir
+    PATH_TO_OUTPUT_DIR: str = args.path_to_output_dir
     num_threads: int = args.num_threads
     gpu_devices: List = (
         args.gpu_devices
@@ -202,7 +199,6 @@ if __name__ == "__main__":
         else get_gpus_with_minimum_free_memory(10)
     )
     is_force_refresh: bool = args.is_force_refresh
-    os.makedirs(PATH_TO_TEMP_DIR, exist_ok=True)
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
     assert num_threads > 0, "ERROR - `num_threads` must be greater than 0"
     assert (
@@ -303,7 +299,7 @@ if __name__ == "__main__":
         path_to_patient_database=PATH_TO_PATIENT_DATABASE,
         path_to_tokenizer=PATH_TO_HUGGINGFACE_MODEL,
         path_to_embedder=PATH_TO_HUGGINGFACE_MODEL,
-        path_to_temp_dir=PATH_TO_TEMP_DIR,
+        path_to_temp_dir=PATH_TO_OUTPUT_DIR,
         path_to_output_dir=PATH_TO_OUTPUT_DIR,
         n_cpu_jobs=num_threads,
         gpu_devices=gpu_devices,

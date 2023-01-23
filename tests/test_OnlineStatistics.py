@@ -74,7 +74,7 @@ def test_constructor():
     assert stat.variance() == 30
     assert stat.standard_deviation() == np.sqrt(30)
 
-    # Test fail case
+    # Test fail cases
     with pytest.raises(ValueError) as _:
         # Negative count
         stat = OnlineStatistics(

@@ -4,13 +4,15 @@ from typing import List, cast
 import piton
 import piton.datasets
 from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import LupusCodeLabeler
+from piton.labelers.omop import OpioidOverdoseLabeler
 from tools import (
     EventsWithLabels,
     event,
     run_test_for_labeler,
     run_test_locally,
 )
+
+# TODO
 
 class DummyOntology:
     def get_dictionary(self):
@@ -34,8 +36,8 @@ class DummyOntology:
         else:
             return []
 
-def test_LupusCodeLabeler() -> None:
-    """Create a LupusCodeLabeler for codes 3 and 6"""
+def test_OpioidOverdoseLabeler() -> None:
+    """Create a OpioidOverdoseLabeler for codes 3 and 6"""
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=180)
     )
@@ -59,9 +61,9 @@ def test_LupusCodeLabeler() -> None:
     ontology = cast(piton.datasets.Ontology, DummyOntology())
 
     # Run labeler
-    labeler = LupusCodeLabeler(ontology, time_horizon)
+    labeler = OpioidOverdoseLabeler(ontology, time_horizon)
     run_test_for_labeler(
-        labeler, events_with_labels, help_text="LupusCodeLabeler"
+        labeler, events_with_labels, help_text="OpioidOverdoseLabeler"
     )
 
     # Check that we selected the right codes
@@ -70,4 +72,4 @@ def test_LupusCodeLabeler() -> None:
 
 # Local testing
 if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/", test_LupusCodeLabeler)
+    run_test_locally("../ignore/test_labelers/", test_OpioidOverdoseLabeler)

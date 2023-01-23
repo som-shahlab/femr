@@ -118,6 +118,13 @@ class WithinVisitLabeler(Labeler):
         visit_to_outcome_count: Dict[int, int] = {}
         visits: List[Event] = []
         for event in patient.events:
+            if event.visit_id is None:
+                # Ignore events without a `visit_id`
+                continue
+                # raise RuntimeError(
+                #     f"Event with code={event.code} at time={event.start} for patient id={patient.patient_id}"
+                #     f" does not have a `visit_id`"
+                # )
             if (
                 event.visit_id not in visit_to_outcome_count
                 and event.code in self.visit_codes
@@ -125,10 +132,11 @@ class WithinVisitLabeler(Labeler):
                 visit_to_outcome_count[event.visit_id] = 0
                 visits.append(event)
             elif event.code in self.outcome_codes:
-                assert event.visit_id in visit_to_outcome_count, (
-                    f"Outcome event ({event.code}) at {event.start} for patient {patient.patient_id}"
-                    f"occurred before its corresponding admission event with visit_id {event.visit_id}"
-                )
+                if not event.visit_id in visit_to_outcome_count:
+                    raise RuntimeError(
+                        f"Outcome event with code={event.code} at time={event.start} for patient id={patient.patient_id}"
+                        f" occurred before its corresponding admission event with visit_id {event.visit_id}"
+                    )
                 visit_to_outcome_count[event.visit_id] += 1
 
         # Generate labels
@@ -270,18 +278,6 @@ class LupusCodeLabeler(CodeLabeler):
         prediction_codes: Optional[List[int]] = None,
     ):
         dictionary = ontology.get_dictionary()
-
-        # icd9_codes: List[str] = ["710.0"]
-        # icd10_codes: List[str] = ["M32"]
-        # codes = set()
-        # for code in icd9_codes:
-        #     codes |= _get_all_children(
-        #         ontology, dictionary.index("ICD9CM/" + code)
-        #     )
-        # for code in icd10_codes:
-        #     codes |= _get_all_children(
-        #         ontology, dictionary.index("ICD10CM/" + code)
-        #     )
         codes = set()
         snomed_codes: List[str] = ["55464009", "201436003"]
         for code in snomed_codes:

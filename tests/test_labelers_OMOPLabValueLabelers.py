@@ -122,7 +122,7 @@ def test_labeling(tmp_path: pathlib.Path):
         datetime.timedelta(days=0), datetime.timedelta(days=10)
     )
     ontology = DummyOntology()
-    labeler = DummyThrombocytopeniaLabeler(ontology, time_horizon, "severe")  # type: ignore
+    labeler = DummyLabeler1(ontology, time_horizon, "severe")  # type: ignore
 
     # Create patient
     events_with_labels: EventsWithLabels = [
