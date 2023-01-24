@@ -25,6 +25,7 @@ import numpy as np
 from nptyping import NDArray
 
 from .. import Patient
+from ..extension import datasets as extension_datasets
 from ..datasets import PatientDatabase
 from . import compute_random_num
 
@@ -65,7 +66,7 @@ class Label:
 
 
 def _apply_labeling_function(
-    args: Tuple[Labeler, Optional[Sequence], Optional[str], List[int]]
+    args: Tuple[Labeler, Optional[Sequence[Patient]], Optional[str], List[int]]
 ) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
@@ -75,6 +76,12 @@ def _apply_labeling_function(
     patient_ids: List[int] = args[3]
     if path_to_patient_database is not None:
         patients = PatientDatabase(path_to_patient_database)
+
+    # Hacky workaround for Ontology not being picklable
+    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None:
+        labeling_function.ontology = patients.get_ontology() # type: ignore
+    if hasattr(labeling_function, "labeler") and hasattr(labeling_function.labeler, 'ontology') and labeling_function.labeler.ontology is None:
+        labeling_function.labeler.ontology = patients.get_ontology() # type: ignore
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
@@ -314,6 +321,7 @@ class Labeler(ABC):
                 Typically this will be a `PatientDatabase` object.
             num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
             num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
+                If specified, will take the first `num_patients` in the provided `PatientDatabase` / `patients` list.
                 If None, use all patients.
 
         Returns:
@@ -335,13 +343,21 @@ class Labeler(ABC):
             )
             pids = list(range(num_patients))
         else:
-            assert patients is not None
             # Use `patients` if specified
+            assert patients is not None
             num_patients = len(patients) if not num_patients else num_patients
-            pids = [p.patient_id for p in patients]
+            pids = [p.patient_id for p in patients[:num_patients]]
 
         # Split patient IDs across parallelized processes
         pids_parts = np.array_split(pids, num_threads)
+
+        # NOTE: Super hacky workaround to pickling limitations
+        if hasattr(self, 'ontology') and isinstance(self.ontology, extension_datasets.Ontology):
+            # Remove ontology due to pickling, add it back later
+            self.ontology = None # type: ignore
+        if hasattr(self, 'labeler') and hasattr(self.labeler, 'ontology') and isinstance(self.labeler.ontology, extension_datasets.Ontology):
+            # If NLabelsPerPatient wrapper, go to sublabeler and remove ontology due to pickling
+            self.labeler.ontology = None # type: ignore
 
         # Multiprocessing
         tasks = [
@@ -466,6 +482,7 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
+        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
@@ -475,13 +492,13 @@ class TimeHorizonEventLabeler(Labeler):
             datetime.timedelta
         ] = time_horizon.end  # `None` if infinite time horizon
 
-        results: List[Label] = []
-        curr_outcome_idx: int = 0
         # For each prediction time, check if there is an outcome which occurs within the (start, end)
         # of the time horizon
-        for time in self.get_prediction_times(patient):
+        results: List[Label] = []
+        curr_outcome_idx: int = 0
+        for time in prediction_times:
             while (
-                curr_outcome_idx < len(outcome_times) - 1
+                curr_outcome_idx < len(outcome_times)
                 and outcome_times[curr_outcome_idx] < time + time_horizon_start
             ):
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
@@ -527,7 +544,7 @@ class TimeHorizonEventLabeler(Labeler):
                 results.append(Label(time=time, value=None))
 
         # checks that we have a label for each prediction time (even if `None``)
-        assert len(results) == len(self.get_prediction_times(patient))
+        assert len(results) == len(prediction_times)
         return results
 
 
@@ -543,14 +560,12 @@ class NLabelsPerPatientLabeler(Labeler):
         labels: List[Label] = self.labeler.label(patient)
         if len(labels) <= self.num_labels:
             return labels
-        hash_to_label_List: List[Tuple[int, int, Label]] = [
+        hash_to_label_list: List[Tuple[int, int, Label]] = [
             (i, compute_random_num(self.seed, patient.patient_id, i), labels[i])
             for i in range(len(labels))
         ]
-        hash_to_label_List.sort(key=lambda a: a[1])
-        n_hash_to_label_list: List[Tuple[int, int, Label]] = [
-            x for x in hash_to_label_List[: self.num_labels]
-        ]
+        hash_to_label_list.sort(key=lambda a: a[1])
+        n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[: self.num_labels]
         n_hash_to_label_list.sort(key=lambda a: a[0])
         n_labels: List[Label] = [
             hash_to_label[2] for hash_to_label in n_hash_to_label_list

@@ -74,7 +74,22 @@ class DummyLabeler1(OMOPConceptOutcomeFromLabValueLabeler):
         "OMOP_CONCEPT_B",
     ]
 
-    def value_to_label(self, value: float) -> str:
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+        value = float(raw_value)
+        if unit == "mmol/L":
+            # mmol/L
+            # Original OMOP concept ID: 8753
+            value = value
+        elif unit == "mEq/L":
+            # mEq/L (1-to-1 -> mmol/L)
+            # Original OMOP concept ID: 9557
+            value = value
+        elif unit == "mg/dL":
+            # mg / dL (divide by 18 to get mmol/L)
+            # Original OMOP concept ID: 8840
+            value = value / 18
+        else:
+            raise ValueError(f"Unknown unit: {unit}")
         if value < 50:
             return "severe"
         elif value < 100:
@@ -83,36 +98,14 @@ class DummyLabeler1(OMOPConceptOutcomeFromLabValueLabeler):
             return "mild"
         return "normal"
 
-    def normalize_value_with_units(
-        self, value: float, unit: Optional[str]
-    ) -> float:
-        if unit == "mmol/L":
-            # mmol/L
-            # Original OMOP concept ID: 8753
-            return value
-        elif unit == "mEq/L":
-            # mEq/L (1-to-1 -> mmol/L)
-            # Original OMOP concept ID: 9557
-            return value
-        elif unit == "mg/dL":
-            # mg / dL (divide by 18 to get mmol/L)
-            # Original OMOP concept ID: 8840
-            return value / 18
-        raise ValueError(f"Unknown unit: {unit}")
-
 
 class DummyLabeler2(OMOPConceptOutcomeFromLabValueLabeler):
     original_omop_concept_codes = [
         "OMOP_CONCEPT_B",
     ]
 
-    def value_to_label(self, value: float) -> str:
+    def value_to_label(self, raw_value: float, unit: Optional[str]) -> str:
         return "normal"
-
-    def normalize_value_with_units(
-        self, value: float, unit: Optional[str]
-    ) -> float:
-        return 0
 
 
 def test_constructor():
@@ -222,11 +215,12 @@ def _assert_value_to_label_correct(
     moderate: float,
     mild: float,
     normal: float,
+    unit: Optional[str]
 ):
-    assert labeler.value_to_label(severe) == "severe"
-    assert labeler.value_to_label(moderate) == "moderate"
-    assert labeler.value_to_label(mild) == "mild"
-    assert labeler.value_to_label(normal) == "normal"
+    assert labeler.value_to_label(str(severe), unit) == "severe"
+    assert labeler.value_to_label(str(moderate), unit) == "moderate"
+    assert labeler.value_to_label(str(mild), unit) == "mild"
+    assert labeler.value_to_label(str(normal), unit) == "normal"
 
 
 def _assert_labvalue_constructor_correct(
@@ -242,14 +236,13 @@ def _assert_labvalue_constructor_correct(
 
 def _create_specific_labvalue_labeler(
     LabelerClass,
-    original_omop_concept_codes: List[str],
     severity: str,
     outcome_codes: set,
 ):
     time_horizon = TimeHorizon(
         datetime.timedelta(days=0), datetime.timedelta(days=10)
     )
-    ontology = DummyOntology_Specific(original_omop_concept_codes)
+    ontology = DummyOntology_Specific(LabelerClass.original_omop_concept_codes)
     labeler = LabelerClass(ontology, time_horizon, severity)  # type: ignore
     _assert_labvalue_constructor_correct(
         labeler, time_horizon, severity, outcome_codes
@@ -343,22 +336,15 @@ class DummyOntology_Specific:
 
 
 def test_thrombocytopenia(tmp_path: pathlib.Path):
-    original_omop_concept_codes: List[str] = [
-        "LOINC/LP393218-5",
-        "LOINC/LG32892-8",
-    ]
     outcome_codes: set = {2, 3, 4, 6, 7}
     labeler = _create_specific_labvalue_labeler(
         ThrombocytopeniaLabValueLabeler,
-        original_omop_concept_codes,
         "severe",
         outcome_codes,
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 49.9, 50.1, 149.9, 150.1)
-    assert labeler.normalize_value_with_units(100, "g/L") == 100
-    assert labeler.normalize_value_with_units(100, None) == 100
+    _assert_value_to_label_correct(labeler, 49.9, 50.1, 149.9, 150.1, None)
 
     # Run tests
     _run_specific_labvalue_test(
@@ -373,31 +359,15 @@ def test_thrombocytopenia(tmp_path: pathlib.Path):
 
 
 def test_hyperkalemia(tmp_path: pathlib.Path):
-    original_omop_concept_codes: List[str] = [
-        "LOINC/LG7931-1",
-        "LOINC/LP386618-5",
-        "LOINC/40653596",
-    ]
     outcome_codes: set = {2, 3, 4, 6, 7, 8}
     labeler = _create_specific_labvalue_labeler(
         HyperkalemiaLabValueLabeler,
-        original_omop_concept_codes,
         "severe",
         outcome_codes,
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 7.1, 6.1, 5.55, 5.49)
-    assert labeler.normalize_value_with_units(100, "mmol/L") == 100
-    assert labeler.normalize_value_with_units(100, "mEq/L (extra text)") == 100
-    assert (
-        labeler.normalize_value_with_units(100, "mg/dL (extra text)")
-        == 100 / 18
-    )
-    with pytest.raises(ValueError):
-        labeler.normalize_value_with_units(100, "g/L")
-    with pytest.raises(ValueError):
-        labeler.normalize_value_with_units(100, None)
+    _assert_value_to_label_correct(labeler, 7.1, 6.1, 5.55, 5.49, 'mmol/l')
 
     # Create patient
     _run_specific_labvalue_test(
@@ -412,29 +382,15 @@ def test_hyperkalemia(tmp_path: pathlib.Path):
 
 
 def test_hypoglycemia(tmp_path: pathlib.Path):
-    original_omop_concept_codes: List[str] = [
-        "SNOMED/33747003",
-        "LOINC/LP416145-3",
-    ]
     outcome_codes: set = {2, 3, 4, 6, 7}
     labeler = _create_specific_labvalue_labeler(
         HypoglycemiaLabValueLabeler,
-        original_omop_concept_codes,
         "severe",
         outcome_codes,
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 2.9, 3.49, 3.89, 5)
-    assert labeler.normalize_value_with_units(100, "mmol/L") == 100
-    assert (
-        labeler.normalize_value_with_units(100, "mg/dL (extra text)")
-        == 100 / 18
-    )
-    with pytest.raises(ValueError):
-        labeler.normalize_value_with_units(100, "g/L")
-    with pytest.raises(ValueError):
-        labeler.normalize_value_with_units(100, None)
+    _assert_value_to_label_correct(labeler, 2.9, 3.49, 3.89, 5, 'mmol/l')
 
     # Create patient
     _run_specific_labvalue_test(
@@ -449,21 +405,15 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
 
 
 def test_hyponatremia(tmp_path: pathlib.Path):
-    original_omop_concept_codes: List[str] = [
-        "LOINC/LG11363-5",
-    ]
     outcome_codes: set = {2, 3, 6}
     labeler = _create_specific_labvalue_labeler(
         HyponatremiaLabValueLabeler,
-        original_omop_concept_codes,
         "severe",
         outcome_codes,
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 124.9, 129.9, 134.99, 136)
-    assert labeler.normalize_value_with_units(100, "g/L") == 100
-    assert labeler.normalize_value_with_units(100, None) == 100
+    _assert_value_to_label_correct(labeler, 124.9, 129.9, 134.99, 136, None)
 
     # Create patient
     _run_specific_labvalue_test(
@@ -478,26 +428,16 @@ def test_hyponatremia(tmp_path: pathlib.Path):
 
 
 def test_anemia(tmp_path: pathlib.Path):
-    original_omop_concept_codes: List[str] = [
-        "LOINC/LP392452-1",
-    ]
     outcome_codes: set = {2, 3, 6}
     labeler = _create_specific_labvalue_labeler(
         AnemiaLabValueLabeler,
-        original_omop_concept_codes,
         "severe",
         outcome_codes,
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 69.9, 109.99, 119.999, 121)
-    assert labeler.normalize_value_with_units(100, "g/dL") == 100 * 10
-    assert labeler.normalize_value_with_units(100, "mg/dL") == 100 / 100
-    with pytest.raises(ValueError):
-        labeler.normalize_value_with_units(100, "g/L")
-    with pytest.raises(ValueError):
-        labeler.normalize_value_with_units(100, None)
-
+    _assert_value_to_label_correct(labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, 'g/dl')
+    
     # Create patient
     _run_specific_labvalue_test(
         labeler,

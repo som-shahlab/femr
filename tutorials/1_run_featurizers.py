@@ -21,6 +21,8 @@ from piton.labelers.omop_lab_values import (
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
     ThrombocytopeniaLabValueLabeler,
+    HyponatremiaLabValueLabeler,
+    AnemiaLabValueLabeler,
 )
 
 """
@@ -35,7 +37,12 @@ To generate admission/discharge placeholder labels on 1% extract:
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
         --labeling_function admission_discharge \
         --num_threads 20
-
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
+        --labeling_function admission_discharge \
+        --num_threads 20
+        
 To run a real labeler:
 
     python3 tutorials/1_run_featurizers.py \
@@ -44,7 +51,42 @@ To run a real labeler:
         --labeling_function lupus \
         --max_labels_per_patient 5 \
         --num_threads 20
-
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/ \
+        --labeling_function lupus \
+        --max_labels_per_patient 5 \
+        --num_threads 20
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/thrombocytopenia_lab/ \
+        --labeling_function thrombocytopenia_lab \
+        --max_labels_per_patient 5 \
+        --num_threads 20
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyperkalemia_lab/ \
+        --labeling_function hyperkalemia_lab \
+        --max_labels_per_patient 5 \
+        --num_threads 20
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/hypoglycemia_lab/ \
+        --labeling_function hypoglycemia_lab \
+        --max_labels_per_patient 5 \
+        --num_threads 20
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyponatremia_lab/ \
+        --labeling_function hyponatremia_lab \
+        --max_labels_per_patient 5 \
+        --num_threads 20
+    python3 tutorials/1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/anemia_lab/ \
+        --labeling_function anemia_lab \
+        --max_labels_per_patient 5 \
+        --num_threads 20
 """
 
 
@@ -69,6 +111,8 @@ LABELING_FUNCTIONS: List[str] = [
     "thrombocytopenia_lab",
     "hyperkalemia_lab",
     "hypoglycemia_lab",
+    "hyponatremia_lab",
+    "anemia_lab",
 ]
 
 if __name__ == "__main__":
@@ -173,6 +217,14 @@ if __name__ == "__main__":
         )
     elif args.labeling_function == "hypoglycemia_lab":
         labeler = HypoglycemiaLabValueLabeler(
+            ontology, year_time_horizon, "severe"
+        )
+    elif args.labeling_function == "hyponatremia_lab":
+        labeler = HyponatremiaLabValueLabeler(
+            ontology, year_time_horizon, "severe"
+        )
+    elif args.labeling_function == "anemia_lab":
+        labeler = AnemiaLabValueLabeler(
             ontology, year_time_horizon, "severe"
         )
     else:

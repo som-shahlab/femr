@@ -10,12 +10,10 @@ import pytest
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop_inpatient_admissions import (
-    AdmissionDischargePlaceholderLabeler,
+    DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
     InpatientMortalityLabeler,
     InpatientReadmissionLabeler,
-    _1WeekLongLOSLabeler,
-    _30DayReadmissionLabeler,
 )
 
 # Needed to import `tools` for local testing
@@ -54,7 +52,6 @@ class DummyAdmissionDischargeOntology:
 def _run_test_admission_discharge_placeholder(
     labeler, events_with_labels: EventsWithLabels, help_text: str = ""
 ):
-    assert labeler.prediction_codes == [1]
     # Check Labels match admission start/end times
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [  # type: ignore
         y  # type: ignore
@@ -77,7 +74,7 @@ def _run_test_admission_discharge_placeholder(
 
 def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
     ontology = DummyAdmissionDischargeOntology()
-    labeler = AdmissionDischargePlaceholderLabeler(ontology)  # type: ignore
+    labeler = DummyAdmissionDischargeLabeler(ontology)  # type: ignore
     # Multiple admission/discharges
     events_with_labels: EventsWithLabels = [
         # fmt: off
@@ -220,23 +217,6 @@ def test_readmission(tmp_path: pathlib.Path):
         help_text="test_readmission_general",
     )
 
-    # Confirm 30-day readmission labeler matches this
-    labeler2 = _30DayReadmissionLabeler(ontology)  # type: ignore
-    assert labeler.get_time_horizon() == labeler2.get_time_horizon()
-    assert labeler.get_outcome_times(patient) == labeler2.get_outcome_times(
-        patient
-    )
-    assert labeler.get_prediction_times(
-        patient
-    ) == labeler2.get_prediction_times(patient)
-    run_test_for_labeler(
-        labeler2,
-        events_with_labels,
-        true_outcome_times=true_outcome_times,
-        true_prediction_times=true_prediction_times,
-        help_text="test_readmission_30_day",
-    )
-
     # Test fail cases
     with pytest.raises(ValueError) as _:
         # Require that all events have `end` specified
@@ -374,14 +354,6 @@ def test_long_admission(tmp_path: pathlib.Path):
     assert labeler.admission_codes == [1]
     run_test_for_labeler(
         labeler, events_with_labels, help_text="test_long_admission"
-    )
-
-    # Confirm 7-day LOS labeler matches this
-    labeler2 = _1WeekLongLOSLabeler(ontology)  # type: ignore
-    assert labeler.long_time == labeler2.long_time
-    assert labeler.admission_codes == labeler2.admission_codes
-    run_test_for_labeler(
-        labeler2, events_with_labels, help_text="test_long_admission_1_wek"
     )
 
     # Test fail cases

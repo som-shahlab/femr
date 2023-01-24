@@ -146,4 +146,5 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         assert np.sum(orig != new) == 0
 
 
-run_test_locally("../ignore/test_labelers/", test_labeled_patients)
+if __name__ == "__main__":
+    run_test_locally("../ignore/test_labelers/", test_labeled_patients)

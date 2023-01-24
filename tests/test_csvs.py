@@ -3,7 +3,6 @@ import datetime
 import io
 import os
 import pathlib
-import shutil
 from typing import Dict, Mapping, Sequence
 
 import zstandard as zst
@@ -86,17 +85,3 @@ def test_csv_zst(tmp_path: pathlib.Path) -> None:
 def test_csv(tmp_path: pathlib.Path) -> None:
     _ = create_csv(tmp_path)
     run_test(tmp_path)
-
-
-def reset_tmp_path(tmp_path: str) -> None:
-    shutil.rmtree(tmp_path)
-    os.makedirs(tmp_path, exist_ok=True)
-
-
-# For local testing
-# tmp_path: str = os.path.abspath('../ignore/test_csvs')
-# reset_tmp_path(tmp_path)
-# test_csv_zst(tmp_path=tmp_path)
-# reset_tmp_path(tmp_path)
-# test_csv(tmp_path=tmp_path)
-# reset_tmp_path(tmp_path)
