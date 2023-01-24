@@ -215,7 +215,7 @@ def _assert_value_to_label_correct(
     moderate: float,
     mild: float,
     normal: float,
-    unit: Optional[str]
+    unit: Optional[str],
 ):
     assert labeler.value_to_label(str(severe), unit) == "severe"
     assert labeler.value_to_label(str(moderate), unit) == "moderate"
@@ -367,7 +367,7 @@ def test_hyperkalemia(tmp_path: pathlib.Path):
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 7.1, 6.1, 5.55, 5.49, 'mmol/l')
+    _assert_value_to_label_correct(labeler, 7.1, 6.1, 5.55, 5.49, "mmol/l")
 
     # Create patient
     _run_specific_labvalue_test(
@@ -390,7 +390,7 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 2.9, 3.49, 3.89, 5, 'mmol/l')
+    _assert_value_to_label_correct(labeler, 2.9, 3.49, 3.89, 5, "mmol/l")
 
     # Create patient
     _run_specific_labvalue_test(
@@ -436,8 +436,10 @@ def test_anemia(tmp_path: pathlib.Path):
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, 'g/dl')
-    
+    _assert_value_to_label_correct(
+        labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, "g/dl"
+    )
+
     # Create patient
     _run_specific_labvalue_test(
         labeler,

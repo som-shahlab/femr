@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import List, Optional, Set, Any
+from typing import Any, List, Optional, Set
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -36,7 +36,7 @@ from .omop import (
 class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
     """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value over a time horizon."""
 
-    # parent OMOP concept codes, from which all the outcome 
+    # parent OMOP concept codes, from which all the outcome
     # are derived (as children from our ontology)
     original_omop_concept_codes: List[str] = []
 
@@ -60,7 +60,9 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
             try:
                 piton_code = ontology.get_dictionary().index(omop_concept_code)
             except ValueError:
-                raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
+                raise ValueError(
+                    f"OMOP Concept Code {omop_concept_code} not found in ontology."
+                )
             all_children: Set[int] = _get_all_children(ontology, piton_code)
             self.outcome_codes += list(all_children)
         self.outcome_codes = list(set(self.outcome_codes))
@@ -78,9 +80,13 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
                     label: Optional[str] = None
                     try:
                         # `event.unit` is string of form "mg/dL", "ounces", etc.
-                        label = self.value_to_label(str(event.value), str(event.unit))
+                        label = self.value_to_label(
+                            str(event.value), str(event.unit)
+                        )
                     except Exception as e:
-                        print(f"Warning: Error parsing value='{event.value}' with unit='{event.unit}' for event.code='{event.code}' @ {event.start} for patient_id='{patient.patient_id}' | Exception: {e}")
+                        print(
+                            f"Warning: Error parsing value='{event.value}' with unit='{event.unit}' for event.code='{event.code}' @ {event.start} for patient_id='{patient.patient_id}' | Exception: {e}"
+                        )
                     if label == self.severity:
                         times.append(event.start)
         return times
@@ -95,8 +101,8 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
     @abstractmethod
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
         """Convert `value` to a string label: "mild", "moderate", "severe", or "normal".
-            NOTE: Some units have the form 'mg/dL (See scan or EMR data for detail)', so you
-            need to use `.startswith()` to check for the unit you want.
+        NOTE: Some units have the form 'mg/dL (See scan or EMR data for detail)', so you
+        need to use `.startswith()` to check for the unit you want.
         """
         return "normal"
 
@@ -162,6 +168,7 @@ class HyperkalemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         elif value > 5.5:
             return "mild"
         return "normal"
+
 
 class HypoglycemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     """lab-based definition for hypoglycemia using blood glucose concentration (mmol/L).

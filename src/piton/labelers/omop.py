@@ -45,7 +45,9 @@ def get_inpatient_admission_events(
     return admissions
 
 
-def get_inpatient_admission_discharge_times(ontology: extension_datasets.Ontology, patient: Patient) -> Tuple[List[datetime.datetime], List[datetime.datetime]]:
+def get_inpatient_admission_discharge_times(
+    ontology: extension_datasets.Ontology, patient: Patient
+) -> Tuple[List[datetime.datetime], List[datetime.datetime]]:
     """Return a list of all admission/discharge times for this patient."""
     dictionary = ontology.get_dictionary()
     admission_codes: List[int] = [
@@ -71,7 +73,9 @@ def map_omop_concept_ids_to_piton_codes(
 ) -> List[int]:
     codes: List[int] = []
     for omop_concept_id in omop_concept_ids:
-        piton_code: Optional[int] = ontology.get_code_from_concept_id(  # type:ignore
+        piton_code: Optional[
+            int
+        ] = ontology.get_code_from_concept_id(  # type:ignore
             omop_concept_id
         )
         if piton_code is None:
@@ -176,19 +180,20 @@ class WithinVisitLabeler(Labeler):
     def get_labeler_type(self) -> LabelType:
         return "boolean"
 
+
 class WithinInpatientVisitLabeler(WithinVisitLabeler):
     """
-    The `WithinInpatientVisitLabeler` predicts whether or not a patient experiences 
+    The `WithinInpatientVisitLabeler` predicts whether or not a patient experiences
     a specific event (i.e. has a `code` within `self.outcome_codes`) within each INPATIENT visit.
 
-    The only difference from `WithinVisitLabeler` is that these visits are 
+    The only difference from `WithinVisitLabeler` is that these visits are
     restricted to only INPATIENT visits.
-    
+
     Prediction time: Start of each INPATIENT visit (adjusted by `self.prediction_adjustment_timedelta` if provided)
 
     IMPORTANT: This labeler assumes that every event has a `event.visit_id` property.
     """
-    
+
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
@@ -198,12 +203,13 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
         super().__init__(
             ontology=ontology,
             outcome_codes=outcome_codes,
-            prediction_adjustment_timedelta=prediction_adjustment_timedelta
+            prediction_adjustment_timedelta=prediction_adjustment_timedelta,
         )
         dictionary = ontology.get_dictionary()
         self.visit_codes: List[int] = [
             dictionary.index(x) for x in get_inpatient_admission_concepts()
         ]
+
 
 ##########################################################
 ##########################################################
@@ -267,7 +273,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
     """Same as CodeLabeler, but add the extra step of mapping OMOP concept IDs
     (stored in `omop_concept_ids`) to Piton codes (stored in `codes`)."""
 
-    # parent OMOP concept codes, from which all the outcome 
+    # parent OMOP concept codes, from which all the outcome
     # are derived (as children from our ontology)
     original_omop_concept_codes: List[str] = []
 
@@ -278,7 +284,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         prediction_codes: Optional[List[int]] = None,
     ):
         outcome_codes: List[int] = []
-        
+
         # We need to traverse through the ontology ourselves using
         # OMOP Concept Codes (e.g. "LOINC/123") instead of pre-specified
         # OMOP Concept IDs (e.g. 3939430) to get all revelant children
@@ -286,11 +292,13 @@ class OMOPConceptCodeLabeler(CodeLabeler):
             try:
                 piton_code = ontology.get_dictionary().index(omop_concept_code)
             except ValueError:
-                raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
+                raise ValueError(
+                    f"OMOP Concept Code {omop_concept_code} not found in ontology."
+                )
             all_children: Set[int] = _get_all_children(ontology, piton_code)
             outcome_codes += list(all_children)
         outcome_codes = list(set(outcome_codes))
-        
+
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
