@@ -14,6 +14,7 @@ from piton.labelers.omop_inpatient_admissions import (
     InpatientLongAdmissionLabeler,
     InpatientMortalityLabeler,
     InpatientReadmissionLabeler,
+    get_inpatient_admission_events,
 )
 
 # Needed to import `tools` for local testing
@@ -26,6 +27,56 @@ from tools import (
     run_test_for_labeler,
     run_test_locally,
 )
+
+
+class DummyOntology_GetInpatients:
+    def get_dictionary(self):
+        return [
+            "zero",
+            "Visit/IP",
+            "Visit/OP",
+            "three",
+            "four",
+            "five",
+        ]
+
+    def get_children(self, *args) -> List[int]:
+        return []
+
+def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
+    ontology = DummyOntology_GetInpatients()
+    events_with_labels: EventsWithLabels = [
+        # fmt: off
+        # visit detail <> occurence - IP
+        (event((2000, 1, 1), 0, end=datetime.datetime(2000, 1, 2), visit_id=1, omop_table='visit_detail'), True),
+        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 2), visit_id=1, omop_table='visit_occurrence'), False),
+        # visit detail <> occurence - not IP
+        (event((2000, 1, 31), 4, end=datetime.datetime(2000, 1, 31), visit_id=2, omop_table='visit_detail'), False),
+        (event((2000, 1, 1), 2, end=datetime.datetime(2000, 1, 2), visit_id=2, omop_table='visit_occurrence'), False),
+        # visit detail (no occurence)
+        (event((2005, 1, 1), 5, end=datetime.datetime(2005, 1, 2), visit_id=3, omop_table='visit_detail'), False),
+        # visit detail <> multiple occurences - IP + not IP
+        (event((2010, 1, 1), 4, end=datetime.datetime(2010, 3, 1), visit_id=4, omop_table='visit_detail'), True),
+        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 2), visit_id=4, omop_table='visit_occurrence'), False),
+        (event((2000, 1, 1), 2, end=datetime.datetime(2000, 1, 2), visit_id=4, omop_table='visit_occurrence'), False),
+        # (no visit detail) occurrence - not IP
+        (event((2010, 1, 1), 2, end=datetime.datetime(2010, 1, 2), visit_id=5, omop_table='visit_occurrence'), False),
+        # (no visit detail) occurrence - IP
+        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 1, 2), visit_id=6, omop_table='visit_occurrence'), False),
+        # multiple visit details <> occurence - IP
+        (event((2010, 3, 30, 23, 59), 0, end=datetime.datetime(2010, 4, 1), visit_id=7, omop_table='visit_detail'), True),
+        (event((2011, 3, 30, 23, 59), 0, end=datetime.datetime(2011, 4, 1), visit_id=7, omop_table='visit_detail'), True),
+        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 1, 2), visit_id=7, omop_table='visit_occurrence'), False),
+        # multiple visit details <> multiple occurences - IP + not IP
+        (event((2010, 3, 30, 23, 59), 0, end=datetime.datetime(2010, 4, 1), visit_id=8, omop_table='visit_detail'), True),
+        (event((2011, 3, 30, 23, 59), 0, end=datetime.datetime(2011, 4, 1), visit_id=8, omop_table='visit_detail'), True),
+        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 1, 2), visit_id=8, omop_table='visit_occurrence'), False),
+        (event((2010, 1, 1), 0, end=datetime.datetime(2010, 1, 2), visit_id=8, omop_table='visit_occurrence'), False),
+        # fmt: on
+    ]
+    patient = piton.Patient(0, [ x[0] for x in events_with_labels ])
+    results: List[piton.Event] = get_inpatient_admission_events(patient, ontology)
+    assert results == [ x[0] for x in events_with_labels if x[1] == True ], f"Results: {results} | test_get_inpatient_admission_events"
 
 #############################################
 #############################################
@@ -371,6 +422,7 @@ def test_long_admission(tmp_path: pathlib.Path):
 
 # Local testing
 if __name__ == "__main__":
+    run_test_locally("../ignore/test_labelers/",test_get_inpatient_admission_events)
     run_test_locally(
         "../ignore/test_labelers/", test_admission_discharge_placeholder
     )
