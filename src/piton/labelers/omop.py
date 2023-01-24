@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import datetime
-from collections import deque, defaultdict
+from collections import defaultdict, deque
 from typing import Dict, List, Optional, Set, Tuple
 
 from .. import Event, Patient
@@ -45,23 +45,27 @@ def get_inpatient_admission_events(
     #
     # Loop through all patient's events, keeping track of each unique `visit_id` we see
     # belonging to an event from the `visit_occurrence` table. If we see a corresponding event
-    # from the `visit_occurrence` table with the same `visit_id` as an event from the 
+    # from the `visit_occurrence` table with the same `visit_id` as an event from the
     # `visit_detail` table, then assign the `visit_occurrence` event's code to the `visit_detail` event.
     #
     # This is necessary b/c the `visit_detail` table keeps accurate track of (start, end) times but doesn't
     # distinguish inpatient from outpatient visits, while the `visit_occurrence` table does explicitly label
     # inpatient visits but has inaccurate (start, end) event times
-    is_visit_id_inpatient: defaultdict = defaultdict(bool) # [key] = visit_id, [value] = TRUE if this is an inpatient admission
+    is_visit_id_inpatient: defaultdict = defaultdict(
+        bool
+    )  # [key] = visit_id, [value] = TRUE if this is an inpatient admission
     for e in patient.events:
-        if e.omop_table == 'visit_occurrence':
+        if e.omop_table == "visit_occurrence":
             # Track inpatient status
             # If multiple visit_occurrence labels for same visit, then we'll take the 'inpatient' label
-            is_visit_id_inpatient[e.visit_id] = (e.code in admission_codes) or is_visit_id_inpatient[e.visit_id]
-        elif e.omop_table == 'visit_detail':
+            is_visit_id_inpatient[e.visit_id] = (
+                e.code in admission_codes
+            ) or is_visit_id_inpatient[e.visit_id]
+        elif e.omop_table == "visit_detail":
             # Track (start, end) status
             admissions.append(e)
     # Remove events that were not labeled 'inpatient' using the `visit_occurrence` table
-    admissions = [ e for e in admissions if is_visit_id_inpatient[e.visit_id] ]
+    admissions = [e for e in admissions if is_visit_id_inpatient[e.visit_id]]
     return admissions
 
 

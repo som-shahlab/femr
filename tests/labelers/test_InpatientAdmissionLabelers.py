@@ -43,6 +43,7 @@ class DummyOntology_GetInpatients:
     def get_children(self, *args) -> List[int]:
         return []
 
+
 def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
     ontology = DummyOntology_GetInpatients()
     events_with_labels: EventsWithLabels = [
@@ -74,9 +75,14 @@ def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
         (event((2010, 1, 1), 0, end=datetime.datetime(2010, 1, 2), visit_id=8, omop_table='visit_occurrence'), False),
         # fmt: on
     ]
-    patient = piton.Patient(0, [ x[0] for x in events_with_labels ])
-    results: List[piton.Event] = get_inpatient_admission_events(patient, ontology)
-    assert results == [ x[0] for x in events_with_labels if x[1] == True ], f"Results: {results} | test_get_inpatient_admission_events"
+    patient = piton.Patient(0, [x[0] for x in events_with_labels])
+    results: List[piton.Event] = get_inpatient_admission_events(
+        patient, ontology
+    )
+    assert results == [
+        x[0] for x in events_with_labels if x[1] == True
+    ], f"Results: {results} | test_get_inpatient_admission_events"
+
 
 #############################################
 #############################################
@@ -422,7 +428,9 @@ def test_long_admission(tmp_path: pathlib.Path):
 
 # Local testing
 if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/",test_get_inpatient_admission_events)
+    run_test_locally(
+        "../ignore/test_labelers/", test_get_inpatient_admission_events
+    )
     run_test_locally(
         "../ignore/test_labelers/", test_admission_discharge_placeholder
     )
