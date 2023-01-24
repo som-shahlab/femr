@@ -25,8 +25,8 @@ import numpy as np
 from nptyping import NDArray
 
 from .. import Patient
-from ..extension import datasets as extension_datasets
 from ..datasets import PatientDatabase
+from ..extension import datasets as extension_datasets
 from . import compute_random_num
 
 
@@ -78,10 +78,17 @@ def _apply_labeling_function(
         patients = PatientDatabase(path_to_patient_database)
 
     # Hacky workaround for Ontology not being picklable
-    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None:
-        labeling_function.ontology = patients.get_ontology() # type: ignore
-    if hasattr(labeling_function, "labeler") and hasattr(labeling_function.labeler, 'ontology') and labeling_function.labeler.ontology is None:
-        labeling_function.labeler.ontology = patients.get_ontology() # type: ignore
+    if (
+        hasattr(labeling_function, "ontology")
+        and labeling_function.ontology is None
+    ):
+        labeling_function.ontology = patients.get_ontology()  # type: ignore
+    if (
+        hasattr(labeling_function, "labeler")
+        and hasattr(labeling_function.labeler, "ontology")
+        and labeling_function.labeler.ontology is None
+    ):
+        labeling_function.labeler.ontology = patients.get_ontology()  # type: ignore
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
@@ -352,12 +359,18 @@ class Labeler(ABC):
         pids_parts = np.array_split(pids, num_threads)
 
         # NOTE: Super hacky workaround to pickling limitations
-        if hasattr(self, 'ontology') and isinstance(self.ontology, extension_datasets.Ontology):
+        if hasattr(self, "ontology") and isinstance(
+            self.ontology, extension_datasets.Ontology
+        ):
             # Remove ontology due to pickling, add it back later
-            self.ontology = None # type: ignore
-        if hasattr(self, 'labeler') and hasattr(self.labeler, 'ontology') and isinstance(self.labeler.ontology, extension_datasets.Ontology):
+            self.ontology = None  # type: ignore
+        if (
+            hasattr(self, "labeler")
+            and hasattr(self.labeler, "ontology")
+            and isinstance(self.labeler.ontology, extension_datasets.Ontology)
+        ):
             # If NLabelsPerPatient wrapper, go to sublabeler and remove ontology due to pickling
-            self.labeler.ontology = None # type: ignore
+            self.labeler.ontology = None  # type: ignore
 
         # Multiprocessing
         tasks = [
@@ -482,7 +495,9 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+        prediction_times: List[datetime.datetime] = self.get_prediction_times(
+            patient
+        )
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
@@ -565,7 +580,9 @@ class NLabelsPerPatientLabeler(Labeler):
             for i in range(len(labels))
         ]
         hash_to_label_list.sort(key=lambda a: a[1])
-        n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[: self.num_labels]
+        n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[
+            : self.num_labels
+        ]
         n_hash_to_label_list.sort(key=lambda a: a[0])
         n_labels: List[Label] = [
             hash_to_label[2] for hash_to_label in n_hash_to_label_list

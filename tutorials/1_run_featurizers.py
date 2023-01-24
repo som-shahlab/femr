@@ -18,11 +18,11 @@ from piton.labelers.omop_inpatient_admissions import (
     _30DayReadmissionLabeler,
 )
 from piton.labelers.omop_lab_values import (
+    AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
-    ThrombocytopeniaLabValueLabeler,
     HyponatremiaLabValueLabeler,
-    AnemiaLabValueLabeler,
+    ThrombocytopeniaLabValueLabeler,
 )
 
 """
@@ -42,7 +42,7 @@ To generate admission/discharge placeholder labels on 1% extract:
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
         --labeling_function admission_discharge \
         --num_threads 20
-        
+
 To run a real labeler:
 
     python3 tutorials/1_run_featurizers.py \
@@ -224,9 +224,7 @@ if __name__ == "__main__":
             ontology, year_time_horizon, "severe"
         )
     elif args.labeling_function == "anemia_lab":
-        labeler = AnemiaLabValueLabeler(
-            ontology, year_time_horizon, "severe"
-        )
+        labeler = AnemiaLabValueLabeler(ontology, year_time_horizon, "severe")
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."
