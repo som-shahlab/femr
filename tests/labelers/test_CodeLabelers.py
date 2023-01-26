@@ -297,6 +297,7 @@ class DummyOntology_Mortality:
             "five",
             "Death Type/OMOP generated",
         ]
+
     def get_children(self, parent_code: int) -> List[int]:
         return []
 

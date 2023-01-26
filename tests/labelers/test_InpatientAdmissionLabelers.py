@@ -11,7 +11,7 @@ import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
 from piton.labelers.omop import (
     get_inpatient_admission_discharge_times,
-    move_datetime_to_end_of_day
+    move_datetime_to_end_of_day,
 )
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
@@ -46,6 +46,7 @@ class DummyOntology_GetInpatients:
     def get_children(self, *args) -> List[int]:
         return []
 
+
 def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
     ontology = DummyOntology_GetInpatients()
     events_with_labels: EventsWithLabels = [
@@ -77,11 +78,17 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
         (event((2030, 1, 1), 0, end=datetime.datetime(2030, 1, 2), visit_id=8, omop_table='visit_occurrence'), False),
         # fmt: on
     ]
-    patient = piton.Patient(0, [ x[0] for x in events_with_labels ])
-    results: List[piton.Event] = get_inpatient_admission_discharge_times(patient, ontology)
-    assert results == list(zip([ x[0].start for x in events_with_labels if x[1] == True ],
-                          [ x[0].end for x in events_with_labels if x[1] == True])), \
-        f"Results: {results} | test_get_inpatient_admission_discharge_times"
+    patient = piton.Patient(0, [x[0] for x in events_with_labels])
+    results: List[piton.Event] = get_inpatient_admission_discharge_times(
+        patient, ontology
+    )
+    assert results == list(
+        zip(
+            [x[0].start for x in events_with_labels if x[1] == True],
+            [x[0].end for x in events_with_labels if x[1] == True],
+        )
+    ), f"Results: {results} | test_get_inpatient_admission_discharge_times"
+
 
 #############################################
 #############################################
@@ -113,7 +120,7 @@ def _run_test_admission_discharge_placeholder(
         y  # type: ignore
         for x in events_with_labels  # type: ignore
         for y in [(x[0].start, x[1]), (x[0].end, x[1])]  # type: ignore
-        if isinstance(x[1], bool) or (x[1] is None) # type: ignore
+        if isinstance(x[1], bool) or (x[1] is None)  # type: ignore
     ]  # type: ignore
     patients: List[piton.Patient] = create_patients_list(
         10, [x[0] for x in events_with_labels]
@@ -196,12 +203,66 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
 
     # Overlapping admission/discharges
     events_with_labels = [
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 30), visit_id=1, omop_table='visit_detail'), True),
-        (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), visit_id=1, omop_table='visit_occurrence'), 'skip'),
-        (event((2000, 1, 15), 1, end=datetime.datetime(2000, 2, 10), visit_id=2, omop_table='visit_detail'), True),
-        (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), visit_id=2, omop_table='visit_occurrence'), 'skip'),
-        (event((2000, 1, 29), 1, end=datetime.datetime(2000, 2, 4), visit_id=3, omop_table='visit_detail'), True),
-        (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), visit_id=3, omop_table='visit_occurrence'), 'skip'),
+        (
+            event(
+                (2000, 1, 1),
+                1,
+                end=datetime.datetime(2000, 1, 30),
+                visit_id=1,
+                omop_table="visit_detail",
+            ),
+            True,
+        ),
+        (
+            event(
+                (2020, 1, 1),
+                1,
+                end=datetime.datetime(2020, 1, 30),
+                visit_id=1,
+                omop_table="visit_occurrence",
+            ),
+            "skip",
+        ),
+        (
+            event(
+                (2000, 1, 15),
+                1,
+                end=datetime.datetime(2000, 2, 10),
+                visit_id=2,
+                omop_table="visit_detail",
+            ),
+            True,
+        ),
+        (
+            event(
+                (2020, 1, 1),
+                1,
+                end=datetime.datetime(2020, 1, 30),
+                visit_id=2,
+                omop_table="visit_occurrence",
+            ),
+            "skip",
+        ),
+        (
+            event(
+                (2000, 1, 29),
+                1,
+                end=datetime.datetime(2000, 2, 4),
+                visit_id=3,
+                omop_table="visit_detail",
+            ),
+            True,
+        ),
+        (
+            event(
+                (2020, 1, 1),
+                1,
+                end=datetime.datetime(2020, 1, 30),
+                visit_id=3,
+                omop_table="visit_occurrence",
+            ),
+            "skip",
+        ),
     ]
     _run_test_admission_discharge_placeholder(
         labeler,
@@ -213,12 +274,60 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
     with pytest.raises(RuntimeError):
         # Every admission must have an `end` time
         events_with_labels = [
-            (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 30), visit_id=1, omop_table='visit_detail'), True),
-            (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), visit_id=1, omop_table='visit_occurrence'), 'skip'),
-            (event((2000, 1, 15), 1, end=datetime.datetime(2000, 2, 10), visit_id=2, omop_table='visit_detail'), True),
-            (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), visit_id=2, omop_table='visit_occurrence'), 'skip'),
-            (event((2000, 1, 29), 1, visit_id=3, omop_table='visit_detail'), True),
-            (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), visit_id=3, omop_table='visit_occurrence'), 'skip'),
+            (
+                event(
+                    (2000, 1, 1),
+                    1,
+                    end=datetime.datetime(2000, 1, 30),
+                    visit_id=1,
+                    omop_table="visit_detail",
+                ),
+                True,
+            ),
+            (
+                event(
+                    (2020, 1, 1),
+                    1,
+                    end=datetime.datetime(2020, 1, 30),
+                    visit_id=1,
+                    omop_table="visit_occurrence",
+                ),
+                "skip",
+            ),
+            (
+                event(
+                    (2000, 1, 15),
+                    1,
+                    end=datetime.datetime(2000, 2, 10),
+                    visit_id=2,
+                    omop_table="visit_detail",
+                ),
+                True,
+            ),
+            (
+                event(
+                    (2020, 1, 1),
+                    1,
+                    end=datetime.datetime(2020, 1, 30),
+                    visit_id=2,
+                    omop_table="visit_occurrence",
+                ),
+                "skip",
+            ),
+            (
+                event((2000, 1, 29), 1, visit_id=3, omop_table="visit_detail"),
+                True,
+            ),
+            (
+                event(
+                    (2020, 1, 1),
+                    1,
+                    end=datetime.datetime(2020, 1, 30),
+                    visit_id=3,
+                    omop_table="visit_occurrence",
+                ),
+                "skip",
+            ),
         ]
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
@@ -290,10 +399,14 @@ def test_readmission(tmp_path: pathlib.Path):
     ]
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
     true_outcome_times: List[datetime.datetime] = [
-        x[0].start for x in events_with_labels if x[0].omop_table == 'visit_detail'
+        x[0].start
+        for x in events_with_labels
+        if x[0].omop_table == "visit_detail"
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].end) for x in events_with_labels if x[0].omop_table == 'visit_detail'
+        move_datetime_to_end_of_day(x[0].end)
+        for x in events_with_labels
+        if x[0].omop_table == "visit_detail"
     ]
     assert labeler.get_time_horizon() == time_horizon
     assert labeler.get_outcome_times(patient) == true_outcome_times
@@ -378,7 +491,7 @@ def test_mortality(tmp_path: pathlib.Path):
         #
         # NOTE: No censoring since we have the end of the admission
         (event((2006, 1, 2), 1, end=datetime.datetime(2006, 5, 10), visit_id=8, omop_table='visit_detail'), False),
-        # 
+        #
         # visit occurrences for all visit_details
         (event((2020, 1, 10), 1, visit_id=1, omop_table='visit_occurrence'), 'skip'),
         (event((2020, 1, 10), 1, visit_id=2, omop_table='visit_occurrence'), 'skip'),
@@ -393,10 +506,14 @@ def test_mortality(tmp_path: pathlib.Path):
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
     assert labeler.outcome_codes == [2, 3, 5]
     run_test_for_labeler(
-        labeler, 
-        events_with_labels, 
-        true_prediction_times=[ move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool) ],
-        help_text="test_mortality"
+        labeler,
+        events_with_labels,
+        true_prediction_times=[
+            move_datetime_to_end_of_day(x[0].start)
+            for x in events_with_labels
+            if isinstance(x[1], bool)
+        ],
+        help_text="test_mortality",
     )
 
 
@@ -432,7 +549,7 @@ def test_long_admission(tmp_path: pathlib.Path):
         (event((2006, 1, 3), 0), "skip"),
         (event((2008, 1, 1), 1, end=datetime.datetime(2008, 1, 7, 23, 59), visit_id=4, omop_table='visit_detail'), False),
         (event((2010, 1, 1), 1, end=datetime.datetime(2010, 1, 8), visit_id=5, omop_table='visit_detail'), True),
-        # 
+        #
         # visit occurrences for all visit_details
         (event((2020, 1, 10), 1, visit_id=1, omop_table='visit_occurrence'), 'skip'),
         (event((2020, 1, 10), 1, visit_id=2, omop_table='visit_occurrence'), 'skip'),
@@ -444,13 +561,15 @@ def test_long_admission(tmp_path: pathlib.Path):
     assert labeler.long_time == long_time
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if x[0].omop_table == 'visit_detail'
+        move_datetime_to_end_of_day(x[0].start)
+        for x in events_with_labels
+        if x[0].omop_table == "visit_detail"
     ]
     run_test_for_labeler(
-        labeler, 
-        events_with_labels, 
+        labeler,
+        events_with_labels,
         true_prediction_times=true_prediction_times,
-        help_text="test_long_admission"
+        help_text="test_long_admission",
     )
 
     # Test fail cases
@@ -468,7 +587,9 @@ def test_long_admission(tmp_path: pathlib.Path):
 
 # Local testing
 if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/",test_get_inpatient_admission_discharge_times)
+    run_test_locally(
+        "../ignore/test_labelers/", test_get_inpatient_admission_discharge_times
+    )
     run_test_locally(
         "../ignore/test_labelers/", test_admission_discharge_placeholder
     )
