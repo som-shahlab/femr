@@ -74,6 +74,12 @@ def _apply_labeling_function(
     path_to_patient_database: Optional[str] = args[2]
     patient_ids: List[int] = args[3]
 
+    # Hacky workaround for Ontology not being picklable
+    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None:
+        labeling_function.ontology = patients.get_ontology() # type: ignore
+    if hasattr(labeling_function, "labeler") and hasattr(labeling_function.labeler, 'ontology') and labeling_function.labeler.ontology is None:
+        labeling_function.labeler.ontology = patients.get_ontology() # type: ignore
+
     if path_to_patient_database is not None:
         patients = PatientDatabase(path_to_patient_database)
 
@@ -343,12 +349,20 @@ class Labeler(ABC):
             pids = [p.patient_id for p in patients[:num_patients]]
 
         # Split patient IDs across parallelized processes
-        pids_parts = np.array_split(pids, num_threads)
+        pid_parts = np.array_split(pids, num_threads)
+        
+        # NOTE: Super hacky workaround to pickling limitations
+        if hasattr(self, 'ontology') and isinstance(self.ontology, extension_datasets.Ontology):
+            # Remove ontology due to pickling, add it back later
+            self.ontology = None # type: ignore
+        if hasattr(self, 'labeler') and hasattr(self.labeler, 'ontology') and isinstance(self.labeler.ontology, extension_datasets.Ontology):
+            # If NLabelsPerPatient wrapper, go to sublabeler and remove ontology due to pickling
+            self.labeler.ontology = None # type: ignore
 
         # Multiprocessing
         tasks = [
             (self, patients, path_to_patient_database, pid_part)
-            for pid_part in pids_parts
+            for pid_part in pid_parts
         ]
         pool = ProcessPool(num_threads)
         results: List[Dict[int, List[Label]]] = list(

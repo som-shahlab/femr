@@ -37,6 +37,9 @@ To generate admission/discharge placeholder labels on 1% extract:
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
         --labeling_function admission_discharge \
         --num_threads 20
+
+To generate admission/discharge placeholder labels on 100% extract:
+
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
@@ -51,24 +54,21 @@ To run a real labeler:
         --labeling_function lupus \
         --max_labels_per_patient 5 \
         --num_threads 20
+
     python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/ \
-        --labeling_function lupus \
-        --max_labels_per_patient 5 \
-        --num_threads 20
-    python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/thrombocytopenia_lab/ \
         --labeling_function thrombocytopenia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
+        
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyperkalemia_lab/ \
         --labeling_function hyperkalemia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
+        
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/hypoglycemia_lab/ \
