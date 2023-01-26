@@ -61,14 +61,14 @@ To run a real labeler:
         --labeling_function thrombocytopenia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
-        
+
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyperkalemia_lab/ \
         --labeling_function hyperkalemia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
-        
+
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/hypoglycemia_lab/ \
