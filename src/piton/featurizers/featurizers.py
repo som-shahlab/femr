@@ -114,8 +114,10 @@ class AgeFeaturizer(Featurizer):
     def is_needs_preprocessing(self) -> bool:
         return self.is_normalize
 
+    def __repr__(self):
+        return f"AgeFeaturizer(is_normalize={self.is_normalize}, count={self.age_statistics.current_count} mean={self.age_statistics.mean()}, std={self.age_statistics.standard_deviation()})"
 
-def _reshuffle(
+def _reshuffle_count_time_bins(
     time_bins: List[datetime.timedelta],
     codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]],
     code_counts_per_bin: Dict[int, Dict[int, int]],
@@ -385,7 +387,7 @@ class CountFeaturizer(Featurizer):
             for event in patient.events:
                 code: int = event.code  # type: ignore
                 while event.start > labels[label_idx].time:
-                    _reshuffle(
+                    _reshuffle_count_time_bins(
                         time_bins,
                         codes_per_bin,
                         code_counts_per_bin,
@@ -418,7 +420,7 @@ class CountFeaturizer(Featurizer):
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1
 
-                _reshuffle(
+                _reshuffle_count_time_bins(
                     time_bins,
                     codes_per_bin,
                     code_counts_per_bin,
@@ -443,3 +445,6 @@ class CountFeaturizer(Featurizer):
 
     def is_needs_preprocessing(self) -> bool:
         return True
+
+    def __repr__(self) -> str:
+        return f"CountFeaturizer(number of included codes={len(self.included_codes)})"

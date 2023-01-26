@@ -103,7 +103,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
                 prediction_time: datetime.datetime = (
                     move_datetime_to_end_of_day(visit_event.start)
                 )
-                labels.append(Label(prediction_time, is_outcome_occurs))
+                labels.append(Label(time=prediction_time, value=is_outcome_occurs))
         return labels
 
     def get_labeler_type(self) -> LabelType:

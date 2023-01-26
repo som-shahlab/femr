@@ -70,17 +70,19 @@ To run a real labeler:
         --num_threads 20
 
     python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
+        /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/hypoglycemia_lab/ \
         --labeling_function hypoglycemia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
+
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyponatremia_lab/ \
         --labeling_function hyponatremia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
+
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/anemia_lab/ \
