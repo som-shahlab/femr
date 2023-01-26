@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import List, Optional, Callable, Dict
+from typing import Callable, Dict, List, Optional
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -15,11 +15,11 @@ from .core import (
 )
 from .omop import (
     WithinVisitLabeler,
-    group_inpatient_events_by_visit_id,
     get_death_concepts,
     get_inpatient_admission_discharge_times,
+    group_inpatient_events_by_visit_id,
+    map_omop_concept_codes_to_piton_codes,
     move_datetime_to_end_of_day,
-    map_omop_concept_codes_to_piton_codes
 )
 
 
@@ -51,7 +51,9 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
     def label(self, patient: Patient) -> List[Label]:
         """Label all visits with whether the patient experiences outcomes
         in `self.outcome_codes` during each INPATIENT visit."""
-        events_by_visit_id: Dict[int, List[Event]] = group_inpatient_events_by_visit_id(patient, self.ontology)
+        events_by_visit_id: Dict[
+            int, List[Event]
+        ] = group_inpatient_events_by_visit_id(patient, self.ontology)
         return self.label_each_visit(events_by_visit_id)
 
 
@@ -66,7 +68,10 @@ class DummyAdmissionDischargeLabeler(Labeler):
 
     def label(self, patient: Patient) -> List[Label]:
         labels: List[Label] = []
-        for (admission_time, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for (
+            admission_time,
+            discharge_time,
+        ) in get_inpatient_admission_discharge_times(patient, self.ontology):
             labels.append(Label(time=admission_time, value=True))
             labels.append(Label(time=discharge_time, value=True))
         return labels
@@ -92,7 +97,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(seconds=1), datetime.timedelta(days=30)),  # type: ignore
+        time_horizon: TimeHorizon = TimeHorizon(
+            datetime.timedelta(seconds=1), datetime.timedelta(days=30)
+        ),  # type: ignore
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
@@ -100,14 +107,20 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""
         times: List[datetime.datetime] = []
-        for (admission_time, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for (
+            admission_time,
+            discharge_time,
+        ) in get_inpatient_admission_discharge_times(patient, self.ontology):
             times.append(admission_time)
         return times
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return end of admission as prediction time, scaled to 11:59:59pm."""
         times: List[datetime.datetime] = []
-        for (admission_time, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for (
+            admission_time,
+            discharge_time,
+        ) in get_inpatient_admission_discharge_times(patient, self.ontology):
             times.append(move_datetime_to_end_of_day(discharge_time))
         return times
 
@@ -139,11 +152,16 @@ class InpatientLongAdmissionLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:
         """Label all admissions with admission length > `self.long_time`"""
         labels: List[Label] = []
-        for (admission_time, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for (
+            admission_time,
+            discharge_time,
+        ) in get_inpatient_admission_discharge_times(patient, self.ontology):
             is_long_admission: bool = (
                 discharge_time - admission_time
             ) >= self.long_time
-            prediction_time: datetime.datetime = move_datetime_to_end_of_day(admission_time)
+            prediction_time: datetime.datetime = move_datetime_to_end_of_day(
+                admission_time
+            )
             labels.append(Label(prediction_time, is_long_admission))
         return labels
 
@@ -164,7 +182,11 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
     ):
-        piton_codes = map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts())
-        super().__init__(ontology=ontology, 
-                         outcome_codes=list(piton_codes),
-                         prediction_time_adjustment_func=move_datetime_to_end_of_day)
+        piton_codes = map_omop_concept_codes_to_piton_codes(
+            ontology, get_death_concepts()
+        )
+        super().__init__(
+            ontology=ontology,
+            outcome_codes=list(piton_codes),
+            prediction_time_adjustment_func=move_datetime_to_end_of_day,
+        )

@@ -13,8 +13,8 @@ from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
 from piton.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
-    InpatientMortalityLabeler,
     InpatientLongAdmissionLabeler,
+    InpatientMortalityLabeler,
     InpatientReadmissionLabeler,
 )
 from piton.labelers.omop_lab_values import (

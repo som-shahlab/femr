@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, List, Literal, NamedTuple, Optional, Tuple, TypeVar
+
 import numpy as np
 import scipy.sparse
 from nptyping import NDArray
 from pathos.pools import ProcessPool
 
-from piton.extension import datasets as extension_datasets
 from piton import Patient
+from piton.extension import datasets as extension_datasets
 from piton.labelers.core import Label, LabeledPatients
 
 PatientDatabase = extension_datasets.PatientDatabase
@@ -325,9 +326,7 @@ class FeaturizerList:
         # Preprocess in parallel
         pool = ProcessPool(num_threads)
         preprocessed_featurizers: List[Featurizer] = [
-            y
-            for x in pool.imap(_run_preprocess_featurizers, tasks)
-            for y in x
+            y for x in pool.imap(_run_preprocess_featurizers, tasks) for y in x
         ]
 
         # Aggregate featurizers

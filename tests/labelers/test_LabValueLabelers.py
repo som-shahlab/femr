@@ -10,9 +10,7 @@ import pytest
 
 import piton.datasets
 from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import (
-    move_datetime_to_end_of_day
-)
+from piton.labelers.omop import move_datetime_to_end_of_day
 from piton.labelers.omop_lab_values import (
     AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
@@ -107,7 +105,7 @@ class DummyLabeler2(OMOPConceptOutcomeFromLabValueLabeler):
         "OMOP_CONCEPT_B",
     ]
 
-    def value_to_label(self, raw_value: float, unit: Optional[str]) -> str:
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
         return "normal"
 
 
@@ -169,7 +167,9 @@ def test_labeling(tmp_path: pathlib.Path):
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+        move_datetime_to_end_of_day(x[0].start)
+        for x in events_with_labels
+        if isinstance(x[1], bool)
     ]
     run_test_for_labeler(
         labeler,
@@ -206,6 +206,7 @@ def _assert_value_to_label_correct(
     assert labeler.value_to_label(str(moderate), unit) == "moderate"
     assert labeler.value_to_label(str(mild), unit) == "mild"
     assert labeler.value_to_label(str(normal), unit) == "normal"
+
 
 def _create_specific_labvalue_labeler(
     LabelerClass,
@@ -277,7 +278,9 @@ def _run_specific_labvalue_test(
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+        move_datetime_to_end_of_day(x[0].start)
+        for x in events_with_labels
+        if isinstance(x[1], bool)
     ]
     run_test_for_labeler(
         labeler,

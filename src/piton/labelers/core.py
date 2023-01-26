@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import collections
 import datetime
-from pathos.pools import ProcessPool
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -23,10 +22,10 @@ from typing import (
 
 import numpy as np
 from nptyping import NDArray
+from pathos.pools import ProcessPool
 
 from .. import Patient
 from ..datasets import PatientDatabase
-from ..extension import datasets as extension_datasets
 from . import compute_random_num
 
 
@@ -74,7 +73,7 @@ def _apply_labeling_function(
     patients: Optional[Sequence[Patient]] = args[1]
     path_to_patient_database: Optional[str] = args[2]
     patient_ids: List[int] = args[3]
-    
+
     if path_to_patient_database is not None:
         patients = PatientDatabase(path_to_patient_database)
 
