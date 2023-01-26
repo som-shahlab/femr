@@ -328,7 +328,6 @@ class AcuteKidneyInjuryLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
 
 
 class CeliacTestLabeler(Labeler):
-    # TODO - check
     """
     The Celiac test labeler predicts whether or not a celiac test will be positive or negative.
     The prediction time is 24 hours before the lab results come in.
