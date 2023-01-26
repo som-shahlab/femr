@@ -65,7 +65,7 @@ def group_inpatient_events_by_visit_id(patient: Patient, ontology: extension_dat
     #
     # Loop through all patient's events, keeping track of each unique `visit_id` we see
     # belonging to an event from the `visit_occurrence` table. If we see a corresponding event
-    # from the `visit_occurrence` table with the same `visit_id` as an event from the 
+    # from the `visit_occurrence` table with the same `visit_id` as an event from the
     # `visit_detail` table, then assign the `visit_occurrence` event's code to the `visit_detail` event.
     #
     # This is necessary b/c the `visit_detail` table keeps accurate track of (start, end) times but doesn't
