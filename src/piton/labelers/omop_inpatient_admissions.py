@@ -6,13 +6,7 @@ from typing import Callable, Dict, List, Optional
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import (
-    Label,
-    Labeler,
-    LabelType,
-    TimeHorizon,
-    TimeHorizonEventLabeler,
-)
+from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 from .omop import (
     WithinVisitLabeler,
     get_death_concepts,
@@ -51,9 +45,7 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
     def label(self, patient: Patient) -> List[Label]:
         """Label all visits with whether the patient experiences outcomes
         in `self.outcome_codes` during each INPATIENT visit."""
-        events_by_visit_id: Dict[
-            int, List[Event]
-        ] = group_inpatient_events_by_visit_id(patient, self.ontology)
+        events_by_visit_id: Dict[int, List[Event]] = group_inpatient_events_by_visit_id(patient, self.ontology)
         return self.label_each_visit(events_by_visit_id)
 
 
@@ -156,12 +148,8 @@ class InpatientLongAdmissionLabeler(Labeler):
             admission_time,
             discharge_time,
         ) in get_inpatient_admission_discharge_times(patient, self.ontology):
-            is_long_admission: bool = (
-                discharge_time - admission_time
-            ) >= self.long_time
-            prediction_time: datetime.datetime = move_datetime_to_end_of_day(
-                admission_time
-            )
+            is_long_admission: bool = (discharge_time - admission_time) >= self.long_time
+            prediction_time: datetime.datetime = move_datetime_to_end_of_day(admission_time)
             labels.append(Label(prediction_time, is_long_admission))
         return labels
 
@@ -182,9 +170,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
     ):
-        piton_codes = map_omop_concept_codes_to_piton_codes(
-            ontology, get_death_concepts()
-        )
+        piton_codes = map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts())
         super().__init__(
             ontology=ontology,
             outcome_codes=list(piton_codes),

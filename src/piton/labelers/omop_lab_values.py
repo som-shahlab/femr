@@ -60,9 +60,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:
         """Label all INPATIENT visits in which the patient experiences an outcome
         in `self.outcome_codes` with whether that outcome was severe or not."""
-        events_by_visit_id: Dict[
-            int, List[Event]
-        ] = group_inpatient_events_by_visit_id(patient, self.ontology)
+        events_by_visit_id: Dict[int, List[Event]] = group_inpatient_events_by_visit_id(patient, self.ontology)
         labels: List[Label] = []
         # Loop through all visits in patient, check if outcome occurs during visit
         # and if so, mark that it occurred in `labels`.
@@ -82,9 +80,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
                         label: Optional[str] = None
                         try:
                             # `e.unit` is string of form "mg/dL", "ounces", etc.
-                            label = self.value_to_label(
-                                str(e.value), str(e.unit)
-                            )
+                            label = self.value_to_label(str(e.value), str(e.unit))
                         except Exception as exception:
                             print(
                                 f"Warning: Error parsing value='{e.value}' with unit='{e.unit}'"
@@ -100,9 +96,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
             if is_outcome_occurs is not None:
                 # If lab test result was reported, then record whether the outcome was TRUE or FALSE.
                 # Otherwise, if no lab test occurred in this visit, we ignore it.
-                prediction_time: datetime.datetime = (
-                    move_datetime_to_end_of_day(visit_event.start)
-                )
+                prediction_time: datetime.datetime = move_datetime_to_end_of_day(visit_event.start)
                 labels.append(Label(time=prediction_time, value=is_outcome_occurs))
         return labels
 
@@ -334,16 +328,12 @@ class CeliacTestLabeler(Labeler):
     Note: This labeler excludes patients who either already had a celiac test or were previously diagnosed.
     """
 
-    def __init__(
-        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
-    ):
+    def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
         dictionary = ontology.get_dictionary()
-        self.lab_codes = _get_all_children(
-            ontology, dictionary.index("LNC/31017-7")
+        self.lab_codes = _get_all_children(ontology, dictionary.index("LNC/31017-7"))
+        self.celiac_codes = _get_all_children(ontology, dictionary.index("ICD9CM/579.0")) | _get_all_children(
+            ontology, dictionary.index("ICD10CM/K90.0")
         )
-        self.celiac_codes = _get_all_children(
-            ontology, dictionary.index("ICD9CM/579.0")
-        ) | _get_all_children(ontology, dictionary.index("ICD10CM/K90.0"))
 
         self.pos_value = "Positive"
         self.neg_value = "Negative"

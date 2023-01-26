@@ -179,15 +179,9 @@ if __name__ == "__main__":
     MAX_LABELS_PER_PATIENT: int = args.max_labels_per_patient
 
     # create directories to save files
-    PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(
-        PATH_TO_OUTPUT_DIR, "labeled_patients.pkl"
-    )
-    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = os.path.join(
-        PATH_TO_OUTPUT_DIR, "preprocessed_featurizers.pkl"
-    )
-    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = os.path.join(
-        PATH_TO_OUTPUT_DIR, "featurized_patients.pkl"
-    )
+    PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, "labeled_patients.pkl")
+    PATH_TO_SAVE_PREPROCESSED_FEATURIZERS: str = os.path.join(PATH_TO_OUTPUT_DIR, "preprocessed_featurizers.pkl")
+    PATH_TO_SAVE_FEATURIZED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, "featurized_patients.pkl")
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
 
     # Load PatientDatabase + Ontology
@@ -196,9 +190,7 @@ if __name__ == "__main__":
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
     # Define the labeling function.
-    year_time_horizon: TimeHorizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=365)
-    )
+    year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
     if args.labeling_function == "admission_discharge":
         labeler = DummyAdmissionDischargeLabeler(ontology)
     elif args.labeling_function == "mortality":
@@ -229,9 +221,7 @@ if __name__ == "__main__":
     if not args.labeling_function == "admission_discharge":
         # Don't throw out labels for admission/discharge placeholder, otherwise
         # defeats the purpose of this labeler
-        labeler = NLabelsPerPatientLabeler(
-            labeler, seed=0, num_labels=MAX_LABELS_PER_PATIENT
-        )
+        labeler = NLabelsPerPatientLabeler(labeler, seed=0, num_labels=MAX_LABELS_PER_PATIENT)
         print_log(
             "Labeler",
             f"Keeping max of {MAX_LABELS_PER_PATIENT} labels per patient",
@@ -256,16 +246,12 @@ if __name__ == "__main__":
 
     # Preprocessing the featurizers, which includes processes such as normalizing age.
     print_log("Preprocessing Featurizer", "Starting")
-    featurizer_age_count.preprocess_featurizers(
-        PATH_TO_PATIENT_DATABASE, labeled_patients, NUM_THREADS
-    )
+    featurizer_age_count.preprocess_featurizers(PATH_TO_PATIENT_DATABASE, labeled_patients, NUM_THREADS)
     save_to_pkl(featurizer_age_count, PATH_TO_SAVE_PREPROCESSED_FEATURIZERS)
     print_log("Preprocessing Featurizer", "Finished")
 
     print_log("Featurize Patients", "Starting")
-    results = featurizer_age_count.featurize(
-        PATH_TO_PATIENT_DATABASE, labeled_patients, NUM_THREADS
-    )
+    results = featurizer_age_count.featurize(PATH_TO_PATIENT_DATABASE, labeled_patients, NUM_THREADS)
     save_to_pkl(results, PATH_TO_SAVE_FEATURIZED_PATIENTS)
     print_log("Featurize Patients", "Finished")
 

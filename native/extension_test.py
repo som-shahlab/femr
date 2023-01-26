@@ -51,12 +51,7 @@ def test_helper(tmp_path, capsys):
             database.get_code_dictionary().index("not in there")
 
         assert database.get_code_dictionary().index("bar/foo") is not None
-        assert (
-            database.get_code_count(
-                database.get_code_dictionary().index("bar/foo")
-            )
-            == 4
-        )
+        assert database.get_code_count(database.get_code_dictionary().index("bar/foo")) == 4
         assert database.get_text_count("Short Text") == 2
         assert database.get_text_count("Long Text") == 1
         assert database.get_text_count("Missing Text") == 0
@@ -83,12 +78,8 @@ def test_helper(tmp_path, capsys):
                 code=1,
                 value="Short Text",
             ),
-            piton.Event(
-                start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1
-            ),
-            piton.Event(
-                start=f("1990-03-15 14:30:00"), code=1, value=34.5, visit_id=0
-            ),
+            piton.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1),
+            piton.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5, visit_id=0),
         )
 
         total = 0

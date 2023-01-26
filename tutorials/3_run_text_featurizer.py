@@ -194,21 +194,13 @@ if __name__ == "__main__":
     PATH_TO_HUGGINGFACE_MODEL: str = args.path_to_huggingface_model
     PATH_TO_OUTPUT_DIR: str = args.path_to_output_dir
     num_threads: int = args.num_threads
-    gpu_devices: List = (
-        args.gpu_devices
-        if len(args.gpu_devices) > 0
-        else get_gpus_with_minimum_free_memory(10)
-    )
+    gpu_devices: List = args.gpu_devices if len(args.gpu_devices) > 0 else get_gpus_with_minimum_free_memory(10)
     is_force_refresh: bool = args.is_force_refresh
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
     assert num_threads > 0, "ERROR - `num_threads` must be greater than 0"
-    assert (
-        len(gpu_devices) > 0
-    ), f"ERROR - Not enough GPUs specified. Must specify at least 1."
+    assert len(gpu_devices) > 0, f"ERROR - Not enough GPUs specified. Must specify at least 1."
 
-    num_patients_per_chunk: int = (
-        20000  # Use 20,000 patients per chunk - TODO: Make this a CLI arg?
-    )
+    num_patients_per_chunk: int = 20000  # Use 20,000 patients per chunk - TODO: Make this a CLI arg?
 
     # Load code dictionary
     data = PatientDatabase(PATH_TO_PATIENT_DATABASE)
@@ -242,22 +234,14 @@ if __name__ == "__main__":
                 "LOINC/LP173418-7",
             ]  # 19
         else:
-            raise NotImplementedError(
-                f"Codes for note type {t} have not been implemented yet."
-            )
-    valid_note_codes: List[int] = [
-        code_dictionary.index(x) for x in valid_note_source_codes
-    ]
+            raise NotImplementedError(f"Codes for note type {t} have not been implemented yet.")
+    valid_note_codes: List[int] = [code_dictionary.index(x) for x in valid_note_source_codes]
 
     # Choose embedding method
     if args.embedder__method == "cls":
-        embed_method: Callable = (
-            piton.featurizers.featurizers_notes.embed_with_cls
-        )
+        embed_method: Callable = piton.featurizers.featurizers_notes.embed_with_cls
     else:
-        raise ValueError(
-            f"Invalid `embed_method` ({args.embedder__method}) specified"
-        )
+        raise ValueError(f"Invalid `embed_method` ({args.embedder__method}) specified")
 
     # Set up preprocessing transformations
     preprocess_transformations: List[Callable] = []
@@ -273,9 +257,7 @@ if __name__ == "__main__":
         elif t == "keep_only_last_n_chars":
             preprocess_transformations.append(keep_only_last_n_chars)
         else:
-            raise ValueError(
-                f"Invalid preprocess transformation ({t}) specified"
-            )
+            raise ValueError(f"Invalid preprocess transformation ({t}) specified")
 
     # Logging
     print_log(
@@ -287,9 +269,7 @@ if __name__ == "__main__":
         f"    ...which correspond to these source codes: {valid_note_source_codes}",
     )
     print_log("ArgParse", f"Use these GPUs: {gpu_devices}")
-    print_log(
-        "ArgParse", f"Use this embedding method: '{embed_method.__name__}'"
-    )
+    print_log("ArgParse", f"Use this embedding method: '{embed_method.__name__}'")
     print_log(
         "ArgParse",
         f"Apply these transformations in order: {[ x.__name__ for x in preprocess_transformations ]}",

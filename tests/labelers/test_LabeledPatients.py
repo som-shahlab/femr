@@ -41,9 +41,7 @@ def assert_tuples_match_labels(labeled_patients: LabeledPatients):
 
 def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
     """Passes if np.arrays output by `as_numpy_arrays()` are the same as the `labels` in `labeled_patients`."""
-    label_numpy: Tuple[
-        np.ndarray, np.ndarray, np.ndarray
-    ] = labeled_patients.as_numpy_arrays()
+    label_numpy: Tuple[np.ndarray, np.ndarray, np.ndarray] = labeled_patients.as_numpy_arrays()
     assert (
         label_numpy[0].shape[0]
         == label_numpy[1].shape[0]
@@ -54,9 +52,7 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
         patient_id = label_numpy[0][i]
         assert (
             Label(
-                value=bool(label_numpy[1][i])
-                if label_numpy[1][i] is not None
-                else None,
+                value=bool(label_numpy[1][i]) if label_numpy[1][i] is not None else None,
                 time=label_numpy[2][i],
             )
             in labeled_patients[patient_id]
@@ -81,19 +77,13 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         (event((2016, 3, 1, 10, 10, 10), 2, None), None),
         # fmt: on
     ]
-    patients: List[piton.Patient] = create_patients_list(
-        10, [x[0] for x in events_with_labels]
-    )
+    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
-        (x[0].start, x[1])
-        for x in events_with_labels
-        if isinstance(x[1], bool) or (x[1] is None)
+        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
     ]
 
     # Create Labeler
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=180)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     labeler = CodeLabeler([3], time_horizon, prediction_codes=[2])
 
     # Create LabeledPatients
@@ -102,18 +92,14 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         labels = labeler.label(patient)
         if len(labels) > 0:
             patients_to_labels[patient.patient_id] = labels
-    labeled_patients: LabeledPatients = LabeledPatients(
-        patients_to_labels, labeler.get_labeler_type()
-    )
+    labeled_patients: LabeledPatients = LabeledPatients(patients_to_labels, labeler.get_labeler_type())
 
     # Data representations
     #   Check accuracy of Labels
     for i in range(len(patients)):
         assert_labels_are_accurate(labeled_patients, i, true_labels)
     #   Check that label counter is correct
-    assert labeled_patients.get_num_labels() == len(true_labels) * len(
-        labeled_patients
-    ), (
+    assert labeled_patients.get_num_labels() == len(true_labels) * len(labeled_patients), (
         f"Number of labels in LabeledPatients ({labeled_patients.get_num_labels()}) "
         f"!= Expected number of labels ({len(true_labels)} * {len(labeled_patients)})"
     )
@@ -135,10 +121,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
-    assert (
-        labeled_patients_new.as_list_of_label_tuples()
-        == labeled_patients.as_list_of_label_tuples()
-    )
+    assert labeled_patients_new.as_list_of_label_tuples() == labeled_patients.as_list_of_label_tuples()
     for (orig, new) in zip(
         labeled_patients.as_numpy_arrays(),
         labeled_patients_new.as_numpy_arrays(),

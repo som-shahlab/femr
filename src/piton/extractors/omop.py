@@ -32,9 +32,7 @@ class _DemographicsConverter(CSVExtractor):
             if row["year_of_birth"]:
                 year = int(row["year_of_birth"])
             else:
-                raise RuntimeError(
-                    "Should always have at least a year of birth?"
-                )
+                raise RuntimeError("Should always have at least a year of birth?")
 
             if row["month_of_birth"]:
                 month = int(row["month_of_birth"])
@@ -69,9 +67,7 @@ class _DemographicsConverter(CSVExtractor):
         ]
 
 
-def _get_date(
-    row: Mapping[str, str], date_field: str
-) -> Optional[datetime.datetime]:
+def _get_date(row: Mapping[str, str], date_field: str) -> Optional[datetime.datetime]:
     """Extract the highest resolution date from the raw data."""
     for attempt in (date_field + "time", date_field):
         if attempt in row and row[attempt] != "":
@@ -110,9 +106,7 @@ class _ConceptTableConverter(CSVExtractor):
             return self.prefix
 
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        def normalize_to_float_if_possible(
-            field_name: Optional[str], value: str | float | None
-        ) -> str | float | None:
+        def normalize_to_float_if_possible(field_name: Optional[str], value: str | float | None) -> str | float | None:
             if field_name is not None:
                 val = _try_numeric(row[field_name])
                 if val is not None:
@@ -122,9 +116,7 @@ class _ConceptTableConverter(CSVExtractor):
         value = normalize_to_float_if_possible(self.string_value_field, None)
         value = normalize_to_float_if_possible(self.numeric_value_field, value)
 
-        concept_id_field = self.concept_id_field or (
-            self.prefix + "_concept_id"
-        )
+        concept_id_field = self.concept_id_field or (self.prefix + "_concept_id")
         code = int(row[concept_id_field])
         if code == 0:
             # The following are worth recovering even without the code ...
@@ -145,12 +137,7 @@ class _ConceptTableConverter(CSVExtractor):
             end = None
 
         if start is None:
-            raise RuntimeError(
-                "Could not find a date field for "
-                + repr(self)
-                + " "
-                + repr(row)
-            )
+            raise RuntimeError("Could not find a date field for " + repr(self) + " " + repr(row))
 
         if "visit_occurrence_id" in row and row["visit_occurrence_id"]:
             visit_id = int(row["visit_occurrence_id"])
@@ -176,9 +163,7 @@ class _ConceptTableConverter(CSVExtractor):
         if unit is not None:
             metadata["unit"] = unit
 
-        source_code_column = concept_id_field.replace(
-            "_concept_id", "_source_value"
-        )
+        source_code_column = concept_id_field.replace("_concept_id", "_source_value")
         source_code = row.get(source_code_column)
         metadata["source_code"] = source_code or ""
 
@@ -201,16 +186,12 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             prefix="condition",
             file_suffix="occurrence",
         ),
-        _ConceptTableConverter(
-            prefix="death", concept_id_field="death_type_concept_id"
-        ),
+        _ConceptTableConverter(prefix="death", concept_id_field="death_type_concept_id"),
         _ConceptTableConverter(
             prefix="procedure",
             file_suffix="occurrence",
         ),
-        _ConceptTableConverter(
-            prefix="device_exposure", concept_id_field="device_concept_id"
-        ),
+        _ConceptTableConverter(prefix="device_exposure", concept_id_field="device_concept_id"),
         _ConceptTableConverter(
             prefix="measurement",
             string_value_field="value_source_value",

@@ -37,9 +37,7 @@ class EventWriter:
 
     def __init__(self, path: str):
         """Open a file for writing."""
-        self.file = tempfile.NamedTemporaryFile(
-            dir=path, suffix=".csv.zst", delete=False
-        )
+        self.file = tempfile.NamedTemporaryFile(dir=path, suffix=".csv.zst", delete=False)
         compressor = zstandard.ZstdCompressor(level=1)
         self.o = io.TextIOWrapper(
             compressor.stream_writer(self.file),
@@ -61,13 +59,7 @@ class EventWriter:
         data["code"] = str(event.code)
         data["value"] = _encode_value(event.value)
         data["metadata"] = base64.b64encode(
-            pickle.dumps(
-                {
-                    a: b
-                    for a, b in event.__dict__.items()
-                    if a not in ("start", "code", "value")
-                }
-            )
+            pickle.dumps({a: b for a, b in event.__dict__.items() if a not in ("start", "code", "value")})
         ).decode("utf8")
 
         self.writer.writerow(data)
@@ -86,9 +78,7 @@ class EventReader:
         """Open the event file."""
         self.filename = filename
         decompressor = zstandard.ZstdDecompressor()
-        self.o = io.TextIOWrapper(
-            decompressor.stream_reader(open(self.filename, "rb"))
-        )
+        self.o = io.TextIOWrapper(decompressor.stream_reader(open(self.filename, "rb")))
         self.reader = csv.DictReader(self.o)
 
     def __iter__(self) -> Iterator[Tuple[int, Event]]:

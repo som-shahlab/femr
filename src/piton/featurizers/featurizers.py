@@ -41,9 +41,7 @@ class AgeFeaturizer(Featurizer):
         if not self.is_needs_preprocessing():
             return
 
-        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(
-            patient
-        )
+        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
         if not patient_birth_date:
             return
 
@@ -63,19 +61,13 @@ class AgeFeaturizer(Featurizer):
         This is handled by the OnlineStatistics.merge() method.
         """
         if len(featurizers) == 0:
-            raise ValueError(
-                "You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`"
-            )
+            raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
 
         # Calculate merged mean/variance/count across each individual featurizer
-        merged_stats: OnlineStatistics = OnlineStatistics.merge(
-            [f.age_statistics for f in featurizers]
-        )
+        merged_stats: OnlineStatistics = OnlineStatistics.merge([f.age_statistics for f in featurizers])
         # Create new featurizer with merged mean/variance/count
         template_featurizer: AgeFeaturizer = featurizers[0]
-        aggregated_featurizer: AgeFeaturizer = AgeFeaturizer(
-            template_featurizer.is_normalize
-        )
+        aggregated_featurizer: AgeFeaturizer = AgeFeaturizer(template_featurizer.is_normalize)
         aggregated_featurizer.age_statistics = merged_stats
         return aggregated_featurizer
 
@@ -87,16 +79,12 @@ class AgeFeaturizer(Featurizer):
     ) -> List[List[ColumnValue]]:
         """Return the age of the patient at each label.
         If `is_normalize`, then normalize each label's age across all patient's ages across all their labels."""
-        assert (
-            ontology is not None
-        ), "Ontology cannot be `None` for AgeFeaturizer"
+        assert ontology is not None, "Ontology cannot be `None` for AgeFeaturizer"
         all_columns: List[List[ColumnValue]] = []
         # Outer list is per label
         # Inner list is the list of features for that label
 
-        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(
-            patient
-        )
+        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
         if not patient_birth_date:
             return all_columns
 
@@ -104,9 +92,7 @@ class AgeFeaturizer(Featurizer):
             age_in_yrs: float = (label.time - patient_birth_date).days / 365
             if self.is_normalize:
                 # age = (age - mean(ages)) / std(ages)
-                age_in_yrs = (age_in_yrs - self.age_statistics.mean()) / (
-                    self.age_statistics.standard_deviation()
-                )
+                age_in_yrs = (age_in_yrs - self.age_statistics.mean()) / (self.age_statistics.standard_deviation())
             all_columns.append([ColumnValue(0, age_in_yrs)])
 
         return all_columns
@@ -116,6 +102,7 @@ class AgeFeaturizer(Featurizer):
 
     def __repr__(self):
         return f"AgeFeaturizer(is_normalize={self.is_normalize}, count={self.age_statistics.current_count} mean={self.age_statistics.mean()}, std={self.age_statistics.standard_deviation()})"
+
 
 def _reshuffle_count_time_bins(
     time_bins: List[datetime.timedelta],
@@ -145,9 +132,7 @@ def _reshuffle_count_time_bins(
                 # to entry @ `bin_idx + 1`.
                 # Basically, move this code from the bin that is closer to the prediction time (`bin_idx`)
                 # to a bin that is further away from the prediction time (`bin_idx + 1`)
-                codes_per_bin[bin_idx + 1].append(
-                    codes_per_bin[bin_idx].popleft()
-                )
+                codes_per_bin[bin_idx + 1].append(codes_per_bin[bin_idx].popleft())
 
                 # Remove oldest_event_code from current (closer to prediction time) bin `bin_idx`
                 code_counts_per_bin[bin_idx][oldest_event_code] -= 1
@@ -218,35 +203,21 @@ class CountFeaturizer(Featurizer):
                 which will make this run slower.
         """
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.included_codes: set = (
-            set(included_codes)
-            if not isinstance(included_codes, set)
-            else included_codes
-        )
-        self.excluded_codes: set = (
-            set(excluded_codes)
-            if not isinstance(excluded_codes, set)
-            else excluded_codes
-        )
+        self.included_codes: set = set(included_codes) if not isinstance(included_codes, set) else included_codes
+        self.excluded_codes: set = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
-        self.is_keep_only_none_valued_events: bool = (
-            is_keep_only_none_valued_events
-        )
+        self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
 
         # Map code to its feature's corresponding column index
         # NOTE: Must be sorted to preserve set ordering across instantiations
-        self.code_to_column_index: Dict[int, int] = {
-            code: idx for idx, code in enumerate(sorted(self.included_codes))
-        }
+        self.code_to_column_index: Dict[int, int] = {code: idx for idx, code in enumerate(sorted(self.included_codes))}
 
         if self.time_bins is not None:
             assert len(set(self.time_bins)) == len(
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
-    def get_codes(
-        self, code: int, ontology: extension_datasets.Ontology
-    ) -> Iterator[int]:
+    def get_codes(self, code: int, ontology: extension_datasets.Ontology) -> Iterator[int]:
         if code not in self.excluded_codes:
             if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(code):
@@ -268,9 +239,7 @@ class CountFeaturizer(Featurizer):
             # If we haven't seen this code before, then add it to our list of included codes
             if event.code not in self.included_codes:
                 # NOTE: Ordering of below two lines is important if want column indexes to start at 0
-                self.code_to_column_index[event.code] = len(
-                    self.code_to_column_index
-                )
+                self.code_to_column_index[event.code] = len(self.code_to_column_index)
                 self.included_codes.add(event.code)
 
     @classmethod
@@ -284,14 +253,10 @@ class CountFeaturizer(Featurizer):
         featurizer that combines all these codes
         """
         if len(featurizers) == 0:
-            raise ValueError(
-                "You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`"
-            )
+            raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
 
         # Aggregating count featurizers
-        all_codes: List[int] = [
-            c for f in featurizers for c in f.included_codes
-        ]
+        all_codes: List[int] = [c for f in featurizers for c in f.included_codes]
 
         template_featurizer: CountFeaturizer = featurizers[0]
         new_featurizer: CountFeaturizer = CountFeaturizer(
@@ -333,10 +298,7 @@ class CountFeaturizer(Featurizer):
                     label_idx += 1
                     # Create all features for label at index `label_idx`
                     all_columns.append(
-                        [
-                            ColumnValue(self.code_to_column_index[code], count)
-                            for code, count in code_counter.items()
-                        ]
+                        [ColumnValue(self.code_to_column_index[code], count) for code, count in code_counter.items()]
                     )
                     if label_idx >= len(labels):
                         # We've reached the end of the labels for this patient,
@@ -344,10 +306,7 @@ class CountFeaturizer(Featurizer):
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
-                if (
-                    self.is_keep_only_none_valued_events
-                    and event.value is not None
-                ):
+                if self.is_keep_only_none_valued_events and event.value is not None:
                     # If we only want to keep events with no value, then skip this event
                     # because it has a non-None value
                     continue
@@ -364,16 +323,11 @@ class CountFeaturizer(Featurizer):
                 # the featurization of these labels is the count of every single event)
                 for label in labels[label_idx:]:
                     all_columns.append(
-                        [
-                            ColumnValue(self.code_to_column_index[code], count)
-                            for code, count in code_counter.items()
-                        ]
+                        [ColumnValue(self.code_to_column_index[code], count) for code, count in code_counter.items()]
                     )
         else:
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
-            time_bins: List[datetime.timedelta] = sorted(
-                [x for x in self.time_bins if x is not None]
-            )
+            time_bins: List[datetime.timedelta] = sorted([x for x in self.time_bins if x is not None])
 
             codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
@@ -398,8 +352,7 @@ class CountFeaturizer(Featurizer):
                     all_columns.append(
                         [
                             ColumnValue(
-                                self.code_to_column_index[code]
-                                + i * len(self.included_codes),
+                                self.code_to_column_index[code] + i * len(self.included_codes),
                                 count,
                             )
                             for i in range(len(self.time_bins))
@@ -431,8 +384,7 @@ class CountFeaturizer(Featurizer):
                     all_columns.append(
                         [
                             ColumnValue(
-                                self.code_to_column_index[code]
-                                + i * len(self.included_codes),
+                                self.code_to_column_index[code] + i * len(self.included_codes),
                                 count,
                             )
                             for i in range(len(self.time_bins))

@@ -22,12 +22,7 @@ from piton.labelers.omop_lab_values import (
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import (
-    EventsWithLabels,
-    event,
-    run_test_for_labeler,
-    run_test_locally,
-)
+from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
 
 #############################################
 #############################################
@@ -167,9 +162,7 @@ def test_labeling(tmp_path: pathlib.Path):
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start)
-        for x in events_with_labels
-        if isinstance(x[1], bool)
+        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
     ]
     run_test_for_labeler(
         labeler,
@@ -278,9 +271,7 @@ def _run_specific_labvalue_test(
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start)
-        for x in events_with_labels
-        if isinstance(x[1], bool)
+        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
     ]
     run_test_for_labeler(
         labeler,
@@ -415,9 +406,7 @@ def test_anemia(tmp_path: pathlib.Path):
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(
-        labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, "g/dl"
-    )
+    _assert_value_to_label_correct(labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, "g/dl")
 
     # Create patient
     _run_specific_labvalue_test(

@@ -75,17 +75,13 @@ def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
 
     for i in range(7):
         with contextlib.closing(events.create_writer()) as writer:
-            for patient_id, event in ALL_EVENTS[
-                i * events_per_chunk : (i + 1) * events_per_chunk
-            ]:
+            for patient_id, event in ALL_EVENTS[i * events_per_chunk : (i + 1) * events_per_chunk]:
                 writer.add_event(patient_id, event)
 
     return events
 
 
-def create_patients_list(
-    num_patients: int, events: List[piton.Event]
-) -> List[piton.Patient]:
+def create_patients_list(num_patients: int, events: List[piton.Event]) -> List[piton.Patient]:
     """Creates a list of patients, each with the same events contained in `events`"""
     patients: List[piton.Patient] = []
     for patient_id in range(num_patients):
@@ -99,28 +95,18 @@ def create_patients_list(
 
 
 def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
-    return create_events(tmp_path).to_patient_collection(
-        os.path.join(tmp_path, "patients")
-    )
+    return create_events(tmp_path).to_patient_collection(os.path.join(tmp_path, "patients"))
 
 
 def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
-    path_to_concept_file: str = os.path.join(
-        path_to_ontology_dir, "concept", "concept.csv.zst"
-    )
-    path_to_relationship_file: str = os.path.join(
-        path_to_ontology_dir + "/concept_relationship/"
-    )
+    path_to_concept_file: str = os.path.join(path_to_ontology_dir, "concept", "concept.csv.zst")
+    path_to_relationship_file: str = os.path.join(path_to_ontology_dir + "/concept_relationship/")
     os.makedirs(os.path.dirname(path_to_concept_file), exist_ok=True)
     os.makedirs(path_to_relationship_file, exist_ok=True)
 
     concept_map: Dict[str, int] = {}
 
-    with io.TextIOWrapper(
-        zstandard.ZstdCompressor(1).stream_writer(
-            open(path_to_concept_file, "wb")
-        )
-    ) as o:
+    with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(path_to_concept_file, "wb"))) as o:
         writer = csv.DictWriter(
             o,
             fieldnames=[
@@ -164,9 +150,7 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
     return concept_map
 
 
-def create_database(
-    tmp_path: pathlib.Path, dummy_concepts: List[str] = []
-) -> None:
+def create_database(tmp_path: pathlib.Path, dummy_concepts: List[str] = []) -> None:
 
     patient_collection = create_patients(tmp_path)
 
@@ -200,18 +184,14 @@ def assert_labels_are_accurate(
     help_text: str = "",
 ):
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
-    assert (
-        patient_id in labeled_patients
-    ), f"patient_id={patient_id} not in labeled_patients"
+    assert patient_id in labeled_patients, f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
     # Check that length of lists of labels are the same
     assert len(generated_labels) == len(
         true_labels
     ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
     # Check that value of labels are the same
-    for idx, (label, true_label) in enumerate(
-        zip(generated_labels, true_labels)
-    ):
+    for idx, (label, true_label) in enumerate(zip(generated_labels, true_labels)):
         assert label.value == true_label[1] and label.time == true_label[0], (
             f"patient_id={patient_id}, label_idx={idx}, label={label}  |  "
             f"{label.value} (Assigned) != {true_label} (Expected)  |  "
@@ -227,20 +207,14 @@ def run_test_for_labeler(
     help_text: str = "",
 ) -> None:
 
-    patients: List[piton.Patient] = create_patients_list(
-        10, [x[0] for x in events_with_labels]
-    )
+    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
-        (x[0].start, x[1])
-        for x in events_with_labels
-        if isinstance(x[1], bool) or (x[1] is None)
+        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
     ]
     if true_prediction_times is not None:
         # If manually specified prediction times, adjust labels from occurring at `event.start`
         # e.g. we may make predictions at `event.end` or `event.start + 1 day`
-        true_labels = [
-            (tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)
-        ]
+        true_labels = [(tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)]
     labeled_patients: LabeledPatients = labeler.apply(patients=patients)
 
     # Check accuracy of Labels
@@ -263,19 +237,13 @@ def run_test_for_labeler(
             else:
                 # Otherwise, assume that outcome times are simply the start times of
                 # events with codes in `outcome_codes`
-                assert hasattr(
-                    labeler, "outcome_codes"
-                ), f"{labeler} is missing an `outcome_codes` attribute"
+                assert hasattr(labeler, "outcome_codes"), f"{labeler} is missing an `outcome_codes` attribute"
                 assert labeler.get_outcome_times(p) == [
-                    event.start
-                    for event in p.events
-                    if event.code in labeler.outcome_codes
+                    event.start for event in p.events if event.code in labeler.outcome_codes
                 ], f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
 
 
-def create_labeled_patients_list(
-    labeler: Labeler, patients: List[piton.Patient]
-):
+def create_labeled_patients_list(labeler: Labeler, patients: List[piton.Patient]):
     pat_to_labels = {}
 
     for patient in patients:
@@ -284,9 +252,7 @@ def create_labeled_patients_list(
         if len(labels) > 0:
             pat_to_labels[patient.patient_id] = labels
 
-    labeled_patients = LabeledPatients(
-        pat_to_labels, labeler.get_labeler_type()
-    )
+    labeled_patients = LabeledPatients(pat_to_labels, labeler.get_labeler_type())
 
     return labeled_patients
 

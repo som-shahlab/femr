@@ -7,18 +7,7 @@ import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import (
-    Any,
-    DefaultDict,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Any, DefaultDict, Dict, List, Literal, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 from nptyping import NDArray
@@ -80,11 +69,7 @@ def _apply_labeling_function(
         patients = PatientDatabase(path_to_patient_database)
 
     # Hacky workaround for Ontology not being picklable
-    if (
-        hasattr(labeling_function, "ontology")
-        and labeling_function.ontology is None
-        and path_to_patient_database
-    ):
+    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None and path_to_patient_database:
         labeling_function.ontology = patients.get_ontology()  # type: ignore
     if (
         hasattr(labeling_function, "labeler")
@@ -163,9 +148,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             # If SurvivalValue labeler, then label value is a tuple of (time to event, is censored)
             for patient_id, labels in self.patients_to_labels.items():
                 for label in labels:
-                    survival_value: SurvivalValue = cast(
-                        SurvivalValue, label.value
-                    )
+                    survival_value: SurvivalValue = cast(SurvivalValue, label.value)
                     patient_ids.append(patient_id)
                     label_values.append(
                         [
@@ -175,9 +158,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                     )
                     label_times.append(label.time)
         else:
-            raise ValueError(
-                "Other label types are not implemented yet for this method"
-            )
+            raise ValueError("Other label types are not implemented yet for this method")
         return (
             np.array(patient_ids),
             np.array(label_values),
@@ -221,30 +202,20 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             label_times (NDArray): Times that the corresponding label occurs.
             labeler_type (LabelType): LabelType of the corresponding labels.
         """
-        patients_to_labels: DefaultDict[
-            int, List[Label]
-        ] = collections.defaultdict(list)
+        patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)
         # TODO - does replacing zip with dstack improve speed?
-        for patient_id, l_value, l_time in zip(
-            patient_ids, label_values, label_times
-        ):
+        for patient_id, l_value, l_time in zip(patient_ids, label_values, label_times):
             if labeler_type in ["boolean", "numerical", "categorical"]:
-                patients_to_labels[patient_id].append(
-                    Label(time=l_time, value=l_value)
-                )
+                patients_to_labels[patient_id].append(Label(time=l_time, value=l_value))
             elif labeler_type in ["survival"]:
                 patients_to_labels[patient_id].append(
                     Label(
                         time=l_time,
-                        value=SurvivalValue(
-                            time_to_event=l_value[0], is_censored=l_value[1]
-                        ),
+                        value=SurvivalValue(time_to_event=l_value[0], is_censored=l_value[1]),
                     )
                 )
             else:
-                raise ValueError(
-                    "Other label types are not implemented yet for this method"
-                )
+                raise ValueError("Other label types are not implemented yet for this method")
         return LabeledPatients(dict(patients_to_labels), labeler_type)
 
     def __str__(self):
@@ -300,9 +271,7 @@ class Labeler(ABC):
         """
         pass
 
-    def get_patient_start_end_times(
-        self, patient: Patient
-    ) -> Tuple[datetime.datetime, datetime.datetime]:
+    def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Return the (start, end) of the patient timeline.
 
         Returns:
@@ -341,17 +310,13 @@ class Labeler(ABC):
         if (patients is None and path_to_patient_database is None) or (
             patients is not None and path_to_patient_database is not None
         ):
-            raise ValueError(
-                "Must specify exactly one of `patient_database` or `path_to_patient_database`"
-            )
+            raise ValueError("Must specify exactly one of `patient_database` or `path_to_patient_database`")
 
         if path_to_patient_database:
             # Load patientdatabase if specified
             assert patients is None
             patient_database = PatientDatabase(path_to_patient_database)
-            num_patients = (
-                len(patient_database) if not num_patients else num_patients
-            )
+            num_patients = len(patient_database) if not num_patients else num_patients
             pids = list(range(num_patients))
         else:
             # Use `patients` if specified
@@ -363,9 +328,7 @@ class Labeler(ABC):
         pid_parts = np.array_split(pids, num_threads)
 
         # NOTE: Super hacky workaround to pickling limitations
-        if hasattr(self, "ontology") and isinstance(
-            self.ontology, extension_datasets.Ontology
-        ):
+        if hasattr(self, "ontology") and isinstance(self.ontology, extension_datasets.Ontology):
             # Remove ontology due to pickling, add it back later
             self.ontology = None  # type: ignore
         if (
@@ -377,19 +340,12 @@ class Labeler(ABC):
             self.labeler.ontology = None  # type: ignore
 
         # Multiprocessing
-        tasks = [
-            (self, patients, path_to_patient_database, pid_part)
-            for pid_part in pid_parts
-        ]
+        tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts]
         pool = ProcessPool(num_threads)
-        results: List[Dict[int, List[Label]]] = list(
-            pool.imap(_apply_labeling_function, tasks)
-        )
+        results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
 
         # Join results and return
-        patients_to_labels: Dict[int, List[Label]] = dict(
-            collections.ChainMap(*results)
-        )
+        patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
         return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
@@ -472,9 +428,7 @@ class TimeHorizonEventLabeler(Labeler):
         """
         pass
 
-    def get_patient_start_end_times(
-        self, patient: Patient
-    ) -> Tuple[datetime.datetime, datetime.datetime]:
+    def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Return the datetimes that we consider the (start, end) of this patient."""
         return (patient.events[0].start, patient.events[-1].start)
 
@@ -498,27 +452,20 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(
-            patient
-        )
+        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
         time_horizon_start: datetime.timedelta = time_horizon.start
-        time_horizon_end: Optional[
-            datetime.timedelta
-        ] = time_horizon.end  # `None` if infinite time horizon
+        time_horizon_end: Optional[datetime.timedelta] = time_horizon.end  # `None` if infinite time horizon
 
         # For each prediction time, check if there is an outcome which occurs within the (start, end)
         # of the time horizon
         results: List[Label] = []
         curr_outcome_idx: int = 0
         for time in prediction_times:
-            while (
-                curr_outcome_idx < len(outcome_times)
-                and outcome_times[curr_outcome_idx] < time + time_horizon_start
-            ):
+            while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
                 curr_outcome_idx += 1
@@ -539,18 +486,13 @@ class TimeHorizonEventLabeler(Labeler):
                 and (
                     # outcome occurs before time horizon ends (if there is an end)
                     (time_horizon_end is None)
-                    or outcome_times[curr_outcome_idx]
-                    <= time + time_horizon_end
+                    or outcome_times[curr_outcome_idx] <= time + time_horizon_end
                 )
             )
             # TRUE if patient is censored (i.e. timeline ends BEFORE this time horizon ends,
             # so we don't know if the outcome happened after the patient timeline ends)
             # If infinite time horizon labeler, then assume no censoring
-            is_censored: bool = (
-                end_time < time + time_horizon_end
-                if (time_horizon_end is not None)
-                else False
-            )
+            is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
                 results.append(Label(time=time, value=True))
@@ -579,17 +521,12 @@ class NLabelsPerPatientLabeler(Labeler):
         if len(labels) <= self.num_labels:
             return labels
         hash_to_label_list: List[Tuple[int, int, Label]] = [
-            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i])
-            for i in range(len(labels))
+            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))
         ]
         hash_to_label_list.sort(key=lambda a: a[1])
-        n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[
-            : self.num_labels
-        ]
+        n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[: self.num_labels]
         n_hash_to_label_list.sort(key=lambda a: a[0])
-        n_labels: List[Label] = [
-            hash_to_label[2] for hash_to_label in n_hash_to_label_list
-        ]
+        n_labels: List[Label] = [hash_to_label[2] for hash_to_label in n_hash_to_label_list]
         return n_labels
 
     def get_labeler_type(self) -> LabelType:

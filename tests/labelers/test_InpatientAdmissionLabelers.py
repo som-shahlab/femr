@@ -9,10 +9,7 @@ import pytest
 
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
-from piton.labelers.omop import (
-    get_inpatient_admission_discharge_times,
-    move_datetime_to_end_of_day,
-)
+from piton.labelers.omop import get_inpatient_admission_discharge_times, move_datetime_to_end_of_day
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
@@ -79,9 +76,7 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
         # fmt: on
     ]
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
-    results: List[piton.Event] = get_inpatient_admission_discharge_times(
-        patient, ontology  # type: ignore
-    )
+    results: List[piton.Event] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
     assert results == list(
         zip(
             [x[0].start for x in events_with_labels if x[1] == True],
@@ -112,9 +107,7 @@ class DummyAdmissionDischargeOntology:
         return []
 
 
-def _run_test_admission_discharge_placeholder(
-    labeler, events_with_labels: EventsWithLabels, help_text: str = ""
-):
+def _run_test_admission_discharge_placeholder(labeler, events_with_labels: EventsWithLabels, help_text: str = ""):
     # Check Labels match admission start/end times
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [  # type: ignore
         y  # type: ignore
@@ -122,9 +115,7 @@ def _run_test_admission_discharge_placeholder(
         for y in [(x[0].start, x[1]), (x[0].end, x[1])]  # type: ignore
         if isinstance(x[1], bool) or (x[1] is None)  # type: ignore
     ]  # type: ignore
-    patients: List[piton.Patient] = create_patients_list(
-        10, [x[0] for x in events_with_labels]
-    )
+    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     labeled_patients: LabeledPatients = labeler.apply(patients=patients)
     for patient in patients:
         assert_labels_are_accurate(
@@ -357,9 +348,7 @@ class DummyReadmissionOntology:
 
 def test_readmission(tmp_path: pathlib.Path):
     # Test general readmission labeler on 30-day readmission task
-    time_horizon = TimeHorizon(
-        datetime.timedelta(seconds=1), datetime.timedelta(days=30)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(seconds=1), datetime.timedelta(days=30))
     ontology = DummyReadmissionOntology()
     labeler = InpatientReadmissionLabeler(ontology, time_horizon)  # type: ignore
     events_with_labels: EventsWithLabels = [
@@ -399,14 +388,10 @@ def test_readmission(tmp_path: pathlib.Path):
     ]
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
     true_outcome_times: List[datetime.datetime] = [
-        x[0].start
-        for x in events_with_labels
-        if x[0].omop_table == "visit_detail"
+        x[0].start for x in events_with_labels if x[0].omop_table == "visit_detail"
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].end)
-        for x in events_with_labels
-        if x[0].omop_table == "visit_detail"
+        move_datetime_to_end_of_day(x[0].end) for x in events_with_labels if x[0].omop_table == "visit_detail"
     ]
     assert labeler.get_time_horizon() == time_horizon
     assert labeler.get_outcome_times(patient) == true_outcome_times
@@ -509,9 +494,7 @@ def test_mortality(tmp_path: pathlib.Path):
         labeler,
         events_with_labels,
         true_prediction_times=[
-            move_datetime_to_end_of_day(x[0].start)
-            for x in events_with_labels
-            if isinstance(x[1], bool)
+            move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
         ],
         help_text="test_mortality",
     )
@@ -561,9 +544,7 @@ def test_long_admission(tmp_path: pathlib.Path):
     assert labeler.long_time == long_time
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start)
-        for x in events_with_labels
-        if x[0].omop_table == "visit_detail"
+        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if x[0].omop_table == "visit_detail"
     ]
     run_test_for_labeler(
         labeler,
@@ -587,12 +568,8 @@ def test_long_admission(tmp_path: pathlib.Path):
 
 # Local testing
 if __name__ == "__main__":
-    run_test_locally(
-        "../ignore/test_labelers/", test_get_inpatient_admission_discharge_times
-    )
-    run_test_locally(
-        "../ignore/test_labelers/", test_admission_discharge_placeholder
-    )
+    run_test_locally("../ignore/test_labelers/", test_get_inpatient_admission_discharge_times)
+    run_test_locally("../ignore/test_labelers/", test_admission_discharge_placeholder)
     run_test_locally("../ignore/test_labelers/", test_readmission)
     run_test_locally("../ignore/test_labelers/", test_mortality)
     run_test_locally("../ignore/test_labelers/", test_long_admission)

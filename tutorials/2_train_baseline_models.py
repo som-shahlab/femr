@@ -41,9 +41,7 @@ if __name__ == "__main__":
     def print_log(name: str, content: str):
         print(f"{int(time.time() - START_TIME)} | {name} | {content}")
 
-    parser = argparse.ArgumentParser(
-        description="Train baseline models (LR, XGBoost, etc.)"
-    )
+    parser = argparse.ArgumentParser(description="Train baseline models (LR, XGBoost, etc.)")
 
     parser.add_argument(
         "path_to_patient_database",
@@ -85,9 +83,7 @@ if __name__ == "__main__":
     num_threads: int = int(args.num_threads)
     split_seed: int = int(args.split_seed)
     percent_train: float = float(args.percent_train)
-    assert (
-        0 < percent_train < 1
-    ), f"percent_train must be between 0 and 1, not {percent_train}"
+    assert 0 < percent_train < 1, f"percent_train must be between 0 and 1, not {percent_train}"
 
     # Load PatientDatabase
     database = piton.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
@@ -101,16 +97,10 @@ if __name__ == "__main__":
         featurized_data[2],
         featurized_data[3],
     )
-    print_log(
-        "Featurized Patients", f"Loaded from: {PATH_TO_FEATURIZED_PATIENTS}"
-    )
-    print_log(
-        "Featurized Patients", f"Feature matrix shape: {feature_matrix.shape}"
-    )
+    print_log("Featurized Patients", f"Loaded from: {PATH_TO_FEATURIZED_PATIENTS}")
+    print_log("Featurized Patients", f"Feature matrix shape: {feature_matrix.shape}")
     print_log("Featurized Patients", f"Patient IDs shape: {len(patient_ids)}")
-    print_log(
-        "Featurized Patients", f"Label values shape: {label_values.shape}"
-    )
+    print_log("Featurized Patients", f"Label values shape: {label_values.shape}")
     print_log("Featurized Patients", f"Label times shape: {label_times.shape}")
 
     # Ignore all censored data
@@ -125,9 +115,7 @@ if __name__ == "__main__":
         "Dataset Split",
         f"Splitting dataset ({round(percent_train, 3)} / {round(1 - percent_train, 3)}) (train / test), with seed {split_seed}",
     )
-    hashed_pids = np.array(
-        [database.compute_split(split_seed, pid) for pid in patient_ids]
-    )
+    hashed_pids = np.array([database.compute_split(split_seed, pid) for pid in patient_ids])
     train_pids_idx = np.where(hashed_pids < (percent_train * 100))[0]
     test_pids_idx = np.where(hashed_pids >= (percent_train * 100))[0]
     X_train, y_train = (
@@ -139,9 +127,7 @@ if __name__ == "__main__":
         "Dataset Split",
         f"Train shape: X = {X_train.shape}, Y = {y_train.shape}",
     )
-    print_log(
-        "Dataset Split", f"Test shape: X = {X_test.shape}, Y = {y_test.shape}"
-    )
+    print_log("Dataset Split", f"Test shape: X = {X_test.shape}, Y = {y_test.shape}")
     print_log(
         "Dataset Split",
         f"Prevalence: Total = {round(float(np.mean(label_values)), 3)}, Train = {round(float(np.mean(y_train)), 3)}, Test = {round(float(np.mean(y_test)), 3)}",
@@ -177,14 +163,10 @@ if __name__ == "__main__":
     )  # best for sparse data: see https://scikit-learn.org/stable/modules/preprocessing.html#scaling-sparse-data
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
-    model = LogisticRegressionCV(
-        n_jobs=num_threads, penalty="l2", solver="liblinear"
-    ).fit(X_train_scaled, y_train)
+    model = LogisticRegressionCV(n_jobs=num_threads, penalty="l2", solver="liblinear").fit(X_train_scaled, y_train)
     y_train_proba = model.predict_proba(X_train_scaled)[::, 1]
     y_test_proba = model.predict_proba(X_test_scaled)[::, 1]
-    run_analysis(
-        "Logistic Regression", y_train, y_train_proba, y_test, y_test_proba
-    )
+    run_analysis("Logistic Regression", y_train, y_train_proba, y_test, y_test_proba)
     print_log("Logistic Regression", "Done")
 
     # XGBoost

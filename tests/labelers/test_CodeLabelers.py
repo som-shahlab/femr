@@ -23,12 +23,7 @@ from piton.labelers.omop import (
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import (
-    EventsWithLabels,
-    event,
-    run_test_for_labeler,
-    run_test_locally,
-)
+from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
 
 #############################################
 #############################################
@@ -40,9 +35,7 @@ from tools import (
 
 
 def test_outcome_codes(tmp_path: pathlib.Path):
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=10)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=10))
     # One outcome
     labeler = CodeLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
@@ -63,9 +56,7 @@ def test_outcome_codes(tmp_path: pathlib.Path):
         (event((2018, 12, 4), 1, None), False),
         (event((2018, 12, 30), 4, None), None),
     ]
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="test_outcome_codes_one"
-    )
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_outcome_codes_one")
 
     # Zero outcome
     labeler = CodeLabeler([], time_horizon)
@@ -87,9 +78,7 @@ def test_outcome_codes(tmp_path: pathlib.Path):
         (event((2018, 12, 4), 1, None), False),
         (event((2018, 12, 30), 4, None), None),
     ]
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="test_outcome_codes_zero"
-    )
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_outcome_codes_zero")
 
     # Multiple outcomes
     labeler = CodeLabeler([1, 4], time_horizon)
@@ -114,16 +103,12 @@ def test_outcome_codes(tmp_path: pathlib.Path):
         (event((2018, 12, 4), 4, None), True),
         (event((2018, 12, 30), 0, None), None),
     ]
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="test_outcome_codes_multiple"
-    )
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_outcome_codes_multiple")
 
 
 def test_prediction_codes(tmp_path: pathlib.Path):
     # One outcome + multiple predictions
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=10)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=10))
     labeler = CodeLabeler([2], time_horizon, prediction_codes=[4, 5])
     events_with_labels: EventsWithLabels = [
         (event((2015, 1, 3), 2, None), "skip"),
@@ -143,9 +128,7 @@ def test_prediction_codes(tmp_path: pathlib.Path):
         (event((2018, 12, 4), 1, None), "skip"),
         (event((2018, 12, 30), 4, None), None),
     ]
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="prediction_codes_one_outcomes"
-    )
+    run_test_for_labeler(labeler, events_with_labels, help_text="prediction_codes_one_outcomes")
 
     # Multiple outcomes + multiple predictions
     labeler = CodeLabeler([2, 6, 7], time_horizon, prediction_codes=[4, 5])
@@ -262,9 +245,7 @@ class DummyLabeler_OMOPConcept(OMOPConceptCodeLabeler):
 
 
 def test_omop_concept_code_labeler(tmp_path: pathlib.Path):
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=10)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=10))
     ontology = DummyOntology_OMOPConcept()
     labeler = DummyLabeler_OMOPConcept(ontology, time_horizon, prediction_codes=[1, 2])  # type: ignore
     assert set(labeler.outcome_codes) == {3, 4, 7, 8, 12, 13}
@@ -312,9 +293,7 @@ def test_death_concepts() -> None:
 
 def test_MortalityCodeLabeler() -> None:
     """Create a MortalityCodeLabeler for codes 3 and 6"""
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=180)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     events_with_labels: EventsWithLabels = [
         (event((1995, 1, 3), 0, 34.5), False),
         (event((2000, 1, 1), 1, "test_value"), True),
@@ -339,9 +318,7 @@ def test_MortalityCodeLabeler() -> None:
     # Check that we selected the right codes
     assert set(labeler.outcome_codes) == {3, 6}
 
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="MortalityLabeler"
-    )
+    run_test_for_labeler(labeler, events_with_labels, help_text="MortalityLabeler")
 
 
 #############################################
@@ -374,9 +351,7 @@ class DummyOntology_Lupus:
 
 def test_LupusCodeLabeler() -> None:
     """Create a LupusCodeLabeler for codes 3 and 6"""
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=180)
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     events_with_labels: EventsWithLabels = [
         (event((1995, 1, 3), 0, 34.5), False),
         (event((2000, 1, 1), 1, "test_value"), True),
@@ -399,9 +374,7 @@ def test_LupusCodeLabeler() -> None:
     # Check that we selected the right codes
     assert set(labeler.outcome_codes) == set([3, 6, 7, 9, 10])
 
-    run_test_for_labeler(
-        labeler, events_with_labels, help_text="LupusCodeLabeler"
-    )
+    run_test_for_labeler(labeler, events_with_labels, help_text="LupusCodeLabeler")
 
 
 #############################################
@@ -448,12 +421,8 @@ def _assert_labvalue_constructor_correct(
 
 
 def _create_specific_labvalue_labeler(LabelerClass, outcome_codes: set):
-    time_horizon = TimeHorizon(
-        datetime.timedelta(days=0), datetime.timedelta(days=10)
-    )
-    ontology = DummyOntology_OMOPConcept_Specific(
-        LabelerClass.original_omop_concept_codes
-    )
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=10))
+    ontology = DummyOntology_OMOPConcept_Specific(LabelerClass.original_omop_concept_codes)
     labeler = LabelerClass(ontology, time_horizon, prediction_codes=[1, 2])  # type: ignore
     _assert_labvalue_constructor_correct(labeler, time_horizon, outcome_codes)
     return labeler
@@ -461,9 +430,7 @@ def _create_specific_labvalue_labeler(LabelerClass, outcome_codes: set):
 
 def test_thrombocytopenia(tmp_path: pathlib.Path):
     outcome_codes: set = {2, 3, 4, 6, 7}
-    _create_specific_labvalue_labeler(
-        ThrombocytopeniaCodeLabeler, outcome_codes
-    )
+    _create_specific_labvalue_labeler(ThrombocytopeniaCodeLabeler, outcome_codes)
 
 
 def test_hyperkalemia(tmp_path: pathlib.Path):
