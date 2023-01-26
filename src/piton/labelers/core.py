@@ -24,9 +24,10 @@ import numpy as np
 from nptyping import NDArray
 from pathos.pools import ProcessPool
 
-from .. import Patient
-from ..datasets import PatientDatabase
+from piton import Patient
+from piton.datasets import PatientDatabase
 from . import compute_random_num
+from piton.extension import datasets as extension_datasets
 
 
 @dataclass(frozen=True)
@@ -74,14 +75,14 @@ def _apply_labeling_function(
     path_to_patient_database: Optional[str] = args[2]
     patient_ids: List[int] = args[3]
 
-    # Hacky workaround for Ontology not being picklable
-    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None:
-        labeling_function.ontology = patients.get_ontology() # type: ignore
-    if hasattr(labeling_function, "labeler") and hasattr(labeling_function.labeler, 'ontology') and labeling_function.labeler.ontology is None:
-        labeling_function.labeler.ontology = patients.get_ontology() # type: ignore
-
     if path_to_patient_database is not None:
         patients = PatientDatabase(path_to_patient_database)
+
+    # Hacky workaround for Ontology not being picklable
+    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None and path_to_patient_database:
+        labeling_function.ontology = patients.get_ontology() # type: ignore
+    if hasattr(labeling_function, "labeler") and hasattr(labeling_function.labeler, 'ontology') and labeling_function.labeler.ontology is None and path_to_patient_database:
+        labeling_function.labeler.ontology = patients.get_ontology() # type: ignore
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
