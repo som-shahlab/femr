@@ -351,14 +351,20 @@ class Labeler(ABC):
 
         # Split patient IDs across parallelized processes
         pid_parts = np.array_split(pids, num_threads)
-        
+
         # NOTE: Super hacky workaround to pickling limitations
-        if hasattr(self, 'ontology') and isinstance(self.ontology, extension_datasets.Ontology):
+        if hasattr(self, "ontology") and isinstance(
+            self.ontology, extension_datasets.Ontology
+        ):
             # Remove ontology due to pickling, add it back later
-            self.ontology = None # type: ignore
-        if hasattr(self, 'labeler') and hasattr(self.labeler, 'ontology') and isinstance(self.labeler.ontology, extension_datasets.Ontology):
+            self.ontology = None  # type: ignore
+        if (
+            hasattr(self, "labeler")
+            and hasattr(self.labeler, "ontology")
+            and isinstance(self.labeler.ontology, extension_datasets.Ontology)
+        ):
             # If NLabelsPerPatient wrapper, go to sublabeler and remove ontology due to pickling
-            self.labeler.ontology = None # type: ignore
+            self.labeler.ontology = None  # type: ignore
 
         # Multiprocessing
         tasks = [
