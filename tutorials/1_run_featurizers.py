@@ -12,10 +12,10 @@ from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
 from piton.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
 from piton.labelers.omop_inpatient_admissions import (
-    AdmissionDischargePlaceholderLabeler,
+    DummyAdmissionDischargeLabeler,
     InpatientMortalityLabeler,
-    _1WeekLongLOSLabeler,
-    _30DayReadmissionLabeler,
+    InpatientLongAdmissionLabeler,
+    InpatientReadmissionLabeler,
 )
 from piton.labelers.omop_lab_values import (
     AnemiaLabValueLabeler,
@@ -198,33 +198,25 @@ if __name__ == "__main__":
         datetime.timedelta(days=0), datetime.timedelta(days=365)
     )
     if args.labeling_function == "admission_discharge":
-        labeler = AdmissionDischargePlaceholderLabeler(ontology)
+        labeler = DummyAdmissionDischargeLabeler(ontology)
     elif args.labeling_function == "mortality":
         labeler = InpatientMortalityLabeler(ontology)
     elif args.labeling_function == "long_los":
-        labeler = _1WeekLongLOSLabeler(ontology)
+        labeler = InpatientReadmissionLabeler(ontology)
     elif args.labeling_function == "readmission":
-        labeler = _30DayReadmissionLabeler(ontology)
+        labeler = InpatientReadmissionLabeler(ontology)
     elif args.labeling_function == "lupus":
         labeler = LupusCodeLabeler(ontology, year_time_horizon)
     elif args.labeling_function == "thrombocytopenia_lab":
-        labeler = ThrombocytopeniaLabValueLabeler(
-            ontology, year_time_horizon, "severe"
-        )
+        labeler = ThrombocytopeniaLabValueLabeler(ontology, "severe")
     elif args.labeling_function == "hyperkalemia_lab":
-        labeler = HyperkalemiaLabValueLabeler(
-            ontology, year_time_horizon, "severe"
-        )
+        labeler = HyperkalemiaLabValueLabeler(ontology, "severe")
     elif args.labeling_function == "hypoglycemia_lab":
-        labeler = HypoglycemiaLabValueLabeler(
-            ontology, year_time_horizon, "severe"
-        )
+        labeler = HypoglycemiaLabValueLabeler(ontology, "severe")
     elif args.labeling_function == "hyponatremia_lab":
-        labeler = HyponatremiaLabValueLabeler(
-            ontology, year_time_horizon, "severe"
-        )
+        labeler = HyponatremiaLabValueLabeler(ontology, "severe")
     elif args.labeling_function == "anemia_lab":
-        labeler = AnemiaLabValueLabeler(ontology, year_time_horizon, "severe")
+        labeler = AnemiaLabValueLabeler(ontology, "severe")
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."

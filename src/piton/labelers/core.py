@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import collections
 import datetime
-import multiprocessing
+from pathos.pools import ProcessPool
 import pprint
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -74,21 +74,9 @@ def _apply_labeling_function(
     patients: Optional[Sequence[Patient]] = args[1]
     path_to_patient_database: Optional[str] = args[2]
     patient_ids: List[int] = args[3]
+    
     if path_to_patient_database is not None:
         patients = PatientDatabase(path_to_patient_database)
-
-    # Hacky workaround for Ontology not being picklable
-    if (
-        hasattr(labeling_function, "ontology")
-        and labeling_function.ontology is None
-    ):
-        labeling_function.ontology = patients.get_ontology()  # type: ignore
-    if (
-        hasattr(labeling_function, "labeler")
-        and hasattr(labeling_function.labeler, "ontology")
-        and labeling_function.labeler.ontology is None
-    ):
-        labeling_function.labeler.ontology = patients.get_ontology()  # type: ignore
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
@@ -358,30 +346,15 @@ class Labeler(ABC):
         # Split patient IDs across parallelized processes
         pids_parts = np.array_split(pids, num_threads)
 
-        # NOTE: Super hacky workaround to pickling limitations
-        if hasattr(self, "ontology") and isinstance(
-            self.ontology, extension_datasets.Ontology
-        ):
-            # Remove ontology due to pickling, add it back later
-            self.ontology = None  # type: ignore
-        if (
-            hasattr(self, "labeler")
-            and hasattr(self.labeler, "ontology")
-            and isinstance(self.labeler.ontology, extension_datasets.Ontology)
-        ):
-            # If NLabelsPerPatient wrapper, go to sublabeler and remove ontology due to pickling
-            self.labeler.ontology = None  # type: ignore
-
         # Multiprocessing
         tasks = [
             (self, patients, path_to_patient_database, pid_part)
             for pid_part in pids_parts
         ]
-        ctx = multiprocessing.get_context("forkserver")
-        with ctx.Pool(num_threads) as pool:
-            results: List[Dict[int, List[Label]]] = list(
-                pool.imap(_apply_labeling_function, tasks)
-            )
+        pool = ProcessPool(num_threads)
+        results: List[Dict[int, List[Label]]] = list(
+            pool.imap(_apply_labeling_function, tasks)
+        )
 
         # Join results and return
         patients_to_labels: Dict[int, List[Label]] = dict(

@@ -1,18 +1,16 @@
 """Core featurizer functionality, shared across Featurizers."""
 from __future__ import annotations
 
-import multiprocessing
 from abc import ABC, abstractmethod
 from typing import Any, List, Literal, NamedTuple, Optional, Tuple, TypeVar
-
 import numpy as np
 import scipy.sparse
 from nptyping import NDArray
+from pathos.pools import ProcessPool
 
 from piton.extension import datasets as extension_datasets
-
-from .. import Patient
-from ..labelers.core import Label, LabeledPatients
+from piton import Patient
+from piton.labelers.core import Label, LabeledPatients
 
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
@@ -185,7 +183,6 @@ class Featurizer(ABC):
     A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
     """
 
-    # TODO - rename to 'train' ??
     def preprocess(self, patient: Patient, labels: List[Label]):
         """Preprocess the featurizer on the given patient and label indices.
         This should do nothing if `is_needs_preprocessing()` returns FALSE,
@@ -326,13 +323,12 @@ class FeaturizerList:
         ]
 
         # Preprocess in parallel
-        ctx = multiprocessing.get_context("forkserver")
-        with ctx.Pool(num_threads) as pool:
-            preprocessed_featurizers: List[Featurizer] = [
-                y
-                for x in pool.imap(_run_preprocess_featurizers, tasks)
-                for y in x
-            ]
+        pool = ProcessPool(num_threads)
+        preprocessed_featurizers: List[Featurizer] = [
+            y
+            for x in pool.imap(_run_preprocess_featurizers, tasks)
+            for y in x
+        ]
 
         # Aggregate featurizers
         for idx, featurizer in enumerate(self.featurizers):
@@ -386,11 +382,10 @@ class FeaturizerList:
         ]
 
         # Run featurizers in parallel
-        ctx = multiprocessing.get_context("forkserver")
-        with ctx.Pool(num_threads) as pool:
-            results: List[Tuple[Any, Any, Any, Any]] = list(
-                pool.imap(_run_featurizer, tasks)
-            )
+        pool = ProcessPool(num_threads)
+        results: List[Tuple[Any, Any, Any, Any]] = list(
+            pool.imap(_run_featurizer, tasks)
+        )
 
         # Join results
         data_matrix = scipy.sparse.vstack([x[0] for x in results])

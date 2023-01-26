@@ -34,7 +34,7 @@ export DISTDIR=/local-scratch/nigam/distdir
 Run the following:
 
 ```
-conda create -n PITON_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge
+conda create -n PITON_ENV python=3.10 bazel=5.3 clangxx=14 pathos=0.3.0 -c conda-forge
 conda activate PITON_ENV
 git clone https://github.com/som-shahlab/piton.git
 cd piton

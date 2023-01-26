@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Any, List, Optional, Set
+from typing import Any, List, Optional, Set, Dict
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -16,8 +16,9 @@ from .core import (
 )
 from .omop import (
     _get_all_children,
-    get_inpatient_admission_events,
-    map_omop_concept_ids_to_piton_codes,
+    move_datetime_to_end_of_day,
+    map_omop_concept_codes_to_piton_codes,
+    group_inpatient_events_by_visit_id
 )
 
 ##########################################################
@@ -33,8 +34,15 @@ from .omop import (
 ##########################################################
 
 
-class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
-    """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value over a time horizon."""
+class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
+    """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value during each INPATIENT visit 
+        where that lab test has a result recorded (thus, we're conditioning on ordering the lab test).
+    
+    Prediction Time: At admission for every INPATIENT visit where a lab test result is returned,
+                    where the admission time is manually adjusted to 11:59:59pm
+    Time Horizon: Within an INPATIENT visit
+    Label: TRUE if any lab value comes back with severity level == `self.severity` during the visit, 0 otherwise.
+    """
 
     # parent OMOP concept codes, from which all the outcome
     # are derived (as children from our ontology)
@@ -43,61 +51,57 @@ class OMOPConceptOutcomeFromLabValueLabeler(TimeHorizonEventLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        time_horizon: TimeHorizon,
         severity: str,
     ):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
         self.ontology: extension_datasets.Ontology = ontology
-        self.time_horizon: TimeHorizon = time_horizon
         self.severity: str = severity
-        self.outcome_codes: List[int] = []
+        self.outcome_codes: Set[int] = map_omop_concept_codes_to_piton_codes(ontology, self.original_omop_concept_codes, is_ontology_expansion=True)
 
-        # We need to traverse through the ontology ourselves using
-        # OMOP Concept Codes (e.g. "LOINC/123") instead of pre-specified
-        # OMOP Concept IDs (e.g. 3939430) to get all revelant children
-        for omop_concept_code in self.original_omop_concept_codes:
-            try:
-                piton_code = ontology.get_dictionary().index(omop_concept_code)
-            except ValueError:
-                raise ValueError(
-                    f"OMOP Concept Code {omop_concept_code} not found in ontology."
-                )
-            all_children: Set[int] = _get_all_children(ontology, piton_code)
-            self.outcome_codes += list(all_children)
-        self.outcome_codes = list(set(self.outcome_codes))
+    def label(self, patient: Patient) -> List[Label]:
+        """Label all INPATIENT visits in which the patient experiences an outcome
+        in `self.outcome_codes` with whether that outcome was severe or not."""
+        events_by_visit_id: Dict[int, List[Event]] = group_inpatient_events_by_visit_id(patient, self.ontology)
+        labels: List[Label] = []
+        # Loop through all visits in patient, check if outcome occurs during visit
+        # and if so, mark that it occurred in `labels`.
+        for visit_id, events in events_by_visit_id.items():
+            # if `is_outcome_occurs` is None, then no outcome events were found (so we ignore this visit)
+            # if `is_outcome_occurs` is True, then an outcome event was found and it was `self.severity`
+            # if `is_outcome_occurs` is False, then an outcome event was found, but it was not `self.severity`
+            is_outcome_occurs: Optional[bool] = None
+            visit_event: Optional[Event] = None
+            for e in events:
+                if e.omop_table == 'visit_detail':
+                    # Track the (start, end) of this visit_id from its `visit_detail` event
+                    visit_event = e
+                if e.code in self.outcome_codes:
+                    # This is an outcome event
+                    if e.value is not None:
+                        label: Optional[str] = None
+                        try:
+                            # `e.unit` is string of form "mg/dL", "ounces", etc.
+                            label = self.value_to_label(str(e.value), str(e.unit))
+                        except Exception as exception:
+                            print(
+                                f"Warning: Error parsing value='{e.value}' with unit='{e.unit}'"
+                                f" for code='{e.code}' @ {e.start} for patient_id='{patient.patient_id}'"
+                                f" | Exception: {exception}"
+                            )
+                        is_outcome_occurs = label == self.severity
+            if visit_event is None:
+                raise RuntimeError(f"Every `visit_id` must have an event from the `visit_detail` OMOP table associated with it, but no `visit_detail` events were found with `visit_id={visit_id}`.")
+            if is_outcome_occurs is not None:
+                # If lab test result was reported, then record whether the outcome was TRUE or FALSE.
+                # Otherwise, if no lab test occurred in this visit, we ignore it.
+                prediction_time: datetime.datetime = move_datetime_to_end_of_day(visit_event.start)
+                labels.append(Label(prediction_time, is_outcome_occurs))
+        return labels
 
-    def get_time_horizon(self) -> TimeHorizon:
-        return self.time_horizon
-
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events which correspond to a lab test result
-        at severity level `self.severity`."""
-        times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.outcome_codes:
-                if event.value is not None:
-                    label: Optional[str] = None
-                    try:
-                        # `event.unit` is string of form "mg/dL", "ounces", etc.
-                        label = self.value_to_label(
-                            str(event.value), str(event.unit)
-                        )
-                    except Exception as e:
-                        print(
-                            f"Warning: Error parsing value='{event.value}' with unit='{event.unit}' for event.code='{event.code}' @ {event.start} for patient_id='{patient.patient_id}' | Exception: {e}"
-                        )
-                    if label == self.severity:
-                        times.append(event.start)
-        return times
-
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Default to making prediction at admission time"""
-        admission_events: List[Event] = get_inpatient_admission_events(
-            patient, self.ontology
-        )
-        return [x.start for x in admission_events]
-
+    def get_labeler_type(self) -> LabelType:
+        return "boolean"
+    
     @abstractmethod
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
         """Convert `value` to a string label: "mild", "moderate", "severe", or "normal".
