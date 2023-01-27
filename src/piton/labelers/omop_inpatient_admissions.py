@@ -1,8 +1,8 @@
 """Labeling functions for OMOP data based on lab values."""
 from __future__ import annotations
-from abc import abstractmethod
 
 import datetime
+from abc import abstractmethod
 from typing import Callable, List, Set
 
 from .. import Event, Patient
@@ -12,9 +12,9 @@ from .omop import (
     WithinVisitLabeler,
     get_death_concepts,
     get_inpatient_admission_discharge_times,
+    get_inpatient_admission_events,
     map_omop_concept_codes_to_piton_codes,
     move_datetime_to_end_of_day,
-    get_inpatient_admission_events
 )
 
 
@@ -31,8 +31,8 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = lambda x : x,
-        visit_end_adjust_func: Callable = lambda x : x,
+        visit_start_adjust_func: Callable = lambda x: x,
+        visit_end_adjust_func: Callable = lambda x: x,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
@@ -53,11 +53,7 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
 class DummyAdmissionDischargeLabeler(Labeler):
     """Generate a placeholder Label at every admission and discharge time for this patient."""
 
-    def __init__(
-        self,
-        ontology: extension_datasets.Ontology,
-        prediction_time_adjustment_func: Callable = lambda x: x
-    ):
+    def __init__(self, ontology: extension_datasets.Ontology, prediction_time_adjustment_func: Callable = lambda x: x):
         self.ontology: extension_datasets.Ontology = ontology
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
 
@@ -89,8 +85,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        time_horizon: TimeHorizon = TimeHorizon(start=datetime.timedelta(seconds=1), 
-                                                end=datetime.timedelta(days=30)),  # type: ignore
+        time_horizon: TimeHorizon = TimeHorizon(
+            start=datetime.timedelta(seconds=1), end=datetime.timedelta(days=30)
+        ),  # type: ignore
         prediction_time_adjustment_func: Callable = move_datetime_to_end_of_day,
     ):
         self.ontology: extension_datasets.Ontology = ontology
@@ -165,7 +162,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
         visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
-        visit_end_adjust_func: Callable = lambda x : x,
+        visit_end_adjust_func: Callable = lambda x: x,
     ):
         piton_codes: Set[int] = map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts())
         self.outcome_codes: Set[int] = piton_codes

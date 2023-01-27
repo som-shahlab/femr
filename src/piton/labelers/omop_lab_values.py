@@ -6,16 +6,11 @@ from abc import abstractmethod
 from typing import Callable, List, Optional, Set
 
 from piton import Event, Patient
-from ..extension import datasets as extension_datasets
 from piton.labelers.core import Label, Labeler, LabelType, TimeHorizon
-from piton.labelers.omop import (
-    _get_all_children,
-    map_omop_concept_codes_to_piton_codes,
-    get_inpatient_admission_events
-)
-from piton.labelers.omop_inpatient_admissions import (
-    WithinInpatientVisitLabeler
-)
+from piton.labelers.omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_codes_to_piton_codes
+from piton.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler
+
+from ..extension import datasets as extension_datasets
 
 ##########################################################
 ##########################################################

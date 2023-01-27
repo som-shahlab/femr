@@ -1,8 +1,8 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
-from abc import abstractmethod
 
 import datetime
+from abc import abstractmethod
 from collections import defaultdict, deque
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
@@ -40,9 +40,8 @@ def get_inpatient_admission_codes(
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
     return set([ontology.get_dictionary().index(x) for x in get_inpatient_admission_concepts()])
 
-def get_inpatient_admission_events(
-    patient: Patient, ontology: extension_datasets.Ontology
-) -> List[Event]:
+
+def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
     admission_codes: Set[int] = get_inpatient_admission_codes(ontology)
     events: List[Event] = []
     for e in patient.events:
@@ -58,19 +57,18 @@ def get_inpatient_admission_events(
             events.append(e)
     return events
 
-def get_inpatient_admission_discharge_times(patient: Patient, ontology: extension_datasets.Ontology) -> List[Tuple[datetime.datetime, datetime.datetime]]:
+
+def get_inpatient_admission_discharge_times(
+    patient: Patient, ontology: extension_datasets.Ontology
+) -> List[Tuple[datetime.datetime, datetime.datetime]]:
     """Return a list of all admission/discharge times for this patient."""
     events: List[Event] = get_inpatient_admission_events(patient, ontology)
     times: List[Tuple[datetime.datetime, datetime.datetime]] = []
     for e in events:
         if e.end is None:
-            raise RuntimeError(
-                f"Event {e} cannot have `None` as its `end` attribute."
-            )
+            raise RuntimeError(f"Event {e} cannot have `None` as its `end` attribute.")
         if e.start > e.end:
-            raise RuntimeError(
-                f"Event {e} cannot have `start` after `end`."
-            )
+            raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
         times.append((e.start, e.end))
     return times
 
@@ -139,7 +137,7 @@ class WithinVisitLabeler(Labeler):
     """
     The `WithinVisitLabeler` predicts whether or not a patient experiences a specific event
     (as returned by `self.get_outcome_times()`) within each visit.
-    
+
     Very similar to `TimeHorizonLabeler`, except here we use visits themselves as our time horizon.
 
     Prediction Time: Start of each visit (adjusted by `self.prediction_adjustment_timedelta` if provided)
@@ -151,15 +149,15 @@ class WithinVisitLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = lambda x : x,
-        visit_end_adjust_func: Callable = lambda x : x,
+        visit_start_adjust_func: Callable = lambda x: x,
+        visit_end_adjust_func: Callable = lambda x: x,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         self.ontology = ontology
         self.visit_start_adjust_func = visit_start_adjust_func
         self.visit_end_adjust_func = visit_end_adjust_func
-        
+
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a list of all times when the patient experiences an outcome"""
@@ -172,23 +170,29 @@ class WithinVisitLabeler(Labeler):
 
     def label(self, patient: Patient) -> List[Label]:
         """
-            Label all visits returned by `self.get_visit_events()`with whether the patient 
-            experiences an outcome in `self.outcome_codes` during each visit.
+        Label all visits returned by `self.get_visit_events()`with whether the patient
+        experiences an outcome in `self.outcome_codes` during each visit.
         """
         visits: List[Event] = self.get_visit_events(patient)
-        prediction_start_times: List[datetime.datetime] = [ self.visit_start_adjust_func(visit.start) for visit in visits ]
-        prediction_end_times: List[datetime.datetime] = [ self.visit_end_adjust_func(visit.end) for visit in visits ]
+        prediction_start_times: List[datetime.datetime] = [
+            self.visit_start_adjust_func(visit.start) for visit in visits
+        ]
+        prediction_end_times: List[datetime.datetime] = [self.visit_end_adjust_func(visit.end) for visit in visits]
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
-        
+
         # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
         results: List[Label] = []
         curr_outcome_idx: int = 0
         for (prediction_start, prediction_end) in zip(prediction_start_times, prediction_end_times):
             # Error checking
             if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] is None:
-                raise RuntimeError(f"Outcome times must be of type `datetime.datetime`, but value of `None` provided for `self.get_outcome_times(patient)[{curr_outcome_idx}]")
+                raise RuntimeError(
+                    f"Outcome times must be of type `datetime.datetime`, but value of `None` provided for `self.get_outcome_times(patient)[{curr_outcome_idx}]"
+                )
             if prediction_start is None:
-                raise RuntimeError(f"Prediction start times must be of type `datetime.datetime`, but value of `None` provided for `prediction_start_time`")
+                raise RuntimeError(
+                    f"Prediction start times must be of type `datetime.datetime`, but value of `None` provided for `prediction_start_time`"
+                )
             if prediction_end is None:
                 raise RuntimeError(f"Prediction end times must be of type `datetime.datetime`, but value of `None` provided for `prediction_end_time`")
             if prediction_start > prediction_end:
@@ -215,12 +219,13 @@ class WithinVisitLabeler(Labeler):
                 )
                 and (
                     # outcome occurs before visit ends
-                    outcome_times[curr_outcome_idx] <= prediction_end
+                    outcome_times[curr_outcome_idx]
+                    <= prediction_end
                 )
             )
             # Assume no censoring for visits
             is_censored: bool = False
-            
+
             if is_outcome_occurs_in_time_horizon:
                 results.append(Label(time=prediction_start, value=True))
             elif not is_censored:
@@ -248,7 +253,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         outcome_codes: List[int],
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x : x,
+        prediction_time_adjustment_func: Callable = lambda x: x,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -335,7 +340,7 @@ class MortalityCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x: x
+        prediction_time_adjustment_func: Callable = lambda x: x,
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -360,7 +365,7 @@ class LupusCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x: x
+        prediction_time_adjustment_func: Callable = lambda x: x,
     ):
         concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
         outcome_codes = list(map_omop_concept_codes_to_piton_codes(ontology, concept_codes, is_ontology_expansion=True))

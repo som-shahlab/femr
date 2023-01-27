@@ -12,11 +12,11 @@ import piton.datasets
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop import move_datetime_to_end_of_day
 from piton.labelers.omop_lab_values import (
-    InpatientLabValueLabeler,
     AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
     HyponatremiaLabValueLabeler,
+    InpatientLabValueLabeler,
     ThrombocytopeniaLabValueLabeler,
 )
 
