@@ -23,7 +23,7 @@ from piton.labelers.omop_lab_values import (
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
-
+  
 #############################################
 #############################################
 #
@@ -37,8 +37,8 @@ class DummyOntology_Generic:
     def get_dictionary(self):
         return [
             "zero",
-            "one",
             "Visit/IP",
+            "two",
             "OMOP_CONCEPT_A",
             "OMOP_CONCEPT_B",
             "five",
@@ -95,6 +95,7 @@ class DummyLabeler1(InpatientLabValueLabeler):
         return "normal"
 
 
+
 class DummyLabeler2(InpatientLabValueLabeler):
     original_omop_concept_codes = [
         "OMOP_CONCEPT_B",
@@ -121,62 +122,100 @@ def test_labeling(tmp_path: pathlib.Path):
     ontology = DummyOntology_Generic()
     labeler = DummyLabeler1(ontology, "severe")  # type: ignore
 
-    # Create patient
+    # No prediction time adjustment
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 3), 0, None, visit_id=0), "skip"),
-        (event((2000, 1, 4), 7, None, visit_id=0), "skip"),  # lab test
-        (event((2000, 1, 5), 1, None, visit_id=0), "skip"),
-        (event((2002, 1, 3), 2, end=datetime.datetime(2002, 10, 4), visit_id=1, omop_table='visit_detail'), 'skip'),
-        (event((2002, 10, 1), 2, end=datetime.datetime(2002, 10, 4), visit_id=2, omop_table='visit_detail'), True),
-        (event((2002, 10, 5, 0), 3, None, visit_id=2), "skip"),  # lab test
-        (event((2002, 10, 5, 1), 5, None, visit_id=2), "skip"),
-        (event((2002, 10, 5, 2), 4, 20.5, unit="mmol/L", visit_id=2), "skip"),  # lab test
-        (event((2002, 10, 5, 3), 6, None, visit_id=2), "skip"),
-        (event((2004, 3, 1), 2, end=datetime.datetime(2002, 10, 4), visit_id=3, omop_table='visit_detail'), True),
-        (event((2004, 3, 2), 12, -20.5, visit_id=3, unit="mmol/L"), "skip"),  # lab test
-        (event((2004, 9, 1), 2, end=datetime.datetime(2002, 10, 4), visit_id=4, omop_table='visit_detail'), False),
-        (event((2004, 9, 2), 12, 200.5, visit_id=4, unit="mmol/L"), "skip"),  # lab test
-        (event((2006, 5, 1), 2, end=datetime.datetime(2002, 10, 4), visit_id=5, omop_table='visit_detail'), 'skip'),
-        (event((2006, 5, 2), 0, None, visit_id=5), "skip"),
-        (event((2006, 5, 3), 9, None, visit_id=5), "skip"),
-        (event((2006, 5, 3, 11), 8, None, visit_id=5), "skip"),  # lab test
-        (event((2008, 1, 3), 2, end=datetime.datetime(2002, 10, 4), visit_id=6, omop_table='visit_detail'), False),
-        (event((2008, 1, 4), 12, 75.5, unit="mmol/L", visit_id=6), "skip"),  # lab test
-        (event((2008, 11, 1), 2, end=datetime.datetime(2002, 10, 4), visit_id=7, omop_table='visit_detail'), True),
-        (event((2008, 11, 4), 12, 45.5, unit="mmol/L", visit_id=7), "skip"),  # lab test
-        (event((2008, 12, 30), 2, end=datetime.datetime(2002, 10, 4), visit_id=8, omop_table='visit_detail'), 'skip'),
-        (event((2010, 1, 3), 2, end=datetime.datetime(2002, 10, 4), visit_id=9, omop_table='visit_detail'), False),
-        (event((2010, 1, 4), 13, 125.5, unit="mmol/L", visit_id=9), "skip"),
+        (event((2000, 1, 3), 0, None), "skip"),
+        (event((2000, 1, 4), 7, None), "skip"),  # lab test
+        (event((2000, 1, 5), 2, None), "skip"),
         #
-        # visit occurrences for all visit_details
-        (event((2020, 1, 10), 2, visit_id=1, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=2, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=3, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=4, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=5, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=6, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=7, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=8, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 2, visit_id=9, omop_table='visit_occurrence'), 'skip'),
+        (event((2002, 1, 3), 1, end=datetime.datetime(2002, 10, 4), omop_table='visit_occurrence'), 'skip'), # admission
+        #
+        (event((2002, 10, 1), 1, end=datetime.datetime(2002, 10, 10), omop_table='visit_occurrence'), True), # admission
+        (event((2002, 10, 5, 0), 3, None), "skip"),  # lab test - 5
+        (event((2002, 10, 5, 2), 5, None), "skip"),
+        (event((2002, 10, 5, 2), 4, 20.5, unit="mmol/L"), "skip"),  # lab test - 7
+        (event((2002, 10, 5, 3), 6, None), "skip"),
+        #
+        (event((2004, 3, 1), 1, end=datetime.datetime(2004, 3, 2, 1), omop_table='visit_occurrence'), True), # admission
+        (event((2004, 3, 2), 12, -20.5, unit="mmol/L"), "skip"),  # lab test - 10
+        #
+        (event((2005, 9, 1), 1, end=datetime.datetime(2005, 9, 4), omop_table='visit_occurrence'), False), # admission
+        (event((2005, 9, 2), 12, 200.5, unit="mmol/L"), "skip"),  # lab test - 12
+        #
+        (event((2006, 5, 1), 1, end=datetime.datetime(2006, 5, 5), omop_table='visit_occurrence'), 'skip'), # admission
+        (event((2006, 5, 2), 0, None), "skip"),
+        (event((2006, 5, 3), 9, None), "skip"),
+        (event((2006, 5, 3, 11), 8, None), "skip"),  # lab test - 16
+        #
+        (event((2008, 1, 3), 1, end=datetime.datetime(2008, 1, 5), omop_table='visit_occurrence'), False), # admission
+        (event((2008, 1, 4), 12, 75.5, unit="mmol/L"), "skip"),  # lab test - 18
+        #
+        (event((2009, 11, 4), 1, end=datetime.datetime(2009, 11, 4, 1), omop_table='visit_occurrence'), True), # admission
+        (event((2009, 11, 4), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 20
+        #
+        (event((2010, 10, 30), 1, end=datetime.datetime(2010, 12, 4), omop_table='visit_occurrence'), 'skip'), # admission
+        #
+        (event((2011, 1, 3), 1, end=datetime.datetime(2011, 1, 14), omop_table='visit_occurrence'), False), # admission
+        (event((2011, 1, 4), 13, 125.5, unit="mmol/L"), "skip"),
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+        labeler.visit_start_adjust_func(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+    ]
+    true_outcome_times: List[datetime.datetime] = [
+        events_with_labels[7][0].start,
+        events_with_labels[10][0].start,
+        events_with_labels[20][0].start,
     ]
     run_test_for_labeler(
         labeler,
         events_with_labels,
         true_prediction_times=true_prediction_times,
-        # true_outcome_times=true_outcome_times,
+        true_outcome_times=true_outcome_times,
         help_text="test_labeling",
     )
-
-
-def test_units(tmp_path: pathlib.Path):
-    # TODO: test unit normalization
-    pass
-
+    
+    # Prediction time adjustment
+    labeler = DummyLabeler1(ontology, "severe", visit_start_adjust_func=move_datetime_to_end_of_day )  # type: ignore
+    events_with_labels: EventsWithLabels = [
+        # fmt: off
+        # yes
+        (event((2002, 1, 3), 1, end=datetime.datetime(2002, 1, 10), omop_table='visit_occurrence'), True), # admission
+        (event((2002, 1, 4), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 1
+        # no
+        (event((2003, 1, 3), 1, end=datetime.datetime(2003, 1, 10), omop_table='visit_occurrence'), False), # admission
+        (event((2003, 1, 3), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 3
+        # fmt: on
+    ]
+    true_prediction_times: List[datetime.datetime] = [
+        labeler.visit_start_adjust_func(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+    ]
+    true_outcome_times: List[datetime.datetime] = [
+        events_with_labels[1][0].start,
+        events_with_labels[3][0].start,
+    ]
+    run_test_for_labeler(
+        labeler,
+        events_with_labels,
+        true_prediction_times=true_prediction_times,
+        true_outcome_times=true_outcome_times,
+        help_text="test_labeling_shifted_prediction_time",
+    )
+    
+    
+    # Test fail cases
+    with pytest.raises(RuntimeError):
+        # error when visit_start_adjust_func() pushes `start` after `end`
+        labeler = DummyLabeler1(ontology, "severe", visit_start_adjust_func=move_datetime_to_end_of_day)  # type: ignore
+        events_with_labels: EventsWithLabels = [
+            # fmt: off
+            (event((2009, 11, 4), 1, end=datetime.datetime(2009, 11, 4, 1), omop_table='visit_occurrence'), True), # admission
+            (event((2009, 11, 4), 12, 45.5, unit="mmol/L"), "skip"),
+            # fmt: on
+        ]
+        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        labeler.label(patient)
 
 #############################################
 #############################################
@@ -228,55 +267,52 @@ def _run_specific_labvalue_test(
     outcome_codes_cyclic_iter = itertools.cycle(outcome_codes)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=1, omop_table='visit_detail'), True),  # admission
+        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 3), omop_table='visit_occurrence'), True),  # admission
         (event((2000, 1, 2), next(outcome_codes_cyclic_iter),
-               severe_values[0][0], unit=severe_values[0][1], visit_id=1), "skip"),  # lab test - severe
+               severe_values[0][0], unit=severe_values[0][1]), "skip"),  # lab test - severe - 1
         #
-        (event((2001, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=2, omop_table='visit_detail'), False),  # admission
+        (event((2001, 1, 1), 1, end=datetime.datetime(2001, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2001, 1, 2), next(outcome_codes_cyclic_iter),
-               moderate_values[0][0], unit=moderate_values[0][1], visit_id=2), "skip"),  # lab test - moderate
+               moderate_values[0][0], unit=moderate_values[0][1]), "skip"),  # lab test - moderate
         #
-        (event((2002, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=3, omop_table='visit_detail'), False),  # admission
+        (event((2002, 1, 1), 1, end=datetime.datetime(2002, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2002, 1, 2), next(outcome_codes_cyclic_iter),
-               mild_values[0][0], unit=mild_values[0][1], visit_id=3), "skip"),  # lab test - mild
+               mild_values[0][0], unit=mild_values[0][1]), "skip"),  # lab test - mild
         #
-        (event((2003, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=4, omop_table='visit_detail'), False),  # admission
+        (event((2003, 1, 1), 1, end=datetime.datetime(2003, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2003, 1, 2), next(outcome_codes_cyclic_iter),
-               normal_values[0][0], unit=normal_values[0][1], visit_id=4), "skip"),  # lab test - normal
+               normal_values[0][0], unit=normal_values[0][1]), "skip"),  # lab test - normal
         #
-        (event((2004, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=5, omop_table='visit_detail'), True),  # admission
+        (event((2004, 1, 1), 1, end=datetime.datetime(2004, 1, 10), omop_table='visit_occurrence'), True),  # admission
         (event((2004, 1, 2), next(outcome_codes_cyclic_iter),
-               normal_values[1][0], unit=normal_values[1][1], visit_id=5), "skip"),  # lab test - normal
+               normal_values[1][0], unit=normal_values[1][1]), "skip"),  # lab test - normal
         (event((2004, 1, 9), next(outcome_codes_cyclic_iter),
-               severe_values[1][0], unit=severe_values[1][1], visit_id=5), "skip"),  # lab test - severe
+               severe_values[1][0], unit=severe_values[1][1]), "skip"),  # lab test - severe - 10
         #
-        (event((2005, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=6, omop_table='visit_detail'), False),  # admission
+        (event((2005, 1, 1), 1, end=datetime.datetime(2005, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2005, 1, 2), next(outcome_codes_cyclic_iter),
-               mild_values[1][0], unit=mild_values[1][1], visit_id=6), "skip"),  # lab test - mild
+               mild_values[1][0], unit=mild_values[1][1]), "skip"),  # lab test - mild
         (event((2005, 1, 8), next(outcome_codes_cyclic_iter),
-               moderate_values[1][0], unit=moderate_values[1][1], visit_id=6), "skip"),  # lab test - moderate
+               moderate_values[1][0], unit=moderate_values[1][1]), "skip"),  # lab test - moderate
         #
-        (event((2006, 1, 1), 1, end=datetime.datetime(2002, 10, 4), visit_id=7, omop_table='visit_detail'), 'skip'),  # admission
+        (event((2006, 1, 1), 1, end=datetime.datetime(2006, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2006, 1, 2), next(outcome_codes_cyclic_iter),
-               normal_values[1][0], unit=normal_values[1][1], visit_id=8), "skip"), # lab test - normal
+               normal_values[1][0], unit=normal_values[1][1]), "skip"), # lab test - normal
         #
-        # visit occurrences for all visit_details
-        (event((2020, 1, 10), 1, visit_id=1, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 1, visit_id=2, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 1, visit_id=3, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 1, visit_id=4, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 1, visit_id=5, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 1, visit_id=6, omop_table='visit_occurrence'), 'skip'),
-        (event((2020, 1, 10), 1, visit_id=7, omop_table='visit_occurrence'), 'skip'),
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+        labeler.visit_start_adjust_func(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
+    ]
+    true_outcome_times: List[datetime.datetime] = [
+        events_with_labels[1][0].start,
+        events_with_labels[10][0].start,
     ]
     run_test_for_labeler(
         labeler,
         events_with_labels,
         true_prediction_times=true_prediction_times,
+        true_outcome_times=true_outcome_times,
         help_text=help_text,
     )
 
@@ -448,7 +484,6 @@ def test_celiac_test(tmp_path: pathlib.Path):
 if __name__ == "__main__":
     run_test_locally("../ignore/test_labelers/", test_constructor)
     run_test_locally("../ignore/test_labelers/", test_labeling)
-    run_test_locally("../ignore/test_labelers/", test_units)
     run_test_locally("../ignore/test_labelers/", test_thrombocytopenia)
     run_test_locally("../ignore/test_labelers/", test_hyperkalemia)
     run_test_locally("../ignore/test_labelers/", test_hypoglycemia)

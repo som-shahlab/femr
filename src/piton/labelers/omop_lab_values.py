@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Dict, List, Optional, Set
+from typing import Callable, List, Optional, Set
 
 from piton import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -47,15 +47,21 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
         severity: str,
+        visit_start_adjust_func: Callable = lambda x : x,
+        visit_end_adjust_func: Callable = lambda x : x,
     ):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
-        self.ontology: extension_datasets.Ontology = ontology
         self.severity: str = severity
         self.outcome_codes: Set[int] = map_omop_concept_codes_to_piton_codes(
             ontology,
             self.original_omop_concept_codes,
             is_ontology_expansion=True,
+        )
+        super().__init__(
+            ontology=ontology,
+            visit_start_adjust_func=visit_start_adjust_func,
+            visit_end_adjust_func=visit_end_adjust_func,
         )
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -93,6 +99,9 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
                         valid_times.append(e.start)
                     except Exception as e:
                         pass
+        if len(valid_times) == 0:
+            # Note: this is a necessary check, otherwise the `while` loop below will trip up on its first iteration
+            return []
         # Filter inpatient events to only those where a valid lab test result was returned
         visits: List[Event] = get_inpatient_admission_events(patient, self.ontology)
         valid_visits: List[Event] = []

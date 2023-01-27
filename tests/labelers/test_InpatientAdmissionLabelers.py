@@ -9,7 +9,7 @@ import pytest
 
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
-from piton.labelers.omop import get_inpatient_admission_discharge_times, move_datetime_to_end_of_day
+from piton.labelers.omop import get_inpatient_admission_discharge_times, get_inpatient_admission_events, move_datetime_to_end_of_day
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
@@ -44,6 +44,27 @@ class DummyOntology_GetInpatients:
         return []
 
 
+def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
+    ontology = DummyOntology_GetInpatients()
+    with pytest.raises(RuntimeError):
+        # Admission `start` cannot be after `end`
+        # fmt: off
+        events_with_labels = [
+            (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
+        ]
+        # fmt: on
+        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        get_inpatient_admission_events(patient, ontology)  # type: ignore
+    with pytest.raises(RuntimeError):
+        # Every admission must have an `end` time
+        # fmt: off
+        events_with_labels = [
+            (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
+        ]
+        # fmt: on
+        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        get_inpatient_admission_events(patient, ontology)  # type: ignore
+    
 def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
     ontology = DummyOntology_GetInpatients()
     events_with_labels: EventsWithLabels = [
@@ -398,6 +419,7 @@ def test_long_admission(tmp_path: pathlib.Path):
 
 # Local testing
 if __name__ == "__main__":
+    run_test_locally("../ignore/test_labelers/", test_get_inpatient_admission_events)
     run_test_locally("../ignore/test_labelers/", test_get_inpatient_admission_discharge_times)
     run_test_locally("../ignore/test_labelers/", test_admission_discharge_placeholder)
     run_test_locally("../ignore/test_labelers/", test_readmission)
