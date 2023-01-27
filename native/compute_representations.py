@@ -45,9 +45,7 @@ random.seed(config["seed"])
 
 config = hk.data_structures.to_immutable_dict(config)
 
-loader = piton.extension.dataloader.BatchLoader(
-    args.data_path, args.batch_info_path
-)
+loader = piton.extension.dataloader.BatchLoader(args.data_path, args.batch_info_path)
 
 logging.info(
     "Loaded batches %s %s",
@@ -76,9 +74,7 @@ logging.info("Transformed the model function")
 with open(os.path.join(args.model_dir, "best"), "rb") as f:
     params = pickle.load(f)
 
-logging.info(
-    "Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params))
-)
+logging.info("Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params)))
 
 
 def _cast_floating_to(tree: T, dtype: jnp.dtype) -> T:
@@ -121,15 +117,10 @@ for split in ("train", "dev", "test"):
             batch,
         )
 
-        p_index = (
-            batch["transformer"]["label_indices"]
-            // batch["transformer"]["length"]
-        )
+        p_index = batch["transformer"]["label_indices"] // batch["transformer"]["length"]
 
         reprs.append(repr[: batch["num_indices"], :])
-        label_ages.append(
-            raw_batch["task"]["label_ages"][: batch["num_indices"]]
-        )
+        label_ages.append(raw_batch["task"]["label_ages"][: batch["num_indices"]])
         assert raw_batch["task"]["label_ages"].dtype == np.float64
         label_pids.append(batch["patient_ids"][p_index][: batch["num_indices"]])
 
@@ -142,9 +133,7 @@ label_pids = np.array(jnp.concatenate(label_pids, axis=0))
 label_times = []
 
 for pid, age in zip(label_pids, label_ages):
-    birth_date = datetime.datetime.combine(
-        database.get_patient_birth_date(pid), datetime.time.min
-    )
+    birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
     label_time = birth_date + datetime.timedelta(days=float(age))
     label_times.append(label_time)
 

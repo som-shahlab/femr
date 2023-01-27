@@ -10,9 +10,7 @@ from ..featurizers.featurizers_notes import Note
 from ..labelers.core import Label
 
 
-def remove_short_notes(
-    notes: List[Note], label: Label, min_char_count: int = 0, **kwargs
-) -> List[Note]:
+def remove_short_notes(notes: List[Note], label: Label, min_char_count: int = 0, **kwargs) -> List[Note]:
     """Remove all notes from `notes` whose character length < `min_char_count`.
     `notes` is a list of tuples, where each tuple is: (event idx of note, Event)
     """
@@ -38,9 +36,7 @@ def keep_only_notes_matching_codes(
     return new_notes
 
 
-def remove_notes_after_label(
-    notes: List[Note], label: Label, **kwargs
-) -> List[Note]:
+def remove_notes_after_label(notes: List[Note], label: Label, **kwargs) -> List[Note]:
     """Remove all notes whose `start` > `label.time`."""
     new_notes: List[Note] = []
     for note in notes:

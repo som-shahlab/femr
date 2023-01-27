@@ -9,16 +9,12 @@ def _assert_correct_stats(stat: OnlineStatistics, values: list):
     true_mean = np.mean(values)
     true_sample_variance = np.var(values, ddof=1)
     true_m2 = true_sample_variance * (len(values) - 1)
-    assert stat.current_count == len(
-        values
-    ), f"{stat.current_count} != {len(values)}"
+    assert stat.current_count == len(values), f"{stat.current_count} != {len(values)}"
     assert np.isclose(stat.mean(), true_mean), f"{stat.mean()} != {true_mean}"
     assert np.isclose(
         stat.variance(), true_sample_variance, atol=TOLERANCE
     ), f"{stat.variance()} != {true_sample_variance}"
-    assert np.isclose(
-        stat.current_M2, true_m2, atol=TOLERANCE
-    ), f"{stat.current_M2} != {true_m2}"
+    assert np.isclose(stat.current_M2, true_m2, atol=TOLERANCE), f"{stat.current_M2} != {true_m2}"
 
 
 def test_add():
@@ -59,17 +55,13 @@ def test_constructor():
     assert stat.current_M2 == 0
 
     # Test M2
-    stat = OnlineStatistics(
-        current_count=10, current_mean=20, current_variance=30
-    )
+    stat = OnlineStatistics(current_count=10, current_mean=20, current_variance=30)
     assert stat.current_count == 10
     assert stat.current_mean == 20
     assert stat.current_M2 == 30 * (10 - 1)
 
     # Test getters/setters
-    stat = OnlineStatistics(
-        current_count=10, current_mean=20, current_variance=30
-    )
+    stat = OnlineStatistics(current_count=10, current_mean=20, current_variance=30)
     assert stat.mean() == 20
     assert stat.variance() == 30
     assert stat.standard_deviation() == np.sqrt(30)
@@ -77,19 +69,13 @@ def test_constructor():
     # Test fail cases
     with pytest.raises(ValueError) as _:
         # Negative count
-        stat = OnlineStatistics(
-            current_count=-1, current_mean=2, current_variance=3
-        )
+        stat = OnlineStatistics(current_count=-1, current_mean=2, current_variance=3)
     with pytest.raises(ValueError) as _:
         # Negative variance
-        stat = OnlineStatistics(
-            current_count=1, current_mean=2, current_variance=-3
-        )
+        stat = OnlineStatistics(current_count=1, current_mean=2, current_variance=-3)
     with pytest.raises(ValueError) as _:
         # Positive variance with 0 count
-        stat = OnlineStatistics(
-            current_count=0, current_mean=2, current_variance=1
-        )
+        stat = OnlineStatistics(current_count=0, current_mean=2, current_variance=1)
     with pytest.raises(ValueError) as _:
         # Can only compute variance with >1 observation
         stat = OnlineStatistics()

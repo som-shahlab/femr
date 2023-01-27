@@ -84,18 +84,14 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
         return None
 
 
-def get_concepts_to_add(
-    root: str, child: str
-) -> Tuple[Set[str], Set[Tuple[str, str]]]:
+def get_concepts_to_add(root: str, child: str) -> Tuple[Set[str], Set[Tuple[str, str]]]:
     """Pull out the new concept_ids that we have to map."""
     new_concepts = set()
     new_relationships = set()
 
     try:
         source_path = os.path.join(root, "observation", child)
-        with io.TextIOWrapper(
-            zstandard.ZstdDecompressor().stream_reader(open(source_path, "rb"))
-        ) as f:
+        with io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(source_path, "rb"))) as f:
             reader = csv.DictReader(f)
             for row in reader:
                 new_row = convert_row(row)
@@ -121,21 +117,15 @@ def get_concepts_to_add(
     return new_concepts, new_relationships
 
 
-def correct_rows(
-    root: str, target: str, mapping: Mapping[str, str], child: str
-) -> None:
+def correct_rows(root: str, target: str, mapping: Mapping[str, str], child: str) -> None:
     """Using a concept_id map, fix incorrect mappings.
 
     Currently, this only fixes json encoded observations by decoding them into OMOP fields.
     Future versions of this code might fix other issues."""
     source_path = os.path.join(root, "observation", child)
     out_path = os.path.join(target, "observation", child)
-    with io.TextIOWrapper(
-        zstandard.ZstdDecompressor().stream_reader(open(source_path, "rb"))
-    ) as f:
-        with io.TextIOWrapper(
-            zstandard.ZstdCompressor(1).stream_writer(open(out_path, "wb"))
-        ) as o:
+    with io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(source_path, "rb"))) as f:
+        with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(out_path, "wb"))) as o:
             reader = csv.DictReader(f)
             assert reader.fieldnames is not None
             writer = csv.DictWriter(o, reader.fieldnames)
@@ -145,30 +135,22 @@ def correct_rows(
                 if new_row is None:
                     writer.writerow(row)
                 else:
-                    new_row["observation_concept_id"] = mapping[
-                        new_row["observation_source_value"]
-                    ]
+                    new_row["observation_concept_id"] = mapping[new_row["observation_source_value"]]
 
                     del new_row["observation_parent_id"]
                     del new_row["observation_parent_value"]
 
                     if new_row["unit_concept_id"] != "":
-                        new_row["unit_concept_id"] = mapping[
-                            new_row["unit_source_value"]
-                        ]
+                        new_row["unit_concept_id"] = mapping[new_row["unit_source_value"]]
 
                     writer.writerow(new_row)
 
 
 if __name__ == "__main__":
     forkserver = multiprocessing.get_context("forkserver")
-    parser = argparse.ArgumentParser(
-        description="Clean Stanford flowsheet data"
-    )
+    parser = argparse.ArgumentParser(description="Clean Stanford flowsheet data")
     parser.add_argument("source", type=str, help="The source OMOP folder")
-    parser.add_argument(
-        "target", type=str, help="The location to create the result OMOP folder"
-    )
+    parser.add_argument("target", type=str, help="The location to create the result OMOP folder")
     parser.add_argument(
         "--num_threads",
         type=int,
@@ -202,17 +184,9 @@ if __name__ == "__main__":
 
         highest_concept_id = 0
 
-        destination_path = os.path.join(
-            args.target, "concept", "flowsheet.csv.zst"
-        )
-        destination_rel_path = os.path.join(
-            args.target, "concept_relationship", "flowsheet.csv.zst"
-        )
-        with io.TextIOWrapper(
-            zstandard.ZstdCompressor(1).stream_writer(
-                open(destination_path, "wb")
-            )
-        ) as o:
+        destination_path = os.path.join(args.target, "concept", "flowsheet.csv.zst")
+        destination_rel_path = os.path.join(args.target, "concept_relationship", "flowsheet.csv.zst")
+        with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(destination_path, "wb"))) as o:
             writer = csv.DictWriter(
                 o,
                 fieldnames=[
@@ -255,11 +229,7 @@ if __name__ == "__main__":
                     }
                 )
 
-        with io.TextIOWrapper(
-            zstandard.ZstdCompressor(1).stream_writer(
-                open(destination_rel_path, "wb")
-            )
-        ) as o2:
+        with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(destination_rel_path, "wb"))) as o2:
             rel_writer = csv.DictWriter(
                 o2,
                 fieldnames=[
@@ -293,9 +263,7 @@ if __name__ == "__main__":
                 )
 
         for _ in pool.imap_unordered(
-            functools.partial(
-                correct_rows, args.source, args.target, new_concept_map
-            ),
+            functools.partial(correct_rows, args.source, args.target, new_concept_map),
             os.listdir(os.path.join(args.source, "observation")),
         ):
             pass

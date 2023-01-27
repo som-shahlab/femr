@@ -38,18 +38,14 @@ def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
 
     for i in range(7):
         with contextlib.closing(events.create_writer()) as writer:
-            for patient_id, event in all_events[
-                i * events_per_chunk : (i + 1) * events_per_chunk
-            ]:
+            for patient_id, event in all_events[i * events_per_chunk : (i + 1) * events_per_chunk]:
                 writer.add_event(patient_id, event)
 
     return events
 
 
 def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
-    return create_events(tmp_path).to_patient_collection(
-        os.path.join(tmp_path, "patients")
-    )
+    return create_events(tmp_path).to_patient_collection(os.path.join(tmp_path, "patients"))
 
 
 def test_events(tmp_path: pathlib.Path) -> None:
@@ -66,9 +62,7 @@ def test_events(tmp_path: pathlib.Path) -> None:
 def test_sort_events(tmp_path: pathlib.Path) -> None:
     events = create_events(tmp_path)
 
-    sorted_events = events.sort(
-        os.path.join(tmp_path, "sorted_events"), num_threads=2
-    )
+    sorted_events = events.sort(os.path.join(tmp_path, "sorted_events"), num_threads=2)
 
     with sorted_events.reader() as reader:
         all_sorted_events = list(reader)
@@ -78,9 +72,7 @@ def test_sort_events(tmp_path: pathlib.Path) -> None:
     for reader_func in sorted_events.sharded_readers():
         with reader_func() as reader:
             s_events = list(reader)
-            assert (
-                sorted(s_events, key=lambda a: (a[0], a[1].start)) == s_events
-            )
+            assert sorted(s_events, key=lambda a: (a[0], a[1].start)) == s_events
 
 
 def test_patients(tmp_path: pathlib.Path) -> None:
@@ -114,9 +106,7 @@ def transform_func(a: piton.Patient) -> Optional[piton.Patient]:
 def test_transform_patients(tmp_path: pathlib.Path) -> None:
     patients = create_patients(tmp_path)
 
-    transformed_patients = patients.transform(
-        os.path.join(tmp_path, "transformed_patients"), transform_func
-    )
+    transformed_patients = patients.transform(os.path.join(tmp_path, "transformed_patients"), transform_func)
 
     with transformed_patients.reader() as reader:
         all_patients = list(reader)

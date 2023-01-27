@@ -1,19 +1,14 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
+from abc import abstractmethod
 
 import datetime
 from collections import defaultdict, deque
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import (
-    Label,
-    Labeler,
-    LabelType,
-    TimeHorizon,
-    TimeHorizonEventLabeler,
-)
+from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
 
 def get_visit_concepts() -> List[str]:
@@ -36,110 +31,46 @@ def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
 
 
 def get_visit_codes(ontology: extension_datasets.Ontology) -> List[int]:
-    return [
-        y
-        for x in get_visit_concepts()
-        for y in _get_all_children(ontology, ontology.get_dictionary().index(x))
-    ]
+    return [y for x in get_visit_concepts() for y in _get_all_children(ontology, ontology.get_dictionary().index(x))]
 
 
 def get_inpatient_admission_codes(
     ontology: extension_datasets.Ontology,
-) -> List[int]:
-    return [
-        y
-        for x in get_inpatient_admission_concepts()
-        for y in _get_all_children(ontology, ontology.get_dictionary().index(x))
-    ]
+) -> Set[int]:
+    # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
+    return set([ontology.get_dictionary().index(x) for x in get_inpatient_admission_concepts()])
 
-
-def group_events_by_visit_id(patient: Patient) -> Dict[int, List[Event]]:
-    """Return a dict mapping `visit_id` to a list of events in that visit."""
-    visit_id_to_events: Dict[int, List[Event]] = defaultdict(list)
+def get_inpatient_admission_events(
+    patient: Patient, ontology: extension_datasets.Ontology
+) -> List[Event]:
+    admission_codes: Set[int] = get_inpatient_admission_codes(ontology)
+    events: List[Event] = []
     for e in patient.events:
-        if e.visit_id is None:
-            # Ignore events that don't have a `visit_id`
-            continue
-        visit_id_to_events[e.visit_id].append(e)
-    return dict(visit_id_to_events)
+        if e.code in admission_codes and e.omop_table == 'visit_occurrence':
+            if e.start == e.end:
+                # Drop single point in time events
+                continue
+            events.append(e)
+    return events
+
+def get_inpatient_admission_discharge_times(patient: Patient, ontology: extension_datasets.Ontology) -> List[Tuple[datetime.datetime, datetime.datetime]]:
+    """Return a list of all admission/discharge times for this patient."""
+    events: List[Event] = get_inpatient_admission_events(patient, ontology)
+    times: List[Tuple[datetime.datetime, datetime.datetime]] = []
+    for e in events:
+        if e.end is None:
+            raise RuntimeError(
+                f"Event {e} cannot have `None` as its `end` attribute."
+            )
+        if e.start > e.end:
+            raise RuntimeError(
+                f"Event {e} cannot have `start` after `end`."
+            )
+        times.append((e.start, e.end))
+    return times
 
 
-# TODO - Move this visit transformation logic to ETL pipeline
-def group_inpatient_events_by_visit_id(
-    patient: Patient, ontology: extension_datasets.Ontology
-) -> Dict[int, List[Event]]:
-    """Return a dict mapping `visit_id` to a list of events in that
-    INPATIENT visit (i.e. discard all non-INPATIENT visits),
-    based on combining the `visit_occurrence` and `visit_detail` OMOP table.
-
-    If multiple `visit_detail` events have the same `visit_id`, this only keeps the first one.
-
-    If multiple `visit_occurrence` events have the same `visit_id`, this prioritizes
-    whichever one has an "inpatient" label.
-    """
-    events_by_visit_id: Dict[int, List[Event]] = group_events_by_visit_id(
-        patient
-    )
-    admission_codes: List[int] = get_inpatient_admission_codes(ontology)
-    # In the below code, we combine the best of both the `visit_occurrence` and `visit_detail` tables
-    # to get more accurate inpatient visit times.
-    #
-    # Loop through all patient's events, keeping track of each unique `visit_id` we see
-    # belonging to an event from the `visit_occurrence` table. If we see a corresponding event
-    # from the `visit_occurrence` table with the same `visit_id` as an event from the
-    # `visit_detail` table, then assign the `visit_occurrence` event's code to the `visit_detail` event.
-    #
-    # This is necessary b/c the `visit_detail` table keeps accurate track of (start, end) times but doesn't
-    # distinguish inpatient from outpatient visits, while the `visit_occurrence` table does explicitly label
-    # inpatient visits but has inaccurate (start, end) event times
-    inpatient_events_by_visit_id = {}
-    for visit_id, events in events_by_visit_id.items():
-        is_inpatient: bool = False
-        event: Optional[Event] = None
-        for e in events:
-            if e.omop_table == "visit_occurrence":
-                # Track inpatient status
-                # If multiple `visit_occurrence` events for same visit, then the 'inpatient' label overrides the others
-                is_inpatient = is_inpatient or (e.code in admission_codes)
-            elif e.omop_table == "visit_detail":
-                # Track (start, end) status
-                # We use the `visit_detail` event as the canonical event for this visit
-                if event is None:
-                    # If multiple `visit_detail` events with the same `visit_id`, then we only keep the first one
-                    event = e
-        if is_inpatient and event:
-            inpatient_events_by_visit_id[visit_id] = events
-    return inpatient_events_by_visit_id
-
-
-def get_inpatient_admission_discharge_times(
-    patient: Patient, ontology: extension_datasets.Ontology
-) -> List[Tuple[datetime.datetime, datetime.datetime]]:
-    """Return a list of (admission, discharge) times for all inpatient visits."""
-    inpatient_events_by_visit_id = group_inpatient_events_by_visit_id(
-        patient, ontology
-    )
-    admission_discharge_times: List[
-        Tuple[datetime.datetime, datetime.datetime]
-    ] = []
-    for visit_id, events in inpatient_events_by_visit_id.items():
-        for e in events:
-            if e.omop_table == "visit_detail":
-                if e.start is None:
-                    raise RuntimeError(
-                        f"Every `visit_detail` event must have a start time, but none found for {e}"
-                    )
-                if e.end is None:
-                    raise RuntimeError(
-                        f"Every `visit_detail` event must have a end time, but none found for {e}"
-                    )
-                admission_discharge_times.append((e.start, e.end))
-                # Only keep the first (admission, discharge) time that we see for this visit, so
-                # break after we find it
-                break
-    return admission_discharge_times
-
-
+# TODO - move this into the ontology class
 def map_omop_concept_ids_to_piton_codes(
     ontology: extension_datasets.Ontology,
     omop_concept_ids: List[int],
@@ -151,20 +82,15 @@ def map_omop_concept_ids_to_piton_codes(
     codes: Set[int] = set()
     for omop_concept_id in omop_concept_ids:
         # returns `None` if `omop_concept_id` is not found in the ontology
-        piton_code: Optional[int] = ontology.get_code_from_concept_id(  # type: ignore
-            omop_concept_id
-        )
+        piton_code: Optional[int] = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
         if piton_code is None:
             print(f"OMOP Concept ID {omop_concept_id} not found in ontology")
         else:
-            codes.update(
-                _get_all_children(ontology, piton_code)
-                if is_ontology_expansion
-                else {piton_code}
-            )
+            codes.update(_get_all_children(ontology, piton_code) if is_ontology_expansion else {piton_code})
     return codes
 
 
+# TODO - move this into the ontology class
 def map_omop_concept_codes_to_piton_codes(
     ontology: extension_datasets.Ontology,
     omop_concept_codes: List[str],
@@ -178,21 +104,13 @@ def map_omop_concept_codes_to_piton_codes(
         try:
             piton_code = ontology.get_dictionary().index(omop_concept_code)
         except ValueError:
-            raise ValueError(
-                f"OMOP Concept Code {omop_concept_code} not found in ontology."
-            )
-        codes.update(
-            _get_all_children(ontology, piton_code)
-            if is_ontology_expansion
-            else {piton_code}
-        )
+            raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
+        codes.update(_get_all_children(ontology, piton_code) if is_ontology_expansion else {piton_code})
     return codes
 
 
 # TODO - move this into the ontology class
-def _get_all_children(
-    ontology: extension_datasets.Ontology, code: int
-) -> Set[int]:
+def _get_all_children(ontology: extension_datasets.Ontology, code: int) -> Set[int]:
     children_code_set = set([code])
     parent_deque = deque([code])
 
@@ -215,9 +133,12 @@ def _get_all_children(
 class WithinVisitLabeler(Labeler):
     """
     The `WithinVisitLabeler` predicts whether or not a patient experiences a specific event
-    (i.e. has a `code` within `self.outcome_codes`) within each visit.
+    (as returned by `self.get_outcome_times()`) within each visit.
+    
+    Very similar to `TimeHorizonLabeler`, except here we use visits themselves as our time horizon.
 
     Prediction Time: Start of each visit (adjusted by `self.prediction_adjustment_timedelta` if provided)
+    Time horizon: By end of visit
 
     IMPORTANT: This labeler assumes that every event has a `event.visit_id` property.
     """
@@ -225,58 +146,81 @@ class WithinVisitLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        outcome_codes: List[int],
-        prediction_time_adjustment_func: Optional[Callable] = None,
+        visit_start_adjust_func: Callable = lambda x : x,
+        visit_end_adjust_func: Callable = lambda x : x,
     ):
-        """The argument `prediction_time_adjustment_func` is a function that takes in a `datetime.datetime`
+        """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         self.ontology = ontology
-        self.outcome_codes: List[int] = outcome_codes
-        self.prediction_time_adjustment_func: Callable = (  # type: ignore
-            prediction_time_adjustment_func  # type: ignore
-            if prediction_time_adjustment_func is not None  # type: ignore
-            else lambda x: x  # type: ignore
-        )  # type: ignore
+        self.visit_start_adjust_func = visit_start_adjust_func
+        self.visit_end_adjust_func = visit_end_adjust_func
+        
+    @abstractmethod
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a list of all times when the patient experiences an outcome"""
+        return []
+
+    @abstractmethod
+    def get_visit_events(self, patient: Patient) -> List[Event]:
+        """Return a list of all visits we want to consider (useful for limiting to inpatient visits)."""
+        return []
 
     def label(self, patient: Patient) -> List[Label]:
-        """Label all visits with whether the patient experiences outcomes
-        in `self.outcome_codes` during each visit."""
-        events_by_visit_id: Dict[int, List[Event]] = group_events_by_visit_id(
-            patient
-        )
-        return self.label_each_visit(events_by_visit_id)
-
-    def label_each_visit(self, events_by_visit_id: Dict[int, List[Event]]):
-        """Given a set of events grouped by `visit_id`, label each visit with
-        whether the patient experiences outcomes.
-
-        This is separated from the `label()` function so that it can be used by
-        other labelers that extend this class with different filtering criteria
-        applied to visits (i.e. just Inpatient visits, just Outpatient visits, etc.)
         """
-        labels: List[Label] = []
-        # Loop through all visits in patient, check if outcome occurs during visit
-        # and if so, mark that it occurred in `labels`.
-        for visit_id, events in events_by_visit_id.items():
-            is_outcome_occurs: bool = False
-            visit_event: Optional[Event] = None
-            for e in events:
-                if e.omop_table == "visit_detail":
-                    # Track the (start, end) of this visit_id from its `visit_detail` event
-                    visit_event = e
-                if e.code in self.outcome_codes:
-                    # This is an outcome event
-                    is_outcome_occurs = True
-            if visit_event is None:
-                raise RuntimeError(
-                    "Every `visit_id` must have an event from the `visit_detail` OMOP table"
-                    f" associated with it, but no `visit_detail` events were found with `visit_id={visit_id}`."
+            Label all visits returned by `self.get_visit_events()`with whether the patient 
+            experiences an outcome in `self.outcome_codes` during each visit.
+        """
+        visits: List[Event] = self.get_visit_events(patient)
+        prediction_start_times: List[datetime.datetime] = [ self.visit_start_adjust_func(visit.start) for visit in visits ]
+        prediction_end_times: List[datetime.datetime] = [ self.visit_end_adjust_func(visit.end) for visit in visits ]
+        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        
+        # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
+        results: List[Label] = []
+        curr_outcome_idx: int = 0
+        for (prediction_start, prediction_end) in zip(prediction_start_times, prediction_end_times):
+            # Error checking
+            if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] is None:
+                raise RuntimeError(f"Outcome times must be of type `datetime.datetime`, but value of `None` provided for `self.get_outcome_times(patient)[{curr_outcome_idx}]")
+            if prediction_start is None:
+                raise RuntimeError(f"Prediction start times must be of type `datetime.datetime`, but value of `None` provided for `prediction_start_time`")
+            if prediction_end is None:
+                raise RuntimeError(f"Prediction end times must be of type `datetime.datetime`, but value of `None` provided for `prediction_end_time`")
+            
+            # Find the first outcome that occurs after this visit starts (this works b/c we assume visits are sorted by `start`)
+            while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < prediction_start:
+                # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
+                # outcome EQUAL or AFTER the visit for this prediction time starts (if one exists)
+                curr_outcome_idx += 1
+
+            # TRUE if an event occurs within the visit
+            is_outcome_occurs_in_time_horizon: bool = (
+                (
+                    # ensure there is an outcome
+                    # (needed in case there are 0 outcomes)
+                    curr_outcome_idx
+                    < len(outcome_times)
                 )
-            prediction_time: datetime.datetime = (
-                self.prediction_time_adjustment_func(visit_event.start)
+                and (
+                    # outcome occurs after visit starts
+                    prediction_start
+                    <= outcome_times[curr_outcome_idx]
+                )
+                and (
+                    # outcome occurs before visit ends
+                    outcome_times[curr_outcome_idx] <= prediction_end
+                )
             )
-            labels.append(Label(prediction_time, is_outcome_occurs))
-        return labels
+            # Assume no censoring for visits
+            is_censored: bool = False
+            
+            if is_outcome_occurs_in_time_horizon:
+                results.append(Label(time=prediction_start, value=True))
+            elif not is_censored:
+                # Not censored + no outcome => FALSE
+                results.append(Label(time=prediction_start, value=False))
+
+        return results
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
@@ -297,7 +241,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         outcome_codes: List[int],
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Optional[Callable] = None,
+        prediction_time_adjustment_func: Callable = lambda x : x,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -308,28 +252,20 @@ class CodeLabeler(TimeHorizonEventLabeler):
             prediction_codes (Optional[List[int]]): If not None, limit events at which you make predictions to
                 only events with an `event.code` in these codes.
             prediction_time_adjustment_func (Optional[Callable]). A function that takes in a `datetime.datetime`
-                and returns a different `datetime.datetime`.
+                and returns a different `datetime.datetime`. Defaults to the identity function.
         """
         self.outcome_codes: List[int] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[int]] = prediction_codes
-        self.prediction_time_adjustment_func: Callable = (  # type: ignore
-            prediction_time_adjustment_func  # type: ignore
-            if prediction_time_adjustment_func is not None  # type: ignore
-            else lambda x: x  # type: ignore
-        )  # type: ignore
+        self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
         as the time to make a prediction. Default to all events whose `code` is in `self.prediction_codes`."""
         times: List[datetime.datetime] = []
         for e in patient.events:
-            prediction_time: datetime.datetime = (
-                self.prediction_time_adjustment_func(e.start)
-            )
-            if (self.prediction_codes is None) or (
-                e.code in self.prediction_codes
-            ):
+            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(e.start)
+            if (self.prediction_codes is None) or (e.code in self.prediction_codes):
                 times.append(prediction_time)
         return times
 
@@ -358,7 +294,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Optional[Callable] = None,
+        prediction_time_adjustment_func: Callable = lambda x: x,
     ):
         outcome_codes: List[int] = list(
             map_omop_concept_codes_to_piton_codes(
@@ -392,13 +328,11 @@ class MortalityCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Optional[Callable] = None,
+        prediction_time_adjustment_func: Callable = lambda x: x
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
-            map_omop_concept_codes_to_piton_codes(
-                ontology, get_death_concepts(), is_ontology_expansion=True
-            )
+            map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
         )
 
         super().__init__(
@@ -419,14 +353,10 @@ class LupusCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Optional[Callable] = None,
+        prediction_time_adjustment_func: Callable = lambda x: x
     ):
         concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
-        outcome_codes = list(
-            map_omop_concept_codes_to_piton_codes(
-                ontology, concept_codes, is_ontology_expansion=True
-            )
-        )
+        outcome_codes = list(map_omop_concept_codes_to_piton_codes(ontology, concept_codes, is_ontology_expansion=True))
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
@@ -444,9 +374,7 @@ class HighHbA1cCodeLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        last_trigger_timedelta: datetime.timedelta = datetime.timedelta(
-            days=180
-        ),
+        last_trigger_timedelta: datetime.timedelta = datetime.timedelta(days=180),
     ):
         """Create a High HbA1c (i.e. diabetes) labeler."""
         self.last_trigger_timedelta = last_trigger_timedelta
@@ -474,10 +402,7 @@ class HighHbA1cCodeLabeler(Labeler):
 
         for event in patient.events:
 
-            if (
-                first_diabetes_code_date is not None
-                and event.start > first_diabetes_code_date
-            ):
+            if first_diabetes_code_date is not None and event.start > first_diabetes_code_date:
                 break
 
             if event.value is None or type(event.value) is memoryview:
@@ -485,9 +410,7 @@ class HighHbA1cCodeLabeler(Labeler):
 
             if event.code == self.hba1c_lab_code:
                 is_diabetes = float(event.value) > high_cutoff_threshold
-                if last_trigger is None or (
-                    event.start - last_trigger > self.last_trigger_timedelta
-                ):
+                if last_trigger is None or (event.start - last_trigger > self.last_trigger_timedelta):
                     labels.append(
                         Label(
                             time=event.start - datetime.timedelta(minutes=1),
@@ -608,9 +531,7 @@ class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
     It is conditioned on the patient being prescribed opioids.
     """
 
-    def __init__(
-        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
-    ):
+    def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
         self.time_horizon: TimeHorizon = time_horizon
 
         dictionary = ontology.get_dictionary()
@@ -627,17 +548,11 @@ class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
 
         self.overdose_codes: Set[int] = set()
         for code in icd9_codes:
-            self.overdose_codes |= _get_all_children(
-                ontology, dictionary.index("ICD9CM/" + code)
-            )
+            self.overdose_codes |= _get_all_children(ontology, dictionary.index("ICD9CM/" + code))
         for code in icd10_codes:
-            self.overdose_codes |= _get_all_children(
-                ontology, dictionary.index("ICD10CM/" + code)
-            )
+            self.overdose_codes |= _get_all_children(ontology, dictionary.index("ICD10CM/" + code))
 
-        self.opioid_codes = _get_all_children(
-            ontology, dictionary.index("ATC/N02A")
-        )
+        self.opioid_codes = _get_all_children(ontology, dictionary.index("ATC/N02A"))
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.overdose_codes`."""

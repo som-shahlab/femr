@@ -12,27 +12,22 @@ import piton.datasets
 from piton.labelers.core import TimeHorizon
 from piton.labelers.omop import move_datetime_to_end_of_day
 from piton.labelers.omop_lab_values import (
+    InpatientLabValueLabeler,
     AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
     HyponatremiaLabValueLabeler,
-    OMOPConceptOutcomeFromLabValueLabeler,
     ThrombocytopeniaLabValueLabeler,
 )
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import (
-    EventsWithLabels,
-    event,
-    run_test_for_labeler,
-    run_test_locally,
-)
+from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
 
 #############################################
 #############################################
 #
-# Generic OMOPConceptOutcomeFromLabValueLabeler
+# Generic InpatientLabValueLabeler
 #
 # #############################################
 #############################################
@@ -69,7 +64,7 @@ class DummyOntology_Generic:
             return []
 
 
-class DummyLabeler1(OMOPConceptOutcomeFromLabValueLabeler):
+class DummyLabeler1(InpatientLabValueLabeler):
     original_omop_concept_codes = [
         "OMOP_CONCEPT_A",
         "OMOP_CONCEPT_B",
@@ -100,7 +95,7 @@ class DummyLabeler1(OMOPConceptOutcomeFromLabValueLabeler):
         return "normal"
 
 
-class DummyLabeler2(OMOPConceptOutcomeFromLabValueLabeler):
+class DummyLabeler2(InpatientLabValueLabeler):
     original_omop_concept_codes = [
         "OMOP_CONCEPT_B",
     ]
@@ -167,9 +162,7 @@ def test_labeling(tmp_path: pathlib.Path):
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start)
-        for x in events_with_labels
-        if isinstance(x[1], bool)
+        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
     ]
     run_test_for_labeler(
         labeler,
@@ -188,14 +181,14 @@ def test_units(tmp_path: pathlib.Path):
 #############################################
 #############################################
 #
-# Specific instances of OMOPConceptOutcomeFromLabValueLabeler
+# Specific instances of InpatientLabValueLabeler
 #
 #############################################
 #############################################
 
 
 def _assert_value_to_label_correct(
-    labeler: OMOPConceptOutcomeFromLabValueLabeler,
+    labeler: InpatientLabValueLabeler,
     severe: float,
     moderate: float,
     mild: float,
@@ -221,7 +214,7 @@ def _create_specific_labvalue_labeler(
 
 
 def _run_specific_labvalue_test(
-    labeler: OMOPConceptOutcomeFromLabValueLabeler,
+    labeler: InpatientLabValueLabeler,
     outcome_codes: set,
     severe_values: List[Tuple[float, str]],
     moderate_values: List[Tuple[float, str]],
@@ -278,9 +271,7 @@ def _run_specific_labvalue_test(
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start)
-        for x in events_with_labels
-        if isinstance(x[1], bool)
+        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
     ]
     run_test_for_labeler(
         labeler,
@@ -415,9 +406,7 @@ def test_anemia(tmp_path: pathlib.Path):
     )
 
     # Test value parsing
-    _assert_value_to_label_correct(
-        labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, "g/dl"
-    )
+    _assert_value_to_label_correct(labeler, 69.9 / 10, 109.99 / 10, 119.999 / 10, 121 / 10, "g/dl")
 
     # Create patient
     _run_specific_labvalue_test(

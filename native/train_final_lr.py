@@ -21,15 +21,11 @@ with open(features_path, "rb") as f:
 with open(labels_path, "rb") as f:
     labeled_patients = pickle.load(f)
 
-data_matrix, patient_ids, labeling_time = [
-    features[k] for k in ("data_matrix", "patient_ids", "labeling_time")
-]
+data_matrix, patient_ids, labeling_time = [features[k] for k in ("data_matrix", "patient_ids", "labeling_time")]
 labels = []
 
 for pid, time in zip(patient_ids, labeling_time):
-    raw_labels = [
-        label.value for label in labeled_patients[pid] if label.time == time
-    ]
+    raw_labels = [label.value for label in labeled_patients[pid] if label.time == time]
     assert len(raw_labels) == 1
     labels.append(raw_labels[0])
 

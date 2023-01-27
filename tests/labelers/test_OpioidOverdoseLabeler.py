@@ -12,12 +12,7 @@ from piton.labelers.omop import OpioidOverdoseLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import (
-    EventsWithLabels,
-    event,
-    run_test_for_labeler,
-    run_test_locally,
-)
+from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
 
 # TODO
 

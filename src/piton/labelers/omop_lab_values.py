@@ -5,14 +5,16 @@ import datetime
 from abc import abstractmethod
 from typing import Dict, List, Optional, Set
 
-from .. import Event, Patient
+from piton import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import Label, Labeler, LabelType, TimeHorizon
-from .omop import (
+from piton.labelers.core import Label, Labeler, LabelType, TimeHorizon
+from piton.labelers.omop import (
     _get_all_children,
-    group_inpatient_events_by_visit_id,
     map_omop_concept_codes_to_piton_codes,
-    move_datetime_to_end_of_day,
+    get_inpatient_admission_events
+)
+from piton.labelers.omop_inpatient_admissions import (
+    WithinInpatientVisitLabeler
 )
 
 ##########################################################
@@ -28,7 +30,7 @@ from .omop import (
 ##########################################################
 
 
-class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
+class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
     """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value during each INPATIENT visit
         where that lab test has a result recorded (thus, we're conditioning on ordering the lab test).
 
@@ -38,8 +40,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
     Label: TRUE if any lab value comes back with severity level == `self.severity` during the visit, 0 otherwise.
     """
 
-    # parent OMOP concept codes, from which all the outcome
-    # are derived (as children from our ontology)
+    # parent OMOP concept codes, from which all the outcomes are derived (as children in our ontology)
     original_omop_concept_codes: List[str] = []
 
     def __init__(
@@ -57,54 +58,57 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
             is_ontology_expansion=True,
         )
 
-    def label(self, patient: Patient) -> List[Label]:
-        """Label all INPATIENT visits in which the patient experiences an outcome
-        in `self.outcome_codes` with whether that outcome was severe or not."""
-        events_by_visit_id: Dict[
-            int, List[Event]
-        ] = group_inpatient_events_by_visit_id(patient, self.ontology)
-        labels: List[Label] = []
-        # Loop through all visits in patient, check if outcome occurs during visit
-        # and if so, mark that it occurred in `labels`.
-        for visit_id, events in events_by_visit_id.items():
-            # if `is_outcome_occurs` is None, then no outcome events were found (so we ignore this visit)
-            # if `is_outcome_occurs` is True, then an outcome event was found and it was `self.severity`
-            # if `is_outcome_occurs` is False, then an outcome event was found, but it was not `self.severity`
-            is_outcome_occurs: Optional[bool] = None
-            visit_event: Optional[Event] = None
-            for e in events:
-                if e.omop_table == "visit_detail":
-                    # Track the (start, end) of this visit_id from its `visit_detail` event
-                    visit_event = e
-                if e.code in self.outcome_codes:
-                    # This is an outcome event
-                    if e.value is not None:
-                        label: Optional[str] = None
-                        try:
-                            # `e.unit` is string of form "mg/dL", "ounces", etc.
-                            label = self.value_to_label(
-                                str(e.value), str(e.unit)
-                            )
-                        except Exception as exception:
-                            print(
-                                f"Warning: Error parsing value='{e.value}' with unit='{e.unit}'"
-                                f" for code='{e.code}' @ {e.start} for patient_id='{patient.patient_id}'"
-                                f" | Exception: {exception}"
-                            )
-                        is_outcome_occurs = label == self.severity
-            if visit_event is None:
-                raise RuntimeError(
-                    "Every `visit_id` must have an event from the `visit_detail` OMOP table"
-                    f" associated with it, but no `visit_detail` events were found with `visit_id={visit_id}`."
-                )
-            if is_outcome_occurs is not None:
-                # If lab test result was reported, then record whether the outcome was TRUE or FALSE.
-                # Otherwise, if no lab test occurred in this visit, we ignore it.
-                prediction_time: datetime.datetime = (
-                    move_datetime_to_end_of_day(visit_event.start)
-                )
-                labels.append(Label(time=prediction_time, value=is_outcome_occurs))
-        return labels
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        times: List[datetime.datetime] = []
+        for e in patient.events:
+            if e.code in self.outcome_codes:
+                # This is an outcome event
+                if e.value is not None:
+                    label: Optional[str] = None
+                    try:
+                        # `e.unit` is string of form "mg/dL", "ounces", etc.
+                        label = self.value_to_label(str(e.value), str(e.unit))
+                        if label == self.severity:
+                            times.append(e.start)
+                    except Exception as exception:
+                        print(
+                            f"Warning: Error parsing value='{e.value}' with unit='{e.unit}'"
+                            f" for code='{e.code}' @ {e.start} for patient_id='{patient.patient_id}'"
+                            f" | Exception: {exception}"
+                        )
+        return times
+
+    def get_visit_events(self, patient: Patient) -> List[Event]:
+        """Only keep inpatient visits where a lab test result is returned."""
+        # Get list of all times when lab test result was returned
+        valid_times: List[datetime.datetime] = []
+        for e in patient.events:
+            if e.code in self.outcome_codes:
+                # This is an outcome event
+                if e.value is not None:
+                    try:
+                        # A valid lab value was returned
+                        _ = self.value_to_label(str(e.value), str(e.unit))
+                        # record this visit as valid
+                        valid_times.append(e.start)
+                    except Exception as e:
+                        pass
+        # Filter inpatient events to only those where a valid lab test result was returned
+        visits: List[Event] = get_inpatient_admission_events(patient, self.ontology)
+        valid_visits: List[Event] = []
+        curr_valid_time_idx: int = 0
+        for e in visits:
+            while valid_times[curr_valid_time_idx] < e.start:
+                # Increment valid_times until we get one that occurs after this visit starts
+                curr_valid_time_idx += 1
+                if curr_valid_time_idx >= len(valid_times):
+                    # We've passed through all valid_times, and none occur after this visit starts,
+                    # so we can safely break and return the valid visits we've already found
+                    return valid_visits
+            if e.start <= valid_times[curr_valid_time_idx] <= e.end:
+                # If this valid_times falls within this visit, record that this visit is valid
+                valid_visits.append(e)
+        return valid_visits
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
@@ -118,7 +122,7 @@ class OMOPConceptOutcomeFromLabValueLabeler(Labeler):
         return "normal"
 
 
-class ThrombocytopeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class ThrombocytopeniaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L).
     Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
 
@@ -140,7 +144,7 @@ class ThrombocytopeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         return "normal"
 
 
-class HyperkalemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class HyperkalemiaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for hyperkalemia using blood potassium concentration (mmol/L).
     Thresholds: mild(>5.5),moderate(>6),severe(>7), and abnormal range."""
 
@@ -181,7 +185,7 @@ class HyperkalemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         return "normal"
 
 
-class HypoglycemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class HypoglycemiaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for hypoglycemia using blood glucose concentration (mmol/L).
     Thresholds: mild(<3), moderate(<3.5), severe(<=3.9), and abnormal range."""
 
@@ -217,7 +221,7 @@ class HypoglycemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         return "normal"
 
 
-class HyponatremiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class HyponatremiaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for hyponatremia based on blood sodium concentration (mmol/L).
     Thresholds: mild (<=135),moderate(<130),severe(<125), and abnormal range."""
 
@@ -238,7 +242,7 @@ class HyponatremiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         return "normal"
 
 
-class AnemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class AnemiaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for anemia based on hemoglobin levels (g/L).
     Thresholds: mild(<120),moderate(<110),severe(<70), and reference range"""
 
@@ -275,7 +279,7 @@ class AnemiaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
         return "normal"
 
 
-class NeutropeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class NeutropeniaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for neutropenia based on neutrophils count (thousands/uL).
     Thresholds: mild(<1.5), moderate(<1), severe(<0.5)"""
 
@@ -305,7 +309,7 @@ class NeutropeniaLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
     ]
 
 
-class AcuteKidneyInjuryLabValueLabeler(OMOPConceptOutcomeFromLabValueLabeler):
+class AcuteKidneyInjuryLabValueLabeler(InpatientLabValueLabeler):
     # TODO - very complicated
     """lab-based definition for acute kidney injury based on blood creatinine levels (umol/L)
     according to KDIGO (stages 1,2, and 3), and abnormal range."""
@@ -334,16 +338,12 @@ class CeliacTestLabeler(Labeler):
     Note: This labeler excludes patients who either already had a celiac test or were previously diagnosed.
     """
 
-    def __init__(
-        self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon
-    ):
+    def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
         dictionary = ontology.get_dictionary()
-        self.lab_codes = _get_all_children(
-            ontology, dictionary.index("LNC/31017-7")
+        self.lab_codes = _get_all_children(ontology, dictionary.index("LNC/31017-7"))
+        self.celiac_codes = _get_all_children(ontology, dictionary.index("ICD9CM/579.0")) | _get_all_children(
+            ontology, dictionary.index("ICD10CM/K90.0")
         )
-        self.celiac_codes = _get_all_children(
-            ontology, dictionary.index("ICD9CM/579.0")
-        ) | _get_all_children(ontology, dictionary.index("ICD10CM/K90.0"))
 
         self.pos_value = "Positive"
         self.neg_value = "Negative"
