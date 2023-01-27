@@ -101,7 +101,10 @@ class AgeFeaturizer(Featurizer):
         return self.is_normalize
 
     def __repr__(self):
-        return f"AgeFeaturizer(is_normalize={self.is_normalize}, count={self.age_statistics.current_count} mean={self.age_statistics.mean()}, std={self.age_statistics.standard_deviation()})"
+        return (
+            f"AgeFeaturizer(is_normalize={self.is_normalize}, count={self.age_statistics.current_count}"
+            f" mean={self.age_statistics.mean()}, std={self.age_statistics.standard_deviation()})"
+        )
 
 
 def _reshuffle_count_time_bins(

@@ -69,7 +69,11 @@ def _apply_labeling_function(
         patients = PatientDatabase(path_to_patient_database)
 
     # Hacky workaround for Ontology not being picklable
-    if hasattr(labeling_function, "ontology") and labeling_function.ontology is None and path_to_patient_database:
+    if (
+        hasattr(labeling_function, "ontology")  # type: ignore
+        and labeling_function.ontology is None  # type: ignore
+        and path_to_patient_database  # type: ignore
+    ):  # type: ignore
         labeling_function.ontology = patients.get_ontology()  # type: ignore
     if (
         hasattr(labeling_function, "labeler")
@@ -328,16 +332,16 @@ class Labeler(ABC):
         pid_parts = np.array_split(pids, num_threads)
 
         # NOTE: Super hacky workaround to pickling limitations
-        if hasattr(self, "ontology") and isinstance(self.ontology, extension_datasets.Ontology):
+        if hasattr(self, "ontology") and isinstance(self.ontology, extension_datasets.Ontology):  # type: ignore
             # Remove ontology due to pickling, add it back later
-            self.ontology = None  # type: ignore
+            self.ontology: extension_datasets.Ontology = None  # type: ignore
         if (
             hasattr(self, "labeler")
             and hasattr(self.labeler, "ontology")
             and isinstance(self.labeler.ontology, extension_datasets.Ontology)
         ):
             # If NLabelsPerPatient wrapper, go to sublabeler and remove ontology due to pickling
-            self.labeler.ontology = None  # type: ignore
+            self.labeler.ontology: extension_datasets.Ontology = None  # type: ignore
 
         # Multiprocessing
         tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts]

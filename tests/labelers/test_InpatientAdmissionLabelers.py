@@ -9,7 +9,11 @@ import pytest
 
 import piton.datasets
 from piton.labelers.core import LabeledPatients, TimeHorizon
-from piton.labelers.omop import get_inpatient_admission_discharge_times, get_inpatient_admission_events, move_datetime_to_end_of_day
+from piton.labelers.omop import (
+    get_inpatient_admission_discharge_times,
+    get_inpatient_admission_events,
+    move_datetime_to_end_of_day,
+)
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
@@ -64,7 +68,8 @@ def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
         # fmt: on
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         get_inpatient_admission_events(patient, ontology)  # type: ignore
-    
+
+
 def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
     ontology = DummyOntology_GetInpatients()
     events_with_labels: EventsWithLabels = [

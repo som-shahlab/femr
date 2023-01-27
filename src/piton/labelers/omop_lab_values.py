@@ -42,8 +42,8 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
         severity: str,
-        visit_start_adjust_func: Callable = lambda x : x,
-        visit_end_adjust_func: Callable = lambda x : x,
+        visit_start_adjust_func: Callable = lambda x: x,
+        visit_end_adjust_func: Callable = lambda x: x,
     ):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
@@ -92,7 +92,8 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
                         _ = self.value_to_label(str(e.value), str(e.unit))
                         # record this visit as valid
                         valid_times.append(e.start)
-                    except Exception as e:
+                    except Exception:
+                        # ignore this visit b/c a valid lab value was not returned
                         pass
         if len(valid_times) == 0:
             # Note: this is a necessary check, otherwise the `while` loop below will trip up on its first iteration

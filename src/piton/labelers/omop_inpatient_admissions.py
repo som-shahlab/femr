@@ -74,7 +74,8 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     It explicitly does not try to deal with categorizing admissions as "unexpected" or not and is thus
     not comparable to other work.
 
-    Prediction time: At discharge from an inpatient admission. Defaults to shifting prediction time to the end of the day.
+    Prediction time: At discharge from an inpatient admission. Defaults to shifting prediction time
+                     to the end of the day.
     Time horizon: Interval of time after discharg of length `time_horizon`
     Label: TRUE if patient has an inpatient admission within `time_horizon`
 
@@ -132,7 +133,7 @@ class InpatientLongAdmissionLabeler(Labeler):
         long_time: datetime.timedelta = datetime.timedelta(days=7),
         prediction_time_adjustment_func: Callable = move_datetime_to_end_of_day,
     ):
-        self.ontology = ontology
+        self.ontology: extension_datasets.Ontology = ontology
         self.long_time: datetime.timedelta = long_time
         self.prediction_time_adjustment_func = prediction_time_adjustment_func
 
