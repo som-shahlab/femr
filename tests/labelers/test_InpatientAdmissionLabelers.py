@@ -67,10 +67,10 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
     assert results == list(
         zip(
             [x[0].start for x in events_with_labels if x[1] == True],
-            [x[0].end for x in events_with_labels if x[1] == True]
+            [x[0].end for x in events_with_labels if x[1] == True],
         )
     ), f"Results: {results} | test_get_inpatient_admission_discharge_times"
-    
+
     # Test fail cases
     with pytest.raises(RuntimeError):
         # Every admission must have an `end` time
@@ -90,6 +90,7 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
         # fmt: on
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         results: List[piton.Event] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
+
 
 #############################################
 #############################################
@@ -273,8 +274,12 @@ def test_readmission(tmp_path: pathlib.Path):
         move_datetime_to_end_of_day(x[0].end) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
     ]
     assert labeler.get_time_horizon() == time_horizon
-    assert labeler.get_outcome_times(patient) == true_outcome_times, f"{labeler.get_outcome_times(patient)} != {true_outcome_times}"
-    assert labeler.get_prediction_times(patient) == true_prediction_times, f"{labeler.get_prediction_times(patient)} != {true_prediction_times}"
+    assert (
+        labeler.get_outcome_times(patient) == true_outcome_times
+    ), f"{labeler.get_outcome_times(patient)} != {true_outcome_times}"
+    assert (
+        labeler.get_prediction_times(patient) == true_prediction_times
+    ), f"{labeler.get_prediction_times(patient)} != {true_prediction_times}"
     run_test_for_labeler(
         labeler,
         events_with_labels,
@@ -282,6 +287,7 @@ def test_readmission(tmp_path: pathlib.Path):
         true_prediction_times=true_prediction_times,
         help_text="test_readmission_general",
     )
+
 
 #############################################
 #############################################
