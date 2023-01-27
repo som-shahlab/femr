@@ -45,7 +45,7 @@ def get_inpatient_admission_events(patient: Patient, ontology: extension_dataset
     admission_codes: Set[int] = get_inpatient_admission_codes(ontology)
     events: List[Event] = []
     for e in patient.events:
-        if e.code in admission_codes and e.omop_table == 'visit_occurrence':
+        if e.code in admission_codes and e.omop_table == "visit_occurrence":
             # Error checking
             if e.start is None or e.end is None:
                 raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
@@ -194,10 +194,14 @@ class WithinVisitLabeler(Labeler):
                     f"Prediction start times must be of type `datetime.datetime`, but value of `None` provided for `prediction_start_time`"
                 )
             if prediction_end is None:
-                raise RuntimeError(f"Prediction end times must be of type `datetime.datetime`, but value of `None` provided for `prediction_end_time`")
+                raise RuntimeError(
+                    f"Prediction end times must be of type `datetime.datetime`, but value of `None` provided for `prediction_end_time`"
+                )
             if prediction_start > prediction_end:
-                raise RuntimeError(f"Prediction start time must be before prediction end time, but `prediction_start_time` is {prediction_start} and `prediction_end_time` is {prediction_end}."
-                                   " Maybe you `visit_start_adjust_func()` or `visit_end_adjust_func()` in such a way that the `start` time got pushed after the `end` time?")
+                raise RuntimeError(
+                    f"Prediction start time must be before prediction end time, but `prediction_start_time` is {prediction_start} and `prediction_end_time` is {prediction_end}."
+                    " Maybe you `visit_start_adjust_func()` or `visit_end_adjust_func()` in such a way that the `start` time got pushed after the `end` time?"
+                )
             # Find the first outcome that occurs after this visit starts (this works b/c we assume visits are sorted by `start`)
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < prediction_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first

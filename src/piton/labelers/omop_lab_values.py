@@ -42,8 +42,8 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
         severity: str,
-        visit_start_adjust_func: Callable = lambda x : x,
-        visit_end_adjust_func: Callable = lambda x : x,
+        visit_start_adjust_func: Callable = lambda x: x,
+        visit_end_adjust_func: Callable = lambda x: x,
     ):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""

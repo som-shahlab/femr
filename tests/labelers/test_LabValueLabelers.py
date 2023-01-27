@@ -23,7 +23,7 @@ from piton.labelers.omop_lab_values import (
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
-  
+
 #############################################
 #############################################
 #
@@ -93,7 +93,6 @@ class DummyLabeler1(InpatientLabValueLabeler):
         elif value < 150:
             return "mild"
         return "normal"
-
 
 
 class DummyLabeler2(InpatientLabValueLabeler):
@@ -175,9 +174,9 @@ def test_labeling(tmp_path: pathlib.Path):
         true_outcome_times=true_outcome_times,
         help_text="test_labeling",
     )
-    
+
     # Prediction time adjustment
-    labeler = DummyLabeler1(ontology, "severe", visit_start_adjust_func=move_datetime_to_end_of_day )  # type: ignore
+    labeler = DummyLabeler1(ontology, "severe", visit_start_adjust_func=move_datetime_to_end_of_day)  # type: ignore
     events_with_labels: EventsWithLabels = [
         # fmt: off
         # yes
@@ -185,7 +184,8 @@ def test_labeling(tmp_path: pathlib.Path):
         (event((2002, 1, 4), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 1
         # no
         (event((2003, 1, 3), 1, end=datetime.datetime(2003, 1, 10), omop_table='visit_occurrence'), False), # admission
-        (event((2003, 1, 3), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 3
+        (event((2003, 1, 3), 12, 45.5, unit="mmol/L"), "skip"),
+        # lab test - 3
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
@@ -202,8 +202,7 @@ def test_labeling(tmp_path: pathlib.Path):
         true_outcome_times=true_outcome_times,
         help_text="test_labeling_shifted_prediction_time",
     )
-    
-    
+
     # Test fail cases
     with pytest.raises(RuntimeError):
         # error when visit_start_adjust_func() pushes `start` after `end`
@@ -216,6 +215,7 @@ def test_labeling(tmp_path: pathlib.Path):
         ]
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
+
 
 #############################################
 #############################################
@@ -297,7 +297,8 @@ def _run_specific_labvalue_test(
         #
         (event((2006, 1, 1), 1, end=datetime.datetime(2006, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2006, 1, 2), next(outcome_codes_cyclic_iter),
-               normal_values[1][0], unit=normal_values[1][1]), "skip"), # lab test - normal
+               normal_values[1][0], unit=normal_values[1][1]), "skip"),
+        # lab test - normal
         #
         # fmt: on
     ]
