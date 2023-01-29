@@ -22,21 +22,15 @@ import piton.extension.jax
 
 # Globally register all of our custom operators
 for name, value, platform in piton.extension.jax.get_kernels():
-    jax.lib.xla_client.register_custom_call_target(
-        name, value, platform=platform
-    )
+    jax.lib.xla_client.register_custom_call_target(name, value, platform=platform)
 
 # Per the jax documentation, we currently don't have good typing for arrays
 Array = Any
 
 
-def _convert_to_xla_shape(
-    a: jax.core.ShapedArray, force_dtype: Optional[Any] = None
-) -> xla_client.Shape:
+def _convert_to_xla_shape(a: jax.core.ShapedArray, force_dtype: Optional[Any] = None) -> xla_client.Shape:
     """A helper function for converting between a JAX jax.core.ShapedArray and an xla Shape."""
-    return xla_client.Shape.array_shape(
-        force_dtype or a.dtype, a.shape, list(reversed(range(len(a.shape))))
-    )
+    return xla_client.Shape.array_shape(force_dtype or a.dtype, a.shape, list(reversed(range(len(a.shape)))))
 
 
 def _assert_and_cast_to_shaped(
@@ -67,9 +61,7 @@ def gather_scatter_add(a: Array, indices: Array, output_dim: int) -> Array:
     return gather_scatter_add_fwd(a, indices, output_dim)[0]
 
 
-def gather_scatter_add_fallback(
-    a: Array, indices: Array, output_dim: int
-) -> Array:
+def gather_scatter_add_fallback(a: Array, indices: Array, output_dim: int) -> Array:
     """The python fallback implementation of gather scatter add.
 
     See gather_scatter for the documentation.
@@ -84,17 +76,13 @@ def gather_scatter_add_fallback(
     return result.at[b_indices, :].add(a_vals, mode="drop")
 
 
-def gather_scatter_add_fwd(
-    a: Array, indices: Array, output_dim: int
-) -> Tuple[Array, Tuple[int, Array]]:
+def gather_scatter_add_fwd(a: Array, indices: Array, output_dim: int) -> Tuple[Array, Tuple[int, Array]]:
     """The forward pass for gather / scatter"""
     r = gather_scatter_add_p.bind(a, indices, output_dim=output_dim)
     return r, (a.shape[0], indices)
 
 
-def gather_scatter_add_bwd(
-    _output_dim: int, res: Tuple[int, Array], g: Array
-) -> Tuple[Array, None]:
+def gather_scatter_add_bwd(_output_dim: int, res: Tuple[int, Array], g: Array) -> Tuple[Array, None]:
     """The backward pass for gather / scatter
 
     The basic idea here is that we transpose the indices and apply it in reverse to get the backward pass.
@@ -122,9 +110,7 @@ gather_scatter_add.defvjp(gather_scatter_add_fwd, gather_scatter_add_bwd)
 gather_scatter_add_p = jax.core.Primitive("gather_scatter_add_p")
 
 
-def gather_scatter_add_p_abstract_eval(
-    a: Array, indices: Array, output_dim: int
-) -> jax.core.ShapedArray:
+def gather_scatter_add_p_abstract_eval(a: Array, indices: Array, output_dim: int) -> jax.core.ShapedArray:
     """The abstract shape computation for gather_scatter_p primitive."""
     # Our CUDA kernel currently assume that the inner size is a factor of 32.
     # TODO: Remove this requirement
@@ -166,15 +152,10 @@ def gather_scatter_add_p_xla_translation(
 
     if ctx.platform == "cpu":
         # For our CPU implementation, we simply compile our fallback
-        computation = jax.xla_computation(
-            gather_scatter_add_fallback, static_argnums=(2,)
-        )(*avals_in, output_dim)
+        computation = jax.xla_computation(gather_scatter_add_fallback, static_argnums=(2,))(*avals_in, output_dim)
 
         res = xla_client.ops.Call(ctx.builder, computation, [a, indices])
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
 
     elif ctx.platform == "cuda":
         # For our GPU implementation, we actually call out to CUDA code
@@ -186,9 +167,7 @@ def gather_scatter_add_p_xla_translation(
         if input_shape.dtype == np.float32:
             name = "float_gather_scatter"
         else:
-            raise ValueError(
-                "Could not natively suport dtype " + str(input_shape.dtype)
-            )
+            raise ValueError("Could not natively suport dtype " + str(input_shape.dtype))
 
         return [
             xla_client.ops.CustomCallWithLayout(
@@ -196,10 +175,7 @@ def gather_scatter_add_p_xla_translation(
                 name.encode("utf8"),
                 operands=[a, indices],
                 shape_with_layout=_convert_to_xla_shape(result_shape),
-                operand_shapes_with_layout=[
-                    _convert_to_xla_shape(val)
-                    for val in (input_shape, indices_shape)
-                ],
+                operand_shapes_with_layout=[_convert_to_xla_shape(val) for val in (input_shape, indices_shape)],
                 opaque=struct.pack(
                     "IIII",
                     indices_shape.shape[0],
@@ -210,17 +186,12 @@ def gather_scatter_add_p_xla_translation(
             )
         ]
 
-    raise ValueError(
-        "Unsupported platform; this must be either 'cpu' or 'gpu', got "
-        + str(ctx.platform)
-    )
+    raise ValueError("Unsupported platform; this must be either 'cpu' or 'gpu', got " + str(ctx.platform))
 
 
 gather_scatter_add_p.def_abstract_eval(gather_scatter_add_p_abstract_eval)
 gather_scatter_add_p.def_impl(gather_scatter_add_fallback)
-xla.register_translation(
-    gather_scatter_add_p, gather_scatter_add_p_xla_translation
-)
+xla.register_translation(gather_scatter_add_p, gather_scatter_add_p_xla_translation)
 
 
 @partial(jax.custom_vjp)
@@ -266,17 +237,13 @@ def embedding_dot_fallback(a: Array, b: Array, indices: Array):
     return jnp.multiply(a_vals, b_vals).sum(axis=1)
 
 
-def embedding_dot_fwd(
-    a: Array, b: Array, indices: Array
-) -> Tuple[Array, Tuple[Array, Array, Array]]:
+def embedding_dot_fwd(a: Array, b: Array, indices: Array) -> Tuple[Array, Tuple[Array, Array, Array]]:
     """The forward pass for embedding dot."""
     r = embedding_dot_forward_p.bind(a, b, indices)
     return r, (a, b, indices)
 
 
-def embedding_dot_bwd(
-    res: Tuple[Array, Array, Array], g: Array
-) -> Tuple[Array, Array, None]:
+def embedding_dot_bwd(res: Tuple[Array, Array, Array], g: Array) -> Tuple[Array, Array, None]:
     """The backward pass for embedding dot."""
     a, b, indices = res
     da, db = embedding_dot_backward_p.bind(a, b, indices, g)
@@ -317,10 +284,7 @@ def embedding_dot_forward_p_xla_translation(
     if ctx.platform == "cpu":
         computation = jax.xla_computation(embedding_dot_fallback)(*avals_in)
         res = xla_client.ops.Call(ctx.builder, computation, [a, b, indices])
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
     elif ctx.platform == "cuda":
         assert a_shape.dtype == b_shape.dtype
 
@@ -337,10 +301,7 @@ def embedding_dot_forward_p_xla_translation(
                 name.encode("utf8"),
                 operands=[a, b, indices],
                 shape_with_layout=_convert_to_xla_shape(result_shape),
-                operand_shapes_with_layout=[
-                    _convert_to_xla_shape(val)
-                    for val in (a_shape, b_shape, indices_shape)
-                ],
+                operand_shapes_with_layout=[_convert_to_xla_shape(val) for val in (a_shape, b_shape, indices_shape)],
                 opaque=struct.pack(
                     "IIII",
                     a_shape.shape[1],
@@ -351,17 +312,12 @@ def embedding_dot_forward_p_xla_translation(
             )
         ]
 
-    raise ValueError(
-        "Unsupported platform; this must be either 'cpu' or 'gpu', got "
-        + str(ctx.platform)
-    )
+    raise ValueError("Unsupported platform; this must be either 'cpu' or 'gpu', got " + str(ctx.platform))
 
 
 embedding_dot_forward_p.def_abstract_eval(embedding_dot_forward_p_abstract_eval)
 embedding_dot_forward_p.def_impl(embedding_dot_fallback)
-xla.register_translation(
-    embedding_dot_forward_p, embedding_dot_forward_p_xla_translation
-)
+xla.register_translation(embedding_dot_forward_p, embedding_dot_forward_p_xla_translation)
 
 embedding_dot_backward_p = core.Primitive("embedding_dot_backward")
 
@@ -409,10 +365,7 @@ def embedding_dot_backward_p_xla_translation(
 
         computation = xla_computation(grad(helper, argnums=(0, 1)))(*avals_in)
         res = xla_client.ops.Call(ctx.builder, computation, [a, b, indices, g])
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
     elif ctx.platform == "cuda":
         if a_shape.dtype == np.float32:
             name = "float_embedding_dot_backward"
@@ -424,9 +377,7 @@ def embedding_dot_backward_p_xla_translation(
             name = "half_embedding_dot_backward"
 
             def _convert_back(op):
-                return xla_client.ops.ConvertElementType(
-                    op, xla_client.dtype_to_etype(np.float16)
-                )
+                return xla_client.ops.ConvertElementType(op, xla_client.dtype_to_etype(np.float16))
 
         else:
             raise ValueError("Could not natively suport dtype " + a_shape.dtype)
@@ -437,15 +388,12 @@ def embedding_dot_backward_p_xla_translation(
             operands=[a, b, indices, g],
             shape_with_layout=xla_client.Shape.tuple_shape(
                 [
-                    _convert_to_xla_shape(
-                        val, force_dtype=xla_client.dtype_to_etype(np.float32)
-                    )
+                    _convert_to_xla_shape(val, force_dtype=xla_client.dtype_to_etype(np.float32))
                     for val in (da_shape, db_shape)
                 ]
             ),
             operand_shapes_with_layout=[
-                _convert_to_xla_shape(val)
-                for val in (a_shape, b_shape, indices_shape, g_shape)
+                _convert_to_xla_shape(val) for val in (a_shape, b_shape, indices_shape, g_shape)
             ],
             opaque=struct.pack(
                 "IIII",
@@ -456,25 +404,15 @@ def embedding_dot_backward_p_xla_translation(
             ),
         )
 
-        return [
-            _convert_back(xla_client.ops.GetTupleElement(res, i))
-            for i, _ in enumerate(avals_out)
-        ]
+        return [_convert_back(xla_client.ops.GetTupleElement(res, i)) for i, _ in enumerate(avals_out)]
 
-    raise ValueError(
-        "Unsupported platform; this must be either 'cpu' or 'gpu', got "
-        + str(ctx.platform)
-    )
+    raise ValueError("Unsupported platform; this must be either 'cpu' or 'gpu', got " + str(ctx.platform))
 
 
-embedding_dot_backward_p.def_abstract_eval(
-    embedding_dot_backward_p_abstract_eval
-)
+embedding_dot_backward_p.def_abstract_eval(embedding_dot_backward_p_abstract_eval)
 embedding_dot_backward_p.multiple_results = True
 embedding_dot_backward_p.def_impl(grad(embedding_dot_fallback, argnums=(0, 1)))
-xla.register_translation(
-    embedding_dot_backward_p, embedding_dot_backward_p_xla_translation
-)
+xla.register_translation(embedding_dot_backward_p, embedding_dot_backward_p_xla_translation)
 
 
 @partial(jax.custom_vjp, nondiff_argnums=(2,))
@@ -500,18 +438,14 @@ def exp_mean_fallback(a: Array, b: Array, c: Array) -> Array:
 
 
 @jax.jit
-def exp_mean_fwd(
-    a: Array, b: Array, sparse_c: Array
-) -> Tuple[Array, Tuple[Array, Array, Array]]:
+def exp_mean_fwd(a: Array, b: Array, sparse_c: Array) -> Tuple[Array, Tuple[Array, Array, Array]]:
     """The forward pass for exp_mean"""
     r, da, db = exp_mean_p.bind(a, b, *sparse_c)
     return r, (a, da, db)
 
 
 @jax.jit
-def exp_mean_bwd(
-    _sparse_c: Array, res: Tuple[Array, Array, Array], g: Array
-) -> Tuple[Array, Array]:
+def exp_mean_bwd(_sparse_c: Array, res: Tuple[Array, Array, Array], g: Array) -> Tuple[Array, Array]:
     """The backward pass for exp_mean"""
     (
         a,
@@ -540,13 +474,7 @@ def exp_mean_p_abstract_eval(
     """Abstract shapes for exp_mean_p."""
     assert a.dtype == b.dtype
     assert len(a.shape) == len(b.shape) == 2
-    assert (
-        len(offsets.shape)
-        == len(defaults.shape)
-        == len(indices.shape)
-        == len(values.shape)
-        == 1
-    )
+    assert len(offsets.shape) == len(defaults.shape) == len(indices.shape) == len(values.shape) == 1
 
     assert a.shape[1] == b.shape[1]
 
@@ -606,17 +534,11 @@ def exp_mean_p_xla_translation(
 
     if ctx.platform == "cpu" or a_shape.dtype == jnp.float32:
         if ctx.platform == "cuda":
-            warnings.warn(
-                "Using an inefficient exp_sum mechanism", RuntimeWarning
-            )
+            warnings.warn("Using an inefficient exp_sum mechanism", RuntimeWarning)
 
-        c_shape = jax.core.ShapedArray(
-            [a_shape.shape[0], b_shape.shape[0]], jnp.float32
-        )
+        c_shape = jax.core.ShapedArray([a_shape.shape[0], b_shape.shape[0]], jnp.float32)
 
-        value_and_grad_computation = xla_computation(
-            value_and_grad(exp_mean_fallback, argnums=(0, 1))
-        )(
+        value_and_grad_computation = xla_computation(value_and_grad(exp_mean_fallback, argnums=(0, 1)))(
             a_shape,
             b_shape,
             c_shape,
@@ -635,29 +557,20 @@ def exp_mean_p_xla_translation(
             ],
             _convert_to_xla_shape(c_shape),
         )
-        value_and_grad_res = xla_client.ops.Call(
-            ctx.builder, value_and_grad_computation, [a, b, dense]
-        )
+        value_and_grad_res = xla_client.ops.Call(ctx.builder, value_and_grad_computation, [a, b, dense])
 
         def _convert_to_full(op):
-            return xla_client.ops.ConvertElementType(
-                op, xla_client.dtype_to_etype(jnp.float32)
-            )
+            return xla_client.ops.ConvertElementType(op, xla_client.dtype_to_etype(jnp.float32))
 
         return [
-            _convert_to_full(
-                xla_client.ops.GetTupleElement(value_and_grad_res, i)
-            )
-            for i, _ in enumerate(avals_out)
+            _convert_to_full(xla_client.ops.GetTupleElement(value_and_grad_res, i)) for i, _ in enumerate(avals_out)
         ]
     elif ctx.platform == "cuda":
 
         if a_shape.dtype == jnp.float16:
             name = "half_exp_mean_with_grad"
         else:
-            raise ValueError(
-                "Could not natively suport dtype " + str(a_shape.dtype)
-            )
+            raise ValueError("Could not natively suport dtype " + str(a_shape.dtype))
 
         factor_to_divide_by = (b_shape.shape[0] + 8 * 16 - 1) // (8 * 16)
         m_shift, m_mult = get_shifts_and_mult(factor_to_divide_by)
@@ -667,14 +580,9 @@ def exp_mean_p_xla_translation(
             name.encode("utf8"),
             operands=[a, b, offsets, defaults, indices, values],
             shape_with_layout=xla_client.Shape.tuple_shape(
-                [
-                    _convert_to_xla_shape(val)
-                    for val in (result_shape, da_shape, db_shape)
-                ]
+                [_convert_to_xla_shape(val) for val in (result_shape, da_shape, db_shape)]
             ),
-            operand_shapes_with_layout=[
-                _convert_to_xla_shape(val) for val in avals_in
-            ],
+            operand_shapes_with_layout=[_convert_to_xla_shape(val) for val in avals_in],
             opaque=struct.pack(
                 "IIIII",
                 a_shape.shape[0],
@@ -684,15 +592,9 @@ def exp_mean_p_xla_translation(
                 m_mult,
             ),
         )
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
 
-    raise ValueError(
-        "Unsupported platform; this must be either 'cpu' or 'gpu', got "
-        + str(ctx.platform)
-    )
+    raise ValueError("Unsupported platform; this must be either 'cpu' or 'gpu', got " + str(ctx.platform))
 
 
 exp_mean_p.def_abstract_eval(exp_mean_p_abstract_eval)
@@ -732,9 +634,7 @@ def _get_cached_local_attention_data(b: int, n: int, k: int, w: int) -> bytes:
     """
     key = (b, n, k, w)
     if key not in _local_attention_data_cache:
-        _local_attention_data_cache[
-            key
-        ] = piton.extension.jax.get_local_attention_data(b, n, k, w)
+        _local_attention_data_cache[key] = piton.extension.jax.get_local_attention_data(b, n, k, w)
 
     # We need to pull out the actual pointer and pass that directly.
 
@@ -743,9 +643,7 @@ def _get_cached_local_attention_data(b: int, n: int, k: int, w: int) -> bytes:
         ctypes.py_object,
         ctypes.c_char_p,
     ]
-    pointer = ctypes.pythonapi.PyCapsule_GetPointer(
-        _local_attention_data_cache[key], None
-    )
+    pointer = ctypes.pythonapi.PyCapsule_GetPointer(_local_attention_data_cache[key], None)
 
     result = struct.pack("P", pointer)
 
@@ -781,9 +679,7 @@ def local_attention(
     This allows you to pass multiple sequences in one call to local_attention and know they won't have cross
     attention.
     """
-    return local_attention_fwd(
-        queries, keys, values, length_mask, attention_width
-    )[0]
+    return local_attention_fwd(queries, keys, values, length_mask, attention_width)[0]
 
 
 @partial(vmap, in_axes=(0, 0, 0, None, None))
@@ -798,17 +694,11 @@ def local_attention_fallback_single(
     logits = queries @ keys.T
 
     causal_mask = jnp.tri(N=queries.shape[0], k=0, dtype=jnp.bool_)
-    local_mask = jnp.tri(
-        N=queries.shape[0], k=-(attention_width + 1), dtype=jnp.bool_
-    )
+    local_mask = jnp.tri(N=queries.shape[0], k=-(attention_width + 1), dtype=jnp.bool_)
 
     indices = jnp.arange(queries.shape[0])
-    row_indices = jnp.zeros_like(local_mask) + indices.reshape(
-        (1, queries.shape[0])
-    )
-    col_indices = jnp.zeros_like(local_mask) + indices.reshape(
-        (queries.shape[0], 1)
-    )
+    row_indices = jnp.zeros_like(local_mask) + indices.reshape((1, queries.shape[0]))
+    col_indices = jnp.zeros_like(local_mask) + indices.reshape((queries.shape[0], 1))
 
     col_indices = col_indices.astype(jnp.uint32)
     row_indices = row_indices.astype(jnp.uint32)
@@ -837,9 +727,7 @@ def local_attention_fallback(
     attention_width: int,
 ) -> Tuple[Array, Array]:
     """The full fallback, that supports batching and the dummy attention values"""
-    result = local_attention_fallback_single(
-        queries, keys, values, length, attention_width
-    )
+    result = local_attention_fallback_single(queries, keys, values, length, attention_width)
     attention_shape = tuple(
         piton.extension.jax.get_local_attention_shape(
             queries.shape[0],
@@ -865,9 +753,7 @@ def local_attention_backward_fallback(
     attention_width: int,
 ) -> Array:
     """Fallback for the gradient. Note that we nede to discard the attention."""
-    result = local_attention_fallback_single(
-        queries, keys, values, length, attention_width
-    )
+    result = local_attention_fallback_single(queries, keys, values, length, attention_width)
     return (result * g).sum()
 
 
@@ -883,9 +769,7 @@ def local_attention_fwd(
     keys = add_batch_if_necessary(keys)
     values = add_batch_if_necessary(values)
 
-    attention, result = local_attention_forward_p.bind(
-        queries, keys, values, length, attention_width=attention_width
-    )
+    attention, result = local_attention_forward_p.bind(queries, keys, values, length, attention_width=attention_width)
     res = (queries, keys, values, length, attention)
     return result, res
 
@@ -971,34 +855,23 @@ def local_attention_forward_xla_translation(
     queries_shape, keys_shape, values_shape, length_shape = avals_in
     attention_shape, result_shape = avals_out
 
-    if ctx.platform == "cpu" or (
-        ctx.platform == "cuda" and queries_shape.dtype != jnp.float16
-    ):
+    if ctx.platform == "cpu" or (ctx.platform == "cuda" and queries_shape.dtype != jnp.float16):
         computation = xla_computation(
             local_attention_fallback,
             static_argnums=(4,),
         )(*avals_in, attention_width)
 
-        res = xla_client.ops.Call(
-            ctx.builder, computation, [queries, keys, values, length]
-        )
+        res = xla_client.ops.Call(ctx.builder, computation, [queries, keys, values, length])
 
         if ctx.platform == "cuda":
-            warnings.warn(
-                "Using an inefficient CUDA attention mechanism", RuntimeWarning
-            )
+            warnings.warn("Using an inefficient CUDA attention mechanism", RuntimeWarning)
 
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
     elif ctx.platform == "cuda":
         if queries_shape.dtype == jnp.float16:
             name = "half_local_attention_forward"
         else:
-            raise ValueError(
-                "Could not natively suport dtype " + str(queries_shape.dtype)
-            )
+            raise ValueError("Could not natively suport dtype " + str(queries_shape.dtype))
 
         opaque = _get_cached_local_attention_data(
             queries_shape.shape[0],
@@ -1011,34 +884,20 @@ def local_attention_forward_xla_translation(
             ctx.builder,
             name.encode("utf8"),
             operands=[queries, keys, values, length],
-            shape_with_layout=xla_client.Shape.tuple_shape(
-                [_convert_to_xla_shape(res) for res in avals_out]
-            ),
-            operand_shapes_with_layout=[
-                _convert_to_xla_shape(val) for val in avals_in
-            ],
+            shape_with_layout=xla_client.Shape.tuple_shape([_convert_to_xla_shape(res) for res in avals_out]),
+            operand_shapes_with_layout=[_convert_to_xla_shape(val) for val in avals_in],
             opaque=opaque,
         )
 
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
 
-    raise ValueError(
-        "Unsupported platform; this must be either 'cpu' or 'gpu', got "
-        + str(ctx.platform)
-    )
+    raise ValueError("Unsupported platform; this must be either 'cpu' or 'gpu', got " + str(ctx.platform))
 
 
-local_attention_forward_p.def_abstract_eval(
-    local_attention_forward_abstract_eval
-)
+local_attention_forward_p.def_abstract_eval(local_attention_forward_abstract_eval)
 local_attention_forward_p.def_impl(local_attention_fallback)
 local_attention_forward_p.multiple_results = True
-xla.register_translation(
-    local_attention_forward_p, local_attention_forward_xla_translation
-)
+xla.register_translation(local_attention_forward_p, local_attention_forward_xla_translation)
 
 local_attention_backward_p = core.Primitive("local_attention_backward")
 
@@ -1110,26 +969,21 @@ def local_attention_backward_xla_translation(
     dq, dk, dv = avals_out
 
     if ctx.platform == "cpu":
-        computation = xla_computation(
-            local_attention_backward_fallback, static_argnums=(6,)
-        )(*avals_in, attention_width)
+        computation = xla_computation(local_attention_backward_fallback, static_argnums=(6,))(
+            *avals_in, attention_width
+        )
 
         res = xla_client.ops.Call(
             ctx.builder,
             computation,
             [queries, keys, values, length, attention, g],
         )
-        return [
-            xla_client.ops.GetTupleElement(res, i)
-            for i, _ in enumerate(avals_out)
-        ]
+        return [xla_client.ops.GetTupleElement(res, i) for i, _ in enumerate(avals_out)]
     elif ctx.platform == "cuda":
         if queries_shape.dtype == np.float16:
             name = "half_local_attention_backward"
         else:
-            raise ValueError(
-                "Could not natively suport dtype " + avals_in[0].dtype
-            )
+            raise ValueError("Could not natively suport dtype " + avals_in[0].dtype)
 
         opaque = _get_cached_local_attention_data(
             queries_shape.shape[0],
@@ -1145,41 +999,26 @@ def local_attention_backward_xla_translation(
             shape_with_layout=xla_client.Shape.tuple_shape(
                 [_convert_to_xla_shape(avals_out[0])]
                 + [
-                    _convert_to_xla_shape(
-                        val, force_dtype=xla_client.dtype_to_etype(jnp.float32)
-                    )
+                    _convert_to_xla_shape(val, force_dtype=xla_client.dtype_to_etype(jnp.float32))
                     for val in avals_out[1:]
                 ]
             ),
-            operand_shapes_with_layout=[
-                _convert_to_xla_shape(val) for val in avals_in
-            ],
+            operand_shapes_with_layout=[_convert_to_xla_shape(val) for val in avals_in],
             opaque=opaque,
         )
 
         def _convert_back(op):
-            return xla_client.ops.ConvertElementType(
-                op, xla_client.dtype_to_etype(jnp.float16)
-            )
+            return xla_client.ops.ConvertElementType(op, xla_client.dtype_to_etype(jnp.float16))
 
         return [
-            _convert_back(xla_client.ops.GetTupleElement(res, i))
-            if i > 0
-            else xla_client.ops.GetTupleElement(res, i)
+            _convert_back(xla_client.ops.GetTupleElement(res, i)) if i > 0 else xla_client.ops.GetTupleElement(res, i)
             for i, _ in enumerate(avals_out)
         ]
 
-    raise ValueError(
-        "Unsupported platform; this must be either 'cpu' or 'gpu', got "
-        + str(ctx.platform)
-    )
+    raise ValueError("Unsupported platform; this must be either 'cpu' or 'gpu', got " + str(ctx.platform))
 
 
-local_attention_backward_p.def_abstract_eval(
-    local_attention_backward_abstract_eval
-)
+local_attention_backward_p.def_abstract_eval(local_attention_backward_abstract_eval)
 local_attention_backward_p.multiple_results = True
 local_attention_backward_p.def_impl(local_attention_backward_fallback)
-xla.register_translation(
-    local_attention_backward_p, local_attention_backward_xla_translation
-)
+xla.register_translation(local_attention_backward_p, local_attention_backward_xla_translation)

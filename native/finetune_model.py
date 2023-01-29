@@ -47,9 +47,7 @@ T = TypeVar("T")
 
 os.mkdir(args.directory)
 
-logFormatter = logging.Formatter(
-    "%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s"
-)
+logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
 rootLogger = logging.getLogger()
 
 rootLogger.handlers[0].setFormatter(logFormatter)
@@ -90,9 +88,7 @@ elif batch_config["task"]["type"] == "labeled_patients":
             task["time_bins"] = old_batch_task["survival_dict"]["time_bins"]
             print(task["time_bins"])
 
-        with open(
-            "../../gpu_experiments/best_surv_model/config.msgpack", "rb"
-        ) as f:
+        with open("../../gpu_experiments/best_surv_model/config.msgpack", "rb") as f:
             old_config = msgpack.load(f)
             task["dim"] = 512
 else:
@@ -131,9 +127,7 @@ with open(config_path, "wb") as out:
 
 config = hk.data_structures.to_immutable_dict(config)
 
-loader = piton.extension.dataloader.BatchLoader(
-    args.data_path, args.batch_info_path
-)
+loader = piton.extension.dataloader.BatchLoader(args.data_path, args.batch_info_path)
 
 logging.info(
     "Loaded batches %s %s",
@@ -198,17 +192,10 @@ if args.start_from_checkpoint is not None:
         if (
             batch_task["type"] == "labeled_patients"
             and batch_task["labeler_type"] == "survival"
-            and (
-                "EHRTransformer/~/SurvivalCLMBRTask/~/linear"
-                in checkpointed_weights
-            )
+            and ("EHRTransformer/~/SurvivalCLMBRTask/~/linear" in checkpointed_weights)
         ):
-            magic_layer = checkpointed_weights[
-                "EHRTransformer/~/SurvivalCLMBRTask/~/linear"
-            ]
-            checkpointed_weights[
-                "EHRTransformer/~/SurvivalTask/~/linear"
-            ] = magic_layer
+            magic_layer = checkpointed_weights["EHRTransformer/~/SurvivalCLMBRTask/~/linear"]
+            checkpointed_weights["EHRTransformer/~/SurvivalTask/~/linear"] = magic_layer
 
         for p, v in list(params.items()):
             if p in checkpointed_weights:
@@ -248,14 +235,10 @@ if args.start_from_checkpoint is not None:
 
 original_non_fit_params = non_fit_params
 
-non_fit_params = piton.models.transformer.convert_params(
-    non_fit_params, jnp.float16
-)
+non_fit_params = piton.models.transformer.convert_params(non_fit_params, jnp.float16)
 non_fit_params = hk.data_structures.to_immutable_dict(non_fit_params)
 
-logging.info(
-    "Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params))
-)
+logging.info("Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params)))
 
 total_params = 0
 
@@ -277,13 +260,9 @@ logging.info("Total params %s", total_params)
         5,
     ),
 )
-def compute_loss(
-    params, non_fit_params, rng, config, batch, requires_logits=False
-):
+def compute_loss(params, non_fit_params, rng, config, batch, requires_logits=False):
     total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
-    loss, logits = model.apply(
-        total_params, rng, config, batch, is_training=False
-    )
+    loss, logits = model.apply(total_params, rng, config, batch, is_training=False)
     if requires_logits:
         return loss, logits
     else:
@@ -319,12 +298,8 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
         if config["task"]["type"] == "labeled_patients":
             if config["task"]["labeler_type"] == "survival":
                 logits.append(logit[: batch["num_indices"], :])
-                is_censor.append(
-                    batch["task"]["is_censor"][: batch["num_indices"]]
-                )
-                event_times.append(
-                    batch["task"]["event_times"][: batch["num_indices"]]
-                )
+                is_censor.append(batch["task"]["is_censor"][: batch["num_indices"]])
+                event_times.append(batch["task"]["event_times"][: batch["num_indices"]])
             else:
                 logits.append(logit[: batch["num_indices"]])
                 labels.append(batch["task"]["labels"][: batch["num_indices"]])
@@ -339,9 +314,7 @@ def compute_total_loss(split, params, non_fit_params, rng, config):
 
             limit_time = jnp.quantile(event_times[~is_censor], 0.9)
             is_censor = is_censor.at[event_times > limit_time].set(True)
-            event_times = event_times.at[event_times > limit_time].set(
-                limit_time
-            )
+            event_times = event_times.at[event_times > limit_time].set(limit_time)
 
             c_statistic = piton.extension.metrics.compute_c_statistic(
                 event_times,
@@ -397,9 +370,7 @@ def update(params, non_fit_params, loss_scale, rng, opt_state, config, batch):
     )
 
     batch_loss = loss_scale.unscale(batch_loss.astype(jnp.float32))
-    grads = loss_scale.unscale(
-        piton.models.transformer.convert_params(grads, jnp.float32)
-    )
+    grads = loss_scale.unscale(piton.models.transformer.convert_params(grads, jnp.float32))
 
     grads_finite = jmp.all_finite(grads)
 
@@ -419,13 +390,8 @@ def update(params, non_fit_params, loss_scale, rng, opt_state, config, batch):
 def make_lr_schedule(warmup_percentage, total_steps):
     def lr_schedule(step):
         percent_complete = step / total_steps
-        before_peak = jax.lax.convert_element_type(
-            (percent_complete <= warmup_percentage), jnp.float32
-        )
-        scale = (
-            before_peak * (percent_complete / warmup_percentage)
-            + (1 - before_peak)
-        ) * (1 - percent_complete)
+        before_peak = jax.lax.convert_element_type((percent_complete <= warmup_percentage), jnp.float32)
+        scale = (before_peak * (percent_complete / warmup_percentage) + (1 - before_peak)) * (1 - percent_complete)
         return scale
 
     return lr_schedule
@@ -434,9 +400,7 @@ def make_lr_schedule(warmup_percentage, total_steps):
 num_train_batches = loader.get_number_of_batches("train")
 
 total_steps = config["n_epochs"] * num_train_batches
-logging.info(
-    "total steps %s num train batches %s", total_steps, num_train_batches
-)
+logging.info("total steps %s num train batches %s", total_steps, num_train_batches)
 
 
 def should_decay(module_name, name, value):
@@ -481,9 +445,7 @@ class Batches:
     def __init__(self, num_batch_threads):
         index_queue: queue.Queue[Optional[int]] = queue.Queue(maxsize=300)
 
-        def index_thread(
-            index_queue, seed, total_steps, num_train_batches, num_batch_threads
-        ):
+        def index_thread(index_queue, seed, total_steps, num_train_batches, num_batch_threads):
             rng = random.Random(seed)
             order = None
             for step in range(total_steps):
@@ -512,9 +474,7 @@ class Batches:
 
         self.batch_queue: queue.Queue[Optional[Any]] = queue.Queue(maxsize=200)
 
-        def batch_thread(
-            index_queue, batch_queue, data_path, batch_info_path, token_dropout
-        ):
+        def batch_thread(index_queue, batch_queue, data_path, batch_info_path, token_dropout):
             thread_loader = piton.extension.dataloader.BatchLoader(
                 data_path, batch_info_path, token_dropout=token_dropout
             )
@@ -589,45 +549,30 @@ while True:
     if step % 100 == 0:
         logging.info(f"[Step {step}]")
 
-    if (
-        (step % per_limit == 0 and step != 0)
-        or step == 500
-        or step == 1500
-        or step == 2500
-    ):
+    if (step % per_limit == 0 and step != 0) or step == 500 or step == 1500 or step == 2500:
         logging.info("Loss scale %s", loss_scale)
         logging.info(
             "Train loss %s",
             compute_total_loss("train", params, non_fit_params, rng, config),
         )
-        dev_loss = compute_total_loss(
-            "dev", params, non_fit_params, rng, config
-        )
+        dev_loss = compute_total_loss("dev", params, non_fit_params, rng, config)
         dev_loss_metric = -dev_loss["c_statistic"]
         logging.info("Dev loss %s", dev_loss)
-        if dev_loss_metric != dev_loss_metric or (
-            loss_scale.loss_scale == 1 and loss_scale.counter == 0
-        ):
+        if dev_loss_metric != dev_loss_metric or (loss_scale.loss_scale == 1 and loss_scale.counter == 0):
             logging.info("Diverged, shutting down")
             break
         if dev_loss_metric < best_loss:
             last_good = step
             best_loss = dev_loss_metric
-            test_loss = compute_total_loss(
-                "test", params, non_fit_params, rng, config
-            )
+            test_loss = compute_total_loss("test", params, non_fit_params, rng, config)
             with open(os.path.join(args.directory, "best"), "wb") as out:
                 total_params = params | original_non_fit_params
                 pickle.dump(total_params, out)
-            with open(
-                os.path.join(args.directory, "best_opt_state"), "wb"
-            ) as out:
+            with open(os.path.join(args.directory, "best_opt_state"), "wb") as out:
                 pickle.dump(opt_state, out)
             with open(os.path.join(args.directory, "best_info"), "w") as out_t:
                 out_t.write(f"Step {step}, Loss {dev_loss}")
-            with open(
-                os.path.join(args.directory, "best_test_loss"), "w"
-            ) as out_t:
+            with open(os.path.join(args.directory, "best_test_loss"), "w") as out_t:
                 json.dump(test_loss, out_t)
         else:
             if step - last_good > 15000:

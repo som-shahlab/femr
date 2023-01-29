@@ -5,14 +5,9 @@ from typing import Any, Callable, Dict, Optional, Set, Tuple
 from piton import Event, Patient
 
 
-def remove_short_patients(
-    patient: Patient, min_num_dates: int = 3
-) -> Optional[Patient]:
+def remove_short_patients(patient: Patient, min_num_dates: int = 3) -> Optional[Patient]:
     """Remove patients with too few timepoints."""
-    if (
-        len(set(event.start.date() for event in patient.events))
-        <= min_num_dates
-    ):
+    if len(set(event.start.date() for event in patient.events)) <= min_num_dates:
         return None
     else:
         return patient
@@ -37,11 +32,7 @@ def remove_nones(
 
     new_events = []
     for event in patient.events:
-        if (
-            event.value is None
-            and (event.code, event.start.date()) in has_value
-            and not do_not_apply_to_filter(event)
-        ):
+        if event.value is None and (event.code, event.start.date()) in has_value and not do_not_apply_to_filter(event):
             continue
         new_events.append(event)
 

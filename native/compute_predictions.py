@@ -45,9 +45,7 @@ random.seed(config["seed"])
 
 config = hk.data_structures.to_immutable_dict(config)
 
-loader = piton.extension.dataloader.BatchLoader(
-    args.data_path, args.batch_info_path
-)
+loader = piton.extension.dataloader.BatchLoader(args.data_path, args.batch_info_path)
 
 data = piton.datasets.PatientDatabase(args.data_path)
 
@@ -79,9 +77,7 @@ with open(os.path.join(args.model_dir, "best"), "rb") as f:
     params = pickle.load(f)
 
 
-logging.info(
-    "Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params))
-)
+logging.info("Done initing %s", str(jax.tree_map(lambda a: (a.shape, a.dtype), params)))
 
 
 @functools.partial(jax.jit, static_argnames="config")
@@ -164,10 +160,7 @@ for dev_index in range(num_dev):
     raw_batch = loader.get_batch(split_to_evaluate, dev_index)
     batch = jax.tree_map(lambda a: jnp.array(a), raw_batch)
 
-    mask = (
-        batch["transformer"]["label_indices"]
-        != batch["transformer"]["ages"].shape[0]
-    )
+    mask = batch["transformer"]["label_indices"] != batch["transformer"]["ages"].shape[0]
     loss, logits = compute_loss_and_logits(
         piton.models.transformer.convert_params(params, jnp.float16),
         rng,
@@ -190,9 +183,7 @@ for dev_index in range(num_dev):
 
             pid = int(batch["patient_ids"][p_index])
 
-            birth_date = datetime.datetime.combine(
-                database.get_patient_birth_date(pid), datetime.time.min
-            )
+            birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
 
             prediction_date = birth_date + datetime.timedelta(days=float(age))
 
@@ -223,9 +214,7 @@ for dev_index in range(num_dev):
 
             pid = int(batch["patient_ids"][p_index])
 
-            birth_date = datetime.datetime.combine(
-                database.get_patient_birth_date(pid), datetime.time.min
-            )
+            birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
 
             prediction_date = birth_date + datetime.timedelta(minutes=int(age))
 
@@ -238,17 +227,11 @@ for dev_index in range(num_dev):
             )
 
             target_labels = actual_patients_to_evaluate[pid]
-            target_labels = [
-                label
-                for label in target_labels
-                if label.time == prediction_date
-            ]
+            target_labels = [label for label in target_labels if label.time == prediction_date]
             assert len(target_labels) == 1
             target_label = target_labels[0]
             assert is_censor == target_label.value.is_censored
-            assert event_time == (
-                target_label.value.event_time - target_label.time
-            ) / datetime.timedelta(minutes=1)
+            assert event_time == (target_label.value.event_time - target_label.time) / datetime.timedelta(minutes=1)
 
             if k not in predictions:
                 predictions[k] = v
@@ -303,8 +286,6 @@ time_bins = np.array(config["task"]["time_bins"])
 
 import piton.extension.metrics
 
-actual = piton.extension.metrics.compute_c_statistic(
-    event_time, is_censor, time_bins, logits
-)
+actual = piton.extension.metrics.compute_c_statistic(event_time, is_censor, time_bins, logits)
 
 print(actual)
