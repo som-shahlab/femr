@@ -150,9 +150,7 @@ def test_move_visit_start_minute_after_midnight() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 0, 1),
                 code=2345,
@@ -175,9 +173,7 @@ def test_move_visit_start_minute_after_midnight() -> None:
     expected = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 0, 1),
                 code=2345,
@@ -204,9 +200,7 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2),
                 code=3456,
@@ -226,9 +220,7 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
     expected = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234, visit_id=9999),
             piton.Event(
                 start=datetime.datetime(1999, 7, 2, 0, 0),
                 code=2345,
@@ -272,12 +264,8 @@ def test_remove_nones() -> None:
     patient = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2), code=1234
-            ),  # No value, to be removed
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),  # No value, to be removed
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3),
             piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
@@ -285,9 +273,7 @@ def test_remove_nones() -> None:
     expected = piton.Patient(
         patient_id=123,
         events=[
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3),
             piton.Event(start=datetime.datetime(1999, 7, 9), code=OMOP_BIRTH),
         ],
     )
@@ -301,18 +287,10 @@ def test_delta_encode() -> None:
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
             piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 14), code=1234, value=3
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 19), code=1234, value=5
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 20), code=1234, value=3
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 14), code=1234, value=3),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 19), code=1234, value=5),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 20), code=1234, value=3),
         ],
     )
 
@@ -320,15 +298,9 @@ def test_delta_encode() -> None:
         patient_id=123,
         events=[
             piton.Event(start=datetime.datetime(1999, 7, 2), code=1234),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 19), code=1234, value=5
-            ),
-            piton.Event(
-                start=datetime.datetime(1999, 7, 2, 20), code=1234, value=3
-            ),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 12), code=1234, value=3),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 19), code=1234, value=5),
+            piton.Event(start=datetime.datetime(1999, 7, 2, 20), code=1234, value=3),
         ],
     )
 

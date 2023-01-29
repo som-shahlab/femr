@@ -34,9 +34,7 @@ T = TypeVar("T")
 
 os.mkdir(args.directory)
 
-logFormatter = logging.Formatter(
-    "%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s"
-)
+logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
 rootLogger = logging.getLogger()
 
 fileHandler = logging.FileHandler(os.path.join(args.directory, "log"))
@@ -63,18 +61,14 @@ if args.labeled_patients_path is not None:
         total_events = 0
         total = 0
         for pid, labels in labeled_patients.items():
-            birth_date = datetime.datetime.combine(
-                data.get_patient_birth_date(pid), datetime.time.min
-            )
+            birth_date = datetime.datetime.combine(data.get_patient_birth_date(pid), datetime.time.min)
 
             for label in labels:
                 age = (label.time - birth_date) / datetime.timedelta(minutes=1)
                 if labeled_patients.labeler_type == "boolean":
                     value = label.value
                 elif labeled_patients.labeler_type == "survival":
-                    event_age = (
-                        label.value.event_time - birth_date
-                    ) / datetime.timedelta(minutes=1)
+                    event_age = (label.value.event_time - birth_date) / datetime.timedelta(minutes=1)
                     event_offset = event_age - age
 
                     if event_offset == 0:
@@ -159,6 +153,4 @@ rootLogger.info("Loaded")
 
 loader = piton.extension.dataloader.BatchLoader(args.data_path, target_path)
 
-rootLogger.info(
-    "Number of train patients %s", loader.get_number_of_batches("train")
-)
+rootLogger.info("Number of train patients %s", loader.get_number_of_batches("train"))

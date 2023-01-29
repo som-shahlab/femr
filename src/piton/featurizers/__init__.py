@@ -67,9 +67,7 @@ class OnlineStatistics:
         Return the current sample variance.
         """
         if self.current_count < 2:
-            raise ValueError(
-                f"Cannot compute variance with only {self.current_count} observations."
-            )
+            raise ValueError(f"Cannot compute variance with only {self.current_count} observations.")
 
         return self.current_M2 / (self.current_count - 1)
 
@@ -80,9 +78,7 @@ class OnlineStatistics:
         return math.sqrt(self.variance())
 
     @classmethod
-    def merge_pair(
-        cls, stats1: OnlineStatistics, stats2: OnlineStatistics
-    ) -> OnlineStatistics:
+    def merge_pair(cls, stats1: OnlineStatistics, stats2: OnlineStatistics) -> OnlineStatistics:
         """
         Merge two sets of online statistics using Chan's parallel algorithm.
 
@@ -96,11 +92,7 @@ class OnlineStatistics:
         count: int = stats1.current_count + stats2.current_count
         delta: float = stats2.current_mean - stats1.current_mean
         mean: float = stats1.current_mean + delta * stats2.current_count / count
-        M2 = (
-            stats1.current_M2
-            + stats2.current_M2
-            + delta**2 * stats1.current_count * stats2.current_count / count
-        )
+        M2 = stats1.current_M2 + stats2.current_M2 + delta**2 * stats1.current_count * stats2.current_count / count
         return OnlineStatistics(count, mean, M2 / (count - 1))
 
     @classmethod
@@ -119,14 +111,10 @@ class OnlineStatistics:
             for i in range(0, len(unmerged_stats), 2):
                 if i + 1 < len(unmerged_stats):
                     # If there's another stat after this one, merge them
-                    merged_stats.append(
-                        cls.merge_pair(unmerged_stats[i], unmerged_stats[i + 1])
-                    )
+                    merged_stats.append(cls.merge_pair(unmerged_stats[i], unmerged_stats[i + 1]))
                 else:
                     # We've reached the end of our list, so just add the last stat back
                     merged_stats.append(unmerged_stats[i])
             unmerged_stats = merged_stats
-        assert (
-            len(unmerged_stats) == 1
-        ), f"Should only have one stat left after merging, not ({len(unmerged_stats)})."
+        assert len(unmerged_stats) == 1, f"Should only have one stat left after merging, not ({len(unmerged_stats)})."
         return unmerged_stats[0]

@@ -25,9 +25,7 @@ def has_nvcc():
 
 class cmake_build_ext(build_ext):
     def build_extensions(self) -> None:
-        bazel_extensions = [
-            a for a in self.extensions if isinstance(a, BazelExtension)
-        ]
+        bazel_extensions = [a for a in self.extensions if isinstance(a, BazelExtension)]
 
         if bazel_extensions:
             try:
@@ -56,9 +54,7 @@ class cmake_build_ext(build_ext):
                 check=True,
             )
 
-            parent_directory = os.path.abspath(
-                os.path.join(self.get_ext_fullpath(ext.name), os.pardir)
-            )
+            parent_directory = os.path.abspath(os.path.join(self.get_ext_fullpath(ext.name), os.pardir))
 
             os.makedirs(parent_directory, exist_ok=True)
 
