@@ -20,6 +20,6 @@ repos:
     -   id: mypy
         exclude: ^src/piton/extension/|^tutorial|^native
 -   repo: https://github.com/PyCQA/isort
-    rev: 5.11.4
+    rev: 5.12.0
     hooks:
     -   id: isort
