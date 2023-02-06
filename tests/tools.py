@@ -151,7 +151,6 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
 
 
 def create_database(tmp_path: pathlib.Path, dummy_concepts: List[str] = []) -> None:
-
     patient_collection = create_patients(tmp_path)
 
     path_to_ontology = os.path.join(tmp_path, "ontology")
@@ -206,7 +205,6 @@ def run_test_for_labeler(
     true_prediction_times: Optional[List[datetime.datetime]] = None,
     help_text: str = "",
 ) -> None:
-
     patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
         (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)

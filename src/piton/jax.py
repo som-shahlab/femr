@@ -566,7 +566,6 @@ def exp_mean_p_xla_translation(
             _convert_to_full(xla_client.ops.GetTupleElement(value_and_grad_res, i)) for i, _ in enumerate(avals_out)
         ]
     elif ctx.platform == "cuda":
-
         if a_shape.dtype == jnp.float16:
             name = "half_exp_mean_with_grad"
         else:

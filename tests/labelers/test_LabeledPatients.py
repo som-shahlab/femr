@@ -122,7 +122,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
     assert labeled_patients_new.as_list_of_label_tuples() == labeled_patients.as_list_of_label_tuples()
-    for (orig, new) in zip(
+    for orig, new in zip(
         labeled_patients.as_numpy_arrays(),
         labeled_patients_new.as_numpy_arrays(),
     ):
