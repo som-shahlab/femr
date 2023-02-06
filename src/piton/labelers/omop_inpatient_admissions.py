@@ -59,7 +59,7 @@ class DummyAdmissionDischargeLabeler(Labeler):
 
     def label(self, patient: Patient) -> List[Label]:
         labels: List[Label] = []
-        for (admission_time, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             labels.append(Label(time=self.prediction_time_adjustment_func(admission_time), value=True))
             labels.append(Label(time=self.prediction_time_adjustment_func(discharge_time), value=True))
         return labels
@@ -98,14 +98,14 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""
         times: List[datetime.datetime] = []
-        for (admission_time, __) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for admission_time, __ in get_inpatient_admission_discharge_times(patient, self.ontology):
             times.append(admission_time)
         return times
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return end of admission as prediction timm."""
         times: List[datetime.datetime] = []
-        for (__, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for __, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(discharge_time)
             times.append(prediction_time)
         return times
@@ -140,7 +140,7 @@ class InpatientLongAdmissionLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:
         """Label all admissions with admission length > `self.long_time`"""
         labels: List[Label] = []
-        for (admission_time, discharge_time) in get_inpatient_admission_discharge_times(patient, self.ontology):
+        for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             is_long_admission: bool = (discharge_time - admission_time) >= self.long_time
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(admission_time)
             labels.append(Label(prediction_time, is_long_admission))

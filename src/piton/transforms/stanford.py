@@ -107,7 +107,6 @@ def move_to_day_end(patient: Patient) -> Patient:
 
         event.start = _move_date_to_end(event.start)
         if event.end is not None:
-
             event.end = _move_date_to_end(event.end)
             event.end = max(event.end, event.start)
 

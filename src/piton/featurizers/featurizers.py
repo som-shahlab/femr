@@ -283,7 +283,6 @@ class CountFeaturizer(Featurizer):
         labels: List[Label],
         ontology: Optional[extension_datasets.Ontology],
     ) -> List[List[ColumnValue]]:
-
         if ontology is None:
             raise ValueError("`ontology` can't be `None` for CountFeaturizer")
 
