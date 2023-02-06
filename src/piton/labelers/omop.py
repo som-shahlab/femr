@@ -183,7 +183,7 @@ class WithinVisitLabeler(Labeler):
         # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
         results: List[Label] = []
         curr_outcome_idx: int = 0
-        for (prediction_start, prediction_end) in zip(prediction_start_times, prediction_end_times):
+        for prediction_start, prediction_end in zip(prediction_start_times, prediction_end_times):
             # Error checking
             if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] is None:
                 raise RuntimeError(
@@ -423,7 +423,6 @@ class HighHbA1cCodeLabeler(Labeler):
                 break
 
         for event in patient.events:
-
             if first_diabetes_code_date is not None and event.start > first_diabetes_code_date:
                 break
 

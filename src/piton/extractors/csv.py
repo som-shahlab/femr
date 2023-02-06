@@ -174,7 +174,7 @@ def run_csv_extractors(
             print("Could not find any files for extractor", c)
 
     with multiprocessing.Pool(num_threads) as pool:
-        for (prefix, s) in pool.imap_unordered(_run_csv_extractor, to_process):
+        for prefix, s in pool.imap_unordered(_run_csv_extractor, to_process):
             for k, v in s.items():
                 stats[prefix][k] += v
 

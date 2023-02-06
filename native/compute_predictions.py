@@ -203,7 +203,6 @@ for dev_index in range(num_dev):
             batch["task"]["event_times"],
             batch["task"]["is_censor"],
         ):
-
             p_index = index // batch["transformer"]["length"]
             p_offset = index % batch["transformer"]["length"]
 

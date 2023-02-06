@@ -81,7 +81,6 @@ def test_age_featurizer(tmp_path: pathlib.Path):
 
 
 def test_count_featurizer(tmp_path: pathlib.Path):
-
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     create_database(tmp_path)
 
@@ -128,7 +127,6 @@ def test_count_featurizer(tmp_path: pathlib.Path):
 
 
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
-
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     create_database(tmp_path)
 
