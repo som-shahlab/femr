@@ -105,10 +105,10 @@ if __name__ == "__main__":
 
     # Ignore all censored data
     label_values = label_values.astype(np.float32)
-    feature_matrix = feature_matrix[~np.isnan(label_values)]
-    patient_ids = patient_ids[~np.isnan(label_values)]
-    label_times = label_times[~np.isnan(label_values)]
-    label_values = label_values[~np.isnan(label_values)]
+    feature_matrix = feature_matrix
+    patient_ids = patient_ids
+    label_times = label_times
+    label_values = label_values
 
     # Train/test splits
     print_log(

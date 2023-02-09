@@ -52,7 +52,7 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Optional[Union[bool, int, float, SurvivalValue]]
+    value: Union[bool, int, float, SurvivalValue]
 
 
 def _apply_labeling_function(
@@ -503,12 +503,7 @@ class TimeHorizonEventLabeler(Labeler):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
-            else:
-                # Is censored
-                results.append(Label(time=time, value=None))
 
-        # checks that we have a label for each prediction time (even if `None``)
-        assert len(results) == len(prediction_times)
         return results
 
 

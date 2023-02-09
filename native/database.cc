@@ -214,9 +214,9 @@ void read_patient_from_buffer(Patient& current_patient,
         }
 
         if (index != count) {
-            throw std::runtime_error(
-                absl::StrCat("v0 - Did not read through the entire patient record? ",
-                             index, " ", count, " ", buffer.size()));
+            throw std::runtime_error(absl::StrCat(
+                "v0 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
         }
     } else if (version == 1) {
         size_t index = 0;
@@ -270,9 +270,9 @@ void read_patient_from_buffer(Patient& current_patient,
         }
 
         if (index != count) {
-            throw std::runtime_error(
-                absl::StrCat("v1 - Did not read through the entire patient record? ",
-                             index, " ", count, " ", buffer.size()));
+            throw std::runtime_error(absl::StrCat(
+                "v1 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
         }
     } else if (version == 2) {
         size_t index = 0;
@@ -331,9 +331,9 @@ void read_patient_from_buffer(Patient& current_patient,
         }
 
         if (index != count) {
-            throw std::runtime_error(
-                absl::StrCat("v2 - Did not read through the entire patient record? ",
-                             index, " ", count, " ", buffer.size()));
+            throw std::runtime_error(absl::StrCat(
+                "v2 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
         }
     } else {
         throw std::runtime_error(absl::StrCat(
@@ -478,7 +478,6 @@ PatientDatabase convert_patient_collection_to_patient_database(
     const boost::filesystem::path& concept_root,
     const boost::filesystem::path& target, char delimiter, size_t num_threads) {
     boost::filesystem::create_directories(target);
-    std::cout << "Counting " << absl::Now() << std::endl;
 
     boost::filesystem::path temp_path =
         target / boost::filesystem::unique_path();
@@ -496,11 +495,8 @@ PatientDatabase convert_patient_collection_to_patient_database(
         codes.push_back(entry.first);
     }
 
-    std::cout << "Creating ontology " << absl::Now() << std::endl;
-
     create_ontology(codes, concept_root, target / "ontology", delimiter,
                     num_threads);
-    std::cout << "Done with ontology " << absl::Now() << std::endl;
 
     absl::flat_hash_map<std::string, uint32_t> text_value_to_index;
     {
@@ -888,6 +884,7 @@ std::vector<std::result_of_t<F(CSVReader<TextReader>&)>> process_nested(
 absl::flat_hash_set<uint64_t> get_standard_codes(
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
+    std::cout << "Sure" << std::endl;
     auto valid = process_nested(
         concept, "concept", num_threads, true,
         {"concept_id", "standard_concept"}, delimiter, [&](auto& reader) {
@@ -905,12 +902,14 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
             return result;
         });
 
+    std::cout << "WAT" << std::endl;
     absl::flat_hash_set<uint64_t> result;
     for (const auto& entry : valid) {
         for (const auto& val : entry) {
             result.insert(val);
         }
     }
+    std::cout << "whatever" << std::endl;
 
     return result;
 }
@@ -920,6 +919,7 @@ std::pair<absl::flat_hash_map<uint64_t, uint32_t>,
 get_parents(std::vector<uint64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
+    std::cout << "Get standard codes" << std::endl;
     auto standard_code_map =
         get_standard_codes(concept, delimiter, num_threads);
 
@@ -935,6 +935,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
                                            "Consists of",
                                            "Is a"};
 
+    std::cout << "Process nested" << std::endl;
     auto parents = process_nested(
         concept, "concept_relationship", num_threads, false,
         {"concept_id_1", "concept_id_2", "relationship_id"}, delimiter,
@@ -1085,8 +1086,13 @@ std::vector<std::pair<std::string, std::string>> get_concept_text(
 
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i].first.empty()) {
-            throw std::runtime_error(
-                absl::StrCat("Could not map ", i, " ", originals[i]));
+            std::cout << absl::StrCat(
+                "Could not find the following concept_id in any of the concept "
+                "tables",
+                originals[i]);
+
+            result[i].first = absl::StrCat("INVALID/", originals[i]);
+            result[i].second = absl::StrCat("INVALID/", originals[i]);
         }
     }
     return result;
@@ -1122,6 +1128,7 @@ Ontology create_ontology(std::vector<uint64_t> raw_codes,
                                  delimiter, num_threads);
 
     {
+        boost::filesystem::create_directory(target);
         DictionaryWriter main(target / "main");
         for (const auto& t : text) {
             main.add_value(t.first);

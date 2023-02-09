@@ -23,6 +23,12 @@ version = "0.1.0"
 [project.scripts]
 etl_stanford_omop = "piton.etl_pipelines.stanford:etl_starr_omop_program"
 
+clmbr_create_batches = "piton.models.dataloader:create_batches"
+clmbr_create_dictionary = "piton.models.scripts:create_dictionary"
+clmbr_create_survival_dictionary = "piton.models.scripts:create_survival_dictionary"
+clmbr_train_model = "piton.models.scripts:train_model"
+clmbr_compute_representations = "piton.models.scripts:compute_representations"
+
 [project.optional-dependencies]
 build = [
     "pytest >= 5.2",
