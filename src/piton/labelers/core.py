@@ -468,7 +468,13 @@ class TimeHorizonEventLabeler(Labeler):
         # of the time horizon
         results: List[Label] = []
         curr_outcome_idx: int = 0
+        last_time = None
         for time in prediction_times:
+            if last_time is not None:
+                assert time > last_time, "Must be ascending prediction times"
+
+            last_time = time
+
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)

@@ -186,6 +186,7 @@ def assert_labels_are_accurate(
     assert patient_id in labeled_patients, f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
     # Check that length of lists of labels are the same
+    print(generated_labels)
     assert len(generated_labels) == len(
         true_labels
     ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"

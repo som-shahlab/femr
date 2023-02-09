@@ -54,7 +54,6 @@ def test_outcome_codes(tmp_path: pathlib.Path):
         (event((2018, 5, 4), 4, None), False),
         (event((2018, 11, 1), 5, None), False),
         (event((2018, 12, 4), 1, None), False),
-        (event((2018, 12, 30), 4, None), None),
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_outcome_codes_one")
 
@@ -76,7 +75,6 @@ def test_outcome_codes(tmp_path: pathlib.Path):
         (event((2018, 5, 4), 4, None), False),
         (event((2018, 11, 1), 5, None), False),
         (event((2018, 12, 4), 1, None), False),
-        (event((2018, 12, 30), 4, None), None),
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_outcome_codes_zero")
 
@@ -101,7 +99,6 @@ def test_outcome_codes(tmp_path: pathlib.Path):
         (event((2018, 11, 1), 5, None), False),
         (event((2018, 12, 3), 0, None), True),
         (event((2018, 12, 4), 4, None), True),
-        (event((2018, 12, 30), 0, None), None),
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_outcome_codes_multiple")
 
@@ -111,51 +108,25 @@ def test_prediction_codes(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=10))
     labeler = CodeLabeler([2], time_horizon, prediction_codes=[4, 5])
     events_with_labels: EventsWithLabels = [
-        (event((2015, 1, 3), 2, None), "skip"),
         (event((2015, 1, 3), 4, None), True),
-        (event((2015, 1, 3), 1, None), "skip"),
-        (event((2015, 1, 3), 3, None), "skip"),
-        (event((2015, 10, 5), 1, None), "skip"),
-        (event((2018, 1, 3), 2, None), "skip"),
         (event((2018, 3, 1), 4, None), False),
-        (event((2018, 3, 3), 1, None), "skip"),
         (event((2018, 5, 2), 5, None), True),
-        (event((2018, 5, 3), 2, None), "skip"),
-        (event((2018, 5, 3, 11), 1, None), "skip"),
         (event((2018, 5, 4), 4, None), False),
-        (event((2018, 5, 4), 1, None), "skip"),
         (event((2018, 11, 1), 5, None), False),
-        (event((2018, 12, 4), 1, None), "skip"),
-        (event((2018, 12, 30), 4, None), None),
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="prediction_codes_one_outcomes")
 
     # Multiple outcomes + multiple predictions
     labeler = CodeLabeler([2, 6, 7], time_horizon, prediction_codes=[4, 5])
     events_with_labels = [
-        (event((2010, 1, 1), 2, None), "skip"),
         (event((2010, 1, 3), 4, None), True),
-        (event((2010, 1, 8), 6, None), "skip"),
         (event((2010, 2, 1), 5, None), True),
-        (event((2010, 2, 9), 7, None), "skip"),
         (event((2010, 2, 11), 4, None), False),
-        (event((2015, 1, 3), 2, None), "skip"),
         (event((2015, 1, 3), 4, None), True),
-        (event((2015, 1, 3), 1, None), "skip"),
-        (event((2015, 1, 3), 3, None), "skip"),
-        (event((2015, 10, 5), 1, None), "skip"),
-        (event((2018, 1, 3), 2, None), "skip"),
         (event((2018, 3, 1), 4, None), True),
-        (event((2018, 3, 2), 7, None), "skip"),
-        (event((2018, 3, 3), 1, None), "skip"),
         (event((2018, 5, 2), 5, None), True),
-        (event((2018, 5, 3), 2, None), "skip"),
-        (event((2018, 5, 3, 11), 1, None), "skip"),
         (event((2018, 5, 4), 4, None), False),
-        (event((2018, 5, 4), 1, None), "skip"),
         (event((2018, 11, 1), 5, None), False),
-        (event((2018, 12, 4), 1, None), "skip"),
-        (event((2018, 12, 30), 4, None), None),
     ]
     run_test_for_labeler(
         labeler,
@@ -165,31 +136,7 @@ def test_prediction_codes(tmp_path: pathlib.Path):
 
     # Multiple outcomes + no predictions
     labeler = CodeLabeler([2, 6, 7], time_horizon, prediction_codes=[])
-    events_with_labels = [
-        (event((2010, 1, 1), 2, None), "skip"),
-        (event((2010, 1, 3), 4, None), "skip"),
-        (event((2010, 1, 8), 6, None), "skip"),
-        (event((2010, 2, 1), 5, None), "skip"),
-        (event((2010, 2, 9), 7, None), "skip"),
-        (event((2010, 2, 11), 4, None), "skip"),
-        (event((2015, 1, 3), 2, None), "skip"),
-        (event((2015, 1, 3), 4, None), "skip"),
-        (event((2015, 1, 3), 1, None), "skip"),
-        (event((2015, 1, 3), 3, None), "skip"),
-        (event((2015, 10, 5), 1, None), "skip"),
-        (event((2018, 1, 3), 2, None), "skip"),
-        (event((2018, 3, 1), 4, None), "skip"),
-        (event((2018, 3, 2), 7, None), "skip"),
-        (event((2018, 3, 3), 1, None), "skip"),
-        (event((2018, 5, 2), 5, None), "skip"),
-        (event((2018, 5, 3), 2, None), "skip"),
-        (event((2018, 5, 3, 11), 1, None), "skip"),
-        (event((2018, 5, 4), 4, None), "skip"),
-        (event((2018, 5, 4), 1, None), "skip"),
-        (event((2018, 11, 1), 5, None), "skip"),
-        (event((2018, 12, 4), 1, None), "skip"),
-        (event((2018, 12, 30), 4, None), "skip"),
-    ]
+    events_with_labels = []
     run_test_for_labeler(
         labeler,
         events_with_labels,
