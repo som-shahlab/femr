@@ -18,16 +18,44 @@ from typing import List, Optional, Tuple
 
 TARGET_DIR = "trash/mimic_omop_conversion"
 
-VOCAB_DIR = "/local-scratch/nigam/projects/ethanid/mimic_tutorial_data/athena"
-MIMIC_DIR = "/local-scratch/nigam/projects/clmbr_text_assets/data/mimic_iii/mimic-iii-unzipped"
+"""
+We assume you have already donwloaded a copy of MIMIC to MIMIC_DIR
+"""
 
+MIMIC_DIR = "/local-scratch/nigam/projects/clmbr_text_assets/data/mimic_iii/mimic-iii-unzipped"
 # Simple flag to do a partial extract to run faster
 PARTIAL_EXTRACT = True
+
+
+def verbose_mimic_open(mimic_table, read_full=False):
+    """A utility to verbosely open a mimic file, with support for partial reads."""
+    print("Processing", mimic_table)
+    file = open(os.path.join(MIMIC_DIR, mimic_table + ".csv"))
+
+    if not read_full and PARTIAL_EXTRACT:
+        lines = [file.readline() for _ in range(10000)]
+        file.close()
+        return io.StringIO("\n".join(lines))
+    else:
+        return file
+
 
 OMOP_DIR = os.path.join(TARGET_DIR, "mimic_omop")
 EXTRACT_DIR = os.path.join(TARGET_DIR, "mimic_extract")
 
 os.makedirs(OMOP_DIR, exist_ok=True)
+
+"""
+First, we need to start with an existing Athena ontology dump.
+
+Athena is the OHDSI vocab management tool and it has a download feature to get ontology dumps.
+
+See https://athena.ohdsi.org/
+
+This tutorial assumes that this download has already been done and the corresponding Athena dump can be found at VOCAB_DIR
+"""
+
+VOCAB_DIR = "/local-scratch/nigam/projects/ethanid/mimic_tutorial_data/athena"
 
 print("Reading the OMOP vocab for initial use")
 code_to_concept_id_map = {}
@@ -40,23 +68,19 @@ with open(os.path.join(VOCAB_DIR, "concept.csv")) as f:
         code_to_concept_id_map[row["vocabulary_id"] + "/" + row["concept_code"]] = row["concept_id"]
 
 
-def verbose_mimic_open(mimic_table, read_full=False):
-    print("Processing", mimic_table)
-    file = open(os.path.join(MIMIC_DIR, mimic_table + ".csv"))
+"""
+Note that the existing Athena dump will not contain all the codes we need.
 
-    if not read_full and PARTIAL_EXTRACT:
-        lines = [file.readline() for _ in range(10000)]
-        file.close()
-        return io.StringIO("\n".join(lines))
-    else:
-        return file
+So we will inevetiably have to add some custom codes of our own.
 
-
+We keep track of these extra codes using an extra codes list, to be added to the concept table at the end.
+"""
 extra_code_offset = int(1e8)
 extra_codes: List[Tuple[str, str]] = []
 
 
 def get_concept_id(code, description=None, require_exists=False):
+    """Get the concept id for a given code. If the code is not in the current concept list, it gets added."""
     if description is None:
         description = code
     if code not in code_to_concept_id_map:
@@ -68,10 +92,10 @@ def get_concept_id(code, description=None, require_exists=False):
     return code_to_concept_id_map[code]
 
 
-# We need to prime the pump for the ITEM ids.
-# Note that this is technically not necessary, but it helps give good descriptions
-# In a full ETL, you would want to actually map to OMOP concepts here
-
+"""
+We want to manually handle certain MIMIC concepts to provide additional metadata.
+In a future ETL you would want to actually try to map these to OMOP standard concepts.
+"""
 for item_source in ("D_ITEMS", "D_LABITEMS"):
     with verbose_mimic_open(item_source, read_full=True) as rf:
         reader = csv.DictReader(rf)
@@ -81,9 +105,22 @@ for item_source in ("D_ITEMS", "D_LABITEMS"):
 
             get_concept_id(code, description)
 
+"""
+The main part of the ETL begins.
+
+The overall idea is that we process all the MIMIC tables, pulling out events of interest.
+
+We will then insert these events in the OMOP observation table, which can hold arbitrary events.
+
+Note that there are some special cases where we need to put some data in the person, visit_occurrence and
+drug_exposure tables.
+"""
+
 
 @dataclasses.dataclass
 class EventData:
+    """A helper class to hold onto events we want to save."""
+
     person_id: str
     code: str
     time: str
@@ -97,12 +134,15 @@ class EventData:
 
 
 # Keep track of events to handle later
+events: List[EventData]
 events = []
 
 # Process the patient table
-with open(os.path.join(OMOP_DIR, "person.csv"), "w") as wf:
-    with verbose_mimic_open("PATIENTS", read_full=True) as rf:
-        reader = csv.DictReader(rf)
+with verbose_mimic_open("PATIENTS", read_full=True) as rf:
+    reader = csv.DictReader(rf)
+
+    # Note that we also need to create an OMOP person table for special data from this table
+    with open(os.path.join(OMOP_DIR, "person.csv"), "w") as wf:
         fields = ["person_id", "birth_datetime"]
         for t in ["gender", "ethnicity", "race"]:
             fields.append(t + "_concept_id")
@@ -124,7 +164,7 @@ with open(os.path.join(OMOP_DIR, "person.csv"), "w") as wf:
                 }
             )
 
-            # For some reason, mimic also stores deaths in the person table
+            # For some reason, mimic also stores deaths in the PATIENTS table
             if row["EXPIRE_FLAG"] == "1":
                 events.append(
                     EventData(person_id=row["SUBJECT_ID"], code="Condition Type/OMOP4822053", time=row["DOD"])
@@ -295,6 +335,8 @@ with open(os.path.join(OMOP_DIR, "observation.csv"), "w") as wf:
 """
 Piton relies on a subset of OMOP's vocabulary.
 
+In particular, we need the concept and concept_relationship tables.
+
 Here we populate those tables, in actual csv form.
 """
 
@@ -311,6 +353,7 @@ def copy_and_convert_to_csv(name, extra_rows=[]):
                 writer.writerow(row)
 
 
+# Add our custom concepts to the corresponding tables
 extra_concept_rows = [
     [
         extra_code_offset + i,
@@ -332,8 +375,9 @@ copy_and_convert_to_csv("concept_relationship.csv")
 
 
 """
-Finally ready to perform the ETL.
-This is an OMOP format dataset now so we can use the generic OMOP converter.
+Finally ready to perform the final stage of ETL.
+
+As we have converted to OMOP, we can use the generic OMOP pipeline.
 """
 
 os.system(f"etl_generic_omop {OMOP_DIR} {EXTRACT_DIR} {EXTRACT_DIR}_logs")
