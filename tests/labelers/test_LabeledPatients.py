@@ -52,7 +52,7 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
         patient_id = label_numpy[0][i]
         assert (
             Label(
-                value=bool(label_numpy[1][i]) if label_numpy[1][i] is not None else None,
+                value=bool(label_numpy[1][i]),
                 time=label_numpy[2][i],
             )
             in labeled_patients[patient_id]
