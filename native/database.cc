@@ -884,7 +884,6 @@ std::vector<std::result_of_t<F(CSVReader<TextReader>&)>> process_nested(
 absl::flat_hash_set<uint64_t> get_standard_codes(
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
-    std::cout << "Sure" << std::endl;
     auto valid = process_nested(
         concept, "concept", num_threads, true,
         {"concept_id", "standard_concept"}, delimiter, [&](auto& reader) {
@@ -902,14 +901,12 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
             return result;
         });
 
-    std::cout << "WAT" << std::endl;
     absl::flat_hash_set<uint64_t> result;
     for (const auto& entry : valid) {
         for (const auto& val : entry) {
             result.insert(val);
         }
     }
-    std::cout << "whatever" << std::endl;
 
     return result;
 }
@@ -919,7 +916,6 @@ std::pair<absl::flat_hash_map<uint64_t, uint32_t>,
 get_parents(std::vector<uint64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
-    std::cout << "Get standard codes" << std::endl;
     auto standard_code_map =
         get_standard_codes(concept, delimiter, num_threads);
 
@@ -935,7 +931,6 @@ get_parents(std::vector<uint64_t>& raw_codes,
                                            "Consists of",
                                            "Is a"};
 
-    std::cout << "Process nested" << std::endl;
     auto parents = process_nested(
         concept, "concept_relationship", num_threads, false,
         {"concept_id_1", "concept_id_2", "relationship_id"}, delimiter,
