@@ -1,31 +1,30 @@
 """
 A tool for downloading datasets from BigQuery.
 
-IMPORTANT NOTE: If the `google` package gives you trouble with Python 3.10,
-try downgrading to Python 3.9 (see: https://issuetracker.google.com/issues/205238176?pli=1)
-
 Setup:
 ```
     pip install --upgrade google-cloud-bigquery
     pip install --upgrade google-cloud-storage
+    conda install google-cloud-sdk -c conda-forge
 ```
 
 How to run:
 ```
-python3 download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> \
+python download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> \
     <PATH TO LOCAL FOLDER WHERE DATASET WHERE DATASET WILL BE DOWNLOADED>
     --excluded_tables <(Optional) NAME OF TABLE 1 TO BE IGNORED> <(Optional) NAME OF TABLE 2 TO BE IGNORED>
 ```
 
-Example: python3 download_bigquery.py som-nero-nigam-starr som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_12_03 \
-    /local-scratch/nigam/projects/mwornow/piton_tool/ignore/ \
-    --excluded_tables observation note_nlp measurement note
+Example: python download_bigquery.py som-nero-nigam-starr \
+    som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_lite_2023_02_08 .
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
+import random
 import threading
 from functools import partial
 
@@ -70,6 +69,12 @@ if __name__ == "__main__":
             " i.e. `--excluded_tables observation note_nlp`"
         ),
     )
+    parser.add_argument(
+        "--scratch_bucket_postfix",
+        type=str,
+        default="_extract_scratch",
+        help="The postfix for the GCP bucket used for storing temporary files while downloading.",
+    )
     args = parser.parse_args()
 
     print('Make sure to run "gcloud auth application-default login" before running this command')
@@ -78,16 +83,17 @@ if __name__ == "__main__":
     client = bigquery.Client(project=args.gcp_project_name)
     storage_client = storage.Client(project=args.gcp_project_name)
 
-    # We need to create a temporary Google Cloud Storage (GCS) bucket to move our data
-    # from BigQuery to Google Cloud Storage. Unfortunately, this is a necessary step:
-    # GCP doesn't allow you to directly download BigQuery datasets to your local (you need to go through GCS first)
-    # NOTE: Bucket names must follow this rule: https://cloud.google.com/storage/docs/buckets#naming
-    bucket_name: str = f"temp-extract-{(args.gcp_dataset_id.replace('.', '-')).lower()[:50]}"
-    bucket = storage_client.bucket(bucket_name)
+    random_dir = hashlib.md5(random.randbytes(16)).hexdigest()
+
+    scratch_bucket_name = args.gcp_project_name.replace("-", "_") + args.scratch_bucket_postfix
+
+    print(f"Storing temporary files in gs://{scratch_bucket_name}/{random_dir}")
+
     try:
-        bucket = storage_client.create_bucket(bucket, location="us-west2")
-    except google.cloud.exceptions.Conflict:
-        print(f"Bucket ({bucket_name}) already exists, will be overwritten")
+        bucket = storage_client.get_bucket(scratch_bucket_name)
+    except google.api_core.exceptions.NotFound as e:
+        print(f"Could not find the requested bucket? gs://{scratch_bucket_name} in project {args.gcp_project_name}")
+        raise e
 
     # Get list of all tables in this GCP dataset
     # NOTE: the `HTTPIterator` can be iterated over like a list, but only once (it's a generator)
@@ -110,13 +116,18 @@ if __name__ == "__main__":
         Args:
             table_id (str): Name of table (e.g. "attribute_definition")
         """
+        if f.errors is not None:
+            print("Could not extract, got errors", f.errors, "for", table_id)
+            os.abort()
         print(f"Downloading | table = {table_id}")
         # Setup local directory for storing downloaded .csv.gz's
         target_folder: str = os.path.join(args.output_dir, args.gcp_dataset_id, table_id)
         os.makedirs(target_folder, exist_ok=True)
         # Get all .csv.gz's corresponding to this table
         # NOTE: the `HTTPIterator` can be iterated over like a list, but only once (it's a generator)
-        blobs: google.api_core.page_iterator.HTTPIterator = storage_client.list_blobs(bucket, prefix=table_id + "/")
+        blobs: google.api_core.page_iterator.HTTPIterator = storage_client.list_blobs(
+            bucket, prefix=f"{random_dir}/{table_id}/"
+        )
         for blob in blobs:
             # Download .csv.gz file to local filesystem
             blob.download_to_filename(os.path.join(target_folder, blob.name.split("/")[-1]))
@@ -134,7 +145,7 @@ if __name__ == "__main__":
             continue
         print(f"Extracting | table = {table.table_id}")
         # Create Google Cloud Storage bucket to extract this table into
-        bucket_target_path: str = f"gs://{bucket_name}/{table.table_id}/*.csv.gz"
+        bucket_target_path: str = f"gs://{scratch_bucket_name}/{random_dir}/{table.table_id}/*.csv.gz"
         extract_job = client.extract_table(table.reference, bucket_target_path, job_config=extract_config)
         # Call the `download()` function asynchronously to download the bucket contents to our local filesystem
         extract_job.add_done_callback(partial(download, table.table_id))
@@ -149,15 +160,13 @@ if __name__ == "__main__":
     print("------\n------")
 
     # Delete the temporary Google Cloud Storage bucket
-    print("\nDeleting temporary bucket...")
-    try:
-        bucket.delete()
-    except google.cloud.exceptions.Conflict:
-        print(f"The bucket ({bucket_name}) still has undeleted items in it. Deleting those items now...")
-        undeleted_blobs: google.api_core.page_iterator.HTTPIterator = storage_client.list_blobs(bucket)
-        for blob in undeleted_blobs:
-            blob.delete()
-        bucket.delete()
+    print("\nDeleting temporary files...")
+    undeleted_blobs: google.api_core.page_iterator.HTTPIterator = storage_client.list_blobs(
+        bucket,
+        prefix=random_dir + "/",
+    )
+    for blob in undeleted_blobs:
+        blob.delete()
     print("------\n------")
-    print("Successfully deleted temporary Google Cloud Storage bucket!")
+    print("Successfully deleted temporary Google Cloud Storage files!")
     print("------\n------")
