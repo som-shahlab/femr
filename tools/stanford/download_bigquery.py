@@ -8,6 +8,10 @@ Setup:
     conda install google-cloud-sdk -c conda-forge
 ```
 
+Note: After installing above packages, run `gcloud auth application-default login` on your terminal. 
+You will be prompted with a authorization link that you will need to follow and approve using your 
+email address. Then you will copy-paste authorization code to the terminal. 
+
 How to run:
 ```
 python download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> \
