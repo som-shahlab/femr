@@ -44,7 +44,6 @@ def _get_stanford_transformations() -> Sequence[Callable[[Patient], Optional[Pat
             # If we ever remove or revisit visit_id, we would want to revisit this
             do_not_apply_to_filter=_is_visit_event,
         ),
-        remove_short_patients,
     ]
 
     return transforms
