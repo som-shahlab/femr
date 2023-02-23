@@ -1,8 +1,9 @@
-# piton
+# FEMR
+### Framework for Electronic Medical Records
 
-**piton** is a python package for building models using EHR data.
+**FEMR** is a python package for building models using EHR data.
 
-**piton** offers the following four main types of functionality. In order, they are the ability to:
+**FEMR** offers the following four main types of functionality. In order, they are the ability to:
 1. Convert EHR and claims data into a common schema, where each patient is associated with a timeline of events extracted from the EHR
 2. Apply labeling functions on that schema in order to derive labels for each patient
 3. Apply featurization schemes to obtain feature matrices for each patient
