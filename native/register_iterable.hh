@@ -38,6 +38,9 @@ void register_iterable(py::module& m, const char* name) {
                  if (index < 0) {
                      index = span.size() + index;
                  }
+                 if (index >= span.size() || index < 0) {
+                     throw py::index_error();
+                 }
                  return span[index];
              })
         .def("__contains__",
@@ -61,6 +64,10 @@ void register_iterable(py::module& m, const char* name) {
         .def("__getitem__", [](const T& span, ssize_t index) {
             if (index < 0) {
                 index = span.size() + index;
+            }
+
+            if (index >= span.size() || index < 0) {
+                throw py::index_error();
             }
             return span[index];
         });
