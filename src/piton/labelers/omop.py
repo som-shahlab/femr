@@ -288,7 +288,9 @@ class CodeLabeler(TimeHorizonEventLabeler):
         last_time = None
         for e in patient.events:
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(e.start)
-            if (self.prediction_codes is None) or (e.code in self.prediction_codes) and (last_time != prediction_time):
+            if ((self.prediction_codes is None) or (e.code in self.prediction_codes)) and (
+                last_time != prediction_time
+            ):
                 times.append(prediction_time)
                 last_time = prediction_time
         return times

@@ -289,16 +289,20 @@ def test_readmission(tmp_path: pathlib.Path):
         (event((2015, 3, 1), 1, end=datetime.datetime(2015, 3, 2), omop_table='visit_occurrence'), False),
         #
         (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 3), omop_table='visit_occurrence'), True),
-        (event((2020, 1, 10), 1, end=datetime.datetime(2020, 1, 20), omop_table='visit_occurrence'), None),
+        (event((2020, 1, 10), 1, end=datetime.datetime(2020, 1, 20), omop_table='visit_occurrence'), "out of range"),
         # fmt: on
     ]
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
     true_outcome_times: List[datetime.datetime] = [
-        x[0].start for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
+        x[0].start for x in events_with_labels if x[0].omop_table == "visit_occurrence" and x[1] != "skip"
     ]
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].end) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
+        move_datetime_to_end_of_day(x[0].end)
+        for x in events_with_labels
+        if x[0].omop_table == "visit_occurrence" and x[1] != "skip"
     ]
+    print(true_outcome_times)
+    print(labeler.get_outcome_times(patient))
     assert labeler.get_time_horizon() == time_horizon
     assert (
         labeler.get_outcome_times(patient) == true_outcome_times
