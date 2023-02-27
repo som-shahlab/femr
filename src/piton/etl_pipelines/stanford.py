@@ -13,7 +13,7 @@ from piton import Event, Patient
 from piton.datasets import EventCollection, PatientCollection
 from piton.extractors.csv import run_csv_extractors
 from piton.extractors.omop import get_omop_csv_extractors
-from piton.transforms import delta_encode, remove_nones, remove_short_patients
+from piton.transforms import delta_encode, remove_nones
 from piton.transforms.stanford import (
     move_billing_codes,
     move_pre_birth,
