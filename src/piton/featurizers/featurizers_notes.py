@@ -18,9 +18,11 @@ from ..datasets import PatientDatabase
 from ..labelers.core import Label, LabeledPatients
 from .core import ColumnValue
 
-NotesTokenized: TypeAlias = Dict[str, TensorType["n_notes", "max_note_token_count", int]]  # noqa
-NotesEmbedded: TypeAlias = TensorType["n_notes", "embedding_length"]  # noqa
-NotesEmbeddedByToken: TypeAlias = TensorType["n_notes", "max_note_token_count", "embedding_length"]  # noqa
+NotesTokenized: TypeAlias = Dict[str, TensorType["n_notes", "max_note_token_count", int]]  # type: ignore # noqa
+
+NotesEmbedded: TypeAlias = TensorType["n_notes", "embedding_length"]  # type: ignore # noqa
+
+NotesEmbeddedByToken: TypeAlias = TensorType["n_notes", "max_note_token_count", "embedding_length"]  # type: ignore # noqa
 
 
 class Note(NamedTuple):
