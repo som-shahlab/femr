@@ -86,12 +86,6 @@ pybind_library(
     ],
 )
 
-make(
-    name="zstd",
-    lib_source="@source_zstd//:all",
-    lib_name="libzstd",
-    copts=["-fPIC"],
-)
 
 filegroup(
     name="clang_tidy_config",
@@ -176,7 +170,7 @@ cc_library(
         "csv.cc",
     ],
     deps=[
-        ":zstd",
+        "@zstd//:everything",
         "@com_google_absl//absl/strings",
         "@boost//:filesystem",
     ],
