@@ -78,6 +78,10 @@ pybind_library(
         "dataloader_extension.cc",
     ],
     deps=[
+        ":create_dictionary",
+        ":create_survival_dictionary",
+        ":constdb",
+        ":npy",
         ":database",
         ":clmbr_dictionary",
         ":flatmap",
@@ -218,6 +222,23 @@ cc_test(
 )
 
 cc_library(
+    name="npy",
+    hdrs=["npy.hh"],
+)
+
+cc_library(
+    name="constdb",
+    hdrs=["constdb.hh"],
+    srcs=[
+        "constdb.cc",
+    ],
+    deps=[
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+
+cc_library(
     name="thread_utils",
     hdrs=[
         "thread_utils.hh",
@@ -305,32 +326,6 @@ cc_test(
     ],
 )
 
-
-cc_library(
-    name="dataloader",
-    hdrs=[
-        "dataloader.hh",
-    ],
-    srcs=[],
-    deps=[
-        "@concurrentqueue",
-    ],
-)
-
-cc_test(
-    name="dataloader_test",
-    srcs=[
-        "dataloader_test.cc",
-    ],
-    deps=[
-        ":dataloader",
-        "@boost//:optional",
-        "@boost//:callable_traits",
-        "@gtest//:gtest_main",
-    ],
-)
-
-
 cc_library(
     name="civil_day_caster",
     hdrs=["civil_day_caster.hh"],
@@ -406,9 +401,20 @@ cc_binary(
 )
 
 cc_binary(
-    name="compute_dictionary",
+    name="prepare_notes_for_tokenization",
     srcs=[
-        "compute_dictionary.cc",
+        "prepare_notes_for_tokenization.cc",
+    ],
+    deps=[
+        ":database",
+    ],
+)
+
+cc_library(
+    name="create_dictionary",
+    hdrs=["create_dictionary.hh"],
+    srcs=[
+        "create_dictionary.cc",
     ],
     deps=[
         "@json",
@@ -419,10 +425,11 @@ cc_binary(
     ],
 )
 
-cc_binary(
-    name="compute_survival_dictionary",
+cc_library(
+    name="create_survival_dictionary",
+    hdrs=["create_survival_dictionary.hh"],
     srcs=[
-        "compute_survival_dictionary.cc",
+        "create_survival_dictionary.cc",
     ],
     deps=[
         "@json",

@@ -285,10 +285,14 @@ class CodeLabeler(TimeHorizonEventLabeler):
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
         as the time to make a prediction. Default to all events whose `code` is in `self.prediction_codes`."""
         times: List[datetime.datetime] = []
+        last_time = None
         for e in patient.events:
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(e.start)
-            if (self.prediction_codes is None) or (e.code in self.prediction_codes):
+            if ((self.prediction_codes is None) or (e.code in self.prediction_codes)) and (
+                last_time != prediction_time
+            ):
                 times.append(prediction_time)
+                last_time = prediction_time
         return times
 
     def get_time_horizon(self) -> TimeHorizon:

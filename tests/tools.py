@@ -16,7 +16,7 @@ import piton.datasets
 from piton.labelers.core import Label, LabeledPatients, Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
-EventsWithLabels = List[Tuple[piton.Event, Optional[Union[bool, str]]]]
+EventsWithLabels = List[Tuple[piton.Event, Union[bool, str]]]
 
 
 def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
@@ -186,6 +186,7 @@ def assert_labels_are_accurate(
     assert patient_id in labeled_patients, f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
     # Check that length of lists of labels are the same
+
     assert len(generated_labels) == len(
         true_labels
     ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
@@ -207,7 +208,7 @@ def run_test_for_labeler(
 ) -> None:
     patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
-        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
+        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool)
     ]
     if true_prediction_times is not None:
         # If manually specified prediction times, adjust labels from occurring at `event.start`

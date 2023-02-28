@@ -52,7 +52,7 @@ def assert_np_arrays_match_labels(labeled_patients: LabeledPatients):
         patient_id = label_numpy[0][i]
         assert (
             Label(
-                value=bool(label_numpy[1][i]) if label_numpy[1][i] is not None else None,
+                value=bool(label_numpy[1][i]),
                 time=label_numpy[2][i],
             )
             in labeled_patients[patient_id]
@@ -73,13 +73,13 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         (event((2015, 6, 5, 0), 2, None), True),
         (event((2015, 6, 5, 10, 10), 2, None), True),
         (event((2015, 6, 15, 11), 3, None), "skip"),
-        (event((2016, 1, 1), 2, None), None),
-        (event((2016, 3, 1, 10, 10, 10), 2, None), None),
+        (event((2016, 1, 1), 2, None), "out of range"),
+        (event((2016, 3, 1, 10, 10, 10), 2, None), "out of range"),
         # fmt: on
     ]
     patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
-        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool) or (x[1] is None)
+        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool)
     ]
 
     # Create Labeler
