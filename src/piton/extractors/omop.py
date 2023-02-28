@@ -22,7 +22,7 @@ class _DemographicsConverter(CSVExtractor):
         return "person"
 
     def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
-        if row["birth_datetime"]:
+        if row.get("birth_datetime", ""):
             birth = datetime.datetime.fromisoformat(row["birth_datetime"])
         else:
             year = 1900

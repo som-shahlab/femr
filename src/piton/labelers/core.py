@@ -52,7 +52,7 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Optional[Union[bool, int, float, SurvivalValue]]
+    value: Union[bool, int, float, SurvivalValue]
 
 
 def _apply_labeling_function(
@@ -468,7 +468,13 @@ class TimeHorizonEventLabeler(Labeler):
         # of the time horizon
         results: List[Label] = []
         curr_outcome_idx: int = 0
+        last_time = None
         for time in prediction_times:
+            if last_time is not None:
+                assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
+
+            last_time = time
+
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
@@ -503,12 +509,7 @@ class TimeHorizonEventLabeler(Labeler):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
-            else:
-                # Is censored
-                results.append(Label(time=time, value=None))
 
-        # checks that we have a label for each prediction time (even if `None``)
-        assert len(results) == len(prediction_times)
         return results
 
 

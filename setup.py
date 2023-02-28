@@ -19,6 +19,7 @@ class BazelExtension(setuptools.Extension):
 def has_nvcc():
     try:
         subprocess.check_output(["nvcc", "--version"]).decode("utf8")
+        return True
     except OSError:
         return False
 

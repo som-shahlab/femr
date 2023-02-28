@@ -197,6 +197,13 @@ class Transformer(hk.Module):
         else:
             x = self.embed(batch["tokens"])
 
+        if self.config.get("note_embedding_data"):
+            note_embedding_matrix = batch["note_embedding_bytes"].view(dtype=jnp.float16).reshape(-1, 768)
+            note_embedding = note_embedding_matrix.at[batch["tokens"]].get(mode="clip")
+            # debug.print("Got {a}", a=batch["is_note_embedding"].mean())
+            assert note_embedding.shape == x.shape
+            x = jnp.where(batch["is_note_embedding"].reshape(-1, 1), note_embedding, x)
+
         dummy_values = jnp.ones((1, 1), dtype=x.dtype)
 
         x = jnp.where(
@@ -416,7 +423,7 @@ class CLMBRTask(hk.Module):
 
 
 class SurvivalCLMBRTask(hk.Module):
-    def __init__(self, config):
+    def __init__(self, config, get_time_reprs=False):
         """Please read the Survival-CLMBR paper to understand the algorithm here."""
         super().__init__(name="SurvivalCLMBRTask")
         self.config = config
@@ -464,9 +471,9 @@ class SurvivalCLMBRTask(hk.Module):
         )
         event_loss = -event_loss / (num_masked * total_code_weight.shape[0])
 
-        logits = jnp.exp2(full_a @ total_code_weight.T)
+        logits = jnp.exp2((full_a @ total_code_weight.T).astype(jnp.float32))
 
-        return (event_loss + survival_loss), logits
+        return (event_loss + survival_loss), logits, total_reps
 
 
 def create_task(config):

@@ -6,6 +6,7 @@ import collections
 import contextlib
 import csv
 import io
+import logging
 import multiprocessing
 import os
 import sys
@@ -75,7 +76,7 @@ def _run_csv_extractor(args: Tuple[str, EventCollection, CSVExtractor, Optional[
                         for event in events:
                             stats["valid_events"] += 1
                             o.add_event(
-                                int(row[extractor.get_patient_id_field()]),
+                                int(lower_row[extractor.get_patient_id_field()]),
                                 event,
                             )
                     else:
@@ -105,7 +106,7 @@ def _run_csv_extractor(args: Tuple[str, EventCollection, CSVExtractor, Optional[
         return (extractor.get_file_prefix(), stats)
 
     except Exception as e:
-        print("Failing on", source, extractor)
+        logging.error("Failing on %s %s", source, extractor)
         raise e
 
 
