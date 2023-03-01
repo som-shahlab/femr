@@ -20,7 +20,7 @@ const char* sequential_mmap(int fd, const char* filename, size_t length) {
                std::strerror(errno));
         exit(-1);
     }
-    
+
     return (const char*)mmap(nullptr, length, PROT_READ,
                                       MAP_SHARED | MAP_POPULATE, fd, 0);
 }
@@ -45,7 +45,7 @@ ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
     if (read_all) {
         mmap_data = sequential_mmap(fd, filename, length);
     } else {
-        mmap_data = 
+        mmap_data =
             (const char*)mmap(nullptr, length, PROT_READ, MAP_SHARED, fd, 0);
     }
 
