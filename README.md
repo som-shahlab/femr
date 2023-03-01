@@ -11,7 +11,7 @@
 
 # Installation
 
-# Note: FEMR currently is only tested on Linux. Installation might not work on macOS or Windows. Support for those platforms is currently in progress.
+### Note: FEMR currently is only tested on Linux. Installation might not work on macOS or Windows. Support for those platforms is currently in progress.
 
 Special note for NERO users:
 
