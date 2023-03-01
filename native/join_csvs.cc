@@ -350,6 +350,7 @@ void sort_and_join_csvs(
     const boost::filesystem::path& target_directory,
     const std::vector<std::pair<std::string, ColumnValueType>>& sort_keys,
     char delimiter, size_t num_shards) {
+
     boost::filesystem::create_directory(target_directory);
     boost::filesystem::path sorted_dir =
         target_directory / boost::filesystem::unique_path();

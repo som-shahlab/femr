@@ -76,10 +76,7 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
         if event.visit_id is not None:
             # Only trigger for non-visit events with start time after associated visit start
             # Note: ignores non-visit events starting same time as visit (i.e., at midnight)
-            if (
-                event.visit_id in visit_starts
-                and event.start > visit_starts[event.visit_id]
-            ):
+            if event.visit_id in visit_starts and event.start > visit_starts[event.visit_id]:
                 first_event_starts[event.visit_id] = min(
                     event.start,
                     first_event_starts.get(event.visit_id, event.start),
@@ -110,7 +107,6 @@ def move_to_day_end(patient: Patient) -> Patient:
 
         event.start = _move_date_to_end(event.start)
         if event.end is not None:
-
             event.end = _move_date_to_end(event.end)
             event.end = max(event.end, event.start)
 
@@ -155,12 +151,8 @@ def move_billing_codes(patient: Patient) -> Patient:
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
     This class fixes that by assigning them to the end of the visit.
     """
-    end_visits: Dict[
-        int, datetime.datetime
-    ] = {}  # Map from visit ID to visit end time
-    lowest_visit: Dict[
-        Tuple[datetime.datetime, int], int
-    ] = {}  # Map from code/start time pairs to visit ID
+    end_visits: Dict[int, datetime.datetime] = {}  # Map from visit ID to visit end time
+    lowest_visit: Dict[Tuple[datetime.datetime, int], int] = {}  # Map from code/start time pairs to visit ID
 
     billing_codes = [
         "pat_enc_dx",
@@ -168,18 +160,11 @@ def move_billing_codes(patient: Patient) -> Patient:
         "arpb_transactions",
     ]
 
-    all_billing_codes = {
-        (prefix + "_" + billing_code)
-        for billing_code in billing_codes
-        for prefix in ["shc", "lpch"]
-    }
+    all_billing_codes = {(prefix + "_" + billing_code) for billing_code in billing_codes for prefix in ["shc", "lpch"]}
 
     for event in patient.events:
         # For events that share the same code/start time, we find the lowest visit ID
-        if (
-            event.clarity_table in all_billing_codes
-            and event.visit_id is not None
-        ):
+        if event.clarity_table in all_billing_codes and event.visit_id is not None:
             key = (event.start, event.code)
             if key not in lowest_visit:
                 lowest_visit[key] = event.visit_id
@@ -190,15 +175,11 @@ def move_billing_codes(patient: Patient) -> Patient:
             if event.end is not None:
                 if event.visit_id is None:
                     # Every event with an end time should have a visit ID associated with it
-                    raise RuntimeError(
-                        f"Expected visit id for visit? {patient.patient_id} {event}"
-                    )
+                    raise RuntimeError(f"Expected visit id for visit? {patient.patient_id} {event}")
                 if end_visits.get(event.visit_id, event.end) != event.end:
                     # Every event associated with a visit should have an end time that matches the visit end time
                     # Also the end times of all events associated with a visit should have the same end time
-                    raise RuntimeError(
-                        f"Multiple end visits? {end_visits.get(event.visit_id)} {event}"
-                    )
+                    raise RuntimeError(f"Multiple end visits? {end_visits.get(event.visit_id)} {event}")
                 end_visits[event.visit_id] = event.end
 
     new_events = []
@@ -219,9 +200,7 @@ def move_billing_codes(patient: Patient) -> Patient:
 
             end_visit = end_visits.get(event.visit_id)
             if end_visit is None:
-                raise RuntimeError(
-                    f"Expected visit end for code {patient.patient_id} {event} {patient}"
-                )
+                raise RuntimeError(f"Expected visit end for code {patient.patient_id} {event} {patient}")
 
             # The start time for an event should be no later than its associated visit end time
             event.start = max(event.start, end_visit)

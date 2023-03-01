@@ -1,4 +1,4 @@
-// TODO(ethan): Convert this to a Python extension so it can be called more easily
+#include "create_dictionary.hh"
 
 #include <cmath>
 #include <nlohmann/json.hpp>
@@ -18,7 +18,6 @@ constexpr int NUM_SAMPLES = 10000;
 
 // The state for doing the dictionary calculation
 struct DictionaryData {
-
     // The age mean and variance
     OnlineStatistics age_stats;
 
@@ -32,7 +31,7 @@ struct DictionaryData {
     FlatMap<absl::flat_hash_map<uint32_t, double>> text_counts;
 
     // Random numeric samples for each lab value
-    FlatMap<ReservoirSampler> numeric_samples;
+    FlatMap<ReservoirSampler<float>> numeric_samples;
 
     // A random number generator
     std::mt19937 rng;
@@ -42,8 +41,8 @@ struct DictionaryData {
 void add_patient_to_dictionary(DictionaryData& data, const Patient& p,
                                Ontology& ontology, size_t num_patients,
                                const FlatMap<bool>& banned_codes) {
-
-    // We want each patient to get roughly uniform weight, so scale by number of patients and number of events.
+    // We want each patient to get roughly uniform weight, so scale by number of
+    // patients and number of events.
     double weight = 1.0 / (num_patients * p.events.size());
 
     for (const auto& event : p.events) {
@@ -74,8 +73,8 @@ void add_patient_to_dictionary(DictionaryData& data, const Patient& p,
                 // Add a numeric sample
                 auto iter = data.numeric_samples.find(event.code);
                 if (iter == nullptr) {
-                    data.numeric_samples.insert(event.code,
-                                                ReservoirSampler(NUM_SAMPLES));
+                    data.numeric_samples.insert(
+                        event.code, ReservoirSampler<float>(NUM_SAMPLES));
                     iter = data.numeric_samples.find(event.code);
                 }
                 iter->add(event.numeric_value, weight, data.rng);
@@ -124,27 +123,13 @@ void merge_dictionary(DictionaryData& result, const DictionaryData& to_merge) {
     for (uint32_t code : to_merge.numeric_samples.keys()) {
         const auto* samples = to_merge.numeric_samples.find(code);
         auto* target_samples = result.numeric_samples.find_or_insert(
-            code, ReservoirSampler(NUM_SAMPLES));
+            code, ReservoirSampler<float>(NUM_SAMPLES));
         target_samples->combine(*samples, result.rng);
     }
 }
 
-int main() {
-    boost::filesystem::path path;
-    if (true) {
-        path =
-            "/local-scratch/nigam/projects/ethanid/"
-            "som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2";
-    } else if (false) {
-        path =
-            "/share/pi/nigam/data/"
-            "som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_09_05_"
-            "extract";
-    } else {
-        path =
-            "/share/pi/nigam/data/"
-            "som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2";
-    }
+void create_dictionary(const std::string& input, const std::string& output) {
+    boost::filesystem::path path(input);
     PatientDatabase database(path, true);
 
     // Prime the pump
@@ -232,7 +217,7 @@ int main() {
     for (uint32_t code : result.numeric_samples.keys()) {
         auto* numeric = result.numeric_samples.find(code);
 
-        std::vector<double> samples = numeric->get_samples();
+        std::vector<float> samples = numeric->get_samples();
         double weight = numeric->get_total_weight() /
                         10.0;  // Divide by 10 due to 10 bins by default
 
@@ -297,17 +282,7 @@ int main() {
 
     std::vector<std::uint8_t> v = json::to_msgpack(j);
 
-    const char* target_path;
-    if (true) {
-        target_path =
-            "/local-scratch/nigam/projects/ethanid/gpu_experiments/"
-            "dictionary_with_counts";
-    } else {
-        target_path =
-            "/share/pi/nigam/ethanid/gpu_experiments/dictionary_with_counts";
-    }
-
-    std::ofstream o(target_path, std::ios_base::binary);
+    std::ofstream o(output, std::ios_base::binary);
 
     o.write((const char*)v.data(), v.size());
 }

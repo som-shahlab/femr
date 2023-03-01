@@ -1,3 +1,5 @@
+#include "create_survival_dictionary.hh"
+
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <random>
@@ -44,12 +46,16 @@ void process_patient(SurvivalDictionaryData& data, const Patient& p,
         const Event& next_event = p.events[event_index + 1];
 
         if (!should_make_prediction(
-                last_prediction_age, event.start_age_in_minutes, next_event.start_age_in_minutes,
-                (p.birth_date + event.start_age_in_minutes / (60 * 24)).year())) {
+                last_prediction_age, event.start_age_in_minutes,
+                next_event.start_age_in_minutes,
+                (p.birth_date + event.start_age_in_minutes / (60 * 24))
+                    .year())) {
             continue;
         }
 
-        auto entry = data.calculator.get_times_for_event(event.start_age_in_minutes).second;
+        auto entry =
+            data.calculator.get_times_for_event(event.start_age_in_minutes)
+                .second;
 
         if (entry.size() == 0) {
             continue;
@@ -108,17 +114,21 @@ void process_time_patient(TimeBinCollectionData& data, const Patient& p,
         const Event& next_event = p.events[event_index + 1];
 
         if (!should_make_prediction(
-                last_prediction_age, event.start_age_in_minutes, next_event.start_age_in_minutes,
-                (p.birth_date + event.start_age_in_minutes / (60 * 24)).year())) {
+                last_prediction_age, event.start_age_in_minutes,
+                next_event.start_age_in_minutes,
+                (p.birth_date + event.start_age_in_minutes / (60 * 24))
+                    .year())) {
             continue;
         }
 
-        auto full = data.calculator.get_times_for_event(event.start_age_in_minutes);
+        auto full =
+            data.calculator.get_times_for_event(event.start_age_in_minutes);
         auto entry = full.second;
         if (entry.size() > 0) {
             for (const auto& event : entry) {
                 data.sample_per_index
-                    .find_or_insert(event.second, ReservoirSampler<uint32_t>(10000))
+                    .find_or_insert(event.second,
+                                    ReservoirSampler<uint32_t>(10000))
                     ->add(event.first, weight, data.rng);
             }
             last_prediction_age = event.start_age_in_minutes;
@@ -146,24 +156,11 @@ void process_time_patient(TimeBinCollectionData& data, const Patient& p,
     }
 }
 
-int main() {
-    boost::filesystem::path path;
-    if (true) {
-        path = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2";
-        // path =
-        //     "/share/pi/nigam/data/"
-        //     "som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_09_05_"
-        //     "extract";
-        // path = "/local-scratch/nigam/projects/ethanid/piton_1_extract";
-    } else {
-        path =
-            "/share/pi/nigam/data/"
-            "som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2";
-    }
+void create_survival_dictionary(const std::string& input,
+                                const std::string& output, size_t num_buckets,
+                                size_t dictionary_size) {
+    boost::filesystem::path path(input);
     PatientDatabase database(path, true);
-
-    const uint32_t dictionary_size = 8192;
-    const uint32_t num_buckets = 8;
 
     FlatMap<bool> banned_codes;
 
@@ -239,7 +236,8 @@ int main() {
         },
         combine_time_data);
 
-    auto get_buckets = [&](const ReservoirSampler<uint32_t>& samples, size_t n_b) {
+    auto get_buckets = [&](const ReservoirSampler<uint32_t>& samples,
+                           size_t n_b) {
         std::vector<uint32_t> result(n_b);
 
         auto s = samples.get_samples();
@@ -253,7 +251,8 @@ int main() {
         return result;
     };
 
-    auto print_buckets = [&](const ReservoirSampler<uint32_t>& samples, size_t n_b) {
+    auto print_buckets = [&](const ReservoirSampler<uint32_t>& samples,
+                             size_t n_b) {
         auto s = samples.get_samples();
         std::cout << "Got total weight " << samples.get_total_weight()
                   << std::endl;
@@ -315,11 +314,7 @@ int main() {
 
     std::vector<std::uint8_t> v = json::to_msgpack(j);
 
-    std::ofstream o(
-        "/local-scratch/nigam/projects/ethanid/gpu_experiments/new_surv_dict",
-        // "/share/pi/nigam/ethanid/gpu_experiments/"
-        // "new_surv_dict",
-        std::ios_base::binary);
+    std::ofstream o(output, std::ios_base::binary);
 
     o.write((const char*)v.data(), v.size());
 }

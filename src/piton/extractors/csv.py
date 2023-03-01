@@ -6,6 +6,7 @@ import collections
 import contextlib
 import csv
 import io
+import logging
 import multiprocessing
 import os
 import sys
@@ -42,9 +43,7 @@ class CSVExtractor(abc.ABC):
         ...
 
 
-def _run_csv_extractor(
-    args: Tuple[str, EventCollection, CSVExtractor, Optional[str]]
-) -> Tuple[str, Dict[str, int]]:
+def _run_csv_extractor(args: Tuple[str, EventCollection, CSVExtractor, Optional[str]]) -> Tuple[str, Dict[str, int]]:
     """
     Run a single csv converter, returns the prefix and the count dicts.
 
@@ -58,11 +57,7 @@ def _run_csv_extractor(
             if source.endswith(".csv.zst"):
                 # Support Zstandard compressed CSVs
                 f = stack.enter_context(
-                    io.TextIOWrapper(
-                        zstandard.ZstdDecompressor().stream_reader(
-                            open(source, "rb")
-                        )
-                    )
+                    io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(source, "rb")))
                 )
             else:
                 # Support normal CSVs
@@ -81,7 +76,7 @@ def _run_csv_extractor(
                         for event in events:
                             stats["valid_events"] += 1
                             o.add_event(
-                                int(row[extractor.get_patient_id_field()]),
+                                int(lower_row[extractor.get_patient_id_field()]),
                                 event,
                             )
                     else:
@@ -89,30 +84,21 @@ def _run_csv_extractor(
                         # This is a bad row, should be inspected further
                         if debug_file is not None:
                             if debug_writer is None:
-                                os.makedirs(
-                                    os.path.dirname(debug_file), exist_ok=True
-                                )
+                                os.makedirs(os.path.dirname(debug_file), exist_ok=True)
                                 if debug_file.endswith(".csv.zst"):
                                     # Support Zstandard compressed CSVs
                                     debug_f = stack.enter_context(
                                         io.TextIOWrapper(
-                                            zstandard.ZstdCompressor(
-                                                level=1
-                                            ).stream_writer(
-                                                open(debug_file, "wb")
-                                            )
+                                            zstandard.ZstdCompressor(level=1).stream_writer(open(debug_file, "wb"))
                                         )
                                     )
                                 else:
                                     # Support normal CSVs
-                                    debug_f = stack.enter_context(
-                                        open(debug_file, "r")
-                                    )
+                                    debug_f = stack.enter_context(open(debug_file, "r"))
                                 assert reader.fieldnames is not None
                                 debug_writer = csv.DictWriter(
                                     debug_f,
-                                    fieldnames=list(reader.fieldnames)
-                                    + ["extractor"],
+                                    fieldnames=list(reader.fieldnames) + ["extractor"],
                                 )
                                 debug_writer.writeheader()
                             row["extractor"] = repr(extractor)
@@ -120,7 +106,7 @@ def _run_csv_extractor(
         return (extractor.get_file_prefix(), stats)
 
     except Exception as e:
-        print("Failing on", source, extractor)
+        logging.error("Failing on %s %s", source, extractor)
         raise e
 
 
@@ -146,9 +132,7 @@ def run_csv_extractors(
     Returns:
         An EventCollection storing the resulting events
     """
-    stats: Dict[str, Dict[str, int]] = collections.defaultdict(
-        lambda: collections.defaultdict(int)
-    )
+    stats: Dict[str, Dict[str, int]] = collections.defaultdict(lambda: collections.defaultdict(int))
 
     if debug_folder:
         os.makedirs(debug_folder, exist_ok=True)
@@ -172,12 +156,7 @@ def run_csv_extractors(
                 )
             ]
             if len(matching_extractors) > 1:
-                raise RuntimeError(
-                    "Multiple extractors matched "
-                    + full_path
-                    + " "
-                    + str(matching_extractors)
-                )
+                raise RuntimeError("Multiple extractors matched " + full_path + " " + str(matching_extractors))
             elif len(matching_extractors) == 0:
                 pass
             else:
@@ -196,7 +175,7 @@ def run_csv_extractors(
             print("Could not find any files for extractor", c)
 
     with multiprocessing.Pool(num_threads) as pool:
-        for (prefix, s) in pool.imap_unordered(_run_csv_extractor, to_process):
+        for prefix, s in pool.imap_unordered(_run_csv_extractor, to_process):
             for k, v in s.items():
                 stats[prefix][k] += v
 

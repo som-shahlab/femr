@@ -5,44 +5,65 @@ import io
 import os
 import pathlib
 import pickle
-from typing import Dict, List, Tuple
+import shutil
+from inspect import signature
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import zstandard
 
 import piton
 import piton.datasets
-from piton.labelers.core import LabeledPatients, LabelingFunction
+from piton.labelers.core import Label, LabeledPatients, Labeler
+
+# 2nd elem of tuple -- 'skip' means no label, None means censored
+EventsWithLabels = List[Tuple[piton.Event, Union[bool, str]]]
+
+
+def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
+    """A terser way to create a Piton Event."""
+    hour, minute, seconds = 0, 0, 0
+    if len(date) == 3:
+        year, month, day = date
+    elif len(date) == 4:
+        year, month, day, hour = date
+    elif len(date) == 5:
+        year, month, day, hour, minute = date
+    elif len(date) == 6:
+        year, month, day, hour, minute, seconds = date
+    else:
+        raise ValueError(f"Invalid date: {date}")
+    return piton.Event(
+        start=datetime.datetime(year, month, day, hour, minute, seconds),
+        code=code,
+        value=value,
+        visit_id=visit_id,
+        **kwargs,
+    )
+
 
 DUMMY_EVENTS = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=34.5),
-    piton.Event(
-        start=datetime.datetime(2010, 1, 1),
-        code=1,
-        value="test_value",
-    ),
-    piton.Event(start=datetime.datetime(2010, 1, 5), code=2, value=1),
-    piton.Event(start=datetime.datetime(2010, 6, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2010, 8, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2011, 7, 5), code=2, value=None),
-    piton.Event(start=datetime.datetime(2012, 10, 5), code=3, value=None),
-    piton.Event(start=datetime.datetime(2015, 6, 5, 0), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2015, 6, 5, 10, 10), code=2, value=None
-    ),
-    piton.Event(start=datetime.datetime(2015, 6, 15, 11), code=3, value=None),
-    piton.Event(start=datetime.datetime(2016, 1, 1), code=2, value=None),
-    piton.Event(
-        start=datetime.datetime(2016, 3, 1, 10, 10, 10), code=4, value=None
-    ),
+    event((1995, 1, 3), 0, 34.5),
+    event((2010, 1, 1), 1, "test_value"),
+    event((2010, 1, 5), 2, 1),
+    event((2010, 6, 5), 3, None),
+    event((2010, 8, 5), 2, None),
+    event((2011, 7, 5), 2, None),
+    event((2012, 10, 5), 3, None),
+    event((2015, 6, 5, 0), 2, None),
+    event((2015, 6, 5, 10, 10), 2, None),
+    event((2015, 6, 15, 11), 3, None),
+    event((2016, 1, 1), 2, None),
+    event((2016, 3, 1, 10, 10, 10), 4, None),
 ]
 
 NUM_EVENTS = len(DUMMY_EVENTS)
 NUM_PATIENTS = 10
 
-all_events: List[Tuple[int, piton.Event]] = []
+DUMMY_CONCEPTS: List[str] = ["zero", "one", "two", "three", "four"]
 
+ALL_EVENTS: List[Tuple[int, piton.Event]] = []
 for patient_id in range(NUM_PATIENTS):
-    all_events.extend((patient_id, event) for event in DUMMY_EVENTS)
+    ALL_EVENTS.extend((patient_id, event) for event in DUMMY_EVENTS)
 
 
 def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
@@ -50,41 +71,42 @@ def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
     os.makedirs(event_path, exist_ok=True)
     events = piton.datasets.EventCollection(event_path)
     chunks = 7
-    events_per_chunk = (len(all_events) + chunks - 1) // chunks
+    events_per_chunk = (len(ALL_EVENTS) + chunks - 1) // chunks
 
     for i in range(7):
         with contextlib.closing(events.create_writer()) as writer:
-            for patient_id, event in all_events[
-                i * events_per_chunk : (i + 1) * events_per_chunk
-            ]:
+            for patient_id, event in ALL_EVENTS[i * events_per_chunk : (i + 1) * events_per_chunk]:
                 writer.add_event(patient_id, event)
 
     return events
 
 
+def create_patients_list(num_patients: int, events: List[piton.Event]) -> List[piton.Patient]:
+    """Creates a list of patients, each with the same events contained in `events`"""
+    patients: List[piton.Patient] = []
+    for patient_id in range(num_patients):
+        patients.append(
+            piton.Patient(
+                patient_id,
+                events,
+            )
+        )
+    return patients
+
+
 def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
-    return create_events(tmp_path).to_patient_collection(
-        os.path.join(tmp_path, "patients")
-    )
+    return create_events(tmp_path).to_patient_collection(os.path.join(tmp_path, "patients"))
 
 
 def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
-    path_to_concept_file: str = os.path.join(
-        path_to_ontology_dir, "concept", "concept.csv.zst"
-    )
+    path_to_concept_file: str = os.path.join(path_to_ontology_dir, "concept", "concept.csv.zst")
+    path_to_relationship_file: str = os.path.join(path_to_ontology_dir + "/concept_relationship/")
     os.makedirs(os.path.dirname(path_to_concept_file), exist_ok=True)
-    os.makedirs(
-        os.path.join(path_to_ontology_dir + "/concept_relationship/"),
-        exist_ok=True,
-    )
+    os.makedirs(path_to_relationship_file, exist_ok=True)
 
     concept_map: Dict[str, int] = {}
 
-    with io.TextIOWrapper(
-        zstandard.ZstdCompressor(1).stream_writer(
-            open(path_to_concept_file, "wb")
-        )
-    ) as o:
+    with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(path_to_concept_file, "wb"))) as o:
         writer = csv.DictWriter(
             o,
             fieldnames=[
@@ -113,11 +135,11 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
                 {
                     "concept_id": str(code),
                     "concept_name": c,
+                    "concept_code": c,
                     "domain_id": "Observation",
                     "vocabulary_id": "dummy",
                     "concept_class_id": "Observation",
                     "standard_concept": "",
-                    "concept_code": c,
                     "valid_start_DATE": "1970-01-01",
                     "valid_end_DATE": "2099-12-31",
                     "invalid_reason": "",
@@ -128,32 +150,20 @@ def create_ontology(path_to_ontology_dir: str, concepts: List[str]):
     return concept_map
 
 
-DUMMY_CONCEPTS: List[str] = ["zero", "one", "two", "three", "four"]
-
-
-def create_database(
-    tmp_path: pathlib.Path, dummy_concepts: List[str] = []
-) -> None:
-
+def create_database(tmp_path: pathlib.Path, dummy_concepts: List[str] = []) -> None:
     patient_collection = create_patients(tmp_path)
-    with patient_collection.reader() as reader:
-        _ = list(reader)
 
     path_to_ontology = os.path.join(tmp_path, "ontology")
-
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
-
-    _ = create_ontology(path_to_ontology, dummy_concepts)
+    create_ontology(path_to_ontology, dummy_concepts)
 
     path_to_database = os.path.join(tmp_path, "target")
-
-    if not os.path.exists(path_to_database):
-        os.mkdir(path_to_database)
+    os.makedirs(path_to_database, exist_ok=True)
 
     patient_collection.to_patient_database(
         path_to_database,
-        path_to_ontology,  # concept.csv
+        path_to_ontology,
         num_threads=2,
     ).close()
 
@@ -166,21 +176,73 @@ def get_piton_code(ontology, target_code, dummy_concepts: List[str] = []):
     return piton_target_code
 
 
-def create_patients_list(events: List[piton.Event]) -> List[piton.Patient]:
-    patients: List[piton.Patient] = []
-    for patient_id in range(NUM_PATIENTS):
-        patients.append(
-            piton.Patient(
-                patient_id,
-                events,
-            )
-        )
-    return patients
-
-
-def create_labeled_patients_list(
-    labeler: LabelingFunction, patients: List[piton.Patient]
+def assert_labels_are_accurate(
+    labeled_patients: LabeledPatients,
+    patient_id: int,
+    true_labels: List[Tuple[datetime.datetime, Optional[bool]]],
+    help_text: str = "",
 ):
+    """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
+    assert patient_id in labeled_patients, f"patient_id={patient_id} not in labeled_patients"
+    generated_labels: List[Label] = labeled_patients[patient_id]
+    # Check that length of lists of labels are the same
+
+    assert len(generated_labels) == len(
+        true_labels
+    ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
+    # Check that value of labels are the same
+    for idx, (label, true_label) in enumerate(zip(generated_labels, true_labels)):
+        assert label.value == true_label[1] and label.time == true_label[0], (
+            f"patient_id={patient_id}, label_idx={idx}, label={label}  |  "
+            f"{label.value} (Assigned) != {true_label} (Expected)  |  "
+            f"{help_text}"
+        )
+
+
+def run_test_for_labeler(
+    labeler: Labeler,
+    events_with_labels: EventsWithLabels,
+    true_outcome_times: Optional[List[datetime.datetime]] = None,
+    true_prediction_times: Optional[List[datetime.datetime]] = None,
+    help_text: str = "",
+) -> None:
+    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
+    true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
+        (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool)
+    ]
+    if true_prediction_times is not None:
+        # If manually specified prediction times, adjust labels from occurring at `event.start`
+        # e.g. we may make predictions at `event.end` or `event.start + 1 day`
+        true_labels = [(tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)]
+    labeled_patients: LabeledPatients = labeler.apply(patients=patients)
+
+    # Check accuracy of Labels
+    for patient in patients:
+        assert_labels_are_accurate(
+            labeled_patients,
+            patient.patient_id,
+            true_labels,
+            help_text=help_text,
+        )
+
+    # Check Labeler's internal functions
+    if hasattr(labeler, "get_outcome_times"):
+        for p in patients:
+            if true_outcome_times:
+                # If manually specified outcome times, check that they are correct
+                assert (
+                    labeler.get_outcome_times(p) == true_outcome_times
+                ), f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
+            else:
+                # Otherwise, assume that outcome times are simply the start times of
+                # events with codes in `outcome_codes`
+                assert hasattr(labeler, "outcome_codes"), f"{labeler} is missing an `outcome_codes` attribute"
+                assert labeler.get_outcome_times(p) == [
+                    event.start for event in p.events if event.code in labeler.outcome_codes
+                ], f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
+
+
+def create_labeled_patients_list(labeler: Labeler, patients: List[piton.Patient]):
     pat_to_labels = {}
 
     for patient in patients:
@@ -189,9 +251,7 @@ def create_labeled_patients_list(
         if len(labels) > 0:
             pat_to_labels[patient.patient_id] = labels
 
-    labeled_patients = LabeledPatients(
-        pat_to_labels, labeler.get_labeler_type()
-    )
+    labeled_patients = LabeledPatients(pat_to_labels, labeler.get_labeler_type())
 
     return labeled_patients
 
@@ -208,3 +268,14 @@ def load_from_pkl(path_to_file: str):
     with open(path_to_file, "rb") as fd:
         result = pickle.load(fd)
     return result
+
+
+def run_test_locally(str_path: str, test_func: Callable):
+    """Run test locally the way Github Actions does (in a temporary directory `tmp_path`)."""
+    tmp_path = pathlib.Path(str_path)
+    shutil.rmtree(tmp_path)
+    os.makedirs(tmp_path, exist_ok=True)
+    if signature(test_func).parameters.get("tmp_path"):
+        test_func(tmp_path)
+    else:
+        test_func()

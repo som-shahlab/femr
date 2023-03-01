@@ -24,7 +24,7 @@ struct DictEntry {
     // Only for text dictionary entries
     uint32_t text_value = 0;
 
-    bool operator<(const DictEntry& other) { return weight < other.weight; }
+    bool operator<(const DictEntry& other) const { return weight < other.weight; }
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(DictEntry, type, code, weight, val_start,
                                    val_end, text_value)

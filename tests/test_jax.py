@@ -37,12 +37,8 @@ def gather_scatter_add_helper(dtype, device):
     k1, k2, k3 = random.split(k, 3)
 
     a = random.normal(k1, shape=(A, K), dtype=dtype)
-    indices = random.randint(
-        k2, shape=(N, 2), minval=0, maxval=255, dtype=jnp.uint32
-    )
-    indices = indices.at[-100:, :].set(
-        np.array([512, 256], dtype=jnp.uint32).reshape(1, -1)
-    )
+    indices = random.randint(k2, shape=(N, 2), minval=0, maxval=255, dtype=jnp.uint32)
+    indices = indices.at[-100:, :].set(np.array([512, 256], dtype=jnp.uint32).reshape(1, -1))
     indices_sort = jnp.argsort(indices[:, 1])
     indices = indices[indices_sort, :]
     # print(indices)
@@ -70,9 +66,7 @@ def gather_scatter_add_helper(dtype, device):
 
     assert jnp.allclose(expected_grad, actual_dummy_grad, atol=1e-2, rtol=1e-3)
 
-    actual_grad = h(jax.jit(gather_scatter_add, static_argnums=(2,)))(
-        a, indices, B
-    )
+    actual_grad = h(jax.jit(gather_scatter_add, static_argnums=(2,)))(a, indices, B)
     print(expected_grad)
     print(actual_grad)
 
@@ -97,9 +91,7 @@ def embedding_dot_test_helper(device, dtype):
     embedding1 = device_put(random.normal(k1, (30, 70), dtype=dtype), device)
     embedding2 = device_put(random.normal(k2, (60, 70), dtype=dtype), device)
 
-    indices = device_put(
-        random.randint(k3, (50, 2), minval=0, maxval=50), device
-    ).astype(jnp.uint32)
+    indices = device_put(random.randint(k3, (50, 2), minval=0, maxval=50), device).astype(jnp.uint32)
 
     def total_embedding_fallback(embedding1, embedding2, indices):
         return embedding_dot_fallback(embedding1, embedding2, indices).sum()
@@ -190,9 +182,7 @@ def exp_mean_helper(dtype, is_zero, device):
     sparse_c = (indptr, defaults, indices, values)
 
     v1 = exp_mean_fallback(a, b, c)
-    v1_true = exp_mean_fallback(
-        a.astype(jnp.float32), b.astype(jnp.float32), c.astype(jnp.float32)
-    )
+    v1_true = exp_mean_fallback(a.astype(jnp.float32), b.astype(jnp.float32), c.astype(jnp.float32))
     v2 = jit(exp_mean)(a, b, sparse_c)
 
     if False:
@@ -308,10 +298,7 @@ def local_attention_helper(dtype, device):
     keys = random.normal(k2, shape=(2, B * N, K))
     values = random.normal(k3, shape=(2, B * N, K))
 
-    queries, keys, values = [
-        device_put(jnp.array(a, dtype=dtype), device)
-        for a in (queries, keys, values)
-    ]
+    queries, keys, values = [device_put(jnp.array(a, dtype=dtype), device) for a in (queries, keys, values)]
 
     N_arg = ~jnp.array(N - 1).astype(jnp.uint32)
     print(N_arg)
@@ -320,9 +307,7 @@ def local_attention_helper(dtype, device):
 
     res_est_f = local_attention(queries, keys, values, N_arg, W)
 
-    res_est = jit(local_attention, static_argnames={"attention_width"})(
-        queries, keys, values, N_arg, W
-    )
+    res_est = jit(local_attention, static_argnames={"attention_width"})(queries, keys, values, N_arg, W)
 
     print(res_true.shape)
     print(res_est_f.shape)
@@ -335,9 +320,7 @@ def local_attention_helper(dtype, device):
 
     def helper(func):
         def h(queries, keys, values, length, attention_width):
-            return (
-                func(queries, keys, values, length, attention_width) * valid
-            ).sum()
+            return (func(queries, keys, values, length, attention_width) * valid).sum()
 
         return grad(
             h,
@@ -348,13 +331,11 @@ def local_attention_helper(dtype, device):
             ),
         )
 
-    dq1, dk1, dv1 = helper(
-        lambda *args, **kwargs: local_attention_fallback(*args, **kwargs)[1]
-    )(queries, keys, values, N_arg, attention_width=W)
-
-    dq2_f, dk2_f, dv2_f = helper(local_attention)(
+    dq1, dk1, dv1 = helper(lambda *args, **kwargs: local_attention_fallback(*args, **kwargs)[1])(
         queries, keys, values, N_arg, attention_width=W
     )
+
+    dq2_f, dk2_f, dv2_f = helper(local_attention)(queries, keys, values, N_arg, attention_width=W)
 
     dq2, dk2, dv2 = jit(
         helper(local_attention),

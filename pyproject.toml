@@ -13,12 +13,22 @@ dependencies = [
     "zstandard >= 0.18",
     "icecream == 2.1.3",
     "nptyping == 2.4.1",
+    "pathos == 0.3.0",
+    # This version of dill is needed for multiprocessing abstractmethod support >>
+    "dill @ git+https://github.com/som-shahlab/dill@enums"
 ]
 requires-python=">3.10"
 version = "0.1.0"
 
 [project.scripts]
 etl_stanford_omop = "piton.etl_pipelines.stanford:etl_starr_omop_program"
+etl_generic_omop = "piton.etl_pipelines.omop:etl_generic_omop_program"
+
+clmbr_create_batches = "piton.models.dataloader:create_batches"
+clmbr_create_dictionary = "piton.models.scripts:create_dictionary"
+clmbr_create_survival_dictionary = "piton.models.scripts:create_survival_dictionary"
+clmbr_train_model = "piton.models.scripts:train_model"
+clmbr_compute_representations = "piton.models.scripts:compute_representations"
 
 [project.optional-dependencies]
 build = [
@@ -41,10 +51,10 @@ include_trailing_comma = true
 force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
-line_length = 80
+line_length = 120
 
 [tool.black]
-line_length = 80
+line_length = 120
 target_version = ['py310']
 
 [tool.pydocstyle]
