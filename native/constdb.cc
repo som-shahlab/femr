@@ -8,10 +8,10 @@
 
 #include <iostream>
 
-void sequential_hint(int fd, const char* filename);
+const char* sequential_mmap(int fd, const char* filename, size_t length);
 
 #ifdef POSIX_FADV_SEQUENTIAL
-void sequential_hint(int fd, const char* filename) {
+const char* sequential_mmap(int fd, const char* filename, size_t length) {
     int error = posix_fadvise(fd, 0, 0,
                                   POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
 
@@ -20,9 +20,14 @@ void sequential_hint(int fd, const char* filename) {
                std::strerror(errno));
         exit(-1);
     }
+    
+    return (const char*)mmap(nullptr, length, PROT_READ,
+                                      MAP_SHARED | MAP_POPULATE, fd, 0);
 }
 #else
-void sequential_hint(int fd, const char* filename) {}
+const char* sequential_mmap(int fd, const char* filename, size_t length) {
+    return (const char*)mmap(nullptr, length, PROT_READ, MAP_SHARED, fd, 0);
+}
 #endif
 
 ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
@@ -38,12 +43,9 @@ ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
 
     fd = open(filename, O_RDONLY);
     if (read_all) {
-        sequential_hint(fd, filename);
-        
-        mmap_data = (const char*)mmap(nullptr, length, PROT_READ,
-                                      MAP_SHARED | MAP_POPULATE, fd, 0);
+        mmap_data = sequential_mmap(fd, filename, length);
     } else {
-        mmap_data =
+        mmap_data = 
             (const char*)mmap(nullptr, length, PROT_READ, MAP_SHARED, fd, 0);
     }
 
