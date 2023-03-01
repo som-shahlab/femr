@@ -1,43 +1,39 @@
 # FEMR
 ### Framework for Electronic Medical Records
 
-<<<<<<< HEAD
-**piton** is a Python package for ingesting EHR data for building ML models.
-
-**piton** offers the following four main types of functionality. In order, they are the ability to:
-1. Convert EHR and claims data into a common schema, where each patient is associated with a timeline of events
-=======
 **FEMR** is a python package for building models using EHR data.
 
 **FEMR** offers the following four main types of functionality. In order, they are the ability to:
 1. Convert EHR and claims data into a common schema, where each patient is associated with a timeline of events extracted from the EHR
->>>>>>> origin/main
 2. Apply labeling functions on that schema in order to derive labels for each patient
 3. Apply featurization schemes to obtain feature matrices for each patient
 4. Perform other common tasks necessary for research with EHR data
 
 # Installation
 
-<<<<<<< HEAD
-> **NOTE FOR NERO USERS:** As Nero does not have internet access, you must run the following command before running the code below.
-> ```
-> export DISTDIR=/local-scratch/nigam/distdir
-> ```
-=======
+To install **FEMR** run the following, replacing `<FEMR_ENV>` with the desired name of your conda environment:
+
+```
+conda create -n FEMR_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge
+conda activate FEMR_ENV
+
+export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+
+git clone https://github.com/som-shahlab/femr.git
+cd femr
+pip install -e .
+```
+
 ### Note: FEMR currently is only tested on Linux. Installation might not work on macOS or Windows. Support for those platforms is currently in progress.
 
-Special note for NERO users:
->>>>>>> origin/main
+### Special note for NERO users
 
-To install **piton** run the following, replacing `<PITON_ENV>` with the desired name of your conda environment:
+As Nero does not have internet access, you must run the following before running the code below.
 
-<<<<<<< HEAD
-```bash
-conda create -n <PITON_ENV> python=3.10 bazel=5.3 clangxx=14 -c conda-forge
-conda activate <PITON_ENV>
-git clone https://github.com/som-shahlab/piton.git
-cd piton
-=======
+```
+export DISTDIR=/local-scratch/nigam/distdir
+```
+
 1. Download the right version of cuda on your local machine and transfer it over a folder in nero [link](https://developer.nvidia.com/cuda-11.1.1-download-archive?target_os=Linux&target_arch=x86_64&target_distro=Ubuntu&target_version=1804&target_type=runfilelocal)
 2. Run the installer as bash command by providing path to install such as `bash <CUDA_PATH> --installpath=<INSTALL_PATH>`, where `<CUDA_PATH>` is the path to the file you downloaded/transferred in step 1 and `<INSTALL_PATH>` is where you'd like to store the CUDA installation files. During installation, uncheck all the boxes except cuda toolkit.
 3. After the installation completes, it will spit out two paths on terminal that should be put into your .bashrc file:
@@ -49,27 +45,6 @@ export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
 
 Note: you may need to restart your terminal for the changes to reflect
 
-As Nero does not have internet access, you must run the following before running the code below.
-
-```
-export DISTDIR=/local-scratch/nigam/distdir
-```
-
-
-
-Run the following:
-
-```
-conda create -n FEMR_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge
-conda activate FEMR_ENV
-
-export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
-
-git clone https://github.com/som-shahlab/femr.git
-cd femr
->>>>>>> origin/main
-pip install -e .
-```
 ### (Optional) Installing PyTorch
 
 If you want to use PyTorch for deep learning, you can install it as follows:
@@ -98,7 +73,7 @@ export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
 
 # Development
 
-The following guides are for developers who want to contribute to **piton**.
+The following guides are for developers who want to contribute to **FEMR**.
 
 ## Precommit checks
 
@@ -144,10 +119,10 @@ zstd -1 --rm $OMOP_SOURCE/**/*.csv
 # Set up environment variables
 #   Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
 export OMOP_SOURCE=/path/to/omop/folder...
-#   Path to any arbitrary folder where you want to store your Piton extract
-export EXTRACT_DESTINATION=/path/to/piton/extract/folder...
-#   Path to any arbitrary folder where you want to store your Piton extract logs
-export EXTRACT_LOGS=/path/to/piton/extract/logs...
+#   Path to any arbitrary folder where you want to store your FEMR extract
+export EXTRACT_DESTINATION=/path/to/femr/extract/folder...
+#   Path to any arbitrary folder where you want to store your FEMR extract logs
+export EXTRACT_LOGS=/path/to/femr/extract/logs...
 
 # Do some data preprocessing with Stanford-specific helper scripts
 #   Extract data from flowsheets
@@ -155,7 +130,7 @@ python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRA
 #   Normalize visits
 python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
 
-# Run actual Piton extraction
+# Run actual FEMR extraction
 etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
 
