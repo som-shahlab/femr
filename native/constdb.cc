@@ -8,6 +8,21 @@
 
 #include <iostream>
 
+#ifdef POSIX_FADV_SEQUENTIAL
+void sequential_hint(int fd) {
+    int error = posix_fadvise(fd, 0, 0,
+                                  POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+
+    if (error != 0) {
+        printf("Got error trying to set options for %s: %s\n", filename,
+               std::strerror(errno));
+        exit(-1);
+    }
+}
+#else
+void sequential_hint(int fd) {}
+#endif
+
 ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
     struct stat statbuf;
 
@@ -21,15 +36,8 @@ ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
 
     fd = open(filename, O_RDONLY);
     if (read_all) {
-        int error = posix_fadvise(fd, 0, 0,
-                                  POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
-
-        if (error != 0) {
-            printf("Got error trying to set options for %s: %s\n", filename,
-                   std::strerror(errno));
-            exit(-1);
-        }
-
+        sequential_hint(fd);
+        
         mmap_data = (const char*)mmap(nullptr, length, PROT_READ,
                                       MAP_SHARED | MAP_POPULATE, fd, 0);
     } else {
