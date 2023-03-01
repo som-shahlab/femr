@@ -13,7 +13,8 @@ struct SurvivalEvent {
 };
 
 inline bool should_make_prediction(uint32_t last_prediction_age,
-                                   uint32_t current_age, boost::optional<uint32_t> next_age,
+                                   uint32_t current_age,
+                                   boost::optional<uint32_t> next_age,
                                    int current_year) {
     if (current_year < 2010) {
         // Only make predictions when we have OK data
@@ -132,7 +133,7 @@ struct SurvivalCalculator {
     }
 };
 
-FlatMap<std::vector<uint32_t>> get_mapping(
+inline FlatMap<std::vector<uint32_t>> get_mapping(
     Ontology& ontology, const std::vector<uint32_t>& survival_codes) {
     FlatMap<std::vector<uint32_t>> survival_dictionary;
     FlatMap<uint32_t> to_index;

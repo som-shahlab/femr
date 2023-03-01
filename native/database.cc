@@ -20,13 +20,14 @@
 #include "thread_utils.hh"
 
 constexpr int QUEUE_SIZE = 1000;
-constexpr absl::CivilDay epoch(1900);
+constexpr absl::CivilDay epoch(1800);
+constexpr absl::CivilDay legacy_epoch(1900);
 
 constexpr int seconds_per_minute = 60;
 constexpr int minutes_per_hour = 60;
 constexpr int hours_per_day = 24;
 
-constexpr uint32_t current_version = 2;
+constexpr uint32_t current_version = 3;
 
 template <typename T>
 std::string_view container_to_view(const T& data) {
@@ -74,7 +75,7 @@ void write_patient_to_buffer(uint32_t start_unique,
                              std::vector<uint32_t>& buffer) {
     if (current_patient.birth_date < epoch) {
         throw std::runtime_error(
-            absl::StrCat("Cannot have a birth date before epoch (1900) ",
+            absl::StrCat("Cannot have a birth date before epoch (1800) ",
                          absl::FormatCivilTime(current_patient.birth_date),
                          " for ", original_patient_id));
     }
@@ -156,7 +157,7 @@ void read_patient_from_buffer(Patient& current_patient,
                               uint32_t count, uint32_t version) {
     if (version == 0) {
         size_t index = 0;
-        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.birth_date = legacy_epoch + buffer[index++];
         current_patient.events.resize(buffer[index++]);
 
         uint64_t last_age = 0;
@@ -214,13 +215,13 @@ void read_patient_from_buffer(Patient& current_patient,
         }
 
         if (index != count) {
-            throw std::runtime_error(
-                absl::StrCat("v0 - Did not read through the entire patient record? ",
-                             index, " ", count, " ", buffer.size()));
+            throw std::runtime_error(absl::StrCat(
+                "v0 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
         }
     } else if (version == 1) {
         size_t index = 0;
-        current_patient.birth_date = epoch + buffer[index++];
+        current_patient.birth_date = legacy_epoch + buffer[index++];
         current_patient.events.resize(buffer[index++]);
 
         uint32_t last_age = 0;
@@ -270,11 +271,72 @@ void read_patient_from_buffer(Patient& current_patient,
         }
 
         if (index != count) {
-            throw std::runtime_error(
-                absl::StrCat("v1 - Did not read through the entire patient record? ",
-                             index, " ", count, " ", buffer.size()));
+            throw std::runtime_error(absl::StrCat(
+                "v1 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
         }
     } else if (version == 2) {
+        size_t index = 0;
+        uint32_t current_unique = buffer[index++];
+        current_patient.birth_date = legacy_epoch + buffer[index++];
+        current_patient.events.resize(buffer[index++]);
+
+        uint32_t last_age = 0;
+
+        uint32_t count_with_same = 0;
+        for (Event& event : current_patient.events) {
+            if (count_with_same == 0) {
+                count_with_same = buffer[index++];
+                last_age += buffer[index++];
+            } else {
+                count_with_same--;
+            }
+            event.start_age_in_minutes = last_age;
+
+            uint32_t code_and_type = buffer[index++];
+            event.code = code_and_type >> 2;
+            uint32_t type = code_and_type & 3;
+
+            switch (type) {
+                case 0:
+                    event.value_type = ValueType::NONE;
+                    break;
+
+                case 1: {
+                    event.code = event.code >> 1;
+                    if (code_and_type & 4) {
+                        // Is unique
+                        event.value_type = ValueType::UNIQUE_TEXT;
+                        event.text_value = current_unique++;
+                    } else {
+                        event.value_type = ValueType::SHARED_TEXT;
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                case 2:
+                case 3: {
+                    event.value_type = ValueType::NUMERIC;
+                    if (type == 2) {
+                        event.numeric_value = buffer[index++];
+                    } else {
+                        event.text_value = buffer[index++];
+                    }
+                    break;
+                }
+
+                default:
+                    throw std::runtime_error("Invalid value type?");
+            }
+        }
+
+        if (index != count) {
+            throw std::runtime_error(absl::StrCat(
+                "v2 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
+        }
+    } else if (version == 3) {
         size_t index = 0;
         uint32_t current_unique = buffer[index++];
         current_patient.birth_date = epoch + buffer[index++];
@@ -331,9 +393,9 @@ void read_patient_from_buffer(Patient& current_patient,
         }
 
         if (index != count) {
-            throw std::runtime_error(
-                absl::StrCat("v2 - Did not read through the entire patient record? ",
-                             index, " ", count, " ", buffer.size()));
+            throw std::runtime_error(absl::StrCat(
+                "v2 - Did not read through the entire patient record? ", index,
+                " ", count, " ", buffer.size()));
         }
     } else {
         throw std::runtime_error(absl::StrCat(
@@ -478,7 +540,6 @@ PatientDatabase convert_patient_collection_to_patient_database(
     const boost::filesystem::path& concept_root,
     const boost::filesystem::path& target, char delimiter, size_t num_threads) {
     boost::filesystem::create_directories(target);
-    std::cout << "Counting " << absl::Now() << std::endl;
 
     boost::filesystem::path temp_path =
         target / boost::filesystem::unique_path();
@@ -496,11 +557,8 @@ PatientDatabase convert_patient_collection_to_patient_database(
         codes.push_back(entry.first);
     }
 
-    std::cout << "Creating ontology " << absl::Now() << std::endl;
-
     create_ontology(codes, concept_root, target / "ontology", delimiter,
                     num_threads);
-    std::cout << "Done with ontology " << absl::Now() << std::endl;
 
     absl::flat_hash_map<std::string, uint32_t> text_value_to_index;
     {
@@ -1085,8 +1143,13 @@ std::vector<std::pair<std::string, std::string>> get_concept_text(
 
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i].first.empty()) {
-            throw std::runtime_error(
-                absl::StrCat("Could not map ", i, " ", originals[i]));
+            std::cout << absl::StrCat(
+                "Could not find the following concept_id in any of the concept "
+                "tables",
+                originals[i]);
+
+            result[i].first = absl::StrCat("INVALID/", originals[i]);
+            result[i].second = absl::StrCat("INVALID/", originals[i]);
         }
     }
     return result;
@@ -1122,6 +1185,7 @@ Ontology create_ontology(std::vector<uint64_t> raw_codes,
                                  delimiter, num_threads);
 
     {
+        boost::filesystem::create_directory(target);
         DictionaryWriter main(target / "main");
         for (const auto& t : text) {
             main.add_value(t.first);

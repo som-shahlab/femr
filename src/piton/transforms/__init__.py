@@ -5,14 +5,9 @@ from typing import Any, Callable, Dict, Optional, Set, Tuple
 from piton import Event, Patient
 
 
-def remove_short_patients(
-    patient: Patient, min_num_dates: int = 3
-) -> Optional[Patient]:
+def remove_short_patients(patient: Patient, min_num_dates: int = 3) -> Optional[Patient]:
     """Remove patients with too few timepoints."""
-    if (
-        len(set(event.start.date() for event in patient.events))
-        <= min_num_dates
-    ):
+    if len(set(event.start.date() for event in patient.events)) <= min_num_dates:
         return None
     else:
         return patient
@@ -37,11 +32,7 @@ def remove_nones(
 
     new_events = []
     for event in patient.events:
-        if (
-            event.value is None
-            and (event.code, event.start.date()) in has_value
-            and not do_not_apply_to_filter(event)
-        ):
+        if event.value is None and (event.code, event.start.date()) in has_value and not do_not_apply_to_filter(event):
             continue
         new_events.append(event)
 
@@ -52,7 +43,10 @@ def remove_nones(
     return patient
 
 
-def delta_encode(patient: Patient) -> Patient:
+def delta_encode(
+    patient: Patient,
+    do_not_apply_to_filter: Optional[Callable[[Event], bool]] = None,
+) -> Patient:
     """Delta encodes the patient.
 
     The idea behind delta encoding is that if we get duplicate values within a short amount of time
@@ -60,12 +54,14 @@ def delta_encode(patient: Patient) -> Patient:
 
     This code removes all *sequential* duplicates within the same day.
     """
+    do_not_apply_to_filter = do_not_apply_to_filter or (lambda _: False)
+
     last_value: Dict[Tuple[int, datetime.date], Any] = {}
 
     new_events = []
     for event in patient.events:
         key = (event.code, event.start.date())
-        if key in last_value and last_value[key] == event.value:
+        if key in last_value and last_value[key] == event.value and not do_not_apply_to_filter(event):
             continue
         last_value[key] = event.value
         new_events.append(event)

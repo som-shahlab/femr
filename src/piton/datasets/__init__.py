@@ -7,18 +7,7 @@ import functools
 import itertools
 import multiprocessing.pool
 import os
-from typing import (
-    Any,
-    Callable,
-    ContextManager,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from typing import Any, Callable, ContextManager, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -34,9 +23,7 @@ def _get_sort_key(pid_and_event: Tuple[int, Event]) -> Any:
 
 def _sort_readers(
     events: EventCollection,
-    reader_funcs: Sequence[
-        Callable[[], ContextManager[Iterable[Tuple[int, Event]]]]
-    ],
+    reader_funcs: Sequence[Callable[[], ContextManager[Iterable[Tuple[int, Event]]]]],
 ) -> None:
     """Sort the provided reader_funcs and write out to the provided events."""
     items: List[Tuple[int, Event]] = []
@@ -74,20 +61,14 @@ class EventCollection:
         Each resulting reader can be used in a multiprocessing.Pool to enable multiprocessing.
         """
         return [
-            functools.partial(
-                _create_event_reader, os.path.join(self.path, child)
-            )
-            for child in os.listdir(self.path)
+            functools.partial(_create_event_reader, os.path.join(self.path, child)) for child in os.listdir(self.path)
         ]
 
     @contextlib.contextmanager
     def reader(self) -> Iterator[Iterable[Tuple[int, Event]]]:
         """Return a contextmanager that allows iteration over all of the events."""
         with contextlib.ExitStack() as stack:
-            sub_readers = [
-                stack.enter_context(reader())
-                for reader in self.sharded_readers()
-            ]
+            sub_readers = [stack.enter_context(reader()) for reader in self.sharded_readers()]
             yield itertools.chain.from_iterable(sub_readers)
 
     def create_writer(self) -> fileio.EventWriter:
@@ -100,30 +81,19 @@ class EventCollection:
 
         current_shards = self.sharded_readers()
 
-        targets_per_current = (
-            len(current_shards) + num_threads - 1
-        ) // num_threads
+        targets_per_current = (len(current_shards) + num_threads - 1) // num_threads
 
-        chunks = [
-            current_shards[
-                i * targets_per_current : (i + 1) * targets_per_current
-            ]
-            for i in range(num_threads)
-        ]
+        chunks = [current_shards[i * targets_per_current : (i + 1) * targets_per_current] for i in range(num_threads)]
 
         chunks = [chunk for chunk in chunks if chunk]
 
         with multiprocessing.pool.Pool(num_threads) as pool:
-            for _ in pool.imap_unordered(
-                functools.partial(_sort_readers, result), chunks
-            ):
+            for _ in pool.imap_unordered(functools.partial(_sort_readers, result), chunks):
                 pass
 
         return result
 
-    def to_patient_collection(
-        self, target_path: str, num_threads: int = 1
-    ) -> PatientCollection:
+    def to_patient_collection(self, target_path: str, num_threads: int = 1) -> PatientCollection:
         """Convert the EventCollection to a PatientCollection, which is stored in target_path."""
         extension_datasets.sort_and_join_csvs(
             self.path,
@@ -155,9 +125,7 @@ def _transform_single_reader(
 ) -> Optional[Dict[str, Dict[str, int]]]:
     """Transform a single PatientReader, writing to a particular target_path."""
     if capture_statistics:
-        information: Dict[str, Dict[str, int]] = collections.defaultdict(
-            lambda: collections.defaultdict(int)
-        )
+        information: Dict[str, Dict[str, int]] = collections.defaultdict(lambda: collections.defaultdict(int))
     with contextlib.closing(fileio.PatientWriter(target_path)) as o:
         with reader_func() as reader:
             for p in reader:
@@ -170,16 +138,12 @@ def _transform_single_reader(
                     if current_patient is None:
                         if capture_statistics:
                             information[str(transform)]["lost_patients"] += 1
-                            information[str(transform)][
-                                "lost_events"
-                            ] += current_event_count
+                            information[str(transform)]["lost_events"] += current_event_count
                         break
                     else:
                         if capture_statistics:
                             new_events = len(current_patient.events)
-                            information[str(transform)]["lost_events"] += (
-                                current_event_count - new_events
-                            )
+                            information[str(transform)]["lost_events"] += current_event_count - new_events
                             current_event_count = new_events
 
                 if current_patient is not None:
@@ -203,9 +167,7 @@ class PatientCollection:
     ) -> Sequence[Callable[[], ContextManager[Iterable[Patient]]]]:
         """Return a list of contextmanagers that allow sharded iteration of Patients."""
         return [
-            functools.partial(
-                _sharded_patient_reader, os.path.join(self.path, child)
-            )
+            functools.partial(_sharded_patient_reader, os.path.join(self.path, child))
             for child in os.listdir(self.path)
         ]
 
@@ -213,17 +175,13 @@ class PatientCollection:
     def reader(self) -> Iterator[Iterable[Patient]]:
         """Return a single contextmanager that allows iteration over Patients."""
         with contextlib.ExitStack() as stack:
-            sub_readers = [
-                stack.enter_context(reader())
-                for reader in self.sharded_readers()
-            ]
+            sub_readers = [stack.enter_context(reader()) for reader in self.sharded_readers()]
             yield itertools.chain.from_iterable(sub_readers)
 
     def transform(
         self,
         target_path: str,
-        transform: Callable[[Patient], Optional[Patient]]
-        | Sequence[Callable[[Patient], Optional[Patient]]],
+        transform: Callable[[Patient], Optional[Patient]] | Sequence[Callable[[Patient], Optional[Patient]]],
         num_threads: int = 1,
         stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> PatientCollection:
@@ -233,9 +191,7 @@ class PatientCollection:
         if not isinstance(transform, collections.abc.Sequence):
             transform = [transform]
 
-        total_stats: Dict[str, Dict[str, int]] = collections.defaultdict(
-            lambda: collections.defaultdict(int)
-        )
+        total_stats: Dict[str, Dict[str, int]] = collections.defaultdict(lambda: collections.defaultdict(int))
 
         with multiprocessing.pool.Pool(num_threads) as pool:
             for stats in pool.imap_unordered(
@@ -256,9 +212,7 @@ class PatientCollection:
 
         return PatientCollection(target_path)
 
-    def to_patient_database(
-        self, target_path: str, concept_path: str, num_threads: int = 1
-    ) -> PatientDatabase:
+    def to_patient_database(self, target_path: str, concept_path: str, num_threads: int = 1) -> PatientDatabase:
         """Convert a PatientCollection to a PatientDatabase."""
         extension_datasets.convert_patient_collection_to_patient_database(
             self.path, concept_path, target_path, ",", num_threads

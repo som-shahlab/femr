@@ -13,7 +13,7 @@ from piton import Event, Patient
 from piton.datasets import EventCollection, PatientCollection
 from piton.extractors.csv import run_csv_extractors
 from piton.extractors.omop import get_omop_csv_extractors
-from piton.transforms import delta_encode, remove_nones, remove_short_patients
+from piton.transforms import delta_encode, remove_nones
 from piton.transforms.stanford import (
     move_billing_codes,
     move_pre_birth,
@@ -26,9 +26,7 @@ def _is_visit_event(e: Event) -> bool:
     return e.omop_table == "visit_occurrence"
 
 
-def _get_stanford_transformations() -> Sequence[
-    Callable[[Patient], Optional[Patient]]
-]:
+def _get_stanford_transformations() -> Sequence[Callable[[Patient], Optional[Patient]]]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
     transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
@@ -41,8 +39,11 @@ def _get_stanford_transformations() -> Sequence[
             # If we ever remove or revisit visit_id, we would want to revisit this
             do_not_apply_to_filter=_is_visit_event,
         ),
-        delta_encode,
-        remove_short_patients,
+        functools.partial(
+            delta_encode,  # We have to keep visits in order to sync up visit_ids later in the process
+            # If we ever remove or revisit visit_id, we would want to revisit this
+            do_not_apply_to_filter=_is_visit_event,
+        ),
     ]
 
     return transforms
@@ -50,9 +51,7 @@ def _get_stanford_transformations() -> Sequence[
 
 def etl_starr_omop_program() -> None:
     """Extract data from an Stanford STARR-OMOP v5 source to create a piton PatientDatabase."""
-    parser = argparse.ArgumentParser(
-        description="An extraction tool for STARR-OMOP v5 sources"
-    )
+    parser = argparse.ArgumentParser(description="An extraction tool for STARR-OMOP v5 sources")
 
     parser.add_argument(
         "omop_source",
@@ -93,9 +92,7 @@ def etl_starr_omop_program() -> None:
     if not os.path.exists(args.temp_location):
         os.mkdir(args.temp_location)
 
-    logFormatter = logging.Formatter(
-        "%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s"
-    )
+    logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
     rootLogger = logging.getLogger()
 
     fileHandler = logging.FileHandler(os.path.join(args.target_location, "log"))
@@ -112,9 +109,7 @@ def etl_starr_omop_program() -> None:
     try:
         event_dir = os.path.join(args.temp_location, "events")
         raw_patients_dir = os.path.join(args.temp_location, "patients_raw")
-        cleaned_patients_dir = os.path.join(
-            args.temp_location, "patients_cleaned"
-        )
+        cleaned_patients_dir = os.path.join(args.temp_location, "patients_cleaned")
 
         if not os.path.exists(event_dir):
             rootLogger.info("Converting to events")
@@ -128,9 +123,7 @@ def etl_starr_omop_program() -> None:
                 stats_dict=stats_dict,
             )
             rootLogger.info("Got converter statistics " + str(stats_dict))
-            with open(
-                os.path.join(args.target_location, "convert_stats.json"), "w"
-            ) as f:
+            with open(os.path.join(args.target_location, "convert_stats.json"), "w") as f:
                 json.dump(stats_dict, f)
         else:
             rootLogger.info("Already converted to events, skipping")
@@ -156,9 +149,7 @@ def etl_starr_omop_program() -> None:
                 stats_dict=stats_dict,
             )
             rootLogger.info("Got transform statistics " + str(stats_dict))
-            with open(
-                os.path.join(args.target_location, "transform_stats.json"), "w"
-            ) as f:
+            with open(os.path.join(args.target_location, "transform_stats.json"), "w") as f:
                 json.dump(stats_dict, f)
         else:
             rootLogger.info("Already applied transformations, skipping")

@@ -34,10 +34,7 @@ def test_c_statistic():
     total_weight = 0
 
     for time in sorted(list(set(times))):
-        mask = (
-            ((times > time) & (is_censor != 0))
-            | ((times >= time) & (is_censor == 0))
-        ).astype(bool)
+        mask = (((times > time) & (is_censor != 0)) | ((times >= time) & (is_censor == 0))).astype(bool)
 
         for i, val in enumerate(time_bins):
             if time < val:
@@ -60,18 +57,14 @@ def test_c_statistic():
             current_risks = risks[mask]
             current_correct = correct[mask]
 
-            auroc = sklearn.metrics.roc_auc_score(
-                current_correct, current_risks
-            )
+            auroc = sklearn.metrics.roc_auc_score(current_correct, current_risks)
 
             total_auroc += auroc * weight
             total_weight += weight
 
     expected = total_auroc / total_weight
 
-    actual = piton.metrics.compute_c_statistic(
-        times, is_censor, time_bins, hazards
-    )[0]
+    actual = piton.metrics.compute_c_statistic(times, is_censor, time_bins, hazards)[0]
 
     assert actual == expected
 
@@ -98,9 +91,7 @@ def test_calibration():
 
     expected = np.ones(shape=(B,)) / B
 
-    dummy = piton.metrics.compute_calibration(
-        dummy_probs, np.zeros_like(dummy_probs), B
-    )
+    dummy = piton.metrics.compute_calibration(dummy_probs, np.zeros_like(dummy_probs), B)
 
     assert np.allclose(expected, dummy, atol=0.01)
 
@@ -133,9 +124,7 @@ def test_breslow():
 
     times = [0, 1]
 
-    breslow = piton.metrics.estimate_breslow(
-        t[: size // 10], c[: size // 10], times, hazard[: size // 10, :]
-    )
+    breslow = piton.metrics.estimate_breslow(t[: size // 10], c[: size // 10], times, hazard[: size // 10, :])
     cdf = piton.metrics.apply_breslow(t, times, hazard, breslow)
 
     valid_probs = scipy.stats.expon.cdf(t, scale=1 / event_h)

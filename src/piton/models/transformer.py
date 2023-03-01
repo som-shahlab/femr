@@ -66,17 +66,12 @@ class TransformerBlock(hk.Module):
         self.norm = hk.RMSNorm(-1)
         # self.norm = hk.LayerNorm(-1, True, True)
         self.input_proj = hk.Linear(
-            output_size=3 * self.config["hidden_size"]
-            + self.config["intermediate_size"],
+            output_size=3 * self.config["hidden_size"] + self.config["intermediate_size"],
         )
         self.output_proj = hk.Linear(
             self.config["hidden_size"],
             w_init=hk.initializers.TruncatedNormal(
-                stddev=2
-                / (
-                    self.config["n_layers"]
-                    * jnp.sqrt(self.config["hidden_size"])
-                )
+                stddev=2 / (self.config["n_layers"] * jnp.sqrt(self.config["hidden_size"]))
             ),
         )
 
@@ -86,9 +81,7 @@ class TransformerBlock(hk.Module):
 
         x = self.norm(x)
 
-        x_with_ages = jnp.concatenate(
-            (x, jnp.expand_dims(normed_ages, -1)), axis=-1
-        )
+        x_with_ages = jnp.concatenate((x, jnp.expand_dims(normed_ages, -1)), axis=-1)
         assert x_with_ages.shape[0] == x.shape[0]
         assert x_with_ages.shape[1] == self.config["hidden_size"] + 1
         assert x_with_ages.dtype == x.dtype
@@ -108,9 +101,7 @@ class TransformerBlock(hk.Module):
             k = apply_rotary_pos_emb(k, pos_embed)
 
         def move_to_batch(val):
-            with_head = val.reshape(
-                (x.shape[0], self.config["n_heads"], head_size)
-            )
+            with_head = val.reshape((x.shape[0], self.config["n_heads"], head_size))
             with_head_at_start = with_head.transpose((1, 0, 2))
             return with_head_at_start
 
@@ -128,9 +119,7 @@ class TransformerBlock(hk.Module):
         if hk.running_init():
             attn = jnp.zeros_like(q)
         else:
-            attn = piton.jax.local_attention(
-                q, k, v, length_mask, self.config["attention_width"]
-            )
+            attn = piton.jax.local_attention(q, k, v, length_mask, self.config["attention_width"])
 
         def move_out_of_batch(val):
             with_head_at_start = val.transpose((1, 0, 2))
@@ -176,12 +165,9 @@ class Transformer(hk.Module):
             w_init=hk.initializers.TruncatedNormal(stddev=1),
         )
 
-        self.layer_transform = hk.transform(
-            lambda *args: TransformerBlock(config)(*args)
-        )
+        self.layer_transform = hk.transform(lambda *args: TransformerBlock(config)(*args))
         self.lifted_params = [
-            hk.lift(self.layer_transform.init, name=f"loop_{i}")
-            for i in range(self.config["n_layers"])
+            hk.lift(self.layer_transform.init, name=f"loop_{i}") for i in range(self.config["n_layers"])
         ]
 
     def __call__(self, batch, is_training):
@@ -195,9 +181,7 @@ class Transformer(hk.Module):
             e = self.embed.embeddings
             assert e.dtype == jnp.float32
 
-            x = piton.jax.gather_scatter_add(
-                e, batch["sparse_token_indices"], batch["ages"].shape[0]
-            )
+            x = piton.jax.gather_scatter_add(e, batch["sparse_token_indices"], batch["ages"].shape[0])
 
             if "bad_tokens" in batch:
                 alt = batch["bad_tokens"] @ e
@@ -212,6 +196,13 @@ class Transformer(hk.Module):
                 )
         else:
             x = self.embed(batch["tokens"])
+
+        if self.config.get("note_embedding_data"):
+            note_embedding_matrix = batch["note_embedding_bytes"].view(dtype=jnp.float16).reshape(-1, 768)
+            note_embedding = note_embedding_matrix.at[batch["tokens"]].get(mode="clip")
+            # debug.print("Got {a}", a=batch["is_note_embedding"].mean())
+            assert note_embedding.shape == x.shape
+            x = jnp.where(batch["is_note_embedding"].reshape(-1, 1), note_embedding, x)
 
         dummy_values = jnp.ones((1, 1), dtype=x.dtype)
 
@@ -229,9 +220,7 @@ class Transformer(hk.Module):
         normed_ages = normed_ages.astype(x.dtype)
 
         if self.config["rotary"] == "global":
-            pos_embed = fixed_pos_embedding(
-                ages, self.config["hidden_size"], x.dtype
-            )
+            pos_embed = fixed_pos_embedding(ages, self.config["hidden_size"], x.dtype)
         elif self.config["rotary"] == "per_head":
             pos_embed = fixed_pos_embedding(
                 ages,
@@ -254,10 +243,7 @@ class Transformer(hk.Module):
 
         assert all(all_defs[0] == a for a in all_defs)
 
-        all_stacked = [
-            jnp.stack(tuple(a[i] for a in all_flat))
-            for i in range(len(all_flat[0]))
-        ]
+        all_stacked = [jnp.stack(tuple(a[i] for a in all_flat)) for i in range(len(all_flat[0]))]
 
         all_stacked_tree = [
             jax.tree_util.tree_unflatten(all_defs[0], all_stacked),
@@ -267,9 +253,7 @@ class Transformer(hk.Module):
         def process(v, params_rng):
             params, rng = params_rng
 
-            res = self.layer_transform.apply(
-                params, rng, v, normed_ages, pos_embed, batch, is_training
-            )
+            res = self.layer_transform.apply(params, rng, v, normed_ages, pos_embed, batch, is_training)
             return (v + res, None)
 
         final_x = jax.lax.scan(process, x, all_stacked_tree)[0]
@@ -335,9 +319,7 @@ class BooleanTask(hk.Module):
         loss_vector = optax.sigmoid_binary_cross_entropy(logits, labels)
         masked_loss_vector = jnp.where(mask, loss_vector, 0)
 
-        loss = masked_loss_vector.sum(dtype=jnp.float32) / mask.sum(
-            dtype=jnp.float32
-        )
+        loss = masked_loss_vector.sum(dtype=jnp.float32) / mask.sum(dtype=jnp.float32)
 
         return loss, logits
 
@@ -356,33 +338,23 @@ class SurvivalTask(hk.Module):
         self.time_bins = self.time_bins
         self.num_time_bins = len(config["time_bins"])
         self.dim = self.config["dim"]
-        self.final_layer = hk.Linear(
-            output_size=self.num_time_bins * (self.dim - 1)
-        )
+        self.final_layer = hk.Linear(output_size=self.num_time_bins * (self.dim - 1))
 
         self.code_weight = hk.get_parameter(
             "code_weight",
             (1, self.dim - 1),
-            init=hk.initializers.TruncatedNormal(
-                stddev=1 / jnp.sqrt(config["dim"])
-            ),
+            init=hk.initializers.TruncatedNormal(stddev=1 / jnp.sqrt(config["dim"])),
         )
 
         self.code_weight_bias = hk.get_parameter(
             "code_weight_bias",
             (1, 1),
-            init=hk.initializers.TruncatedNormal(
-                stddev=1 / jnp.sqrt(config["dim"])
-            ),
+            init=hk.initializers.TruncatedNormal(stddev=1 / jnp.sqrt(config["dim"])),
         )
 
     def __call__(self, features, mask, batch, _is_training):
-        binned_reprs = self.final_layer(features).reshape(
-            (features.shape[0], self.num_time_bins, self.dim - 1)
-        )
-        offsets = jnp.ones(
-            (features.shape[0], self.num_time_bins, 1), dtype=features.dtype
-        )
+        binned_reprs = self.final_layer(features).reshape((features.shape[0], self.num_time_bins, self.dim - 1))
+        offsets = jnp.ones((features.shape[0], self.num_time_bins, 1), dtype=features.dtype)
 
         times = batch["event_times"]
 
@@ -409,9 +381,7 @@ class SurvivalTask(hk.Module):
 
         total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
 
-        total_code_weight = jnp.concatenate(
-            (self.code_weight, self.code_weight_bias), axis=-1
-        )
+        total_code_weight = jnp.concatenate((self.code_weight, self.code_weight_bias), axis=-1)
 
         hazards = total_reps @ total_code_weight.T
 
@@ -425,10 +395,7 @@ class SurvivalTask(hk.Module):
         event_loss = jnp.log(2) * (hazards * is_event).sum(dtype=jnp.float32)
         event_loss = -event_loss / num_masked
 
-        survival_loss = (
-            jnp.exp2(hazards + log_time_in_bin).sum(dtype=jnp.float32)
-            / num_masked
-        )
+        survival_loss = jnp.exp2(hazards + log_time_in_bin).sum(dtype=jnp.float32) / num_masked
 
         return (
             (event_loss + survival_loss),
@@ -447,20 +414,16 @@ class CLMBRTask(hk.Module):
 
         labels = batch["labels"]
 
-        loss_vector = optax.softmax_cross_entropy_with_integer_labels(
-            logits, labels
-        )
+        loss_vector = optax.softmax_cross_entropy_with_integer_labels(logits, labels)
         masked_loss_vector = jnp.where(mask, loss_vector, 0)
 
-        loss = masked_loss_vector.sum(dtype=jnp.float32) / mask.sum(
-            dtype=jnp.float32
-        )
+        loss = masked_loss_vector.sum(dtype=jnp.float32) / mask.sum(dtype=jnp.float32)
 
         return loss, logits
 
 
 class SurvivalCLMBRTask(hk.Module):
-    def __init__(self, config):
+    def __init__(self, config, get_time_reprs=False):
         """Please read the Survival-CLMBR paper to understand the algorithm here."""
         super().__init__(name="SurvivalCLMBRTask")
         self.config = config
@@ -469,9 +432,7 @@ class SurvivalCLMBRTask(hk.Module):
         self.code_weight = hk.get_parameter(
             "code_weight",
             (num_codes, config["dim"] - 1),
-            init=hk.initializers.TruncatedNormal(
-                stddev=1 / jnp.sqrt(config["dim"])
-            ),
+            init=hk.initializers.TruncatedNormal(stddev=1 / jnp.sqrt(config["dim"])),
         )
 
         self.code_weight_bias = hk.get_parameter(
@@ -482,23 +443,15 @@ class SurvivalCLMBRTask(hk.Module):
 
         self.num_time_bins = config["num_time_bins"]
         self.dim = self.config["dim"]
-        self.final_layer = hk.Linear(
-            output_size=self.num_time_bins * (self.dim - 1)
-        )
+        self.final_layer = hk.Linear(output_size=self.num_time_bins * (self.dim - 1))
 
     def __call__(self, features, mask, batch, _is_training):
-        binned_reprs = self.final_layer(features).reshape(
-            (features.shape[0], self.num_time_bins, self.dim - 1)
-        )
-        offsets = jnp.ones(
-            (features.shape[0], self.num_time_bins, 1), dtype=features.dtype
-        )
+        binned_reprs = self.final_layer(features).reshape((features.shape[0], self.num_time_bins, self.dim - 1))
+        offsets = jnp.ones((features.shape[0], self.num_time_bins, 1), dtype=features.dtype)
 
         total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
 
-        total_code_weight = jnp.concatenate(
-            (self.code_weight, self.code_weight_bias), axis=-1
-        )
+        total_code_weight = jnp.concatenate((self.code_weight, self.code_weight_bias), axis=-1)
 
         num_masked = mask.sum(dtype=jnp.float32)
 
@@ -507,20 +460,20 @@ class SurvivalCLMBRTask(hk.Module):
         assert full_a.dtype == features.dtype
 
         if not hk.running_init():
-            survival_loss = piton.jax.exp_mean(
-                full_a, total_code_weight, batch["sparse_time"]
-            ) * (full_a.shape[0] / num_masked)
+            survival_loss = piton.jax.exp_mean(full_a, total_code_weight, batch["sparse_time"]) * (
+                full_a.shape[0] / num_masked
+            )
         else:
             survival_loss = 0
 
-        event_loss = jnp.log(2) * piton.jax.embedding_dot(
-            full_a, total_code_weight, batch["event_indices"]
-        ).sum(dtype=jnp.float32)
+        event_loss = jnp.log(2) * piton.jax.embedding_dot(full_a, total_code_weight, batch["event_indices"]).sum(
+            dtype=jnp.float32
+        )
         event_loss = -event_loss / (num_masked * total_code_weight.shape[0])
 
-        logits = jnp.exp2(full_a @ total_code_weight.T)
+        logits = jnp.exp2((full_a @ total_code_weight.T).astype(jnp.float32))
 
-        return (event_loss + survival_loss), logits
+        return (event_loss + survival_loss), logits, total_reps
 
 
 def create_task(config):
