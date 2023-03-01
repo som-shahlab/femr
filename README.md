@@ -11,6 +11,8 @@
 
 # Installation
 
+# Note: FEMR currently is only tested on Linux. Installation might not work on macOS or Windows. Support for those platforms is currently in progress.
+
 Special note for NERO users:
 
 You will need to install cuda manually until cuda version is updated on the nero. Follow the following steps for nero.
