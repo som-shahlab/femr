@@ -8,8 +8,10 @@
 
 #include <iostream>
 
+void sequential_hint(int fd, const char* filename);
+
 #ifdef POSIX_FADV_SEQUENTIAL
-void sequential_hint(int fd) {
+void sequential_hint(int fd, const char* filename) {
     int error = posix_fadvise(fd, 0, 0,
                                   POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
 
@@ -20,7 +22,7 @@ void sequential_hint(int fd) {
     }
 }
 #else
-void sequential_hint(int fd) {}
+void sequential_hint(int fd, const char* filename) {}
 #endif
 
 ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
@@ -36,7 +38,7 @@ ConstdbReader::ConstdbReader(const char* filename, bool read_all) {
 
     fd = open(filename, O_RDONLY);
     if (read_all) {
-        sequential_hint(fd);
+        sequential_hint(fd, filename);
         
         mmap_data = (const char*)mmap(nullptr, length, PROT_READ,
                                       MAP_SHARED | MAP_POPULATE, fd, 0);
