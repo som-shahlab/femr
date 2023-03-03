@@ -45,7 +45,7 @@ def get_inpatient_admission_events(patient: Patient, ontology: extension_dataset
     admission_codes: Set[int] = get_inpatient_admission_codes(ontology)
     events: List[Event] = []
     for e in patient.events:
-        if e.code in admission_codes and e.omop_table == "visit_occurrence":
+        if e.code in admission_codes and e.omop_table == "visit":
             # Error checking
             if e.start is None or e.end is None:
                 raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
