@@ -162,7 +162,8 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
+        # visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
+        visit_start_adjust_func: Callable = lambda x: x,
         visit_end_adjust_func: Callable = lambda x: x,
     ):
         piton_codes: Set[int] = map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts())

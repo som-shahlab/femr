@@ -241,8 +241,9 @@ if __name__ == "__main__":
 
     # Lets use both age and count featurizer
     age = AgeFeaturizer()
-    count = CountFeaturizer(is_ontology_expansion=True)
-    featurizer_age_count = FeaturizerList([age, count])
+    # count = CountFeaturizer(is_ontology_expansion=True)
+    featurizer_age_count = FeaturizerList([age])
+    # featurizer_age_count = FeaturizerList([age, count])
 
     # Preprocessing the featurizers, which includes processes such as normalizing age.
     print_log("Preprocessing Featurizer", "Starting")
