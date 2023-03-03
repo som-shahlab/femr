@@ -512,59 +512,6 @@ class TimeHorizonEventLabeler(Labeler):
 
         return results
 
-    # def label(self, patient: Patient) -> List[Label]:
-    #     """Return a list of Labels for an individual patient.
-
-    #     Assumes that events in `patient.events` are already sorted in chronologically
-    #     ascending order (i.e. start -> end).
-
-    #     Args:
-    #         patient (Patient): A patient object
-
-    #     Returns:
-    #         List[Label]: A list containing a label for each datetime returned by `get_prediction_times()`
-    #     """
-    #     if len(patient.events) == 0:
-    #         return []
-
-    #     __, end_time = self.get_patient_start_end_times(patient)
-    #     outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
-    #     time_horizon: TimeHorizon = self.get_time_horizon()
-
-    #     results: List[Label] = []
-    #     curr_outcome_idx: int = 0
-    #     # For each prediction time, check if there is an outcome which occurs within the (start, end)
-    #     # of the time horizon
-    #     for time in self.get_prediction_times(patient):
-    #         while (
-    #             curr_outcome_idx < len(outcome_times)
-    #             and outcome_times[curr_outcome_idx] < time + time_horizon.start
-    #         ):
-    #             # This is the idx in `outcome_times` that corresponds to the first outcome EQUAL or AFTER
-    #             # the time horizon for this prediction time starts (if one exists)
-    #             curr_outcome_idx += 1
-
-    #         # TRUE if an event occurs within the time horizon
-    #         is_outcome_occurs_in_time_horizon: bool = curr_outcome_idx < len(
-    #             outcome_times
-    #         ) and (
-    #             time + time_horizon.start
-    #             <= outcome_times[curr_outcome_idx]
-    #             <= time + time_horizon.end
-    #         )
-    #         # TRUE if patient is censored (i.e. timeline ends BEFORE this time horizon ends,
-    #         # so we don't know if the outcome happened after the patient timeline ends)
-    #         is_censored: bool = end_time < time + time_horizon.end
-
-    #         if is_outcome_occurs_in_time_horizon:
-    #             results.append(Label(time=time, value=True))
-    #         elif not is_censored:
-    #             # Not censored + no outcome => FALSE
-    #             results.append(Label(time=time, value=False))
-
-    #     # # checks that we have a label for each prediction time (even if `None``)
-    #     # assert len(results) == len(self.get_prediction_times(patient))
-    #     return results
 
 
 class NLabelsPerPatientLabeler(Labeler):
