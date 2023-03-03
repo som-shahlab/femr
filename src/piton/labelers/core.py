@@ -471,7 +471,7 @@ class TimeHorizonEventLabeler(Labeler):
         last_time = None
         for time in prediction_times:
             if last_time is not None:
-                assert time >= last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
+                assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
 
             last_time = time
 
@@ -511,7 +511,6 @@ class TimeHorizonEventLabeler(Labeler):
                 results.append(Label(time=time, value=False))
 
         return results
-
 
 
 class NLabelsPerPatientLabeler(Labeler):
