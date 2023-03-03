@@ -52,7 +52,7 @@ pip install -e .
 If you want to use PyTorch for deep learning, you can install it as follows (first install numpy dependency):
 ```python
 conda install numpy
-conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit=11.3 -c pytorch
+pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
 ```
 
 # Precommit checks
@@ -134,3 +134,23 @@ python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATI
 
 etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
+
+
+## Training CLMBR
+
+The tutorial to run CLMBR model is in `tutorials/4_train_clmbr_model.py`. However, before running this script, some additional dependencies need to be installed.
+Please follow the steps below:
+
+1. Jax is one of the important package to train clmbr, but before installing that, you will need to have cuda and cudnn installed. For Nero users, please follow the
+instructions above to install cuda. Additionally, install the latest version of cudnn from nvidia. You will need to create developer account and download the file for specific version
+of your system. For Nero users, please go to this [link](https://developer.nvidia.com/rdp/cudnn-archive) and download the file
+`Download cuDNN v8.7.0 (November 28th, 2022), for CUDA 11.x` -> `Local Installer for Linux x86_64 (Tar)` on your local computer and transfer it
+over to your local folder in nero. Then follow the instruction [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
+section 1.3. Note that you need to copy over cudnn files to your local cuda. For example,
+
+- `cp cudnn-*-archive/include/cudnn*.h <path_to_your_cuda>/include`
+- `cp -P cudnn-*-archive/lib/libcudnn* <path_to_your_cuda>/lib64`
+- `chmod a+r /usr/local/cuda/include/cudnn*.h <path_to_your_cuda>/libcudnn*`
+
+2. Install Jax by running `pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`, as shown [here](https://github.com/google/jax#installation).
+3. Run `pip install dm-haiku msgpack optax`
