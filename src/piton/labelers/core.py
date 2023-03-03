@@ -513,7 +513,6 @@ class TimeHorizonEventLabeler(Labeler):
         return results
 
 
-
 class NLabelsPerPatientLabeler(Labeler):
     """Restricts `self.labeler` to returning a max of `self.k` labels per patient."""
 
