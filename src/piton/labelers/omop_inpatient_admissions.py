@@ -13,7 +13,7 @@ from .omop import (
     get_death_concepts,
     get_inpatient_admission_discharge_times,
     get_inpatient_admission_events,
-    map_omop_concept_codes_to_piton_codes,
+    map_omop_concept_codes_to_femr_codes,
     move_datetime_to_end_of_day,
 )
 
@@ -76,7 +76,7 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
 
     Prediction time: At discharge from an inpatient admission. Defaults to shifting prediction time
                      to the end of the day.
-    Time horizon: Interval of time after discharg of length `time_horizon`
+    Time horizon: Interval of time after discharge of length `time_horizon`
     Label: TRUE if patient has an inpatient admission within `time_horizon`
 
     Defaults to 30-day readmission labeler,
@@ -165,7 +165,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
         visit_end_adjust_func: Callable = lambda x: x,
     ):
-        piton_codes: Set[int] = map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts())
+        piton_codes: Set[int] = map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts())
         self.outcome_codes: Set[int] = piton_codes
         super().__init__(
             ontology=ontology,

@@ -368,7 +368,8 @@ class TimeHorizonEventLabeler(Labeler):
     time horizon (i.e. `TimeHorizon`). It is a boolean event that is TRUE if the event of interest
     occurs within that time horizon, and FALSE if it doesn't occur by the end of the time horizon.
 
-    No labels are generated if the patient record is "censored" before the end of the horizon.
+    No labels are generated if the patient record is "censored" before the end of the horizon and `is_apply_censoring = True`.
+    Note that this defaults to `is_apply_censoring = True`.
 
     You are required to implement three methods:
         get_outcome_times() for defining the datetimes of the event of interset
@@ -440,6 +441,10 @@ class TimeHorizonEventLabeler(Labeler):
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return "boolean"
 
+    def is_apply_censoring(self) -> bool:
+        """Return TRUE if we should apply censoring to this labeler, FALSE if censored results should be FALSE."""
+        return True
+
     def label(self, patient: Patient) -> List[Label]:
         """Return a list of Labels for an individual patient.
 
@@ -509,6 +514,13 @@ class TimeHorizonEventLabeler(Labeler):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
+            else:
+                if self.is_apply_censoring():
+                    # Censored + no outcome => CENSORED
+                    pass
+                else:
+                    # Censored + no outcome => FALSE
+                    results.append(Label(time=time, value=False))
 
         return results
 

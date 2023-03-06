@@ -7,7 +7,7 @@ from typing import Callable, List, Optional, Set
 
 from piton import Event, Patient
 from piton.labelers.core import Label, Labeler, LabelType, TimeHorizon
-from piton.labelers.omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_codes_to_piton_codes
+from piton.labelers.omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_codes_to_femr_codes
 from piton.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler
 
 from ..extension import datasets as extension_datasets
@@ -48,7 +48,7 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
         self.severity: str = severity
-        self.outcome_codes: Set[int] = map_omop_concept_codes_to_piton_codes(
+        self.outcome_codes: Set[int] = map_omop_concept_codes_to_femr_codes(
             ontology,
             self.original_omop_concept_codes,
             is_ontology_expansion=True,

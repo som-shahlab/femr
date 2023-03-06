@@ -185,11 +185,12 @@ def assert_labels_are_accurate(
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
     assert patient_id in labeled_patients, f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
+    
     # Check that length of lists of labels are the same
-
     assert len(generated_labels) == len(
         true_labels
     ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
+
     # Check that value of labels are the same
     for idx, (label, true_label) in enumerate(zip(generated_labels, true_labels)):
         assert label.value == true_label[1] and label.time == true_label[0], (
@@ -273,7 +274,8 @@ def load_from_pkl(path_to_file: str):
 def run_test_locally(str_path: str, test_func: Callable):
     """Run test locally the way Github Actions does (in a temporary directory `tmp_path`)."""
     tmp_path = pathlib.Path(str_path)
-    shutil.rmtree(tmp_path)
+    if os.path.exists(tmp_path) and os.path.isdir(tmp_path):
+        shutil.rmtree(tmp_path)
     os.makedirs(tmp_path, exist_ok=True)
     if signature(test_func).parameters.get("tmp_path"):
         test_func(tmp_path)
