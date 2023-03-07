@@ -10,7 +10,12 @@ import piton.datasets
 from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
-from piton.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
+from piton.labelers.omop import (
+    HighHbA1cCodeLabeler, 
+    LupusCodeLabeler,
+    Harutyunyan_DecompensationLabeler,
+    Harutyunyan_MortalityLabeler,
+)
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
@@ -28,22 +33,20 @@ from piton.labelers.omop_lab_values import (
 """
 Example running:
 
-    # /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-
 To generate admission/discharge placeholder labels on 1% extract:
 
     python3 tutorials/1_run_featurizers.py \
         /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
-        --labeling_function admission_discharge \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/mimic_3_decompensation/ \
+        --labeling_function mimic_3_decompensation \
         --num_threads 20
 
 To generate admission/discharge placeholder labels on 100% extract:
 
     python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/admission_discharge/ \
-        --labeling_function admission_discharge \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2023_02_08_extract_v8 \
+        /local-scratch/nigam/projects/clmbr_text_assets/data/features/mimic_3_decompensation/ \
+        --labeling_function mimic_3_decompensation \
         --num_threads 20
 
 To run a real labeler:
@@ -52,34 +55,6 @@ To run a real labeler:
         /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
         /local-scratch/nigam/projects/clmbr_text_assets/data/features/lupus/ \
         --labeling_function lupus \
-        --max_labels_per_patient 5 \
-        --num_threads 20
-
-    python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/thrombocytopenia_lab/ \
-        --labeling_function thrombocytopenia_lab \
-        --max_labels_per_patient 5 \
-        --num_threads 20
-
-    python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyperkalemia_lab/ \
-        --labeling_function hyperkalemia_lab \
-        --max_labels_per_patient 5 \
-        --num_threads 20
-
-    python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/mwornow/data/1_perct_extract_01_11_23 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/hypoglycemia_lab/ \
-        --labeling_function hypoglycemia_lab \
-        --max_labels_per_patient 5 \
-        --num_threads 20
-
-    python3 tutorials/1_run_featurizers.py \
-        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5 \
-        /local-scratch/nigam/projects/clmbr_text_assets/data/features/hyponatremia_lab/ \
-        --labeling_function hyponatremia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
 
@@ -109,6 +84,9 @@ LABELING_FUNCTIONS: List[str] = [
     # Other code-based tasks
     "lupus",
     "high_hba1c",
+    # MIMIC-III Benchmark tasks
+    "mimic_3_decompensation",
+    "mimic_3_mortality",
     # Lab-value tasks
     "thrombocytopenia_lab",
     "hyperkalemia_lab",
@@ -199,6 +177,10 @@ if __name__ == "__main__":
         labeler = InpatientReadmissionLabeler(ontology)
     elif args.labeling_function == "readmission":
         labeler = InpatientReadmissionLabeler(ontology)
+    elif args.labeling_function == "mimic_3_decompensation":
+        labeler = Harutyunyan_DecompensationLabeler(ontology)
+    elif args.labeling_function == "mimic_3_mortality":
+        labeler = Harutyunyan_MortalityLabeler(ontology)
     elif args.labeling_function == "lupus":
         labeler = LupusCodeLabeler(ontology, year_time_horizon)
     elif args.labeling_function == "thrombocytopenia_lab":
@@ -218,10 +200,10 @@ if __name__ == "__main__":
     print_log("Labeler", f"Using Labeler `{args.labeling_function}`")
 
     # Determine how many labels to keep per patient
-    if not args.labeling_function == "admission_discharge":
+    if MAX_LABELS_PER_PATIENT is not None:
         # Don't throw out labels for admission/discharge placeholder, otherwise
         # defeats the purpose of this labeler
-        labeler = NLabelsPerPatientLabeler(labeler, seed=0, num_labels=MAX_LABELS_PER_PATIENT)
+        labeler = NLabelsPerPatientLabeler(labeler, num_labels=MAX_LABELS_PER_PATIENT, seed=0)
         print_log(
             "Labeler",
             f"Keeping max of {MAX_LABELS_PER_PATIENT} labels per patient",
