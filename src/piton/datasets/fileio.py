@@ -7,6 +7,7 @@ import datetime
 import io
 import pickle
 import tempfile
+import warnings
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import zstandard
@@ -67,7 +68,7 @@ class EventWriter:
     def close(self) -> None:
         """Close the event writer."""
         if self.rows_written == 0:
-            raise RuntimeError("Event writer with zero rows?")
+            warnings.warn(f"Zero rows were written by the `EventWriter` for file: {self.file.name}")
         self.o.close()
 
 
