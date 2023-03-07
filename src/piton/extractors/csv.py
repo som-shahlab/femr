@@ -94,7 +94,7 @@ def _run_csv_extractor(args: Tuple[str, EventCollection, CSVExtractor, Optional[
                                     )
                                 else:
                                     # Support normal CSVs
-                                    debug_f = stack.enter_context(open(debug_file, "r"))
+                                    debug_f = stack.enter_context(open(debug_file, "w"))
                                 assert reader.fieldnames is not None
                                 debug_writer = csv.DictWriter(
                                     debug_f,

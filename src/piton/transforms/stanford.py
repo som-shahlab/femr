@@ -154,6 +154,7 @@ def move_billing_codes(patient: Patient) -> Patient:
     end_visits: Dict[int, datetime.datetime] = {}  # Map from visit ID to visit end time
     lowest_visit: Dict[Tuple[datetime.datetime, int], int] = {}  # Map from code/start time pairs to visit ID
 
+    # List of billing code tables based on the original Clarity queries used to form STRIDE
     billing_codes = [
         "pat_enc_dx",
         "hsp_acct_dx_list",

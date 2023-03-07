@@ -4,4 +4,4 @@ __pycache__
 bazel-*
 *.egg-info
 ignore/*
-.ipynb_checkpoints/
+.ipynb_checkpoints/*
