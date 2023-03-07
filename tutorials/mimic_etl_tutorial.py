@@ -1,5 +1,5 @@
 """
-A simple ETL script that documents the minimum set of OMOP required for Piton to function and provides an example
+A simple ETL script that documents the minimum set of OMOP required for FEMR to function and provides an example
 converting MIMIC to that minimal OMOP subset.
 
 Note that this ETL is very minimal and is not intended to be a full OMOP ETL.
@@ -333,7 +333,7 @@ with open(os.path.join(OMOP_DIR, "observation.csv"), "w") as wf:
 
 
 """
-Piton relies on a subset of OMOP's vocabulary.
+FEMR relies on a subset of OMOP's vocabulary.
 
 In particular, we need the concept and concept_relationship tables.
 

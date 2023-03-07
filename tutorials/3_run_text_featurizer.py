@@ -76,16 +76,16 @@ if __name__ == "__main__":
     def print_log(name: str, content: str):
         print(f"{int(time.time() - START_TIME)} | {name} | {content}")
 
-    parser = argparse.ArgumentParser(description="Run Piton text featurizer")
+    parser = argparse.ArgumentParser(description="Run FEMR text featurizer")
     parser.add_argument(
         "path_to_patient_database",
         type=str,
-        help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5'",
+        help="Path of folder to the FEMR PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5'",
     )
     parser.add_argument(
         "path_to_labeled_patients",
         type=str,
-        help="Path to file containing the Piton LabeledPatients. Example: '/local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pkl'",
+        help="Path to file containing the FEMR LabeledPatients. Example: '/local-scratch/nigam/projects/mwornow/data/mortality_labeled_patients_v1.pkl'",
     )
     parser.add_argument(
         "path_to_huggingface_model",
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     # Logging
     print_log(
         "ArgParse",
-        f"Keep only notes with these Piton event codes: {valid_note_codes}",
+        f"Keep only notes with these FEMR event codes: {valid_note_codes}",
     )
     print_log(
         "ArgParse",
