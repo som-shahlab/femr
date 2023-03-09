@@ -6,7 +6,7 @@ import logging
 import os
 import pickle
 import random
-from typing import Any, TypeVar
+from typing import TypeVar
 
 import haiku as hk
 import jax
@@ -568,9 +568,7 @@ def compute_representations() -> None:
 
     database = piton.datasets.PatientDatabase(args.data_path)
 
-    reprs = []
-    label_ages: Any = []
-    label_pids = []
+    results = []
 
     for split in ("train", "dev", "test"):
         for dev_index in range(loader.get_number_of_batches(split)):
@@ -584,31 +582,47 @@ def compute_representations() -> None:
                 batch,
             )
 
+            repr = np.array(repr)
+
             p_index = batch["transformer"]["label_indices"] // batch["transformer"]["length"]
 
-            reprs.append(repr[: batch["num_indices"], :])
-            label_ages.append(raw_batch["task"]["label_ages"][: batch["num_indices"]])
-            assert raw_batch["task"]["label_ages"].dtype == np.uint32
-            label_pids.append(batch["patient_ids"][p_index][: batch["num_indices"]])
+            for i in range(batch["num_indices"]):
+                r = repr[i, :]
 
-    reprs = np.array(jnp.concatenate(reprs, axis=0))
-    label_ages = np.array(np.concatenate(label_ages, axis=0))
-    assert label_ages.dtype == np.uint32
+                label_pid = raw_batch["patient_ids"][p_index[i]]
+                label_age = raw_batch["task"]["label_ages"][i]
 
-    label_pids = np.array(jnp.concatenate(label_pids, axis=0))
+                offset = raw_batch["offsets"][p_index[i]]
+                results.append((label_pid, label_age, offset, r))
+
+    results.sort(key=lambda a: a[:3])
 
     label_times = []
 
-    for pid, age in zip(label_pids, label_ages):
+    data_matrix = []
+    label_pids = []
+    label_ages = []
+
+    last_label_idx = None
+
+    for pid, age, offset, r in results:
+        # Ignore duplicate
+        if (pid, age) == last_label_idx:
+            continue
+        last_label_idx = (pid, age)
+
         birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
         label_time = birth_date + datetime.timedelta(minutes=int(age))
         label_times.append(label_time)
+        data_matrix.append(r)
+        label_pids.append(pid)
+        label_ages.append(age)
 
     result = {
         "data_path": args.data_path,
         "model": args.model_dir,
-        "data_matrix": reprs,
-        "patient_ids": label_pids,
+        "data_matrix": np.stack(data_matrix),
+        "patient_ids": np.array(label_pids),
         "labeling_time": np.array(label_times),
     }
 
