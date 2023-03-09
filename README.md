@@ -119,36 +119,88 @@ export OMOP_SOURCE=/share/pi/nigam...
 zstd -1 --rm $OMOP_SOURCE/**/*.csv
 ```
 
-## Generating extract
+# How to Run FEMR
+
+## Stanford's STARR-OMOP
+
+First, download STARR-OMOP from Google BigQuery using the following command:
+```bash
+# General format:
+python3 tools/stanford/download_bigquery.py \
+    <NAME_OF_YOUR_GCP_PROJECT> \
+    <GCP_BIGQUERY_DATASET_ID> \
+    <PATH_TO_LOCAL_FOLDER_WHERE_DATASET_WILL_BE_DOWNLOADED> \
+    --excluded_tables <(Optional)_NAME_OF_TABLE_1_TO_BE_IGNORED> <(Optional)_NAME_OF_TABLE_2_TO_BE_IGNORED> ...
+
+#Example:
+python3 download_bigquery.py \
+    som-nero-nigam-starr \
+    som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_lite_2023_02_08 \
+    ./bigquery_dump/ \
+    --excluded_tables notes
+```
+
+Second, run FEMR on your BigQuery download with the following (Note: This should take ~10 minutes total on a 1% extract of STARR-OMOP):
 
 ```
 # Set up environment variables
 #   Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
 export OMOP_SOURCE=/path/to/omop/folder...
-#   Path to any arbitrary folder where you want to store your Piton extract
-export EXTRACT_DESTINATION=/path/to/piton/extract/folder...
-#   Path to any arbitrary folder where you want to store your Piton extract logs
-export EXTRACT_LOGS=/path/to/piton/extract/logs...
+#   Path to any arbitrary folder where you want to store your FEMR extract
+export EXTRACT_DESTINATION=/path/to/femr/extract/folder...
+#   Path to any arbitrary folder where you want to store your FEMR extract logs
+export EXTRACT_LOGS=/path/to/femr/extract/logs...
 
 # Do some data preprocessing with Stanford-specific helper scripts
+#   Convert BigQuery files into .zst.csv format
+gunzip $OMOP_SOURCE/**/*.csv.gz
+zstd -1 --rm $OMOP_SOURCE/**/*.csv
 #   Extract data from flowsheets
 python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
 #   Normalize visits
 python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
 
-# Run actual Piton extraction
+# Run actual FEMR extraction
 etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
 
-Example usage (Note: This should take ~10 minutes on a 1% extract of STARR-OMOP)
+## MIMIC-III OMOP
+
+
+First, download MIMIC-III-OMOP from Google BigQuery using the following command:
+```bash
+# General format:
+python3 tools/stanford/download_bigquery.py \
+    <NAME_OF_YOUR_GCP_PROJECT> \
+    <GCP_BIGQUERY_DATASET_ID> \
+    <PATH_TO_LOCAL_FOLDER_WHERE_DATASET_WILL_BE_DOWNLOADED> \
+    --excluded_tables <(Optional)_NAME_OF_TABLE_1_TO_BE_IGNORED> <(Optional)_NAME_OF_TABLE_2_TO_BE_IGNORED> ...
+
+# Example:
+python3 tools/stanford/download_bigquery.py \
+    som-nero-nigam-starr \
+    som-nero-nigam-starr.mimic_omop
+    ./bigquery_dump/
+```
+
+Second, run FEMR on your BigQuery download with the following:
 
 ```
-export OMOP_SOURCE=/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_11_09
-export EXTRACT_DESTINATION=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
-export EXTRACT_LOGS=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09_logs
+# Set up environment variables
+#   Path to a folder containing your raw MIMIC-III-OMOP download, generated via `tools.stanford.download_bigquery.py`
+export OMOP_SOURCE=/path/to/omop/folder...
+#   Path to any arbitrary folder where you want to store your FEMR extract
+export EXTRACT_DESTINATION=/path/to/femr/extract/folder...
+#   Path to any arbitrary folder where you want to store your FEMR extract logs
+export EXTRACT_LOGS=/path/to/femr/extract/logs...
 
-python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
+# Do some data preprocessing with MIMIC-III-OMOP-specific helper scripts
+#   Convert BigQuery files into .zst.csv format
+gunzip $OMOP_SOURCE/**/*.csv.gz
+zstd -1 --rm $OMOP_SOURCE/**/*.csv
+#   Standardize columns
 python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
 
+# Run actual FEMR extraction
 etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
