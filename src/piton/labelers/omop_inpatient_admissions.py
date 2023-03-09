@@ -108,6 +108,7 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         for __, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(discharge_time)
             times.append(prediction_time)
+        times = sorted(list(set(times)))
         return times
 
     def get_time_horizon(self) -> TimeHorizon:
