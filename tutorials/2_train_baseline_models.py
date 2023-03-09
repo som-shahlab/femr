@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "path_to_patient_database",
         type=str,
-        help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5'",
+        help="Path of folder to the FEMR PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5'",
     )
 
     parser.add_argument(

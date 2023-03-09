@@ -174,7 +174,7 @@ if __name__ == "__main__":
     elif args.labeling_function == "mortality":
         labeler = InpatientMortalityLabeler(ontology)
     elif args.labeling_function == "long_los":
-        labeler = InpatientReadmissionLabeler(ontology)
+        labeler = InpatientLongAdmissionLabeler(ontology)
     elif args.labeling_function == "readmission":
         labeler = InpatientReadmissionLabeler(ontology)
     elif args.labeling_function == "mimic_3_decompensation":
