@@ -45,7 +45,8 @@ class cmake_build_ext(build_ext):
             if source_env.get("DISTDIR"):
                 extra_args.extend(["--distdir", source_env["DISTDIR"]])
 
-            if has_nvcc():
+            if source_env.get("FEMR_CUDA"):
+                assert has_nvcc()
                 extra_args.extend(["--//:cuda=enabled"])
 
             subprocess.run(
