@@ -22,6 +22,7 @@ version = "0.1.0"
 
 [project.scripts]
 etl_stanford_omop = "piton.etl_pipelines.stanford:etl_starr_omop_program"
+etl_mimic_omop = "piton.etl_pipelines.mimic_omop:etl_mimic_omop_program"
 etl_generic_omop = "piton.etl_pipelines.omop:etl_generic_omop_program"
 
 clmbr_create_batches = "piton.models.dataloader:create_batches"

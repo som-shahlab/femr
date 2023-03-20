@@ -15,7 +15,7 @@ email address. Then you will copy-paste authorization code to the terminal.
 How to run:
 ```
 python download_bigquery.py <NAME OF YOUR GCP PROJECT> <GCP BIGQUERY DATASET ID> \
-    <PATH TO LOCAL FOLDER WHERE DATASET WHERE DATASET WILL BE DOWNLOADED>
+    <PATH TO LOCAL FOLDER WHERE DATASET WILL BE DOWNLOADED>
     --excluded_tables <(Optional) NAME OF TABLE 1 TO BE IGNORED> <(Optional) NAME OF TABLE 2 TO BE IGNORED>
 ```
 

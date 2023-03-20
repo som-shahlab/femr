@@ -474,9 +474,9 @@ class TimeHorizonEventLabeler(Labeler):
         results: List[Label] = []
         curr_outcome_idx: int = 0
         last_time = None
-        for time in prediction_times:
+        for time_idx, time in enumerate(prediction_times):
             if last_time is not None:
-                assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
+                assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time} for patient {patient.patient_id}, prediction time idx {time_idx}"
 
             last_time = time
 

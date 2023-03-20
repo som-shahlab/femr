@@ -95,6 +95,7 @@ class _ConceptTableConverter(CSVExtractor):
     concept_id_field: Optional[str] = None
     string_value_field: Optional[str] = None
     numeric_value_field: Optional[str] = None
+    is_drop_events_without_start: bool = False
 
     def get_patient_id_field(self) -> str:
         return "person_id"
@@ -137,7 +138,10 @@ class _ConceptTableConverter(CSVExtractor):
             end = None
 
         if start is None:
-            raise RuntimeError("Could not find a date field for " + repr(self) + " " + repr(row))
+            if self.is_drop_events_without_start:
+                return []
+            else:
+                raise RuntimeError("Could not find a start date for " + repr(self) + " " + repr(row))
 
         if "visit_occurrence_id" in row and row["visit_occurrence_id"]:
             visit_id = int(row["visit_occurrence_id"])
@@ -178,39 +182,55 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
         _ConceptTableConverter(
             prefix="drug_exposure",
             concept_id_field="drug_concept_id",
+            is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
             prefix="visit",
             file_suffix="occurrence",
+            is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
             prefix="condition",
             file_suffix="occurrence",
+            is_drop_events_without_start=True,
         ),
-        _ConceptTableConverter(prefix="death", concept_id_field="death_type_concept_id"),
+        _ConceptTableConverter(
+            prefix="death", 
+            concept_id_field="death_type_concept_id",
+            is_drop_events_without_start=True,
+        ),
         _ConceptTableConverter(
             prefix="procedure",
             file_suffix="occurrence",
+            is_drop_events_without_start=True,
         ),
-        _ConceptTableConverter(prefix="device_exposure", concept_id_field="device_concept_id"),
+        _ConceptTableConverter(
+            prefix="device_exposure", 
+            concept_id_field="device_concept_id",
+            is_drop_events_without_start=True,
+        ),
         _ConceptTableConverter(
             prefix="measurement",
             string_value_field="value_source_value",
             numeric_value_field="value_as_number",
+            is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
             prefix="observation",
             string_value_field="value_as_string",
             numeric_value_field="value_as_number",
+            is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
             prefix="note",
             concept_id_field="note_class_concept_id",
             string_value_field="note_text",
+            is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
             prefix="visit_detail",
             concept_id_field="piton_visit_detail_concept_id",
+            is_drop_events_without_start=True,
         ),
     ]
 

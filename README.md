@@ -191,12 +191,15 @@ export EXTRACT_LOGS=/path/to/femr/extract/logs...
 # Do some data preprocessing with MIMIC-III-OMOP-specific helper scripts
 #   Convert BigQuery files into .zst.csv format
 gunzip $OMOP_SOURCE/**/*.csv.gz
+#   Manually go into visit_detail/000000000.csv and rename `visit_start_*` -> `visit_detail_start_*` and `visit_end_*` -> `visit_detail_end_*`
 zstd -1 --rm $OMOP_SOURCE/**/*.csv
-#   Standardize columns
-python tools/mimic_omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
+#   Normalize visits
+python tools/omop/normalize_visit_detail.py --num_threads 5 "${OMOP_SOURCE}" "${EXTRACT_DESTINATION}_visit_detail"
+#   Fix OMOP tables
+# TODO - python tools/mimic_omop/fix_omop_tables.py --num_threads 5 "${EXTRACT_DESTINATION}_visit_detail"
 
 # Run actual FEMR extraction
-etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
+etl_mimic_omop "${EXTRACT_DESTINATION}_visit_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
 ```
 
 

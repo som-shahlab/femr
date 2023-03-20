@@ -481,9 +481,19 @@ void reader_thread(
 
     while (reader.next_row()) {
         uint64_t patient_id;
-        attempt_parse_or_die(reader.get_row()[0], patient_id);
+        try {
+            attempt_parse_or_die(reader.get_row()[0], patient_id);
+        } catch {
+            std::cout << "Error in `database.cc` for patient_id" << patient_id;
+            std::cout << absl::StrJoin(reader.get_row(), "-");
+        }
         uint64_t code;
-        attempt_parse_or_die(reader.get_row()[1], code);
+        try {
+            attempt_parse_or_die(reader.get_row()[1], code);
+        } catch {
+            std::cout << "Error in `database.cc` for patient_id" << patient_id;
+            std::cout << absl::StrJoin(reader.get_row(), "-");
+        }
         absl::CivilSecond start;
         attempt_parse_time_or_die(reader.get_row()[2], start);
 
