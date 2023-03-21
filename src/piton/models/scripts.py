@@ -497,7 +497,8 @@ def train_model() -> None:
             elif args.early_stopping_window_steps is not None:
                 if step - last_good > args.early_stopping_window_steps:
                     logging.info(
-                        f"We haven't seen improvement in the dev loss in {args.early_stopping_window_steps} steps, so apply early stopping"
+                        f"We haven't seen improvement in the dev loss in {args.early_stopping_window_steps}"
+                        " steps, so apply early stopping"
                     )
                     break
 
