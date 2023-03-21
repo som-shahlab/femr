@@ -65,6 +65,8 @@ def train_model() -> None:
     parser.add_argument("--internal_dropout", type=float, default=0)
     parser.add_argument("--weight_decay", type=float, default=0)
     parser.add_argument("--max_iter", type=float, default=None)
+    parser.add_argument("--early_stopping_window_steps", type=int, default=None, 
+                        help="If we don't see a decrease in dev loss in this many steps, stop training. A reasonable value is 15000.")
 
     args = parser.parse_args()
 
@@ -488,9 +490,9 @@ def train_model() -> None:
                     out_t.write(f"Step {step}, Loss {dev_loss}")
                 with open(os.path.join(args.directory, "best_test_loss"), "w") as out_t:
                     json.dump(test_loss, out_t)
-            else:
-                if step - last_good > 15000:
-                    logging.info("Waited to long, early stop")
+            elif args.early_stopping_window_steps is not None:
+                if step - last_good > args.early_stopping_window_steps:
+                    logging.info(f"We haven't seen improvement in the dev loss in {args.early_stopping_window_steps} steps, so apply early stopping")
                     break
 
             if args.max_iter is not None and step > args.max_iter:
