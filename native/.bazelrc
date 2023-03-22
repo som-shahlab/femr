@@ -2,7 +2,7 @@ build --cxxopt="-std=c++17"
 build --cxxopt="-Wall"
 build --cxxopt="-march=native"
 build --copt="-march=native"
-build --@rules_cuda//cuda:cuda_targets=sm_70
+build --@rules_cuda//cuda:archs=sm_70
 build --@rules_cuda//cuda:copts=-Xptxas="-v"
 build --@rules_cuda//cuda:copts="--use_fast_math"
 
