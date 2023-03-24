@@ -47,11 +47,18 @@ Note: you may need to restart your terminal for the changes to reflect
 
 ### (Optional) Installing PyTorch
 
-If you want to use PyTorch for deep learning, you can install it as follows:
+If you are on Nero, you need to install PyTorch using:
 
 ```bash
 conda install numpy
 pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
+```
+
+If you are on Carina, you need to install PyTorch using:
+
+```bash
+conda install numpy
+conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 ```
 
 ### (Optional) Installing CUDA on Nero
