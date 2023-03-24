@@ -50,15 +50,14 @@ Note: you may need to restart your terminal for the changes to reflect
 If you are on Nero, you need to install PyTorch using:
 
 ```bash
-conda install numpy
+conda install numpy -y
 pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
 ```
 
 If you are on Carina, you need to install PyTorch using:
 
 ```bash
-conda install numpy
-conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install numpy pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
 ```
 
 ### (Optional) Installing CUDA on Nero
