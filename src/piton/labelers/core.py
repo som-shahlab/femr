@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import collections
 import datetime
+import multiprocessing
 import pprint
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
@@ -11,7 +13,6 @@ from typing import Any, DefaultDict, Dict, List, Literal, Optional, Sequence, Tu
 
 import numpy as np
 from nptyping import NDArray
-from pathos.pools import ProcessPool
 
 from piton import Patient
 from piton.datasets import PatientDatabase
@@ -345,8 +346,10 @@ class Labeler(ABC):
 
         # Multiprocessing
         tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts]
-        pool = ProcessPool(num_threads)
-        results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
+        # results = [_apply_labeling_function(task) for task in tasks]
+
+        with multiprocessing.Pool(num_threads) as pool:
+            results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
 
         # Join results and return
         patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
@@ -440,6 +443,10 @@ class TimeHorizonEventLabeler(Labeler):
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return "boolean"
 
+    def allow_same_time_labels(self) -> bool:
+        """Whether or not to allow labels with events at the same time as prediction"""
+        return True
+
     def label(self, patient: Patient) -> List[Label]:
         """Return a list of Labels for an individual patient.
 
@@ -479,6 +486,14 @@ class TimeHorizonEventLabeler(Labeler):
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
                 curr_outcome_idx += 1
+
+            if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] == time:
+                if not self.allow_same_time_labels():
+                    continue
+                warnings.warn(
+                    "You are making predictions at the same time as the target outcome."
+                    "This frequently leads to label leakage."
+                )
 
             # TRUE if an event occurs within the time horizon
             is_outcome_occurs_in_time_horizon: bool = (

@@ -1,8 +1,10 @@
 # flake8: noqa: E402
+# mypy: ignore-errors
 import datetime
 import os
 import pathlib
 import sys
+import warnings
 from typing import List
 
 from piton import Patient
@@ -16,13 +18,13 @@ from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locall
 class DummyLabeler(TimeHorizonEventLabeler):
     """Dummy labeler that returns True if the event's `code` is in `self.outcome_codes`."""
 
-    def __init__(
-        self,
-        outcome_codes: List[int],
-        time_horizon: TimeHorizon,
-    ):
+    def __init__(self, outcome_codes: List[int], time_horizon: TimeHorizon, allow_same_time: bool = True):
         self.outcome_codes: List[int] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
+        self.allow_same_time = allow_same_time
+
+    def allow_same_time_labels(self) -> bool:
+        return self.allow_same_time
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         return sorted(list({e.start for e in patient.events}))
@@ -72,6 +74,27 @@ def test_horizon_0_180_days(tmp_path: pathlib.Path):
         (event((2018, 1, 3), 2, None), True),
         (event((2018, 3, 3), 1, None), True),
         (event((2018, 5, 3), 2, None), True),
+        (event((2018, 5, 3, 11), 1, None), False),
+        (event((2018, 5, 4), 1, None), False),
+        (event((2018, 12, 4), 1, None), "out of range"),
+        # fmt: on
+    ]
+    run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_180_days")
+
+
+def test_horizon_0_180_days_no_same(tmp_path: pathlib.Path):
+    # (0, 180) days
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    labeler = DummyLabeler([2], time_horizon, allow_same_time=False)
+    events_with_labels: EventsWithLabels = [
+        # fmt: off
+        (event((2015, 1, 3), 2, None), "duplicate"),
+        (event((2015, 1, 3), 1, None), "duplicate"),
+        (event((2015, 1, 3), 3, None), "same"),
+        (event((2015, 10, 5), 1, None), False),
+        (event((2018, 1, 3), 2, None), "same"),
+        (event((2018, 3, 3), 1, None), True),
+        (event((2018, 5, 3), 2, None), "same"),
         (event((2018, 5, 3, 11), 1, None), False),
         (event((2018, 5, 4), 1, None), False),
         (event((2018, 12, 4), 1, None), "out of range"),

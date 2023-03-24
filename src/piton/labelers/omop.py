@@ -306,6 +306,10 @@ class CodeLabeler(TimeHorizonEventLabeler):
                 times.append(event.start)
         return times
 
+    def allow_same_time_labels(self) -> bool:
+        # We cannot allow labels at the same time as the codes since they will generally be available as features ...
+        return False
+
 
 class OMOPConceptCodeLabeler(CodeLabeler):
     """Same as CodeLabeler, but add the extra step of mapping OMOP concept IDs
