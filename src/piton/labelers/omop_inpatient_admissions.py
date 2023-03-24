@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Callable, List, Set
+from typing import Any, Callable, List, Set
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -16,6 +16,10 @@ from .omop import (
     map_omop_concept_codes_to_piton_codes,
     move_datetime_to_end_of_day,
 )
+
+
+def identity(x: Any) -> Any:
+    return x
 
 
 class WithinInpatientVisitLabeler(WithinVisitLabeler):
@@ -31,8 +35,8 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = lambda x: x,
-        visit_end_adjust_func: Callable = lambda x: x,
+        visit_start_adjust_func: Callable = identity,
+        visit_end_adjust_func: Callable = identity,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
@@ -53,7 +57,7 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
 class DummyAdmissionDischargeLabeler(Labeler):
     """Generate a placeholder Label at every admission and discharge time for this patient."""
 
-    def __init__(self, ontology: extension_datasets.Ontology, prediction_time_adjustment_func: Callable = lambda x: x):
+    def __init__(self, ontology: extension_datasets.Ontology, prediction_time_adjustment_func: Callable = identity):
         self.ontology: extension_datasets.Ontology = ontology
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
 
@@ -164,7 +168,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
         visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
-        visit_end_adjust_func: Callable = lambda x: x,
+        visit_end_adjust_func: Callable = identity,
     ):
         piton_codes: Set[int] = map_omop_concept_codes_to_piton_codes(ontology, get_death_concepts())
         self.outcome_codes: Set[int] = piton_codes

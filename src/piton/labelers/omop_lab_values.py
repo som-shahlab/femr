@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Callable, List, Optional, Set
+from typing import Any, Callable, List, Optional, Set
 
 from piton import Event, Patient
 from piton.labelers.core import Label, Labeler, LabelType, TimeHorizon
@@ -11,6 +11,11 @@ from piton.labelers.omop import _get_all_children, get_inpatient_admission_event
 from piton.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler
 
 from ..extension import datasets as extension_datasets
+
+
+def identity(x: Any) -> Any:
+    return x
+
 
 ##########################################################
 ##########################################################
@@ -42,8 +47,8 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
         severity: str,
-        visit_start_adjust_func: Callable = lambda x: x,
-        visit_end_adjust_func: Callable = lambda x: x,
+        visit_start_adjust_func: Callable = identity,
+        visit_end_adjust_func: Callable = identity,
     ):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
