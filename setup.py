@@ -49,7 +49,8 @@ class cmake_build_ext(build_ext):
                 extra_args.extend(["--//:cuda=enabled"])
 
             subprocess.run(
-                args=["bazel", "build", "-c", "opt", ext.target] + extra_args,
+                # "opt" == optimized build
+                args=["bazel", "build", "-c", "dbg", ext.target] + extra_args,
                 cwd=ext.sourcedir,
                 env=env,
                 check=True,

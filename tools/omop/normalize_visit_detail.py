@@ -30,7 +30,8 @@ def get_care_site_concepts(root: str, child: str) -> Mapping[str, Tuple[str, Opt
             if care_site_id == "":
                 continue
 
-            if parent_concept_id == "0":
+            if parent_concept_id == "0" or parent_concept_id == "":
+                # Note that `place_of_service_concept_id` is an optional OMOP field (i.e. can be NULL or blank)
                 parent_concept_id = None
 
             new_concepts[care_site_id] = (care_site_name, parent_concept_id)

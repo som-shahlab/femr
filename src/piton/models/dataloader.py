@@ -262,7 +262,7 @@ def create_batches() -> None:
 
     loader_config: Any = {
         "transformer": {
-            "vocab_size": 1024 * 64,
+            "vocab_size": 1024 * 64 // 2, # NOTE: Michael added "// 2" to avoid a json error
             "dictionary": dictionary,
             "min_size": 5,
             "max_size": 14,

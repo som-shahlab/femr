@@ -265,6 +265,8 @@ class CSVReader {
         return current_row;
     }
 
+    // TODO -- add method to get filename from reader
+
     bool next_row() {
         std::string_view line = reader.get_data().substr(current_offset);
 

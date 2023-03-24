@@ -12,7 +12,7 @@ from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabele
 
 
 def get_visit_concepts() -> List[str]:
-    return ["Visit/IP"]
+    return ["Visit/IP", "Visit/OP"]
 
 
 def get_inpatient_admission_concepts() -> List[str]:
@@ -21,12 +21,12 @@ def get_inpatient_admission_concepts() -> List[str]:
 
 def get_death_concepts() -> List[str]:
     return [
-        "Death Type/OMOP generated",
         "Condition Type/OMOP4822053",
     ]
 
 def get_icu_visit_detail_concepts() -> List[str]:
     return [
+        # All care sites with "ICU" (case insensitive) in the name
         'CARE_SITE/7928450', 
         'CARE_SITE/7930385', 
         'CARE_SITE/7930600', 
@@ -113,7 +113,7 @@ def get_icu_events(patient: Patient, ontology: extension_datasets.Ontology, is_r
     icu_visit_detail_codes: Set[int] = get_icu_visit_detail_codes(ontology)
     events: Union[List[Event], List[Tuple[int, Event]]] = []
     for idx, e in enumerate(patient.events):
-        if e.code in icu_visit_detail_codes and e.omop_table == "visit_detail":
+        if e.code in icu_visit_detail_codes and e.omop_table == "visit_occurrence":
             # Error checking
             if e.start is None or e.end is None:
                 raise RuntimeError(f"Event {e} for patient {patient.patient_id} cannot have `None` as its `start` or `end` attribute.")
@@ -765,7 +765,7 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
         return False
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of every hour after every ICU visit. 
+        """Return a list of every hour after every ICU visit, up until death occurs or end of visit.
         Note that this requires creating an artificial event for each hour since there will only be one true
         event per ICU admission, but we'll need to create many subevents (at each hour) within this event.
         Also note that these events may not align with :00 minutes if the ICU visit does not start exactly "on the hour".
@@ -778,6 +778,8 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
         times: List[datetime.datetime] = []
         icu_events: List[Tuple[int, Event]] = get_icu_events(patient, self.ontology, is_return_idx=True) # type: ignore
         icu_event_idxs = [idx for idx, __ in icu_events]
+        death_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        earliest_death_time: datetime.datetime = min(death_times) if len(death_times) > 0 else datetime.datetime.max
         for __, e in icu_events:
             if (
                 e.end is not None
@@ -789,8 +791,10 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
             ):
                 # Record every hour after admission (i.e. every hour between `e.start` and `e.end`),
                 # but only after 4 hours have passed (i.e. start at `e.start + 4 hours`)
+                # and only until the visit ends (`e.end`) or a death event occurs (`earliest_death_time`)
+                end_of_stay: datetime.datetime = min(e.end, earliest_death_time)
                 event_time = e.start + datetime.timedelta(hours=4)
-                while event_time < e.end:
+                while event_time < end_of_stay:
                     times.append(event_time)
                     event_time += datetime.timedelta(hours=1)
         return times
@@ -855,18 +859,11 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
         return valid_events
 
 
-class Harutyunyan_LengthOfStayLabeler(CodeLabeler):
-    # TODO - need to create multiclass labeler
-    """LOS prediciton task from Harutyunyan et al. 2019.
+class Harutyunyan_LengthOfStayLabeler(Labeler):
+    """LOS remaining regression task from Harutyunyan et al. 2019.
     
-    Hourly multiclass prediction task on the patient's remaining length-of-stay in the ICU.
+    Hourly regression task on the patient's remaining length-of-stay (in hours) in the ICU.
     Make prediction every 60 minutes after ICU admission, starting at hour 4.
-    
-    Classification buckets:
-        1. < 24 hours
-        2-8. Day-long buckets for each day of the first week
-        9. >1 week but <=2 weeks
-        10. >2 weeks
     
     Excludes:
         - ICU admissions with no length-of-stay (i.e. `event.end is None` )
@@ -878,41 +875,39 @@ class Harutyunyan_LengthOfStayLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
     ):
-        # TODO
-        # Next 24 hours
-        time_horizon = TimeHorizon(datetime.timedelta(hours=0), datetime.timedelta(hours=24))
-        # Death events
-        outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
-        # Save ontology for `get_prediction_times()`
         self.ontology = ontology
 
-        super().__init__(
-            outcome_codes=outcome_codes,
-            time_horizon=time_horizon,
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a list of all times when the patient experiences an outcome"""
+        outcome_codes = list(
+            map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
         )
-    
-    def is_apply_censoring(self) -> bool:
-        """Consider censored patients to be alive."""
-        return False
+        times: List[datetime.datetime] = []
+        for e in patient.events:
+            if e.code in outcome_codes:
+                times.append(e.start)
+        return times
 
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of every hour after every ICU visit. 
+    def get_labeler_type(self) -> LabelType:
+        return "numeric"
+
+    def label(self, patient: Patient) -> List[Label]:
+        """Return a list of Labels at every hour after every ICU visit, where each Label is the # of hours
+        until the visit ends (or a death event occurs).
         Note that this requires creating an artificial event for each hour since there will only be one true
         event per ICU admission, but we'll need to create many subevents (at each hour) within this event.
         Also note that these events may not align with :00 minutes if the ICU visit does not start exactly "on the hour".
-        
-        This is the same as `get_prediction_times()` for `Harutyunyan_MortalityLabeler`.
         
         Excludes:
             - ICU admissions with no length-of-stay (i.e. `event.end is None` )
             - ICU admissions < 4 hours
             - ICU admissions with no events
         """
-        times: List[datetime.datetime] = []
+        labels: List[Label] = []
         icu_events: List[Tuple[int, Event]] = get_icu_events(patient, self.ontology, is_return_idx=True) # type: ignore
         icu_event_idxs = [idx for idx, __ in icu_events]
+        death_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        earliest_death_time: datetime.datetime = min(death_times) if len(death_times) > 0 else datetime.datetime.max
         for __, e in icu_events:
             if (
                 e.end is not None
@@ -924,11 +919,15 @@ class Harutyunyan_LengthOfStayLabeler(CodeLabeler):
             ):
                 # Record every hour after admission (i.e. every hour between `e.start` and `e.end`),
                 # but only after 4 hours have passed (i.e. start at `e.start + 4 hours`)
+                # and only until the visit ends (`e.end`) or a death event occurs (`earliest_death_time`)
+                end_of_stay: datetime.datetime = min(e.end, earliest_death_time)
                 event_time = e.start + datetime.timedelta(hours=4)
-                while event_time < e.end:
-                    times.append(event_time)
+                while event_time < end_of_stay:
+                    los: float = (end_of_stay - event_time).total_seconds() / 3600
+                    labels.append(Label(event_time, los))
                     event_time += datetime.timedelta(hours=1)
-        return times
+                    assert los >= 0, f"LOS should never be negative, but end_of_stay={end_of_stay} - event_time={event_time} = {end_of_stay - event_time} for patient {patient.patient_id}"
+        return labels
 
 if __name__ == "__main__":
     pass

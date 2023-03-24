@@ -15,11 +15,37 @@ from piton.datasets import EventCollection, PatientCollection
 from piton.extractors.csv import run_csv_extractors
 from piton.extractors.omop import get_omop_csv_extractors
 from piton.transforms import delta_encode, remove_nones
-
+from piton.transforms.stanford import (
+    move_billing_codes,
+    move_pre_birth,
+    move_to_day_end,
+    move_visit_start_to_first_event_start,
+)
 
 def _is_visit_event(e: Event) -> bool:
     return e.omop_table == "visit_occurrence"
 
+def _get_mimic_omop_transformations() -> Sequence[Callable[[Patient], Optional[Patient]]]:
+    """Get the list of current OMOP transformations."""
+    # All of these transformations are information preserving
+    transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
+        move_pre_birth,
+        # move_visit_start_to_first_event_start,
+        # move_to_day_end,
+        # move_billing_codes,
+        # functools.partial(
+        #     remove_nones,  # We have to keep visits in order to sync up visit_ids later in the process
+        #     # If we ever remove or revisit visit_id, we would want to revisit this
+        #     do_not_apply_to_filter=_is_visit_event,
+        # ),
+        # functools.partial(
+        #     delta_encode,  # We have to keep visits in order to sync up visit_ids later in the process
+        #     # If we ever remove or revisit visit_id, we would want to revisit this
+        #     do_not_apply_to_filter=_is_visit_event,
+        # ),
+    ]
+
+    return transforms
 
 def etl_mimic_omop_program() -> None:
     """Extract data from a MIMIC-III-OMOP source to create a piton PatientDatabase."""
@@ -127,7 +153,7 @@ def etl_mimic_omop_program() -> None:
             rootLogger.info("Appling transformations")
             patient_collection = patient_collection.transform(
                 cleaned_patients_dir,
-                [],
+                _get_mimic_omop_transformations(),
                 num_threads=args.num_threads,
                 stats_dict=stats_dict,
             )
