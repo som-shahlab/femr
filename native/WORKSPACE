@@ -306,8 +306,8 @@ git_repository(
 
 http_archive(
     name = "rules_cuda",
-    strip_prefix = "rules_cuda-fc5134f8debb355e7d4a8d55f452542e11b4d6dd",
-    urls = ["https://github.com/Lalaland/rules_cuda/archive/fc5134f8debb355e7d4a8d55f452542e11b4d6dd.zip"],
+    strip_prefix = "rules_cuda-f5dda407d98443b3ec17bba209b92c697e2fe3a6",
+    urls = ["https://github.com/bazel-contrib/rules_cuda/archive/f5dda407d98443b3ec17bba209b92c697e2fe3a6.zip"],
 )
 
 load("@rules_cuda//cuda:repositories.bzl", "register_detected_cuda_toolchains", "rules_cuda_dependencies")
