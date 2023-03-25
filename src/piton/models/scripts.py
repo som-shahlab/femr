@@ -65,6 +65,12 @@ def train_model() -> None:
     parser.add_argument("--internal_dropout", type=float, default=0)
     parser.add_argument("--weight_decay", type=float, default=0)
     parser.add_argument("--max_iter", type=float, default=None)
+    parser.add_argument("--hidden_size", type=float, default=768, help="Transformer hidden size")
+    parser.add_argument("--intermediate_size", type=float, default=3072, help="Transformer intermediate layer size")
+    parser.add_argument("--n_heads", type=float, default=12, help="Transformer # of heads")
+    parser.add_argument("--n_layers", type=float, default=6, help="Transformer # of layers")
+    parser.add_argument("--attention_width", type=float, default=512, help="Transformer attention width.")
+
     parser.add_argument(
         "--early_stopping_window_steps",
         type=int,
@@ -120,12 +126,12 @@ def train_model() -> None:
         "task": task,
         "transformer": {
             "vocab_size": batch_config["transformer"]["vocab_size"],
-            "hidden_size": 768,
-            "intermediate_size": 3072,
-            "n_heads": 12,
-            "n_layers": 6,
+            "hidden_size": args.hidden_size,
+            "intermediate_size": args.intermediate_size,
+            "n_heads": args.n_heads,
+            "n_layers": args.n_layers,
             "rotary": args.rotary_type,
-            "attention_width": (512 - 16),
+            "attention_width": args.attention_width - 16,  # 16 is the width of the tiling
             "internal_dropout": args.internal_dropout,
             "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
             "note_embedding_data": batch_config["transformer"].get("note_embedding_data"),

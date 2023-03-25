@@ -164,6 +164,7 @@ def create_batches() -> None:
     parser.add_argument("--data_path", type=str, required=True, help="The path to the source extract")
     parser.add_argument("--dictionary_path", type=str, required=True, help="The path to the dictionary")
     parser.add_argument("--task", type=str, help="Either clmbr, survival_clmbr, or labeled_patients")
+    parser.add_argument("--transformer_vocab_size", type=int, default=1024 * 64, help="Size of the transformer vocab")
     parser.add_argument(
         "--clmbr_survival_dictionary_path", type=str, help="The survival clmbr dictionary if running that task"
     )
@@ -262,7 +263,7 @@ def create_batches() -> None:
 
     loader_config: Any = {
         "transformer": {
-            "vocab_size": 1024 * 64,
+            "vocab_size": args.transformer_vocab_size,
             "dictionary": dictionary,
             "min_size": 5,
             "max_size": 14,
