@@ -4,11 +4,15 @@ from __future__ import annotations
 import datetime
 from abc import abstractmethod
 from collections import deque
-from typing import Callable, List, Optional, Set, Tuple
+from typing import Any, Callable, List, Optional, Set, Tuple
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
+
+
+def identity(x: Any) -> Any:
+    return x
 
 
 def get_visit_concepts() -> List[str]:
@@ -149,8 +153,8 @@ class WithinVisitLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = lambda x: x,
-        visit_end_adjust_func: Callable = lambda x: x,
+        visit_start_adjust_func: Callable = identity,
+        visit_end_adjust_func: Callable = identity,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
@@ -263,7 +267,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         outcome_codes: List[int],
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x: x,
+        prediction_time_adjustment_func: Callable = identity,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -306,6 +310,10 @@ class CodeLabeler(TimeHorizonEventLabeler):
                 times.append(event.start)
         return times
 
+    def allow_same_time_labels(self) -> bool:
+        # We cannot allow labels at the same time as the codes since they will generally be available as features ...
+        return False
+
 
 class OMOPConceptCodeLabeler(CodeLabeler):
     """Same as CodeLabeler, but add the extra step of mapping OMOP concept IDs
@@ -320,7 +328,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x: x,
+        prediction_time_adjustment_func: Callable = identity,
     ):
         outcome_codes: List[int] = list(
             map_omop_concept_codes_to_piton_codes(
@@ -354,7 +362,7 @@ class MortalityCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x: x,
+        prediction_time_adjustment_func: Callable = identity,
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -379,7 +387,7 @@ class LupusCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = lambda x: x,
+        prediction_time_adjustment_func: Callable = identity,
     ):
         concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
         outcome_codes = list(map_omop_concept_codes_to_piton_codes(ontology, concept_codes, is_ontology_expansion=True))
