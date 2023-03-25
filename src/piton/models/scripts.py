@@ -70,8 +70,7 @@ def train_model() -> None:
     parser.add_argument("--n_heads", type=float, default=12, help="Transformer # of heads")
     parser.add_argument("--n_layers", type=float, default=6, help="Transformer # of layers")
     parser.add_argument("--attention_width", type=float, default=512, help="Transformer attention width.")
-    
-    
+
     parser.add_argument(
         "--early_stopping_window_steps",
         type=int,
@@ -132,7 +131,7 @@ def train_model() -> None:
             "n_heads": args.n_heads,
             "n_layers": args.n_layers,
             "rotary": args.rotary_type,
-            "attention_width": args.attention_width - 16, # 16 is the width of the tiling
+            "attention_width": args.attention_width - 16,  # 16 is the width of the tiling
             "internal_dropout": args.internal_dropout,
             "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
             "note_embedding_data": batch_config["transformer"].get("note_embedding_data"),
