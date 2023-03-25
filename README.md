@@ -14,7 +14,7 @@
 To install **FEMR** run the following, replacing `<FEMR_ENV>` with the desired name of your conda environment:
 
 ```bash
-conda create -n FEMR_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge
+conda create -n FEMR_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge -y
 conda activate FEMR_ENV
 
 export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
