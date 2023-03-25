@@ -454,12 +454,24 @@ class MortalityCodeLabeler(CodeLabeler):
             prediction_time_adjustment_func=prediction_time_adjustment_func,
         )
 
+##########################################################
+##########################################################
+# CLMBR Benchmark Tasks
+# See: https://arxiv.org/pdf/2001.05295.pdf
+# details on how this was reproduced.
+#
+# Citation: Steinberg, Ethan, et al. 
+# "Language models are an effective representation learning technique for electronic health record data." 
+# Journal of biomedical informatics 113 (2021): 103637.
+##########################################################
+##########################################################
 
-class LupusCodeLabeler(CodeLabeler):
+class Steinberg_MortalityLabeler(CodeLabeler):
+    """Decompensation prediction task from Steinberg et al. 2021.
+    
+    Binary prediction task on admission whether the patient dies during inpatient stay.
     """
-    Label if patient is diagnosed with Lupus.
-    """
-
+    
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
@@ -467,254 +479,17 @@ class LupusCodeLabeler(CodeLabeler):
         prediction_codes: Optional[List[int]] = None,
         prediction_time_adjustment_func: Callable = lambda x: x,
     ):
-        concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
-        outcome_codes = list(map_omop_concept_codes_to_femr_codes(ontology, concept_codes, is_ontology_expansion=True))
+        """Create a Mortality labeler."""
+        outcome_codes = list(
+            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
+        )
+
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
             prediction_time_adjustment_func=prediction_time_adjustment_func,
         )
-
-
-class HighHbA1cCodeLabeler(Labeler):
-    """
-    The high HbA1c labeler tries to predict whether a non-diabetic patient will test as diabetic.
-    Note: This labeler will only trigger at most once every 6 months.
-    """
-
-    def __init__(
-        self,
-        ontology: extension_datasets.Ontology,
-        last_trigger_timedelta: datetime.timedelta = datetime.timedelta(days=180),
-    ):
-        """Create a High HbA1c (i.e. diabetes) labeler."""
-        self.last_trigger_timedelta = last_trigger_timedelta
-
-        HbA1c_str: str = "LOINC/4548-4"
-        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_str)
-
-        diabetes_str: str = "SNOMED/44054006"
-        diabetes_code = ontology.get_dictionary().index(diabetes_str)
-        self.diabetes_codes = _get_all_children(ontology, diabetes_code)
-
-    def label(self, patient: Patient) -> List[Label]:
-        if len(patient.events) == 0:
-            return []
-
-        high_cutoff_threshold: float = 6.5
-        labels: List[Label] = []
-        last_trigger: Optional[datetime.datetime] = None
-
-        first_diabetes_code_date = None
-        for event in patient.events:
-            if event.code in self.diabetes_codes:
-                first_diabetes_code_date = event.start
-                break
-
-        for event in patient.events:
-            if first_diabetes_code_date is not None and event.start > first_diabetes_code_date:
-                break
-
-            if event.value is None or type(event.value) is memoryview:
-                continue
-
-            if event.code == self.hba1c_lab_code:
-                is_diabetes = float(event.value) > high_cutoff_threshold
-                if last_trigger is None or (event.start - last_trigger > self.last_trigger_timedelta):
-                    labels.append(
-                        Label(
-                            time=event.start - datetime.timedelta(minutes=1),
-                            value=is_diabetes,
-                        )
-                    )
-                    last_trigger = event.start
-
-                if is_diabetes:
-                    break
-
-        return labels
-
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
-
-
-##########################################################
-##########################################################
-# Labeling functions derived from OMOPConceptCodeLabeler
-##########################################################
-##########################################################
-
-
-class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Hypoglycemia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/267384006', 'SNOMED/421725003', 'SNOMED/719216001',
-        'SNOMED/302866003', 'SNOMED/237633009', 'SNOMED/120731000119103',
-        'SNOMED/190448007', 'SNOMED/230796005', 'SNOMED/421437000',
-        'SNOMED/52767006', 'SNOMED/237637005', 'SNOMED/84371000119108'
-    ]
-    # fmt: on
-
-
-class AKICodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of AKI in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/14669001', 'SNOMED/298015003', 'SNOMED/35455006',
-    ]
-    # fmt: on
-
-
-class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Anemia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/271737000', 'SNOMED/713496008', 'SNOMED/713349004', 'SNOMED/767657005',
-        'SNOMED/111570005', 'SNOMED/691401000119104', 'SNOMED/691411000119101',
-    ]
-    # fmt: on
-
-
-class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Hyperkalemia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/14140009',
-    ]
-    # fmt: on
-
-
-class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Hyponatremia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/267447008', 'SNOMED/89627008'
-    ]
-    # fmt: on
-
-
-class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/267447008', 'SNOMED/89627008',
-    ]
-    # fmt: on
-
-
-class NeutropeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Neutkropenia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/165517008',
-    ]
-    # fmt: on
-
-
-##########################################################
-##########################################################
-# Other labeling functions
-##########################################################
-##########################################################
-
-
-class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
-    """
-    TODO - check
-    The opioid overdose labeler predicts whether or not an opioid overdose will occur in the time horizon
-    after being prescribed opioids.
-    It is conditioned on the patient being prescribed opioids.
-    """
-
-    def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
-        self.time_horizon: TimeHorizon = time_horizon
-
-        dictionary = ontology.get_dictionary()
-        icd9_codes: List[str] = [
-            "E850.0",
-            "E850.1",
-            "E850.2",
-            "965.00",
-            "965.01",
-            "965.02",
-            "965.09",
-        ]
-        icd10_codes: List[str] = ["T40.0", "T40.1", "T40.2", "T40.3", "T40.4"]
-
-        self.overdose_codes: Set[int] = set()
-        for code in icd9_codes:
-            self.overdose_codes |= _get_all_children(ontology, dictionary.index("ICD9CM/" + code))
-        for code in icd10_codes:
-            self.overdose_codes |= _get_all_children(ontology, dictionary.index("ICD10CM/" + code))
-
-        self.opioid_codes = _get_all_children(ontology, dictionary.index("ATC/N02A"))
-
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.overdose_codes`."""
-        times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.overdose_codes:
-                times.append(event.start)
-        return times
-
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a sorted list containing the datetimes at which we'll make a prediction."""
-        times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.opioid_codes:
-                times.append(event.start)
-        return times
-
-    def get_time_horizon(self) -> TimeHorizon:
-        return self.time_horizon
-
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
-
-
-class IsMaleLabeler(Labeler):
-    """Apply a label for whether or not a patient is male or not.
-
-    The prediction time is on admission.
-
-    This is primarily intended as a "debugging" labeler that should be "trivial" and get 1.0 AUROC.
-
-    """
-
-    def __init__(self, ontology: extension_datasets.Ontology):
-        self.male_code: int = ontology.get_dictionary().index("Gender/M")
-
-    def label(self, patient: Patient) -> List[Label]:
-        """Label this patient as Male (TRUE) or not (FALSE)."""
-        # Determine if patient is male
-        is_male: bool = self.male_code in [e.code for e in patient.events]
-
-        # Apply `is_male` label to every admission
-        labels: List[Label] = []
-        for event in patient.events:
-            if event.code in get_inpatient_admission_concepts():
-                labels.append(Label(time=event.start, value=is_male))
-        return labels
-
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
-
 
 
 ##########################################################

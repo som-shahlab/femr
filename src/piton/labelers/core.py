@@ -169,11 +169,11 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             np.array(label_times),
         )
 
-    def get_num_patients(self, include_empty_labels: bool = False) -> int:
+    def get_num_patients(self, is_include_empty_labels: bool = False) -> int:
         """Return the total number of patients. Defaults to only patients with at least one label. 
-            If `include_empty_labels = True`, include patients with zero associated labels.
+            If `is_include_empty_labels = True`, include patients with zero associated labels.
         """
-        if include_empty_labels:
+        if is_include_empty_labels:
             return len(self)
         return len({ key: val for key, val in self.get_patients_to_labels().items() if len(val) > 0 })
 
@@ -185,16 +185,16 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
     
     def get_patients_with_label_values(self, values: List[Any]) -> List[int]:
         """Return the IDs of patients with at least one label whose value is in `values`."""
-        patient_ids: List[int] = []
+        patient_ids: set = set()
         for patient, labels in self.items():
             for label in labels:
                 # NOTE: you can't use `label.value in values` because `in` does an implicit type conversion,
                 # thus `1.0 in [True]` will return True incorrectly
                 for v in values:
                     if label.value == v and isinstance(label.value, type(v)):
-                        patient_ids.append(patient)
+                        patient_ids.add(patient)
                         break
-        return patient_ids
+        return list(patient_ids)
 
     def get_num_labels(self) -> int:
         """Return the total number of labels across all patients."""
