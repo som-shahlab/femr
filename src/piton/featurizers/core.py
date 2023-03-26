@@ -7,7 +7,8 @@ from typing import Any, List, Literal, NamedTuple, Optional, Tuple, TypeVar
 import numpy as np
 import scipy.sparse
 from nptyping import NDArray
-from pathos.pools import ProcessPool
+
+import multiprocessing
 
 from piton import Patient
 from piton.extension import datasets as extension_datasets
@@ -288,16 +289,16 @@ class FeaturizerList:
 
         # Split patients across multiple threads
         patient_ids: List[int] = labeled_patients.get_all_patient_ids()
-        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads)
+        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads * 10)
         tasks = [
             (database_path, patient_ids, labeled_patients, self.featurizers) for patient_ids in patient_ids_per_thread
         ]
 
         # Preprocess in parallel
-        pool = ProcessPool(num_threads)
-        preprocessed_featurizers: List[Featurizer] = [
-            y for x in pool.imap(_run_preprocess_featurizers, tasks) for y in x
-        ]
+        with multiprocessing.Pool(num_threads) as pool:
+            preprocessed_featurizers: List[Featurizer] = [
+                y for x in pool.imap(_run_preprocess_featurizers, tasks) for y in x
+            ]
 
         # Aggregate featurizers
         for idx, featurizer in enumerate(self.featurizers):
@@ -336,14 +337,14 @@ class FeaturizerList:
         """
 
         patient_ids: List[int] = labeled_patients.get_all_patient_ids()
-        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads)
+        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads * 10)
         tasks = [
             (database_path, patient_ids, labeled_patients, self.featurizers) for patient_ids in patient_ids_per_thread
         ]
 
         # Run featurizers in parallel
-        pool = ProcessPool(num_threads)
-        results: List[Tuple[Any, Any, Any, Any]] = list(pool.imap(_run_featurizer, tasks))
+        with multiprocessing.Pool(num_threads) as pool:
+            results: List[Tuple[Any, Any, Any, Any]] = list(pool.imap(_run_featurizer, tasks))
 
         # Join results
         data_matrix = scipy.sparse.vstack([x[0] for x in results])
