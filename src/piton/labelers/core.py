@@ -330,7 +330,7 @@ class Labeler(ABC):
             pids = [p.patient_id for p in patients[:num_patients]]
 
         # Split patient IDs across parallelized processes
-        pid_parts = np.array_split(pids, num_threads)
+        pid_parts = np.array_split(pids, num_threads * 10)
 
         # NOTE: Super hacky workaround to pickling limitations
         if hasattr(self, "ontology") and isinstance(self.ontology, extension_datasets.Ontology):  # type: ignore
@@ -346,10 +346,12 @@ class Labeler(ABC):
 
         # Multiprocessing
         tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts]
-        # results = [_apply_labeling_function(task) for task in tasks]
 
-        with multiprocessing.Pool(num_threads) as pool:
-            results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
+        ctx = multiprocessing.get_context('forkserver')
+        with ctx.Pool(num_threads) as pool:
+            results = []
+            for res in pool.imap_unordered(_apply_labeling_function, tasks):
+                results.append(res)
 
         # Join results and return
         patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
