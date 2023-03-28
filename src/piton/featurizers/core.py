@@ -1,14 +1,13 @@
 """Core featurizer functionality, shared across Featurizers."""
 from __future__ import annotations
 
+import multiprocessing
 from abc import ABC, abstractmethod
 from typing import Any, List, Literal, NamedTuple, Optional, Tuple, TypeVar
 
 import numpy as np
 import scipy.sparse
 from nptyping import NDArray
-
-import multiprocessing
 
 from piton import Patient
 from piton.extension import datasets as extension_datasets
@@ -339,12 +338,16 @@ class FeaturizerList:
         patient_ids: List[int] = labeled_patients.get_all_patient_ids()
         patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads * 10)
         tasks = [
-            (database_path, patient_ids, labeled_patients, self.featurizers) for patient_ids in patient_ids_per_thread
+            (database_path, patient_ids, labeled_patients, self.featurizers)
+            for patient_ids in patient_ids_per_thread
+            if len(patient_ids) > 0
         ]
 
         # Run featurizers in parallel
         with multiprocessing.Pool(num_threads) as pool:
             results: List[Tuple[Any, Any, Any, Any]] = list(pool.imap(_run_featurizer, tasks))
+
+        results = [res for res in results if res[2].shape[0] > 0]
 
         # Join results
         data_matrix = scipy.sparse.vstack([x[0] for x in results])
