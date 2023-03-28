@@ -6,7 +6,7 @@ import logging
 import os
 import pickle
 import random
-from typing import Any, TypeVar
+from typing import TypeVar
 
 import haiku as hk
 import jax
@@ -65,6 +65,12 @@ def train_model() -> None:
     parser.add_argument("--internal_dropout", type=float, default=0)
     parser.add_argument("--weight_decay", type=float, default=0)
     parser.add_argument("--max_iter", type=float, default=None)
+    parser.add_argument("--hidden_size", type=float, default=768, help="Transformer hidden size")
+    parser.add_argument("--intermediate_size", type=float, default=3072, help="Transformer intermediate layer size")
+    parser.add_argument("--n_heads", type=float, default=12, help="Transformer # of heads")
+    parser.add_argument("--n_layers", type=float, default=6, help="Transformer # of layers")
+    parser.add_argument("--attention_width", type=float, default=512, help="Transformer attention width.")
+
     parser.add_argument(
         "--early_stopping_window_steps",
         type=int,
@@ -120,12 +126,12 @@ def train_model() -> None:
         "task": task,
         "transformer": {
             "vocab_size": batch_config["transformer"]["vocab_size"],
-            "hidden_size": 768,
-            "intermediate_size": 3072,
-            "n_heads": 12,
-            "n_layers": 6,
+            "hidden_size": args.hidden_size,
+            "intermediate_size": args.intermediate_size,
+            "n_heads": args.n_heads,
+            "n_layers": args.n_layers,
             "rotary": args.rotary_type,
-            "attention_width": (512 - 16),
+            "attention_width": args.attention_width - 16,  # 16 is the width of the tiling
             "internal_dropout": args.internal_dropout,
             "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
             "note_embedding_data": batch_config["transformer"].get("note_embedding_data"),
@@ -577,9 +583,7 @@ def compute_representations() -> None:
 
     database = piton.datasets.PatientDatabase(args.data_path)
 
-    reprs = []
-    label_ages: Any = []
-    label_pids = []
+    results = []
 
     for split in ("train", "dev", "test"):
         for dev_index in range(loader.get_number_of_batches(split)):
@@ -593,36 +597,51 @@ def compute_representations() -> None:
                 batch,
             )
 
+            repr = np.array(repr)
+
             p_index = batch["transformer"]["label_indices"] // batch["transformer"]["length"]
 
-            reprs.append(repr[: batch["num_indices"], :])
-            label_ages.append(raw_batch["task"]["label_ages"][: batch["num_indices"]])
-            assert raw_batch["task"]["label_ages"].dtype == np.uint32
-            label_pids.append(batch["patient_ids"][p_index][: batch["num_indices"]])
+            for i in range(batch["num_indices"]):
+                r = repr[i, :]
 
-    reprs = np.array(jnp.concatenate(reprs, axis=0))
-    label_ages = np.array(np.concatenate(label_ages, axis=0))
-    assert label_ages.dtype == np.uint32
+                label_pid = raw_batch["patient_ids"][p_index[i]]
+                label_age = raw_batch["task"]["label_ages"][i]
 
-    label_pids = np.array(jnp.concatenate(label_pids, axis=0))
+                offset = raw_batch["offsets"][p_index[i]]
+                results.append((label_pid, label_age, offset, r))
+
+    results.sort(key=lambda a: a[:3])
 
     label_times = []
 
-    for pid, age in zip(label_pids, label_ages):
+    data_matrix = []
+    label_pids = []
+    label_ages = []
+
+    last_label_idx = None
+
+    for pid, age, offset, r in results:
+        # Ignore duplicate
+        if (pid, age) == last_label_idx:
+            continue
+        last_label_idx = (pid, age)
         try:
             birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
             label_time = birth_date + datetime.timedelta(minutes=int(age))
-            label_times.append(label_time)
         except Exception as e:
             print(str(e))
             print(f"PATIENT ID: {pid}, AGE: {age}, BIRTH DATE: {database.get_patient_birth_date(pid)}")
             raise ValueError(f"Could not find a valid label time for {pid}")
+        label_times.append(label_time)
+        data_matrix.append(r)
+        label_pids.append(pid)
+        label_ages.append(age)
 
     result = {
         "data_path": args.data_path,
         "model": args.model_dir,
-        "data_matrix": reprs,
-        "patient_ids": label_pids,
+        "data_matrix": np.stack(data_matrix),
+        "patient_ids": np.array(label_pids),
         "labeling_time": np.array(label_times),
     }
 

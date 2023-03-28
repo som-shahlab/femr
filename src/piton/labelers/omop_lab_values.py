@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Callable, List, Optional, Set
+from typing import Any, Callable, List, Optional, Set
 
 from piton import Event, Patient
 from piton.labelers.core import Label, Labeler, LabelType
@@ -11,6 +11,11 @@ from piton.labelers.omop import get_inpatient_admission_events, map_omop_concept
 from piton.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler
 
 from ..extension import datasets as extension_datasets
+
+
+def identity(x: Any) -> Any:
+    return x
+
 
 ##########################################################
 ##########################################################
@@ -111,6 +116,9 @@ class TomasevLabValueLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
+        severity: str,
+        visit_start_adjust_func: Callable = identity,
+        visit_end_adjust_func: Callable = identity,
     ):
         self.ontology = ontology
         self.outcome_codes: Set[int] = map_omop_concept_codes_to_femr_codes(

@@ -306,22 +306,19 @@ git_repository(
 
 http_archive(
     name = "rules_cuda",
-    sha256 = "f80438bee9906e9ecb1a8a4ae2365374ac1e8a283897281a2db2fb7fcf746333",
-    strip_prefix = "runtime-b1c7cce21ba4661c17ac72421c6a0e2015e7bef3/third_party/rules_cuda",
-    urls = ["https://github.com/tensorflow/runtime/archive/b1c7cce21ba4661c17ac72421c6a0e2015e7bef3.tar.gz"],
+    strip_prefix = "rules_cuda-f5dda407d98443b3ec17bba209b92c697e2fe3a6",
+    urls = ["https://github.com/bazel-contrib/rules_cuda/archive/f5dda407d98443b3ec17bba209b92c697e2fe3a6.zip"],
 )
 
-load("@rules_cuda//cuda:dependencies.bzl", "rules_cuda_dependencies")
+load("@rules_cuda//cuda:repositories.bzl", "register_detected_cuda_toolchains", "rules_cuda_dependencies")
 rules_cuda_dependencies()
-load("@rules_cc//cc:repositories.bzl", "rules_cc_toolchains")
-rules_cc_toolchains()
+register_detected_cuda_toolchains()
 
 dlpack_build = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
 
 http_archive(
     name = "eigen",
-    sha256 = "0215c6593c4ee9f1f7f28238c4e8995584ebf3b556e9dbf933d84feb98d5b9ef",
-    strip_prefix = "eigen-3.3.8",
+    strip_prefix = "eigen-dc252fbf00079ccab57948a164b1421703fe4361",
     urls = [
         "https://gitlab.com/libeigen/eigen/-/archive/3.3.8/eigen-3.3.8.tar.bz2",
     ],
