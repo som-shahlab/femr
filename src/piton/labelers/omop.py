@@ -238,14 +238,14 @@ class WithinVisitLabeler(Labeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = identity,
-        visit_end_adjust_func: Callable = identity,
+        visit_start_adjust_func: Optional[Callable] = None,
+        visit_end_adjust_func: Optional[Callable] = None,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         self.ontology: extension_datasets.Ontology = ontology
-        self.visit_start_adjust_func: Callable = visit_start_adjust_func
-        self.visit_end_adjust_func: Callable = visit_end_adjust_func
+        self.visit_start_adjust_func: Callable = visit_start_adjust_func if visit_start_adjust_func else identity
+        self.visit_end_adjust_func: Callable = visit_end_adjust_func if visit_end_adjust_func else identity
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -354,7 +354,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         outcome_codes: List[int],
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -370,7 +370,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.outcome_codes: List[int] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[int]] = prediction_codes
-        self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
+        self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func if prediction_time_adjustment_func else identity
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
@@ -415,7 +415,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None
     ):
         outcome_codes: List[int] = list(
             map_omop_concept_codes_to_femr_codes(
@@ -428,7 +428,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func,
+            prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity,
         )
 
 
@@ -459,7 +459,7 @@ class MortalityCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=identity if not prediction_time_adjustment_func else prediction_time_adjustment_func,
+            prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity
         )
 
 ##########################################################
@@ -485,7 +485,7 @@ class Steinberg_MortalityLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -496,7 +496,7 @@ class Steinberg_MortalityLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func,
+            prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity,
         )
 
 
