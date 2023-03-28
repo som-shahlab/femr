@@ -597,10 +597,9 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = lambda x: x,
-        visit_end_adjust_func: Callable = lambda x: x,
     ):
         visit_start_adjust_func = lambda x: x + datetime.timedelta(hours=48) # Make prediction 48 hours into ICU admission
+        visit_end_adjust_func = lambda x: x
         super().__init__(ontology, visit_start_adjust_func, visit_end_adjust_func)
     
     def is_apply_censoring(self) -> bool:
