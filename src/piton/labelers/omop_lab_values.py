@@ -27,9 +27,12 @@ from ..extension import datasets as extension_datasets
 class InstantLabValueLabeler(Labeler):
     """Apply a multi-class label for the outcome of a lab test.
     
-        Prediction Time: Immediately before lab result is returned (i.e. 1 second before)
+        Prediction Time: Immediately before lab result is returned (i.e. 1 minute before)
         Time Horizon: The next immediate result for this lab test
         Label: Severity level of lab
+        
+        Excludes:
+            - Labels that occur at the same exact time as the very first event in a patient's history
     """
     
     # parent OMOP concept codes, from which all the outcomes are derived (as children in our ontology)
@@ -49,13 +52,16 @@ class InstantLabValueLabeler(Labeler):
     def label(self, patient: Patient, is_show_warnings: bool = False) -> List[Label]:
         labels: List[Label] = []
         for e in patient.events:
+            if patient.events[0].start == e.start:
+                # Ignore events that occur at the same time as the first event in the patient's history
+                continue
             if e.code in self.outcome_codes:
                 # This is an outcome event
                 if e.value is not None:
                     try:
                         # `e.unit` is string of form "mg/dL", "ounces", etc.
                         label: int = self.label_to_int(self.value_to_label(str(e.value), str(e.unit)))
-                        prediction_time: datetime.datetime = e.start - datetime.timedelta(milliseconds=1)
+                        prediction_time: datetime.datetime = e.start - datetime.timedelta(minutes=1)
                         labels.append(Label(prediction_time, label))
                     except Exception as exception:
                         if is_show_warnings:

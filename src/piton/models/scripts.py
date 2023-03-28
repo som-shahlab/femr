@@ -609,9 +609,14 @@ def compute_representations() -> None:
     label_times = []
 
     for pid, age in zip(label_pids, label_ages):
-        birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
-        label_time = birth_date + datetime.timedelta(minutes=int(age))
-        label_times.append(label_time)
+        try:
+            birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
+            label_time = birth_date + datetime.timedelta(minutes=int(age))
+            label_times.append(label_time)
+        except Exception as e:
+            print(str(e))
+            print(f"PATIENT ID: {pid}, AGE: {age}, BIRTH DATE: {database.get_patient_birth_date(pid)}")
+            raise ValueError(f"Could not find a valid label time for {pid}")
 
     result = {
         "data_path": args.data_path,

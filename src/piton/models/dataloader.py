@@ -211,7 +211,15 @@ def create_batches() -> None:
 
                 for label in labels:
                     age = (label.time - birth_date) / datetime.timedelta(minutes=1)
+                    if label.time <= birth_date:
+                        print(f"Skipping non-positive age ({age}) for label {label} on patient {pid}. This happens when a label time {label.time} is before a patient's birthdate {birth_date}")
+                        continue
+                    if len(data[pid].events) > 0 and data[pid].events[0].start >= label.time:
+                        print(f"Skipping label {label} on patient {pid} because it does not occur after the first event {data[pid].events[0]}")
+                        continue
                     if labeled_patients.labeler_type == "boolean":
+                        value = label.value
+                    elif labeled_patients.labeler_type == "categorical":
                         value = label.value
                     elif labeled_patients.labeler_type == "survival":
                         event_age = (label.value.event_time - birth_date) / datetime.timedelta(minutes=1)
@@ -228,6 +236,8 @@ def create_batches() -> None:
                             "event_time": event_age,
                             "is_censored": label.value.is_censored,
                         }
+                    else:
+                        raise NotImplementedError(f"No support for {labeled_patients.labeler_type} yet in `dataloader.py - create_batches()`")
                     result_labels.append((int(pid), age, value))
 
             task = {
