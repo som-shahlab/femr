@@ -448,7 +448,7 @@ class MortalityCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -459,7 +459,7 @@ class MortalityCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func,
+            prediction_time_adjustment_func=identity if not prediction_time_adjustment_func else prediction_time_adjustment_func,
         )
 
 ##########################################################
