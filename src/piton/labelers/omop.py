@@ -783,9 +783,6 @@ class ChexpertLabeler(ABC):
         Args:
             path_to_patient_database (str, optional): Path to `PatientDatabase` on disk.
                 Must be specified if `patients = None`
-            patients (Sequence[Patient], optional): An Sequence (i.e. list) of `Patient` objects.
-                Must be specified if `path_to_patient_database = None`
-                Typically this will be a `PatientDatabase` object.
             num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
             num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
                 If specified, will take the first `num_patients` in the provided `PatientDatabase` / `patients` list.
