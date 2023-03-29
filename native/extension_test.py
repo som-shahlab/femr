@@ -6,7 +6,7 @@ import extension.datasets as m
 import numpy as np
 import pytest
 
-import piton
+import femr
 
 
 def test_helper(tmp_path, capsys):
@@ -60,26 +60,26 @@ def test_helper(tmp_path, capsys):
 
         assert patient.patient_id == patient_id
         assert patient.events == (
-            piton.Event(start=f("1990-03-08 09:30:00"), code=0, value=None),
-            piton.Event(
+            femr.Event(start=f("1990-03-08 09:30:00"), code=0, value=None),
+            femr.Event(
                 start=f("1990-03-08 10:30:00"),
                 end=f("1990-03-18 10:50:00"),
                 code=0,
                 value=None,
             ),
-            piton.Event(
+            femr.Event(
                 start=f("1990-03-11 14:30:00"),
                 code=2,
                 value="Long Text",
                 visit_id=0,
             ),
-            piton.Event(
+            femr.Event(
                 start=f("1990-03-11 14:30:00"),
                 code=1,
                 value="Short Text",
             ),
-            piton.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1),
-            piton.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5, visit_id=0),
+            femr.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1),
+            femr.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5, visit_id=0),
         )
 
         total = 0

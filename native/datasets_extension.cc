@@ -141,15 +141,15 @@ void register_datasets_extension(py::module& root) {
     register_iterable<absl::Span<const uint32_t>>(root, "IntSpan");
 
     py::module m = root.def_submodule("datasets");
-    py::object piton_root = py::module_::import("piton");
-    if (!piton_root) {
+    py::object femr_root = py::module_::import("femr");
+    if (!femr_root) {
         throw std::runtime_error("Could not import root");
     }
-    py::object python_patient = piton_root.attr("Patient");
+    py::object python_patient = femr_root.attr("Patient");
     if (!python_patient) {
         throw std::runtime_error("Could not import python patient");
     }
-    py::object python_event = piton_root.attr("Event");
+    py::object python_event = femr_root.attr("Event");
     if (!python_event) {
         throw std::runtime_error("Could not import python event");
     }

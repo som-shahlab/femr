@@ -144,8 +144,8 @@ Example usage (Note: This should take ~10 minutes on a 1% extract of STARR-OMOP)
 
 ```bash
 export OMOP_SOURCE=/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_11_09
-export EXTRACT_DESTINATION=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
-export EXTRACT_LOGS=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09_logs
+export EXTRACT_DESTINATION=/local-scratch/nigam/projects/mwornow/femr_starr_omop_cdm5_deid_1pcent_2022_11_09
+export EXTRACT_LOGS=/local-scratch/nigam/projects/mwornow/femr_starr_omop_cdm5_deid_1pcent_2022_11_09_logs
 
 python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
 python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
