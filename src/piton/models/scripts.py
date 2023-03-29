@@ -44,7 +44,7 @@ def create_survival_dictionary() -> None:
 
     args = parser.parse_args()
 
-    piton.extension.dataloader.create_survival(args.output_file, args.data_path, args.num_buckets, args.size)
+    piton.extension.dataloader.create_survival_dictionary(args.data_path, args.output_file, args.num_buckets, args.size)
 
 
 def train_model() -> None:
@@ -279,7 +279,7 @@ def train_model() -> None:
     )
     def compute_loss(params, non_fit_params, rng, config, batch, requires_logits=False):
         total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
-        loss, logits = model.apply(total_params, rng, config, batch, is_training=False)
+        loss, logits, _ = model.apply(total_params, rng, config, batch, is_training=False)
         if requires_logits:
             return loss, logits
         else:
@@ -355,7 +355,7 @@ def train_model() -> None:
     @functools.partial(jax.value_and_grad)
     def loss_value_and_grad(params, non_fit_params, loss_scale, rng, config, batch):
         total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
-        loss, _ = model.apply(total_params, rng, config, batch, is_training=True)
+        loss, _, _ = model.apply(total_params, rng, config, batch, is_training=True)
 
         assert loss.dtype == jnp.float32
 
@@ -421,7 +421,10 @@ def train_model() -> None:
 
     logging.info("Applying decay mask %s", mask_fn(params))
 
-    lr_schedule = make_lr_schedule(warmup_percentage=0.01, total_steps=total_steps)
+    warmup_percentage = 8000 / total_steps
+    logging.info("Warming up for %s", warmup_percentage)
+
+    lr_schedule = make_lr_schedule(warmup_percentage=warmup_percentage, total_steps=total_steps)
     weight_decay = args.weight_decay
     logging.info("Using weight decay %s", weight_decay)
     opt = optax.chain(

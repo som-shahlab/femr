@@ -743,21 +743,6 @@ class BatchCreator {
                 npy::LoadArrayFromNumpy(event_indices_stream, shape,
                                         fortran_order, current_indices);
 
-                if (false) {
-                    std::cout << "Reading event indices ... " << std::endl;
-                    std::cout << "Shape: ";
-                    for (const auto& a : shape) {
-                        std::cout << a << " ";
-                    }
-                    std::cout << std::endl;
-
-                    std::cout << "Values: ";
-                    for (const auto& a : current_indices) {
-                        std::cout << a << " ";
-                    }
-                    std::cout << std::endl;
-                }
-
                 auto embedding_entry = reader->get_int(p.patient_id * 2 + 1);
 
                 std::string embedding_bytes(embedding_entry.first,
@@ -799,22 +784,6 @@ class BatchCreator {
 
             bool is_note = (note_iter != std::end(current_indices)) &&
                            ((size_t)*note_iter == event_index);
-
-            if (false && is_note) {
-                std::cout << "What in the world " << p.patient_id << " "
-                          << event_index << " " << int(event.value_type) << " "
-                          << event.text_value << std::endl;
-                std::cout << "Lol?" << std::endl;
-                const Dictionary* dict;
-                if (event.value_type == ValueType::UNIQUE_TEXT) {
-                    dict = data.get_unique_text_dictionary();
-                } else {
-                    dict = &(data.get_shared_text_dictionary());
-                }
-                std::string_view item = (*dict)[event.text_value];
-                std::cout << "Got it next " << item.size() << std::endl;
-                std::cout << "Sure " << std::string(item) << std::endl;
-            }
 
             std::vector<uint32_t> features;
             if (!is_note) {

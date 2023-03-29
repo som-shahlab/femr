@@ -215,8 +215,7 @@ def create_batches() -> None:
                     if labeled_patients.labeler_type == "boolean":
                         value = label.value
                     elif labeled_patients.labeler_type == "survival":
-                        event_age = (label.value.event_time - birth_date) / datetime.timedelta(minutes=1)
-                        event_offset = event_age - age
+                        event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
                         if event_offset == 0:
                             continue
@@ -226,7 +225,7 @@ def create_batches() -> None:
                         total_events += not label.value.is_censored
 
                         value = {
-                            "event_time": event_age,
+                            "event_time": event_offset + age,
                             "is_censored": label.value.is_censored,
                         }
                     result_labels.append((int(pid), age, value))

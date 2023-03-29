@@ -195,6 +195,10 @@ void create_dictionary(const std::string& input, const std::string& output) {
         entry.weight =
             baseline * (weight * log(weight) + (1 - weight) * log(1 - weight));
 
+        if (weight == 0 || weight == 1) {
+            entry.weight = 0;
+        }
+
         h_entries.push_back(entry);
     }
 
