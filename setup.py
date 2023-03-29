@@ -69,7 +69,7 @@ class cmake_build_ext(build_ext):
 
 setuptools.setup(
     ext_modules=[
-        BazelExtension("piton.extension", "extension.so", "native"),
+        BazelExtension("femr.extension", "extension.so", "native"),
     ],
     cmdclass={"build_ext": cmake_build_ext},
     zip_safe=False,

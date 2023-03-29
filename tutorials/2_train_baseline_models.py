@@ -11,8 +11,8 @@ from sklearn.linear_model import LogisticRegressionCV
 from sklearn.metrics import auc, precision_recall_curve
 from sklearn.preprocessing import MaxAbsScaler
 
-import piton
-import piton.datasets
+import femr
+import femr.datasets
 
 """
 Example running:
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     assert 0 < percent_train < 1, f"percent_train must be between 0 and 1, not {percent_train}"
 
     # Load PatientDatabase
-    database = piton.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
+    database = femr.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
     # Load featurized patients

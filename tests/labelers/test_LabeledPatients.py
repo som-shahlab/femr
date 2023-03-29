@@ -8,9 +8,9 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
-from piton.labelers.omop import CodeLabeler
+import femr.datasets
+from femr.labelers.core import Label, LabeledPatients, TimeHorizon
+from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -77,7 +77,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
         (event((2016, 3, 1, 10, 10, 10), 2, None), "out of range"),
         # fmt: on
     ]
-    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
+    patients: List[femr.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
         (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool)
     ]

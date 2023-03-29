@@ -7,20 +7,20 @@ from typing import Dict, Mapping, Sequence
 
 import zstandard as zst
 
-import piton
-import piton.datasets
-from piton.extractors.csv import run_csv_extractors
+import femr
+import femr.datasets
+from femr.extractors.csv import run_csv_extractors
 
 
-class DummyConverter(piton.extractors.csv.CSVExtractor):
+class DummyConverter(femr.extractors.csv.CSVExtractor):
     def get_patient_id_field(self) -> str:
         return "patient_id"
 
     def get_file_prefix(self) -> str:
         return "temp"
 
-    def get_events(self, row: Mapping[str, str]) -> Sequence[piton.Event]:
-        e = piton.Event(
+    def get_events(self, row: Mapping[str, str]) -> Sequence[femr.Event]:
+        e = femr.Event(
             start=datetime.datetime(int(row["event_start"]), 1, 1),
             code=int(row["event_code"]),
             value=row["event_value"],
