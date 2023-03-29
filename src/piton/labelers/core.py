@@ -39,12 +39,12 @@ class SurvivalValue:
 
 LabelType = Union[
     Literal["boolean"],
-    Literal["numeric"],
+    Literal["numerical"],
     Literal["survival"],
     Literal["categorical"],
 ]
 
-VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
+VALID_LABEL_TYPES = ["boolean", "numerical", "survival", "categorical"]
 
 
 @dataclass

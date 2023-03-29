@@ -671,7 +671,7 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
         return times
 
     def get_labeler_type(self) -> LabelType:
-        return "numeric"
+        return "numerical"
 
     def label(self, patient: Patient) -> List[Label]:
         """Return a list of Labels at every hour after every ICU visit, where each Label is the # of hours
@@ -710,6 +710,7 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
                     event_time += datetime.timedelta(hours=1)
                     assert los >= 0, f"LOS should never be negative, but end_of_stay={end_of_stay} - event_time={event_time} = {end_of_stay - event_time} for patient {patient.patient_id}"
         return labels
+
 
 if __name__ == "__main__":
     pass
