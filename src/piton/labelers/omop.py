@@ -4,6 +4,7 @@ from __future__ import annotations
 import collections
 import datetime
 import multiprocessing
+import random
 from abc import ABC, abstractmethod
 from collections import deque
 from datetime import timedelta
@@ -646,12 +647,13 @@ class IsMaleLabeler(Labeler):
         return "boolean"
 
 
-def _apply_labeling_function(args: Tuple[Any, str, List[int]]) -> Dict[int, List[Label]]:
+def _apply_labeling_function(args: Tuple[Any, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
     labeling_function: Any = args[0]
     path_to_patient_database: str = args[1]
     patient_ids: List[int] = args[2]
+    num_labels: Optional[int] = args[3]
 
     patients = PatientDatabase(path_to_patient_database)
 
@@ -659,6 +661,10 @@ def _apply_labeling_function(args: Tuple[Any, str, List[int]]) -> Dict[int, List
     for patient_id in patient_ids:
         patient: Patient = patients[patient_id]  # type: ignore
         labels: List[Label] = labeling_function.label(patient)
+
+        if num_labels is not None:
+            labels = random.choices(labels, k=num_labels)
+
         patients_to_labels[patient_id] = labels
 
     return patients_to_labels
@@ -758,7 +764,7 @@ class ChexpertLabeler(ABC):
             if prediction_time <= start_time:
                 continue
 
-            bool_labels = row[labels_str].to_list()
+            bool_labels = row[labels_str].astype(int).to_list()
             label_string = "".join([str(x) for x in bool_labels])
             label_num = int(label_string, 2)
             labels.append(Label(time=prediction_time, value=label_num))
@@ -770,6 +776,7 @@ class ChexpertLabeler(ABC):
         path_to_patient_database: str,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
+        num_labels: Optional[int] = None,
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -797,7 +804,7 @@ class ChexpertLabeler(ABC):
         pid_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
-        tasks = [(self, path_to_patient_database, pid_part) for pid_part in pid_parts]
+        tasks = [(self, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts]
         # results = [_apply_labeling_function(task) for task in tasks]
 
         with multiprocessing.Pool(num_threads) as pool:
