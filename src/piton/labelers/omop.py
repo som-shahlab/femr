@@ -659,15 +659,33 @@ def _apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]
     chexpert_df = pd.read_csv(path_to_chexpert_csv, sep="\t")
     patients = PatientDatabase(path_to_patient_database)
 
+    labels_str = [
+        "No Finding",
+        "Enlarged Cardiomediastinum",
+        "Cardiomegaly",
+        "Lung Lesion",
+        "Lung Opacity",
+        "Edema",
+        "Consolidation",
+        "Pneumonia",
+        "Atelectasis",
+        "Pneumothorax",
+        "Pleural Effusion",
+        "Pleural Other",
+        "Fracture",
+        "Support Devices",
+    ]
+
+    chexpert_df[labels_str] = (chexpert_df[labels_str] == 1)*1
+
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
         patient: Patient = patients[patient_id]  # type: ignore
         patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
+
+        if num_labels is not None and num_labels < len(patient_df):
+            patient_df = patient_df.sample(n = num_labels, random_state=0)
         labels: List[Label] = labeling_function.label(patient, patient_df)
-
-        if num_labels is not None:
-            labels = random.choices(labels, k=num_labels)
-
         patients_to_labels[patient_id] = labels
 
     return patients_to_labels
@@ -755,6 +773,8 @@ class ChexpertLabeler(ABC):
             "Fracture",
             "Support Devices",
         ]
+
+        # patient_df[labels_str] = (patient_df[labels_str] == 1)*1
 
         for idx, row in patient_df.iterrows():
             label_time = row["time_stamp"]
