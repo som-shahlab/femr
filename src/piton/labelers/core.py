@@ -368,9 +368,9 @@ class Labeler(ABC):
             self.labeler.ontology: extension_datasets.Ontology = None  # type: ignore
 
         # Multiprocessing
-        tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts]
+        tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts if len(pid_part) > 0]
 
-        ctx = multiprocessing.get_context('forkserver')
+        ctx = multiprocessing.get_context("forkserver")
         with ctx.Pool(num_threads) as pool:
             results = []
             for res in pool.imap_unordered(_apply_labeling_function, tasks):
