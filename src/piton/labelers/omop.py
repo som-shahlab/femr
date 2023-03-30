@@ -647,20 +647,23 @@ class IsMaleLabeler(Labeler):
         return "boolean"
 
 
-def _apply_labeling_function(args: Tuple[Any, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
+def _apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
     labeling_function: Any = args[0]
-    path_to_patient_database: str = args[1]
-    patient_ids: List[int] = args[2]
-    num_labels: Optional[int] = args[3]
+    path_to_chexpert_csv: str = args[1]
+    path_to_patient_database: str = args[2]
+    patient_ids: List[int] = args[3]
+    num_labels: Optional[int] = args[4]
 
+    chexpert_df = pd.read_csv(path_to_chexpert_csv, sep="\t")
     patients = PatientDatabase(path_to_patient_database)
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
         patient: Patient = patients[patient_id]  # type: ignore
-        labels: List[Label] = labeling_function.label(patient)
+        patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
+        labels: List[Label] = labeling_function.label(patient, patient_df)
 
         if num_labels is not None:
             labels = random.choices(labels, k=num_labels)
@@ -700,7 +703,7 @@ class ChexpertLabeler(ABC):
 
         chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
         patient_id = patient.patient_id
-        patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
+        
         patient_df = patient_df.sort_values(by=["time_stamp"], ascending=True)
 
         start_time, _ = self.get_patient_start_end_times(patient)
@@ -725,16 +728,13 @@ class ChexpertLabeler(ABC):
         """Map each multi-label setting to a single label"""
         return "categorical"
 
-    def label(self, patient: Patient) -> List[Label]:
+    def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:
         """
         TODO
         """
         labels: List[Label] = []
 
-        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
-
         patient_id = patient.patient_id
-        patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
         patient_df = patient_df.sort_values(by=["time_stamp"], ascending=True)
 
         start_time, _ = self.get_patient_start_end_times(patient)
@@ -801,7 +801,7 @@ class ChexpertLabeler(ABC):
         pid_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
-        tasks = [(self, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts]
+        tasks = [(self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts]
         # results = [_apply_labeling_function(task) for task in tasks]
 
         with multiprocessing.Pool(num_threads) as pool:
