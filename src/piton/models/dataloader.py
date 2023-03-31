@@ -222,6 +222,8 @@ def create_batches() -> None:
                         value = label.value
                     elif labeled_patients.labeler_type == "categorical":
                         value = label.value
+                    elif labeled_patients.labeler_type == "numerical":
+                        value = label.value
                     elif labeled_patients.labeler_type == "survival":
                         event_age = (label.value.event_time - birth_date) / datetime.timedelta(minutes=1)
                         event_offset = event_age - age

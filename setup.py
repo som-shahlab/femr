@@ -50,7 +50,7 @@ class cmake_build_ext(build_ext):
 
             subprocess.run(
                 # "opt" == optimized build
-                args=["bazel", "build", "-c", "dbg", ext.target] + extra_args,
+                args=["bazel", "build", "-c", "opt", ext.target] + extra_args,
                 cwd=ext.sourcedir,
                 env=env,
                 check=True,

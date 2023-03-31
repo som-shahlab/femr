@@ -23,6 +23,10 @@ def get_inpatient_admission_concepts() -> List[str]:
     return ["Visit/IP"]
 
 
+def get_outpatient_visit_concepts() -> List[str]:
+    return ["Visit/OP"]
+
+
 def get_death_concepts() -> List[str]:
     return [
         "Condition Type/OMOP4822053",
@@ -77,7 +81,7 @@ def map_omop_concepts_to_femr_codes(ontology: extension_datasets.Ontology,
                                     concepts: List[str],
                                     is_get_children: bool = True, 
                                     is_silent_not_found_error: bool = True) -> Set[int]:
-    """Converts OMOP concept names (strings from OHDSI) to FEMR event codes (integers internal to FEMR).
+    """Converts OMOP concept names (strings from OHDSI, e.g. SNOMED/19303) to FEMR event codes (integers internal to FEMR).
 
     Args:
         ontology (extension_datasets.Ontology): FEMR ontology
@@ -111,6 +115,10 @@ def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
     return map_omop_concepts_to_femr_codes(ontology, get_inpatient_admission_concepts(), is_get_children=False, is_silent_not_found_error=True)
 
+def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
+    return map_omop_concepts_to_femr_codes(ontology, get_outpatient_visit_concepts(), is_get_children=False, is_silent_not_found_error=True)
+
+
 def get_icu_events(patient: Patient, ontology: extension_datasets.Ontology, is_return_idx: bool = False) -> Union[List[Event], List[Tuple[int, Event]]]:
     """Return all ICU events for this patient.
     If `is_return_idx` is True, then return a list of tuples (event, idx) where `idx` is the index of the event in `patient.events`."""
@@ -127,6 +135,22 @@ def get_icu_events(patient: Patient, ontology: extension_datasets.Ontology, is_r
                 events.append((idx, e)) # type: ignore
             else:
                 events.append(e)
+    return events
+
+def get_outpatient_visit_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
+    admission_codes: Set[int] = get_outpatient_visit_codes(ontology)
+    events: List[Event] = []
+    for e in patient.events:
+        if e.code in admission_codes and e.omop_table == "visit_occurrence":
+            # Error checking
+            if e.start is None or e.end is None:
+                raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
+            elif e.start > e.end:
+                raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
+            # Drop single point in time events
+            if e.start == e.end:
+                continue
+            events.append(e)
     return events
 
 def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
