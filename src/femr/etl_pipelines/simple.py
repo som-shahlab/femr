@@ -1,39 +1,37 @@
 """An ETL script for doing an end to end transform of our custom "simple" data format into a PatientDatabase."""
 
 import argparse
+import contextlib
 import csv
 import datetime
 import json
 import logging
+import multiprocessing
 import os
 import resource
-import multiprocessing
-import contextlib
-from typing import Callable, Dict, Optional, Sequence, Set, Mapping, Tuple
+from typing import Callable, Dict, Mapping, Optional, Sequence, Set, Tuple
 
-from femr import Patient, Event
+from femr import Event, Patient
 from femr.datasets import EventCollection, PatientCollection
+
 
 def get_concept_ids_from_file(filename: str) -> Set[str]:
     resulting_concepts = set()
-    
+
     with contextlib.ExitStack() as stack:
         f: Iterable[str]
         if filename.endswith(".csv.zst"):
             # Support Zstandard compressed CSVs
-            f = stack.enter_context(
-                io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(filename, "rb")))
-            )
+            f = stack.enter_context(io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(filename, "rb"))))
         else:
             # Support normal CSVs
             f = stack.enter_context(open(filename, "r"))
-        
+
         reader = csv.DictReader(f)
         for row in reader:
-            resulting_concepts.add(row['code'])
+            resulting_concepts.add(row["code"])
 
     return resulting_concepts
-
 
 
 def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollection]) -> None:
@@ -43,9 +41,7 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
         f: Iterable[str]
         if filename.endswith(".csv.zst"):
             # Support Zstandard compressed CSVs
-            f = stack.enter_context(
-                io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(filename, "rb")))
-            )
+            f = stack.enter_context(io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(filename, "rb"))))
         else:
             # Support normal CSVs
             f = stack.enter_context(open(filename, "r"))
@@ -54,13 +50,16 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
 
         reader = csv.DictReader(f)
         for row in reader:
-            assert '/' in row['code'], f"Code must include vocabulary type with a / prefix, but {row} doesn't have one"
-            event = Event(start=datetime.datetime.fromisoformat(row['start']), code=concept_map[row['code']], value=row['value'])
+            assert "/" in row["code"], f"Code must include vocabulary type with a / prefix, but {row} doesn't have one"
+            event = Event(
+                start=datetime.datetime.fromisoformat(row["start"]), code=concept_map[row["code"]], value=row["value"]
+            )
             for k, v in row.items():
-                if k not in ('start', 'code', 'value', 'patient_id'):
+                if k not in ("start", "code", "value", "patient_id"):
                     setattr(event, k, v)
 
-            writer.add_event(int(row['patient_id']), event)
+            writer.add_event(int(row["patient_id"]), event)
+
 
 def etl_simple_femr_program() -> None:
     """Extract data from an generic OMOP source to create a femr PatientDatabase."""
@@ -140,25 +139,29 @@ def etl_simple_femr_program() -> None:
 
             os.mkdir(omop_dir)
             concept_id_map = {}
-            with open(os.path.join(omop_dir, 'concept.csv'), 'w') as f:
-                writer = csv.DictWriter(f, ['concept_id', 'concept_name', 'vocabulary_id', 'standard_concept', 'concept_code'])
+            with open(os.path.join(omop_dir, "concept.csv"), "w") as f:
+                writer = csv.DictWriter(
+                    f, ["concept_id", "concept_name", "vocabulary_id", "standard_concept", "concept_code"]
+                )
                 writer.writeheader()
                 for i, concept_id in enumerate(concept_ids):
                     index = i + 1
-                    prefix_index = concept_id.index('/')
+                    prefix_index = concept_id.index("/")
                     vocab = concept_id[:prefix_index]
-                    code = concept_id[prefix_index + 1:]
-                    writer.writerow({
-                        'concept_id': index,
-                        'concept_name': concept_id,
-                        'vocabulary_id': vocab,
-                        'standard_concept': '',
-                        'concept_code': code,
-                    })
+                    code = concept_id[prefix_index + 1 :]
+                    writer.writerow(
+                        {
+                            "concept_id": index,
+                            "concept_name": concept_id,
+                            "vocabulary_id": vocab,
+                            "standard_concept": "",
+                            "concept_code": code,
+                        }
+                    )
                     concept_id_map[concept_id] = index
 
-            os.mkdir(os.path.join(omop_dir, 'concept_relationship'))
-            
+            os.mkdir(os.path.join(omop_dir, "concept_relationship"))
+
             event_collection = EventCollection(event_dir)
             with multiprocessing.Pool(args.num_threads) as pool:
                 tasks = [(fname, concept_id_map, event_collection) for fname in input_files]
