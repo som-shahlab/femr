@@ -4,14 +4,18 @@ import argparse
 import contextlib
 import csv
 import datetime
-import json
 import logging
 import multiprocessing
 import os
 import resource
-from typing import Callable, Dict, Mapping, Optional, Sequence, Set, Tuple
+import multiprocessing
+import contextlib
+from typing import Set, Mapping, Tuple, Iterable
 
-from femr import Event, Patient
+import io
+import zstandard
+
+from femr import Event
 from femr.datasets import EventCollection, PatientCollection
 
 
