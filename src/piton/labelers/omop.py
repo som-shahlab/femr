@@ -125,12 +125,16 @@ def get_icu_events(patient: Patient, ontology: extension_datasets.Ontology, is_r
     icu_visit_detail_codes: Set[int] = get_icu_visit_detail_codes(ontology)
     events: Union[List[Event], List[Tuple[int, Event]]] = []
     for idx, e in enumerate(patient.events):
-        if e.code in icu_visit_detail_codes and e.omop_table == "visit_occurrence":
+        # `visit_detail` is more accurate + comprehensive than `visit_occurrence` for ICU events for STARR OMOP for some reason
+        if e.code in icu_visit_detail_codes and e.omop_table == "visit_detail":
             # Error checking
             if e.start is None or e.end is None:
                 raise RuntimeError(f"Event {e} for patient {patient.patient_id} cannot have `None` as its `start` or `end` attribute.")
             elif e.start > e.end:
                 raise RuntimeError(f"Event {e} for patient {patient.patient_id} cannot have `start` after `end`.")
+            # Drop single point in time events
+            if e.start == e.end:
+                continue
             if is_return_idx:
                 events.append((idx, e)) # type: ignore
             else:
