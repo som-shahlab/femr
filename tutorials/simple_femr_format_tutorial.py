@@ -32,32 +32,32 @@ Everything will be resorted and joined as part of the ETL process.
 
 import os
 
-TARGET_DIR = 'trash/simple_femr'
+TARGET_DIR = "trash/simple_femr"
 os.mkdir(TARGET_DIR)
 
-INPUT_DIR = os.path.join(TARGET_DIR, 'simple_input')
+INPUT_DIR = os.path.join(TARGET_DIR, "simple_input")
 os.mkdir(INPUT_DIR)
 
 """
 Write an example file.
 """
 
-with open(os.path.join(INPUT_DIR, 'example.csv'), 'w') as f:
-    f.write('patient_id,start,code,value,dosage\n')
-    f.write('2,1994-01-03,Birth/Birth,,\n') # First event is always birth
-    
-    f.write('2,1994-03-06,Drug/Atorvastatin,,50mg\n') # Example usage of dosage
-    
-    f.write('2,1994-02-03,ICD10CM/E11.4,,\n') # Note how events can be out of order 
+with open(os.path.join(INPUT_DIR, "example.csv"), "w") as f:
+    f.write("patient_id,start,code,value,dosage\n")
+    f.write("2,1994-01-03,Birth/Birth,,\n")  # First event is always birth
 
-    f.write('2,1994-07-09,Vitals/Blood Pressure,150,\n') # Example use of a numeric value
+    f.write("2,1994-03-06,Drug/Atorvastatin,,50mg\n")  # Example usage of dosage
+
+    f.write("2,1994-02-03,ICD10CM/E11.4,,\n")  # Note how events can be out of order
+
+    f.write("2,1994-07-09,Vitals/Blood Pressure,150,\n")  # Example use of a numeric value
 
 """
 Convert the directory to an extract
 """
 
-LOG_DIR = os.path.join(TARGET_DIR, 'logs')
-EXTRACT_DIR = os.path.join(TARGET_DIR, 'extract')
+LOG_DIR = os.path.join(TARGET_DIR, "logs")
+EXTRACT_DIR = os.path.join(TARGET_DIR, "extract")
 
 os.system(f"etl_simple_femr {INPUT_DIR} {EXTRACT_DIR} {LOG_DIR} --num_threads 2")
 
@@ -81,7 +81,7 @@ original_id = database.get_original_patient_id(0)
 print("Oiringla id for patient 0", original_id)
 
 # Also note that concepts have been mapped to integers
-print("What code 3 means", database.get_code_dictionary()[3]) # Returns what code=0 means in the database
+print("What code 3 means", database.get_code_dictionary()[3])  # Returns what code=0 means in the database
 
 # You can pull things like dosage by looking at the event
 for event in patient.events:
