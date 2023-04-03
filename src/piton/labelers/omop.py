@@ -1,14 +1,23 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
 
+import collections
 import datetime
-from abc import abstractmethod
+import multiprocessing
+import random
+from abc import ABC, abstractmethod
 from collections import deque
-from typing import Callable, List, Union, Set, Tuple, Optional, Any
+from datetime import timedelta
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+import numpy as np
+import pandas as pd
+
+from piton.datasets import PatientDatabase
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
+from .core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
 
 def identity(x: Any) -> Any:
@@ -738,6 +747,172 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
                     event_time += datetime.timedelta(hours=1)
                     assert los >= 0, f"LOS should never be negative, but end_of_stay={end_of_stay} - event_time={event_time} = {end_of_stay - event_time} for patient {patient.patient_id}"
         return labels
+
+
+def _apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
+    """Apply a labeling function to the set of patients included in `patient_ids`.
+    Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
+    labeling_function: Any = args[0]
+    path_to_chexpert_csv: str = args[1]
+    path_to_patient_database: str = args[2]
+    patient_ids: List[int] = args[3]
+    num_labels: Optional[int] = args[4]
+
+    chexpert_df = pd.read_csv(path_to_chexpert_csv, sep="\t")
+    patients = PatientDatabase(path_to_patient_database)
+
+    labels_str = [
+        "No Finding",
+        "Enlarged Cardiomediastinum",
+        "Cardiomegaly",
+        "Lung Lesion",
+        "Lung Opacity",
+        "Edema",
+        "Consolidation",
+        "Pneumonia",
+        "Atelectasis",
+        "Pneumothorax",
+        "Pleural Effusion",
+        "Pleural Other",
+        "Fracture",
+        "Support Devices",
+    ]
+
+    chexpert_df[labels_str] = (chexpert_df[labels_str] == 1)*1
+
+    patients_to_labels: Dict[int, List[Label]] = {}
+    for patient_id in patient_ids:
+        patient: Patient = patients[patient_id]  # type: ignore
+        patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
+
+        if num_labels is not None and num_labels < len(patient_df):
+            patient_df = patient_df.sample(n = num_labels, random_state=0)
+        labels: List[Label] = labeling_function.label(patient, patient_df)
+        patients_to_labels[patient_id] = labels
+
+    return patients_to_labels
+
+
+class ChexpertLabeler(Labeler):
+    """CheXpert labeler.
+
+    Multi-label classification task of patient's radiology reports.
+    Make prediction 24 hours before radiology note is recorded.
+
+    Excludes:
+        - Radiology reports that are written <=24 hours of a patient's first event (i.e. `patient.events[0].start`)
+    """
+
+    def __init__(
+        self,
+        path_to_chexpert_csv: str,
+    ):
+        self.path_to_chexpert_csv = path_to_chexpert_csv
+
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a list of all times when the patient has a radiology report"""
+
+        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
+        
+        patient_df = chexpert_df.sort_values(by=["time_stamp"], ascending=True)
+
+        start_time, _ = self.get_patient_start_end_times(patient)
+
+        outcome_times = []
+        for idx, row in patient_df.iterrows():
+            label_time = row["time_stamp"]
+            label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
+            prediction_time = label_time - timedelta(hours=24)
+
+            if prediction_time <= start_time:
+                continue
+            outcome_times.append(label_time)
+
+        return outcome_times
+
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        outcome_times = self.get_outcome_times(patient)
+        return [outcome_time - timedelta(hours=24) for outcome_time in outcome_times]
+
+    def get_labeler_type(self) -> LabelType:
+        return "categorical"
+
+    def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:
+        labels: List[Label] = []
+
+        patient_df = patient_df.sort_values(by=["time_stamp"], ascending=True)
+        start_time, _ = self.get_patient_start_end_times(patient)
+
+        labels_str = [
+            "No Finding",
+            "Enlarged Cardiomediastinum",
+            "Cardiomegaly",
+            "Lung Lesion",
+            "Lung Opacity",
+            "Edema",
+            "Consolidation",
+            "Pneumonia",
+            "Atelectasis",
+            "Pneumothorax",
+            "Pleural Effusion",
+            "Pleural Other",
+            "Fracture",
+            "Support Devices",
+        ]
+
+        for idx, row in patient_df.iterrows():
+            label_time = row["time_stamp"]
+            label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
+            prediction_time = label_time - timedelta(days=1)
+
+            if prediction_time <= start_time:
+                continue
+
+            bool_labels = row[labels_str].astype(int).to_list()
+            label_string = "".join([str(x) for x in bool_labels])
+            label_num = int(label_string, 2)
+            labels.append(Label(time=prediction_time, value=label_num))
+
+        return labels
+
+    def apply(
+        self,
+        path_to_patient_database: str,
+        num_threads: int = 1,
+        num_patients: Optional[int] = None,
+        num_labels: Optional[int] = None,
+    ) -> LabeledPatients:
+        """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
+
+        Args:
+            path_to_patient_database (str, optional): Path to `PatientDatabase` on disk.
+                Must be specified if `patients = None`
+            num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
+            num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
+                If specified, will take the first `num_patients` in the provided `PatientDatabase` / `patients` list.
+                If None, use all patients.
+
+        Returns:
+            LabeledPatients: Maps patients to labels
+        """
+        # Split patient IDs across parallelized processes
+        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
+        pids = list(chexpert_df["piton_patient_id"].unique())
+
+        if num_patients is not None:
+            pids = pids[:num_patients]
+
+        pid_parts = np.array_split(pids, num_threads)
+
+        # Multiprocessing
+        tasks = [(self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts]
+
+        with multiprocessing.Pool(num_threads) as pool:
+            results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
+
+        # Join results and return
+        patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
+        return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
 if __name__ == "__main__":

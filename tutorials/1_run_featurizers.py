@@ -11,10 +11,10 @@ from piton.featurizers.core import FeaturizerList
 from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
 from piton.labelers.omop import (
-    HighHbA1cCodeLabeler, 
     LupusCodeLabeler,
     Harutyunyan_DecompensationLabeler,
     Harutyunyan_MortalityLabeler,
+    ChexpertLabeler,
 )
 from piton.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
@@ -64,6 +64,15 @@ To run a real labeler:
         --labeling_function anemia_lab \
         --max_labels_per_patient 5 \
         --num_threads 20
+
+
+    # This is specific to Chexpert Labeler, which is a bit different than other labelers
+    python3 1_run_featurizers.py \
+        /local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2023_02_08_extract_v8 \
+        /local-scratch/nigam/projects/rthapa84/data/MLHC/chexpert \
+        --labeling_function chexpert \
+        --num_threads 20 \
+        --path_to_chexpert_csv /local-scratch/nigam/projects/rthapa84/data/MLHC/chexpert_labeled_radiology_notes_03_01_23.csv
 """
 
 
@@ -93,6 +102,7 @@ LABELING_FUNCTIONS: List[str] = [
     "hypoglycemia_lab",
     "hyponatremia_lab",
     "anemia_lab",
+    "chexpert",
 ]
 
 if __name__ == "__main__":
@@ -147,6 +157,12 @@ if __name__ == "__main__":
         help="Number of patients to use (used for DEBUGGING)",
         default=None,
     )
+    parser.add_argument(
+        "--path_to_chexpert_csv",
+        type=str,
+        help="Path to chexpert labeled csv file. Specific to chexpert labeler",
+        default=None,
+    )
 
     # Parse CLI args
     args = parser.parse_args()
@@ -193,6 +209,9 @@ if __name__ == "__main__":
         labeler = HyponatremiaLabValueLabeler(ontology, "severe")
     elif args.labeling_function == "anemia_lab":
         labeler = AnemiaLabValueLabeler(ontology, "severe")
+    elif args.labeling_function == "chexpert":
+        assert args.path_to_chexpert_csv is not None, f"path_to_chexpert_csv cannot be {args.path_to_chexpert_csv}"
+        labeler = ChexpertLabeler(args.path_to_chexpert_csv)
     else:
         raise ValueError(
             f"Labeling function `{args.labeling_function}` not supported. Must be one of: {LABELING_FUNCTIONS}."
@@ -212,11 +231,20 @@ if __name__ == "__main__":
         print_log("Labeler", f"Keeping ALL labels per patient")
 
     print_log("Labeling Patients", "Starting")
-    labeled_patients = labeler.apply(
-        path_to_patient_database=PATH_TO_PATIENT_DATABASE,
-        num_threads=NUM_THREADS,
-        num_patients=NUM_PATIENTS,
-    )
+
+    if args.labeling_function != "chexpert":
+        labeled_patients = labeler.apply(
+            path_to_patient_database=PATH_TO_PATIENT_DATABASE,
+            num_threads=NUM_THREADS,
+            num_patients=NUM_PATIENTS,
+        )
+    else:
+        labeled_patients = labeler.apply(
+            path_to_patient_database=PATH_TO_PATIENT_DATABASE,
+            num_threads=NUM_THREADS,
+            num_labels=MAX_LABELS_PER_PATIENT,
+        )
+
     save_to_pkl(labeled_patients, PATH_TO_SAVE_LABELED_PATIENTS)
     print_log("Labeling Patients", "Finished")
     print("Length of labeled_patients", len(labeled_patients))
