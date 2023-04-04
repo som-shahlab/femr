@@ -212,10 +212,16 @@ class PatientCollection:
 
         return PatientCollection(target_path)
 
-    def to_patient_database(self, target_path: str, concept_path: str, num_threads: int = 1) -> PatientDatabase:
+    def to_patient_database(
+        self,
+        target_path: str,
+        concept_path: str,
+        num_threads: int = 1,
+        delimiter: str = ",",
+    ) -> PatientDatabase:
         """Convert a PatientCollection to a PatientDatabase."""
         extension_datasets.convert_patient_collection_to_patient_database(
-            self.path, concept_path, target_path, ",", num_threads
+            self.path, concept_path, target_path, delimiter, num_threads
         )
         return PatientDatabase(target_path)
 
