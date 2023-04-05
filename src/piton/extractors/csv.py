@@ -43,13 +43,15 @@ class CSVExtractor(abc.ABC):
         ...
 
 
-def _run_csv_extractor(args: Tuple[str, EventCollection, CSVExtractor, Optional[str]]) -> Tuple[str, Dict[str, int]]:
+def _run_csv_extractor(
+    args: Tuple[str, EventCollection, CSVExtractor, str, Optional[str]]
+) -> Tuple[str, Dict[str, int]]:
     """
     Run a single csv converter, returns the prefix and the count dicts.
 
     This function is supposed to run with a multiprocess pool.
     """
-    source, target, extractor, debug_file = args
+    source, target, extractor, delimiter, debug_file = args
     stats: Dict[str, int] = collections.defaultdict(int)
     try:
         with contextlib.ExitStack() as stack:
@@ -65,7 +67,7 @@ def _run_csv_extractor(args: Tuple[str, EventCollection, CSVExtractor, Optional[
 
             debug_writer = None
 
-            reader = csv.DictReader(f)
+            reader = csv.DictReader(f, delimiter=delimiter)
             with contextlib.closing(target.create_writer()) as o:
                 for row in reader:
                     lower_row = {a.lower(): b for a, b in row.items()}
@@ -115,6 +117,7 @@ def run_csv_extractors(
     target_location: str,
     extractors: Sequence[CSVExtractor],
     num_threads: int = 1,
+    delimiter: str = ",",
     debug_folder: Optional[str] = None,
     stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
 ) -> EventCollection:
@@ -168,7 +171,7 @@ def run_csv_extractors(
                 else:
                     debug_path = None
 
-                to_process.append((full_path, target, extractor, debug_path))
+                to_process.append((full_path, target, extractor, delimiter, debug_path))
 
     for count, c in zip(files_per_extractor, extractors):
         if count == 0:
