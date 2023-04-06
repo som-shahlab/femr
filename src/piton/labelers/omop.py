@@ -498,257 +498,16 @@ class MortalityCodeLabeler(CodeLabeler):
             prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity
         )
 
-##########################################################
-##########################################################
-# CLMBR Benchmark Tasks
-# See: https://arxiv.org/pdf/2001.05295.pdf
-# details on how this was reproduced.
-#
-# Citation: Steinberg, Ethan, et al. 
-# "Language models are an effective representation learning technique for electronic health record data." 
-# Journal of biomedical informatics 113 (2021): 103637.
-##########################################################
-##########################################################
 
-class Steinberg_MortalityLabeler(CodeLabeler):
-    """Decompensation prediction task from Steinberg et al. 2021.
-    
-    Binary prediction task on admission whether the patient dies during inpatient stay.
-    """
-    
-    def __init__(
-        self,
-        ontology: extension_datasets.Ontology,
-        time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Optional[Callable] = None,
-    ):
-        """Create a Mortality labeler."""
-        outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
-
-        super().__init__(
-            outcome_codes=outcome_codes,
-            time_horizon=time_horizon,
-            prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity,
-        )
 
 
 ##########################################################
 ##########################################################
-# MIMIC-III Benchmark Tasks
-# See: https://www.nature.com/articles/s41597-019-0103-9/figures/7 for
-# details on how this was reproduced.
-#
-# Citation: Harutyunyan, H., Khachatrian, H., Kale, D.C. et al. 
-# Multitask learning and benchmarking with clinical time series data. 
-# Sci Data 6, 96 (2019). https://doi.org/10.1038/s41597-019-0103-9
+# CheXpert
 ##########################################################
 ##########################################################
 
-
-class Harutyunyan_DecompensationLabeler(CodeLabeler):
-    """Decompensation prediction task from Harutyunyan et al. 2019.
-    
-    Hourly binary prediction task on whether the patient dies in the next 24 hours.
-    Make prediction every 60 minutes after ICU admission, starting at hour 4.
-    
-    Excludes:
-        - ICU admissions with no length-of-stay (i.e. `event.end is None` )
-        - ICU admissions < 4 hours
-        - ICU admissions with no events
-    """
-
-    def __init__(
-        self,
-        ontology: extension_datasets.Ontology,
-    ):
-        # Next 24 hours
-        time_horizon = TimeHorizon(datetime.timedelta(hours=0), datetime.timedelta(hours=24))
-        # Death events
-        outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
-        # Save ontology for `get_prediction_times()`
-        self.ontology = ontology
-
-        super().__init__(
-            outcome_codes=outcome_codes,
-            time_horizon=time_horizon,
-        )
-    
-    def is_apply_censoring(self) -> bool:
-        """Consider censored patients to be alive."""
-        return False
-
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of every hour after every ICU visit, up until death occurs or end of visit.
-        Note that this requires creating an artificial event for each hour since there will only be one true
-        event per ICU admission, but we'll need to create many subevents (at each hour) within this event.
-        Also note that these events may not align with :00 minutes if the ICU visit does not start exactly "on the hour".
-    
-        Excludes:
-            - ICU admissions with no length-of-stay (i.e. `event.end is None` )
-            - ICU admissions < 4 hours
-            - ICU admissions with no events
-        """
-        times: List[datetime.datetime] = []
-        icu_events: List[Tuple[int, Event]] = get_icu_events(patient, self.ontology, is_return_idx=True) # type: ignore
-        icu_event_idxs = [idx for idx, __ in icu_events]
-        death_times: List[datetime.datetime] = self.get_outcome_times(patient)
-        earliest_death_time: datetime.datetime = min(death_times) if len(death_times) > 0 else datetime.datetime.max
-        for __, e in icu_events:
-            if (
-                e.end is not None
-                and e.end - e.start >= datetime.timedelta(hours=4)
-                and does_exist_event_within_time_range(patient, 
-                                                       e.start, 
-                                                       e.end, 
-                                                       exclude_event_idxs=icu_event_idxs)
-            ):
-                # Record every hour after admission (i.e. every hour between `e.start` and `e.end`),
-                # but only after 4 hours have passed (i.e. start at `e.start + 4 hours`)
-                # and only until the visit ends (`e.end`) or a death event occurs (`earliest_death_time`)
-                end_of_stay: datetime.datetime = min(e.end, earliest_death_time)
-                event_time = e.start + datetime.timedelta(hours=4)
-                while event_time < end_of_stay:
-                    times.append(event_time)
-                    event_time += datetime.timedelta(hours=1)
-        return times
-
-
-class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
-    """In-hospital mortality prediction task from Harutyunyan et al. 2019.
-    Single binary prediction task of whether patient dies within ICU admission 48 hours after admission.
-    Make prediction 48 hours into ICU admission. 
-    
-    Excludes:
-        - ICU admissions with no length-of-stay (i.e. `event.end is None` )
-        - ICU admissions < 48 hours
-        - ICU admissions with no events before 48 hours
-    """
-    
-    def __init__(
-        self,
-        ontology: extension_datasets.Ontology,
-    ):
-        visit_start_adjust_func = lambda x: x + datetime.timedelta(hours=48) # Make prediction 48 hours into ICU admission
-        visit_end_adjust_func = lambda x: x
-        super().__init__(ontology, visit_start_adjust_func, visit_end_adjust_func)
-    
-    def is_apply_censoring(self) -> bool:
-        """Consider censored patients to be alive."""
-        return False
-
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of all times when the patient experiences an outcome"""
-        outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
-        times: List[datetime.datetime] = []
-        for e in patient.events:
-            if e.code in outcome_codes:
-                times.append(e.start)
-        return times
-
-    def get_visit_events(self, patient: Patient) -> List[Event]:
-        """Return a list of all ICU visits > 48 hours.
-        
-        Excludes:
-            - ICU admissions with no length-of-stay (i.e. `event.end is None` )
-            - ICU admissions < 48 hours
-            - ICU admissions with no events before 48 hours
-        """
-        icu_events: List[Tuple[int, Event]] = get_icu_events(patient, self.ontology, is_return_idx=True) # type: ignore
-        icu_event_idxs = [idx for idx, __ in icu_events]
-        valid_events: List[Event] = []
-        for __, e in icu_events:
-            if (
-                e.end is not None
-                and e.end - e.start >= datetime.timedelta(hours=48)
-                and does_exist_event_within_time_range(patient, 
-                                                       e.start, 
-                                                       e.start + datetime.timedelta(hours=48), 
-                                                       exclude_event_idxs=icu_event_idxs)
-            ):
-                valid_events.append(e)
-        return valid_events
-
-
-class Harutyunyan_LengthOfStayLabeler(Labeler):
-    """LOS remaining regression task from Harutyunyan et al. 2019.
-    
-    Hourly regression task on the patient's remaining length-of-stay (in hours) in the ICU.
-    Make prediction every 60 minutes after ICU admission, starting at hour 4.
-    
-    Excludes:
-        - ICU admissions with no length-of-stay (i.e. `event.end is None` )
-        - ICU admissions < 4 hours
-        - ICU admissions with no events
-    """
-
-    def __init__(
-        self,
-        ontology: extension_datasets.Ontology,
-    ):
-        self.ontology = ontology
-
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of all times when the patient experiences an outcome"""
-        outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
-        times: List[datetime.datetime] = []
-        for e in patient.events:
-            if e.code in outcome_codes:
-                times.append(e.start)
-        return times
-
-    def get_labeler_type(self) -> LabelType:
-        return "numerical"
-
-    def label(self, patient: Patient) -> List[Label]:
-        """Return a list of Labels at every hour after every ICU visit, where each Label is the # of hours
-        until the visit ends (or a death event occurs).
-        Note that this requires creating an artificial event for each hour since there will only be one true
-        event per ICU admission, but we'll need to create many subevents (at each hour) within this event.
-        Also note that these events may not align with :00 minutes if the ICU visit does not start exactly "on the hour".
-        
-        Excludes:
-            - ICU admissions with no length-of-stay (i.e. `event.end is None` )
-            - ICU admissions < 4 hours
-            - ICU admissions with no events
-        """
-        labels: List[Label] = []
-        icu_events: List[Tuple[int, Event]] = get_icu_events(patient, self.ontology, is_return_idx=True) # type: ignore
-        icu_event_idxs = [idx for idx, __ in icu_events]
-        death_times: List[datetime.datetime] = self.get_outcome_times(patient)
-        earliest_death_time: datetime.datetime = min(death_times) if len(death_times) > 0 else datetime.datetime.max
-        for __, e in icu_events:
-            if (
-                e.end is not None
-                and e.end - e.start >= datetime.timedelta(hours=4)
-                and does_exist_event_within_time_range(patient, 
-                                                       e.start, 
-                                                       e.end, 
-                                                       exclude_event_idxs=icu_event_idxs)
-            ):
-                # Record every hour after admission (i.e. every hour between `e.start` and `e.end`),
-                # but only after 4 hours have passed (i.e. start at `e.start + 4 hours`)
-                # and only until the visit ends (`e.end`) or a death event occurs (`earliest_death_time`)
-                end_of_stay: datetime.datetime = min(e.end, earliest_death_time)
-                event_time = e.start + datetime.timedelta(hours=4)
-                while event_time < end_of_stay:
-                    los: float = (end_of_stay - event_time).total_seconds() / 3600
-                    labels.append(Label(event_time, los))
-                    event_time += datetime.timedelta(hours=1)
-                    assert los >= 0, f"LOS should never be negative, but end_of_stay={end_of_stay} - event_time={event_time} = {end_of_stay - event_time} for patient {patient.patient_id}"
-        return labels
-
-
-def _apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
+def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
     labeling_function: Any = args[0]
@@ -790,7 +549,6 @@ def _apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]
         patients_to_labels[patient_id] = labels
 
     return patients_to_labels
-
 
 class ChexpertLabeler(Labeler):
     """CheXpert labeler.
@@ -907,7 +665,7 @@ class ChexpertLabeler(Labeler):
         tasks = [(self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts]
 
         with multiprocessing.Pool(num_threads) as pool:
-            results: List[Dict[int, List[Label]]] = list(pool.imap(_apply_labeling_function, tasks))
+            results: List[Dict[int, List[Label]]] = list(pool.imap(chexpert_apply_labeling_function, tasks))
 
         # Join results and return
         patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))

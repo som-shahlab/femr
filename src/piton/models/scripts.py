@@ -125,20 +125,20 @@ def train_model() -> None:
         "seed": batch_config["seed"],
         "task": task,
         "transformer": {
-            "vocab_size": batch_config["transformer"]["vocab_size"],
-            "hidden_size": args.hidden_size,
-            "intermediate_size": args.intermediate_size,
-            "n_heads": args.n_heads,
-            "n_layers": args.n_layers,
+            "vocab_size": int(batch_config["transformer"]["vocab_size"]),
+            "hidden_size": int(args.hidden_size),
+            "intermediate_size": int(args.intermediate_size),
+            "n_heads": int(args.n_heads),
+            "n_layers": int(args.n_layers),
             "rotary": args.rotary_type,
-            "attention_width": args.attention_width - 16,  # 16 is the width of the tiling
-            "internal_dropout": args.internal_dropout,
+            "attention_width": int(args.attention_width) - 16,  # 16 is the width of the tiling
+            "internal_dropout": float(args.internal_dropout),
             "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
             "note_embedding_data": batch_config["transformer"].get("note_embedding_data"),
         },
-        "learning_rate": args.learning_rate,
+        "learning_rate": float(args.learning_rate),
         "max_grad_norm": 1.0,
-        "weight_decay": args.weight_decay,
+        "weight_decay": float(args.weight_decay),
         "n_epochs": 100,
     }
 

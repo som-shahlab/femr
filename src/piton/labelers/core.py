@@ -473,6 +473,12 @@ class TimeHorizonEventLabeler(Labeler):
         """Whether or not to allow labels with events at the same time as prediction"""
         return True
 
+    def is_apply_censoring(self) -> bool:
+        """If TRUE, then a censored patient with no outcome -> IGNORED.
+            If FALSE, then a censored patient with no outcome -> FALSE.
+        """
+        return True
+
     def label(self, patient: Patient) -> List[Label]:
         """Return a list of Labels for an individual patient.
 
