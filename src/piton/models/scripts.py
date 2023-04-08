@@ -49,7 +49,7 @@ def create_survival_dictionary() -> None:
 
 def train_model() -> None:
     os.environ["JAX_NUMPY_RANK_PROMOTION"] = "raise"
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.98"
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
 
     parser = argparse.ArgumentParser(prog="Train")
     parser.add_argument("directory", type=str)
