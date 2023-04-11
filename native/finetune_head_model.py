@@ -64,8 +64,10 @@ actual_patients_to_evaluate = {}
 with open(args.labeled_patients_path, "rb") as f:
     labeled_patients = pickle.load(f)
     for pid, values in labeled_patients.items():
-        # actual_values = [v for v in values if v.value.time_to_event != datetime.timedelta(minutes=0)]
-        actual_values = [v for v in values if v.time != v.value.event_time]
+        if False:
+            actual_values = [v for v in values if v.time != v.value.event_time]
+        else:
+            actual_values = [v for v in values if v.value.time_to_event != datetime.timedelta(minutes=0)]
         if len(actual_values) == 0:
             continue
         actual_values = values
@@ -92,6 +94,7 @@ with open(os.path.join(args.model_dir, "config.msgpack"), "rb") as f:
 config = hk.data_structures.to_immutable_dict(config)
 
 with open(
+    #    "/local-scratch/nigam/secure/truven/truven_batches/batch_info.msgpack",
     "surv_clmbr_batches_new/batch_info.msgpack",
     "rb",
 ) as f:
@@ -346,7 +349,8 @@ def conjugate_gradient(last_w, last_gradient, last_u, gradient, hessian, l):
     return w, g, u
 
 
-for frac in [0.1, 0.2, 0.5, 1]:
+# for frac in [0.1, 0.2, 0.5, 1]:
+for frac in [1]:
     print("WORKING ON", frac)
     train_mask = jnp.logical_and(split_indices == 0, filter_tags < frac)
     print("Total", np.mean(train_mask))
@@ -398,6 +402,7 @@ for frac in [0.1, 0.2, 0.5, 1]:
 
     best_score = None
     best_hazards = None
+    best_test = None
 
     start_l, end_l = -5, 1
     for l_exp in np.linspace(end_l, start_l, num=20):
@@ -405,7 +410,7 @@ for frac in [0.1, 0.2, 0.5, 1]:
             l = 0
         else:
             l = 10 ** (l_exp)
-        print("Starting to train", l, datetime.datetime.now())
+        # print("Starting to train", l, datetime.datetime.now())
         g = None
         u = None
         while True:
@@ -417,12 +422,13 @@ for frac in [0.1, 0.2, 0.5, 1]:
                 break
 
         final_loss = compute_loss(beta, train_reprs, train_log_times, train_is_events)
-        print(
-            "My optimizer",
-            final_loss,
-            jnp.linalg.norm(beta, ord=2),
-            datetime.datetime.now(),
-        )
+        if False:
+            print(
+                "My optimizer",
+                final_loss,
+                jnp.linalg.norm(beta, ord=2),
+                datetime.datetime.now(),
+            )
 
         hazards = jnp.dot(reprs, beta)
 
@@ -445,10 +451,13 @@ for frac in [0.1, 0.2, 0.5, 1]:
 
         for i, name in enumerate(["train", "dev", "test"]):
             score = get_c(i)
-            print(name, score)
+            # print(name, score)
             if name == "dev":
                 if best_score is None or score > best_score:
                     best_score, best_hazards = score, hazards
+                    best_test = get_c(2)
+
+    print("Got best:", best_test)
 
     predictions: Dict[Tuple[int, datetime.datetime], Any] = {}
 
@@ -485,10 +494,10 @@ for frac in [0.1, 0.2, 0.5, 1]:
         assert len(target_labels) == 1
         target_label = target_labels[0]
         assert is_censor == target_label.value.is_censored
-        assert event_time == (target_label.value.event_time - target_label.time) / datetime.timedelta(minutes=1)
-        # assert event_time == (
-        #    target_label.value.time_to_event
-        # ) / datetime.timedelta(minutes=1)
+        if False:
+            assert event_time == (target_label.value.event_time - target_label.time) / datetime.timedelta(minutes=1)
+        else:
+            assert event_time == (target_label.value.time_to_event) / datetime.timedelta(minutes=1)
 
         if k not in predictions:
             predictions[k] = v

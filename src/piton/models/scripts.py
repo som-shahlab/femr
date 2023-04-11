@@ -478,7 +478,7 @@ def train_model() -> None:
         if step % 100 == 0:
             logging.info(f"[Step {step}]")
 
-        if (step % per_limit == 0 and step != 0) or step == 500 or step == 1500 or step == 2500:
+        if step % per_limit == 0 and step != 0:  # or step == 500 or step == 1500 or step == 2500:
             logging.info("Loss scale %s", loss_scale)
             logging.info(
                 "Train loss %s",
