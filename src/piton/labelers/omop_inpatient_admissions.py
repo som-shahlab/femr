@@ -35,15 +35,15 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = identity,
-        visit_end_adjust_func: Callable = identity,
+        visit_start_adjust_func: Optional[Callable] = None,
+        visit_end_adjust_func: Optional[Callable] = None,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         super().__init__(
             ontology=ontology,
-            visit_start_adjust_func=visit_start_adjust_func,
-            visit_end_adjust_func=visit_end_adjust_func,
+            visit_start_adjust_func=visit_start_adjust_func if visit_start_adjust_func else identity,
+            visit_end_adjust_func=visit_end_adjust_func if visit_end_adjust_func else identity,
         )
 
     @abstractmethod

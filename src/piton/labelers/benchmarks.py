@@ -1,22 +1,15 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
 
-import collections
 import datetime
-import multiprocessing
-from datetime import timedelta
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import List, Tuple
 
-import numpy as np
-import pandas as pd
-
-from piton.datasets import PatientDatabase
-from piton.labelers.omop_inpatient_admissions import InpatientLongAdmissionLabeler, InpatientReadmissionLabeler, get_inpatient_admission_discharge_times
+from piton.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler, InpatientLongAdmissionLabeler, InpatientReadmissionLabeler, get_inpatient_admission_discharge_times
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
-from .core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
-from .omop import CodeLabeler, WithinVisitLabeler, does_exist_event_within_time_range, get_death_concepts, map_omop_concept_codes_to_femr_codes, move_datetime_to_end_of_day
+from .core import Label, Labeler, LabelType, TimeHorizon
+from .omop import CodeLabeler, WithinVisitLabeler, get_icu_events, does_exist_event_within_time_range, get_death_concepts, map_omop_concept_codes_to_femr_codes, move_datetime_to_end_of_day
 
 ##########################################################
 ##########################################################
@@ -33,7 +26,7 @@ from .omop import CodeLabeler, WithinVisitLabeler, does_exist_event_within_time_
 class Guo_LongLOSLabeler(InpatientLongAdmissionLabeler):
     """Long LOS prediction task from Guo et al. 2023.
     
-    Binary prediction task on admission whether the patient stays in hospital for >=7 days.
+    Binary prediction task @ 11:59PM on the day of admission whether the patient stays in hospital for >=7 days.
     """
     
     def __init__(
@@ -50,7 +43,7 @@ class Guo_LongLOSLabeler(InpatientLongAdmissionLabeler):
 class Guo_30DayReadmissionLabeler(InpatientReadmissionLabeler):
     """30-day readmissions prediction task from Guo et al. 2023.
     
-    Binary prediction task on disharge whether the patient will be readmitted within 30 days.
+    Binary prediction task @ 11:59PM on the day of disharge whether the patient will be readmitted within 30 days.
     """
     
     def __init__(
@@ -65,6 +58,25 @@ class Guo_30DayReadmissionLabeler(InpatientReadmissionLabeler):
             time_horizon=time_horizon,
             prediction_time_adjustment_func=move_datetime_to_end_of_day,
         )
+
+class Guo_ICUAdmissionLabeler(WithinInpatientVisitLabeler):
+    """ICU admission prediction task from Guo et al. 2023.
+    
+    Binary prediction task @ 11:59PM on the day of admission whether the patient will be readmitted to the ICU.
+    """
+    
+    def __init__(
+        self,
+        ontology: extension_datasets.Ontology,
+    ):
+        super().__init__(
+            ontology=ontology,
+            visit_start_adjust_func=None,
+            visit_end_adjust_func=None,
+        )
+
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        return [ e.start for e in get_icu_events(patient, self.ontology) ] # type: ignore
 
 ##########################################################
 ##########################################################
