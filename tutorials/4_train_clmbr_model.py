@@ -7,7 +7,7 @@
 import os
 import pickle
 
-EXTRACT_LOCATION = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/piton_new3_extract"
+EXTRACT_LOCATION = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/femr_new3_extract"
 LABELS = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/lupus/labeled_patients.pkl"
 TEMP_STORAGE = "trash/clmbr_data"
 

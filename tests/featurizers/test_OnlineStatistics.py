@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from piton.featurizers import OnlineStatistics
+from femr.featurizers import OnlineStatistics
 
 
 def _assert_correct_stats(stat: OnlineStatistics, values: list):

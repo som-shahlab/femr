@@ -6,7 +6,7 @@ using json = nlohmann::json;
 
 boost::filesystem::path extract =
 <<<<<<< HEAD
-    "/local-scratch/nigam/projects/ethanid/piton_9_extract";
+    "/local-scratch/nigam/projects/ethanid/femr_9_extract";
 =======
     "/local-scratch/nigam/projects/ethanid/"
 <<<<<<< HEAD
@@ -69,7 +69,7 @@ int main() {
     std::cout<<"Got " << total << std::endl;
 
     // std::ofstream o(
-    //     "/local-scratch/nigam/projects/ethanid/piton/native/results/"
+    //     "/local-scratch/nigam/projects/ethanid/femr/native/results/"
     //     "final_counts");
     // o << json(length_counts);
 }

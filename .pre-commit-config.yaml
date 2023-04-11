@@ -18,7 +18,7 @@ repos:
     rev: v1.2.0
     hooks:
     -   id: mypy
-        exclude: ^src/piton/extension/|^tutorial|^native
+        exclude: ^src/femr/extension/|^tutorial|^native
 -   repo: https://github.com/PyCQA/isort
     rev: 5.12.0
     hooks:

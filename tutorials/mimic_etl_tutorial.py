@@ -386,8 +386,8 @@ os.system(f"etl_generic_omop {OMOP_DIR} {EXTRACT_DIR} {EXTRACT_DIR}_logs")
 We can now load and examine the resulting extract.
 """
 
-import piton.datasets
+import femr.datasets
 
-database = piton.datasets.PatientDatabase(EXTRACT_DIR)
+database = femr.datasets.PatientDatabase(EXTRACT_DIR)
 
 print("The database has", len(database), "patients")
