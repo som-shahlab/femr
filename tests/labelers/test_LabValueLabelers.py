@@ -8,10 +8,10 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-import piton.datasets
-from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import move_datetime_to_end_of_day
-from piton.labelers.omop_lab_values import (
+import femr.datasets
+from femr.labelers.core import TimeHorizon
+from femr.labelers.omop import move_datetime_to_end_of_day
+from femr.labelers.omop_lab_values import (
     AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
@@ -213,7 +213,7 @@ def test_labeling(tmp_path: pathlib.Path):
             (event((2009, 11, 4), 12, 45.5, unit="mmol/L"), "skip"),
             # fmt: on
         ]
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
 
 

@@ -399,7 +399,7 @@ void read_patient_from_buffer(Patient& current_patient,
         }
     } else {
         throw std::runtime_error(absl::StrCat(
-            "Does not support reading piton databases of version ", version));
+            "Does not support reading femr databases of version ", version));
     }
 }
 

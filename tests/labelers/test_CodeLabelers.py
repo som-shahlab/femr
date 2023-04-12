@@ -6,8 +6,8 @@ import pathlib
 import sys
 from typing import List
 
-from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import (
+from femr.labelers.core import TimeHorizon
+from femr.labelers.omop import (
     AKICodeLabeler,
     AnemiaCodeLabeler,
     CodeLabeler,

@@ -7,14 +7,14 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-import piton.datasets
-from piton.labelers.core import LabeledPatients, TimeHorizon
-from piton.labelers.omop import (
+import femr.datasets
+from femr.labelers.core import LabeledPatients, TimeHorizon
+from femr.labelers.omop import (
     get_inpatient_admission_discharge_times,
     get_inpatient_admission_events,
     move_datetime_to_end_of_day,
 )
-from piton.labelers.omop_inpatient_admissions import (
+from femr.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
     InpatientMortalityLabeler,
@@ -57,7 +57,7 @@ def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
             (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
         get_inpatient_admission_events(patient, ontology)  # type: ignore
     with pytest.raises(RuntimeError):
         # Every admission must have an `end` time
@@ -66,7 +66,7 @@ def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
             (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
         get_inpatient_admission_events(patient, ontology)  # type: ignore
 
 
@@ -88,7 +88,7 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
         (event((2013, 10, 1, 1, 1, 1), 2, end=datetime.datetime(2013, 10, 1, 1, 1, 1), omop_table='visit_occurrence'), 'skip'),
         # fmt: on
     ]
-    patient = piton.Patient(0, [x[0] for x in events_with_labels])
+    patient = femr.Patient(0, [x[0] for x in events_with_labels])
     results: List[Tuple[datetime.datetime, datetime.datetime]] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
     assert results == list(
         zip(
@@ -105,8 +105,8 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
             (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
-        results: List[piton.Event] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
+        results: List[femr.Event] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
     with pytest.raises(RuntimeError):
         # Admission `start` cannot be after `end`
         # fmt: off
@@ -114,8 +114,8 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
             (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
-        results: List[piton.Event] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
+        results: List[femr.Event] = get_inpatient_admission_discharge_times(patient, ontology)  # type: ignore
 
 
 #############################################
@@ -148,7 +148,7 @@ def _run_test_admission_discharge_placeholder(labeler, events_with_labels: Event
         for y in [(x[0].start, x[1]), (x[0].end, x[1])]  # type: ignore
         if isinstance(x[1], bool)  # type: ignore
     ]  # type: ignore
-    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
+    patients: List[femr.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     labeled_patients: LabeledPatients = labeler.apply(patients=patients)
     for patient in patients:
         assert_labels_are_accurate(
@@ -226,7 +226,7 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
             (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
     with pytest.raises(RuntimeError):
         # Admission `start` cannot be after `end`
@@ -235,7 +235,7 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
             (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
 
 
@@ -292,7 +292,7 @@ def test_readmission(tmp_path: pathlib.Path):
         (event((2020, 1, 10), 1, end=datetime.datetime(2020, 1, 20), omop_table='visit_occurrence'), "out of range"),
         # fmt: on
     ]
-    patient = piton.Patient(0, [x[0] for x in events_with_labels])
+    patient = femr.Patient(0, [x[0] for x in events_with_labels])
     true_outcome_times: List[datetime.datetime] = [
         x[0].start for x in events_with_labels if x[0].omop_table == "visit_occurrence" and x[1] != "skip"
     ]

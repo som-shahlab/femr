@@ -5,31 +5,31 @@ import pathlib
 import random
 from typing import List, Optional, Tuple
 
-import piton
-import piton.datasets
+import femr
+import femr.datasets
 
 dummy_events = [
-    piton.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
-    piton.Event(
+    femr.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
+    femr.Event(
         start=datetime.datetime(2010, 1, 3),
         code=1,
         value="test_value",
     ),
-    piton.Event(
+    femr.Event(
         start=datetime.datetime(2010, 1, 5),
         code=2,
         value=None,
     ),
 ]
 
-all_events: List[Tuple[int, piton.Event]] = []
+all_events: List[Tuple[int, femr.Event]] = []
 
 for patient_id in range(10, 25):
     all_events.extend((patient_id, event) for event in dummy_events)
 
 
-def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
-    events = piton.datasets.EventCollection(os.path.join(tmp_path, "events"))
+def create_events(tmp_path: pathlib.Path) -> femr.datasets.EventCollection:
+    events = femr.datasets.EventCollection(os.path.join(tmp_path, "events"))
 
     random.shuffle(all_events)
 
@@ -44,7 +44,7 @@ def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
     return events
 
 
-def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
+def create_patients(tmp_path: pathlib.Path) -> femr.datasets.PatientCollection:
     return create_events(tmp_path).to_patient_collection(os.path.join(tmp_path, "patients"))
 
 
@@ -87,13 +87,13 @@ def test_patients(tmp_path: pathlib.Path) -> None:
         assert patient.events == dummy_events
 
 
-def transform_func(a: piton.Patient) -> Optional[piton.Patient]:
+def transform_func(a: femr.Patient) -> Optional[femr.Patient]:
     if a.patient_id == 10:
         return None
-    return piton.Patient(
+    return femr.Patient(
         patient_id=a.patient_id,
         events=[
-            piton.Event(
+            femr.Event(
                 start=event.start,
                 code=event.code,
                 value="foo",
@@ -115,7 +115,7 @@ def test_transform_patients(tmp_path: pathlib.Path) -> None:
 
     for patient in all_patients:
         better_dummy_events = [
-            piton.Event(
+            femr.Event(
                 start=event.start,
                 code=event.code,
                 value="foo",

@@ -23,9 +23,9 @@ int main() {
     auto iter = database.iterator();
 
     std::ofstream output(
-        "/local-scratch/nigam/projects/ethanid/piton/native/out_text");
+        "/local-scratch/nigam/projects/ethanid/femr/native/out_text");
     std::ofstream output_raw(
-        "/local-scratch/nigam/projects/ethanid/piton/native/out_text_raw");
+        "/local-scratch/nigam/projects/ethanid/femr/native/out_text_raw");
 
     boost::regex date_regex("\\d{2}/\\d{2}/\\d{4}");
     boost::regex longdash_regex("--+");

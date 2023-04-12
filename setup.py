@@ -23,6 +23,18 @@ def has_nvcc():
     except OSError:
         return False
 
+def can_build_simple(sourcedir, env, bazel_extra_args):
+    try:
+        subprocess.run(
+            args=["bazel"] + bazel_extra_args + ["build", "-c", "opt", "simple_test"],
+            cwd=sourcedir,
+            env=env,
+            check=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
 
 class cmake_build_ext(build_ext):
     def build_extensions(self) -> None:
@@ -40,6 +52,7 @@ class cmake_build_ext(build_ext):
                 **source_env,
             }
 
+            bazel_extra_args = []
             extra_args = []
 
             if source_env.get("DISTDIR"):
@@ -47,9 +60,13 @@ class cmake_build_ext(build_ext):
 
             if has_nvcc():
                 extra_args.extend(["--//:cuda=enabled"])
+                
+            if not can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args):
+                bazel_extra_args.extend(["--bazelrc=backupbazelrc"])
+                assert can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args), "Cannot build C++ extension"
 
             subprocess.run(
-                args=["bazel", "build", "-c", "opt", ext.target] + extra_args,
+                args=["bazel"] + bazel_extra_args + ["build", "-c", "opt", ext.target] + extra_args,
                 cwd=ext.sourcedir,
                 env=env,
                 check=True,
@@ -69,7 +86,7 @@ class cmake_build_ext(build_ext):
 
 setuptools.setup(
     ext_modules=[
-        BazelExtension("piton.extension", "extension.so", "native"),
+        BazelExtension("femr.extension", "extension.so", "native"),
     ],
     cmdclass={"build_ext": cmake_build_ext},
     zip_safe=False,
