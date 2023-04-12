@@ -43,6 +43,11 @@ build = [
     "torchtyping == 0.1.4",
     "transformers == 4.25.1",
 ]
+models = [
+   "optax == 0.1.4",
+   "dm-haiku == 0.0.9",
+   "jax == 0.4.8",
+]
 
 [tool.isort]
 multi_line_output = 3
