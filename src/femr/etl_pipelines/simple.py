@@ -4,15 +4,13 @@ import argparse
 import contextlib
 import csv
 import datetime
+import io
 import logging
 import multiprocessing
 import os
 import resource
-import multiprocessing
-import contextlib
-from typing import Set, Mapping, Tuple, Iterable
+from typing import Iterable, Mapping, Set, Tuple
 
-import io
 import zstandard
 
 from femr import Event
