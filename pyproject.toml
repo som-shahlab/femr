@@ -19,10 +19,11 @@ requires-python=">3.10"
 version = "0.1.0"
 
 [project.scripts]
+
 etl_stanford_omop = "femr.etl_pipelines.stanford:etl_starr_omop_program"
 etl_generic_omop = "femr.etl_pipelines.omop:etl_generic_omop_program"
 etl_simple_femr = "femr.etl_pipelines.simple:etl_simple_femr_program"
-
+etl_sickkids_omop = "femr.etl_pipelines.sickkids:etl_sk_omop_program"
 clmbr_create_batches = "femr.models.dataloader:create_batches"
 clmbr_create_dictionary = "femr.models.scripts:create_dictionary"
 clmbr_create_survival_dictionary = "femr.models.scripts:create_survival_dictionary"
