@@ -1,4 +1,4 @@
-"""Transforms that are unique to STARR OMOP."""
+"""Transforms that are unique to SK OMOP."""
 
 import datetime
 from typing import Optional
