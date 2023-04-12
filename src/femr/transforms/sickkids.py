@@ -15,8 +15,6 @@ def replace_categorical_measurement_results(patient: Patient) -> Patient:
         if event.omop_table == "measurement" and event.value == 9999999:
             event.value = None
 
-    patient.resort()
-
     return patient
 
 
