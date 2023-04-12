@@ -14,7 +14,7 @@
 To install **FEMR** run the following, replacing `<FEMR_ENV>` with the desired name of your conda environment:
 
 ```bash
-conda create -n FEMR_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge -y
+conda create -n FEMR_ENV python=3.10 bazel=6 -c conda-forge -y
 conda activate FEMR_ENV
 
 export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
@@ -45,20 +45,6 @@ export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
 
 Note: you may need to restart your terminal for the changes to reflect
 
-### (Optional) Installing PyTorch
-
-If you are on Nero, you need to install PyTorch using:
-
-```bash
-conda install numpy -y
-pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
-```
-
-If you are on Carina, you need to install PyTorch using:
-
-```bash
-conda install numpy pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
-```
 
 ### (Optional) Installing CUDA on Nero
 
@@ -171,4 +157,19 @@ section 1.3. Note that you need to copy over cudnn files to your local cuda. For
 - `chmod a+r <path_to_your_cuda>/include/cudnn*.h <path_to_your_cuda>/lib64/libcudnn*`
 
 2. Install Jax by running `pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`, as shown [here](https://github.com/google/jax#installation).
-3. Run `pip install dm-haiku optax`
+3. Run `pip install -e .[models]`
+
+### (Optional) Installing PyTorch
+
+If you are on Nero, you need to install PyTorch using:
+
+```bash
+conda install numpy -y
+pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
+```
+
+If you are on Carina, you need to install PyTorch using:
+
+```bash
+conda install numpy pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
+```
