@@ -197,7 +197,9 @@ def create_batches() -> None:
 
     with open(args.dictionary_path, "rb") as f:
         dictionary = msgpack.load(f, use_list=False)
-        assert args.transformer_vocab_size <= len(dictionary), f"Transformer vocab size ({args.transformer_vocab_size}) must be <= len(dictionary) ({len(dictionary)})'
+        assert args.transformer_vocab_size <= len(
+            dictionary
+        ), f"Transformer vocab size ({args.transformer_vocab_size}) must be <= len(dictionary) ({len(dictionary)})"
 
     data = femr.datasets.PatientDatabase(args.data_path)
 
