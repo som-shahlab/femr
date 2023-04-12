@@ -469,3 +469,8 @@ cc_library(
         "@json",
     ],
 )
+
+cc_binary(
+    name = "simple_test",
+    srcs = ["simple_test.cc"],
+)
