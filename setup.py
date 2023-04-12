@@ -4,6 +4,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+from typing import List
 
 import setuptools
 from setuptools.command.build_ext import build_ext
@@ -22,6 +23,7 @@ def has_nvcc():
         return True
     except OSError:
         return False
+
 
 def can_build_simple(sourcedir, env, bazel_extra_args):
     try:
@@ -52,18 +54,20 @@ class cmake_build_ext(build_ext):
                 **source_env,
             }
 
-            bazel_extra_args = []
-            extra_args = []
+            bazel_extra_args: List[str] = []
+            extra_args: List[str] = []
 
             if source_env.get("DISTDIR"):
                 extra_args.extend(["--distdir", source_env["DISTDIR"]])
 
             if has_nvcc():
                 extra_args.extend(["--//:cuda=enabled"])
-                
+
             if not can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args):
                 bazel_extra_args.extend(["--bazelrc=backupbazelrc"])
-                assert can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args), "Cannot build C++ extension"
+                assert can_build_simple(
+                    sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args
+                ), "Cannot build C++ extension"
 
             subprocess.run(
                 args=["bazel"] + bazel_extra_args + ["build", "-c", "opt", ext.target] + extra_args,

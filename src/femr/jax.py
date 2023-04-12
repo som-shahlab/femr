@@ -20,12 +20,14 @@ from jax.lib import xla_client
 
 try:
     import femr.extension.jax
-    
+
     # Globally register all of our custom operators
     for name, value, platform in femr.extension.jax.get_kernels():
         jax.lib.xla_client.register_custom_call_target(name, value, platform=platform)
 except Exception as exec:
-    raise RuntimeError("Could not load Jax kernels, did you compile with CUDA installed? Run 'nvcc --version' to check.") from exec
+    raise RuntimeError(
+        "Could not load Jax kernels, did you compile with CUDA installed? Run 'nvcc --version' to check."
+    ) from exec
 
 # Per the jax documentation, we currently don't have good typing for arrays
 Array = Any
