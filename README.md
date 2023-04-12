@@ -24,7 +24,7 @@ cd femr
 pip install -e .
 ```
 
-## Training CLMBR
+## Dependencies for Training CLMBR
 
 The tutorial to run CLMBR model is in `tutorials/4_train_clmbr_model.py`. However, before running this script, some additional dependencies need to be installed.
 Please follow the steps below:
@@ -51,7 +51,10 @@ As Nero does not have internet access, you must run the following before running
 export DISTDIR=/local-scratch/nigam/distdir
 ```
 
-### (Optional) Installing CUDA on Nero
+
+### (Optional) Installing CUDA on Nero / Carina
+
+As a side note for Nero/Carina users, do not use your home directory to save the femr repo and installation files due to limited storage. We recommend using the shared project folder, e.g., on nero, use '/local-scratch/nigam/project/...'
 
 If you are using Nero, you will need to install CUDA manually until the CUDA version on Nero is updated. To do so, follow these steps:
 
@@ -61,12 +64,21 @@ If you are using Nero, you will need to install CUDA manually until the CUDA ver
 3. `ssh` into Nero using `ssh <username>@nero-nigam.compute.stanford.edu`
 4. On Nero, run the CUDA installer as a bash command as follows: `bash <PATH_TO_CUDA_INSTALLER> --installpath=<INSTALL_PATH>`, where `<PATH_TO_CUDA_INSTALLER>` is the path to the file you downloaded/transferred in Step #2, and `<INSTALL_PATH>` is where you'd like to save your CUDA installation files. We recommend using `~` or something similar.
 5. The CUDA installer will pop-up a window during installation. Uncheck all of the boxes it presents except for the box labeled "cuda toolkit".
-6. After the installation completes, the installer will print out two paths to your console. Take note of these paths, and copy them into your `.bashrc` file by running the following commands. You may need to restart your terminal for the changes to be reflected.
+6. After the installation completes, the installer will print out two paths to your console. Take note of these paths, and copy them into your `.bashrc` file by running the following commands. 
+
+ You may need to restart your terminal for the changes to be reflected.
+
 ```bash
 export PATH="<INSTALL_PATH>/bin:$PATH"
 export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
 ```
-4. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
+
+To write in a .bashrc file, use 
+```bash 
+nano ~/.bashrc
+```
+
+7. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
 
 # Development
 
