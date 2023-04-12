@@ -2,11 +2,10 @@
 An ETL script for doing an end to end transform of SK OMOP into a PatientDatabase.
 Note that the transforms are largely the same to that for STARR OMOP in order to
 match the assumptions for timestamps. Exceptions ares:
-1. instead of moving billing codes (pat_enc_dx, hsp_acct_dx_list, arpb_transactions)
-   to the end of visits, we are considering moving all diagnosis codes
-   to the end of visits.
+1. SK-OMOP doesn't contain billing codes
 2. at SK, categorical lab results are assigned a measurement value of 9999999.
    We are replacing these values with None.
+3. missing birthdates(replaced with 1-1-1 in SK-OMOP) are replaced with 1900-1-1
 """
 
 import argparse
