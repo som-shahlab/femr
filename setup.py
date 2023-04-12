@@ -64,7 +64,7 @@ class cmake_build_ext(build_ext):
                 extra_args.extend(["--//:cuda=enabled"])
 
             if not can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args):
-                bazel_extra_args.extend(["--bazelrc=backupbazelrc"])
+                bazel_extra_args.extend(["--noworkspace_rc", "--bazelrc=backupbazelrc"])
                 assert can_build_simple(
                     sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args
                 ), "Cannot build C++ extension"
