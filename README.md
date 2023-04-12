@@ -171,4 +171,4 @@ section 1.3. Note that you need to copy over cudnn files to your local cuda. For
 - `chmod a+r <path_to_your_cuda>/include/cudnn*.h <path_to_your_cuda>/lib64/libcudnn*`
 
 2. Install Jax by running `pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`, as shown [here](https://github.com/google/jax#installation).
-3. Run `pip install dm-haiku msgpack optax`
+3. Run `pip install dm-haiku optax`
