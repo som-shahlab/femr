@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Deque, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Callable, Deque, Dict, Iterator, List, Optional, Tuple, Union
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
@@ -157,8 +157,8 @@ class CountFeaturizer(Featurizer):
     def __init__(
         self,
         is_ontology_expansion: bool = False,
-        excluded_codes: Union[set, List[int]] = [],
-        included_codes: Union[set, List[int]] = [],
+        excluded_codes: Union[set, Callable, None] = None,
+        included_codes: Union[set[int], None] = None,
         time_bins: Optional[List[datetime.timedelta]] = None,
         is_keep_only_none_valued_events: bool = True,
     ):
@@ -172,9 +172,9 @@ class CountFeaturizer(Featurizer):
                     Where "->" denotes "is a parent of" relationship (i.e. A is a parent of B, B is a parent of C).
                     Then if we see 2 occurrences of Code "C", we count 2 occurrences of Code "B" and Code "A".
 
-            excluded_codes (List[int], optional): A list of femr codes that we will ignore. Defaults to [].
+            excluded_codes (optional): Criteria for codes that we will ignore. Defaults to no criteria
 
-            included_codes (List[int], optional): A list of all unique event codes that we will include in our count.
+            included_codes (optional): Exact set of unique event codes that we will include in our count.
 
             time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets.
                 Starts from the label time, and works backwards according to each successive value in `time_bins`.
@@ -205,9 +205,16 @@ class CountFeaturizer(Featurizer):
                 Setting this to FALSE will include all events, including those with values (e.g. lab values),
                 which will make this run slower.
         """
+        # Avoids error _if_ these variables are ever mutated
+        # I.e. https://stackoverflow.com/a/26320917
+        if included_codes is None:
+            included_codes = set()
+        if excluded_codes is None:
+            excluded_codes = set()
+
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.included_codes: set = set(included_codes) if not isinstance(included_codes, set) else included_codes
-        self.excluded_codes: set = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
+        self.included_codes = included_codes
+        self.excluded_codes = excluded_codes
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
         self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
 
@@ -220,8 +227,20 @@ class CountFeaturizer(Featurizer):
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
+    def code_is_excluded(self, code: int) -> bool:
+        """Check if `code` satisfies `code_criteria`."""
+        if isinstance(self.excluded_codes, set):
+            return code in self.excluded_codes
+        elif callable(self.excluded_codes):
+            try:
+                return self.excluded_codes(code)
+            except Exception as e:
+                raise ValueError(f"Runtime error when checking code {code} against `code_criteria`") from e
+        else:
+            raise ValueError(f"Invalid type for `self.excluded_codes`: {type(self.excluded_codes)}")
+
     def get_codes(self, code: int, ontology: extension_datasets.Ontology) -> Iterator[int]:
-        if code not in self.excluded_codes:
+        if not self.code_is_excluded(code):
             if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(code):
                     yield subcode
@@ -259,7 +278,7 @@ class CountFeaturizer(Featurizer):
             raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
 
         # Aggregating count featurizers
-        all_codes: List[int] = [c for f in featurizers for c in f.included_codes]
+        all_codes = {c for f in featurizers for c in f.included_codes}
 
         template_featurizer: CountFeaturizer = featurizers[0]
         new_featurizer: CountFeaturizer = CountFeaturizer(
