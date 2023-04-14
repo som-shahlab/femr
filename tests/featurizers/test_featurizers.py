@@ -124,6 +124,33 @@ def test_count_featurizer(tmp_path: pathlib.Path):
         3,
     )
     _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+    patient: femr.Patient = cast(femr.Patient, database[0])
+    labels = labeler.label(patient)
+    featurizer = CountFeaturizer(exclusion_criteria={get_femr_code(ontology, 2)})
+    featurizer.preprocess(patient, labels)
+
+    assert featurizer.get_num_columns() == 2, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+
+
+def test_count_featurizer_filter(tmp_path: pathlib.Path):
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = femr.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
+
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
+
+    patient: femr.Patient = cast(femr.Patient, database[0])
+    labels = labeler.label(patient)
+    featurizer = CountFeaturizer(exclusion_criteria={get_femr_code(ontology, 2)})
+    featurizer.preprocess(patient, labels)
+
+    assert featurizer.get_num_columns() == 2, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
 
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
