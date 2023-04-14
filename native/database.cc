@@ -781,6 +781,10 @@ uint64_t PatientDatabase::get_original_patient_id(uint32_t patient_id) {
     return read_span<uint64_t>(meta_dictionary, 0)[patient_id];
 }
 
+absl::Span<const uint64_t> PatientDatabase::get_original_patient_ids() {
+    return read_span<uint64_t>(meta_dictionary, 0);
+}
+
 boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
     uint64_t original_patient_id) {
     absl::Span<const uint32_t> sorted_span =

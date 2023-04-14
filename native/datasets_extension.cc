@@ -137,6 +137,7 @@ void register_datasets_extension(py::module& root) {
 
     py::module abc = py::module::import("collections.abc");
     py::object abc_sequence = abc.attr("Sequence");
+    py::object abc_mapping = abc.attr("Mapping");
 
     register_iterable<absl::Span<const uint32_t>>(root, "IntSpan");
 
@@ -219,27 +220,35 @@ void register_datasets_extension(py::module& root) {
         .def(
             "__getitem__",
             [python_patient, pickle](py::object self_object,
-                                     uint32_t patient_id) {
+                                     uint64_t patient_id) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
+
+                uint32_t internal_patient_id = self.get_original_patient_id(patient_id);
+
                 if (patient_id >= self.size()) {
                     throw py::index_error();
                 }
 
-                Patient p = self.get_patient(patient_id);
+                Patient p = self.get_patient(internal_patient_id);
                 py::tuple events(p.events.size());
 
                 absl::CivilSecond birth_date = p.birth_date;
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    events[i] = EventWrapper(pickle, &self, patient_id,
+                    events[i] = EventWrapper(pickle, &self, internal_patient_id,
                                              birth_date, i, event);
                 }
 
-                return python_patient("patient_id"_a = p.patient_id,
+                return python_patient("patient_id"_a = patient_id,
                                       "events"_a = events);
+            },
+            py::return_value_policy::reference_internal)
+        .def("__iter__", [](PatientDatabase& self) {
+                auto span = self.get_original_patient_ids();
+                return py::make_iterator(std::begin(span), std::end(span));
             },
             py::return_value_policy::reference_internal)
         .def("get_patient_birth_date",
@@ -251,10 +260,6 @@ void register_datasets_extension(py::module& root) {
              py::return_value_policy::reference_internal)
         .def("get_ontology", &PatientDatabase::get_ontology,
              py::return_value_policy::reference_internal)
-        .def("get_patient_id_from_original",
-             &PatientDatabase::get_patient_id_from_original)
-        .def("get_original_patient_id",
-             &PatientDatabase::get_original_patient_id)
         .def("get_code_count", &PatientDatabase::get_code_count)
         .def("get_text_count",
              [](PatientDatabase& self, std::string data) -> uint32_t {
@@ -278,7 +283,7 @@ void register_datasets_extension(py::module& root) {
                  // TODO: Implement this to save memory and file pointers
              })
         .attr("__bases__") =
-        py::make_tuple(abc_sequence) + database_binding.attr("__bases__");
+        py::make_tuple(abc_mapping) + database_binding.attr("__bases__");
 
     py::class_<Ontology>(m, "Ontology")
         .def("get_parents", &Ontology::get_parents,

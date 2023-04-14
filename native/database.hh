@@ -148,6 +148,7 @@ class PatientDatabase {
     boost::optional<uint32_t> get_patient_id_from_original(
         uint64_t original_patient_id);
     uint64_t get_original_patient_id(uint32_t patient_id);
+    absl::Span<const uint64_t> get_original_patient_ids();
 
     // Count information
     uint32_t get_code_count(uint32_t code);
