@@ -154,9 +154,9 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     featurizer.preprocess(patient, labels)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
-    included_codes = set([e.code for e in patient.events if e.value is None])
+    exact_codes_set = set([e.code for e in patient.events if e.value is None])
 
-    assert featurizer.included_codes == included_codes, f"featurizer.included_codes = {featurizer.included_codes}"
+    assert featurizer.exact_codes_set == exact_codes_set, f"featurizer.exact_codes_set = {featurizer.exact_codes_set}"
     assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
     assert patient_features[0] == [
