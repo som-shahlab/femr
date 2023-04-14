@@ -225,20 +225,19 @@ void register_datasets_extension(py::module& root) {
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
 
-                uint32_t internal_patient_id = self.get_original_patient_id(patient_id);
+                boost::optional<uint32_t> internal_patient_id = self.get_patient_id_from_original(patient_id);
 
-                if (patient_id >= self.size()) {
+                if (!internal_patient_id) {
                     throw py::index_error();
                 }
-
-                Patient p = self.get_patient(internal_patient_id);
+                Patient p = self.get_patient(*internal_patient_id);
                 py::tuple events(p.events.size());
 
                 absl::CivilSecond birth_date = p.birth_date;
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    events[i] = EventWrapper(pickle, &self, internal_patient_id,
+                    events[i] = EventWrapper(pickle, &self, *internal_patient_id,
                                              birth_date, i, event);
                 }
 
