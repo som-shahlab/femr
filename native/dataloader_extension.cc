@@ -498,7 +498,7 @@ std::unique_ptr<Task> create_task(json config, Ontology& ontology) {
 class FeatureLookup {
    public:
     FeatureLookup(const json& data, uint32_t vocab_size, bool is_hierarchical,
-                  Ontology& ontology) {
+                  Ontology& ontology, PatientDatabase& database) {
         const json::array_t* actual_data;
         this->is_hierarchical = is_hierarchical;
         this->vocab_size = vocab_size;
@@ -512,24 +512,51 @@ class FeatureLookup {
 
         absl::flat_hash_map<uint32_t, uint32_t> code_features_temp;
 
+        uint32_t missing = 0;
+        uint32_t searched = 0;
+
         for (uint32_t i = 0; i < vocab_size; i++) {
             DictEntry entry = (*actual_data)[i].get<DictEntry>();
+            if (entry.type == DictEntryType::UNUSED) {
+                continue;
+            }
+
+            searched++;
+            auto possible_code = ontology.get_dictionary().find(entry.code_string);
+            if (!possible_code.has_value()) {
+                missing++;
+                continue;
+            }
+
+            uint32_t code = *possible_code;
+
             switch (entry.type) {
                 case DictEntryType::CODE:
-                    code_features_temp[entry.code] = i;
+                    code_features_temp[code] = i;
                     break;
 
-                case DictEntryType::TEXT:
-                    text_features[std::make_pair(entry.code,
-                                                 entry.text_value)] = i;
+                case DictEntryType::TEXT: {
+                    auto possible_text = database.get_shared_text_dictionary().find(entry.text_string);
+                    if (!possible_text) {
+                        missing++;
+                    } else {
+                        text_features[std::make_pair(code,
+                                                 *possible_text)] = i;
+                    }
                     break;
+                }
 
                 case DictEntryType::NUMERIC:
-                    numeric_features[entry.code].push_back(
+                    numeric_features[code].push_back(
                         std::make_tuple(entry.val_start, entry.val_end, i));
+                    break;
+
+                case DictEntryType::UNUSED:
                     break;
             }
         }
+
+        std::cout<<"When mapping codes, dropped " << missing << " out of " << searched << std::endl;
 
         for (uint32_t code = 0; code < ontology.get_dictionary().size();
              code++) {
@@ -639,7 +666,7 @@ class BatchCreator {
           lookup(config["transformer"]["dictionary"],
                  config["transformer"]["vocab_size"],
                  config["transformer"].value("is_hierarchical", false),
-                 data.get_ontology()),
+                 data.get_ontology(), data),
           task(create_task(config["task"], data.get_ontology())),
           rng(config["seed"]),
           token_dropout(_token_dropout) {
@@ -1214,6 +1241,9 @@ void create_batches(const std::string& target_path,
 
     (void)data.get_unique_text_dictionary();
     (void)data.get_shared_text_dictionary();
+    (void)data.get_shared_text_dictionary().init_sorted_values();
+    (void)data.get_ontology().get_dictionary();
+    (void)data.get_ontology().get_dictionary().init_sorted_values();
 
     BatchInfo info = proccess_patients_in_parallel(
         data, 40,

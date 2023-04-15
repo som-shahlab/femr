@@ -18,6 +18,8 @@ class Dictionary {
     const std::vector<std::string_view>& values() const;
     uint32_t size() const;
 
+    void init_sorted_values();
+
    private:
     int fd;
     char* mmap_data;

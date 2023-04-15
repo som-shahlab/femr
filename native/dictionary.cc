@@ -114,8 +114,12 @@ std::string_view Dictionary::operator[](uint32_t idx) const {
 }
 
 boost::optional<uint32_t> Dictionary::find(std::string_view word) {
+    if (values_.size() == 0) {
+        return boost::none;
+    }
     if (word.data() >= values_.front().data() &&
         word.data() <= values_.back().data()) {
+        printf("Slow path\n");
         // This is an internal reference, we can use a fast path to find it
         auto iter =
             std::lower_bound(std::begin(values_), std::end(values_), word,
@@ -136,6 +140,7 @@ boost::optional<uint32_t> Dictionary::find(std::string_view word) {
         auto iter = std::lower_bound(
             std::begin(sorted), std::end(sorted), word,
             [&](uint32_t a, std::string_view b) { return values_[a] < b; });
+
         if (iter == std::end(sorted) || values_[*iter] != word) {
             return boost::none;
         } else {
@@ -148,7 +153,7 @@ const std::vector<std::string_view>& Dictionary::values() const {
     return values_;
 }
 
-const std::vector<uint32_t>& Dictionary::get_sorted_values() {
+void Dictionary::init_sorted_values() {
     if (!possib_sorted_values) {
         possib_sorted_values.emplace();
         possib_sorted_values->reserve(values_.size());
@@ -160,6 +165,10 @@ const std::vector<uint32_t>& Dictionary::get_sorted_values() {
             std::begin(*possib_sorted_values), std::end(*possib_sorted_values),
             [&](uint32_t a, uint32_t b) { return values_[a] < values_[b]; });
     }
+}
+
+const std::vector<uint32_t>& Dictionary::get_sorted_values() {
+    init_sorted_values();
     return *possib_sorted_values;
 }
 
