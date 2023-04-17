@@ -81,7 +81,7 @@ class Event:
             other = {}
             if val.__dict__ is not None:
                 for a, b in val.__dict__.items():
-                    if a not in ('code', 'start', 'value') and b is not None:
+                    if a not in ("code", "start", "value") and b is not None:
                         other[a] = b
 
             return (val.code, val.start, val.value, other)
