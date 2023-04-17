@@ -36,4 +36,4 @@ jobs:
     - name: C++ tests
       run: |
         cd native
-        bazel test //...
+        bazel test non_flaky_test

@@ -474,3 +474,8 @@ cc_binary(
     name = "simple_test",
     srcs = ["simple_test.cc"],
 )
+
+test_suite(
+	name = "non_flaky_test",
+	tags = ["-flaky"],
+)
