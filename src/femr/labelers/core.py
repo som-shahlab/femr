@@ -322,7 +322,7 @@ class Labeler(ABC):
             assert patients is None
             patient_database = PatientDatabase(path_to_patient_database)
             num_patients = len(patient_database) if not num_patients else num_patients
-            pids = list(range(num_patients))
+            pids = list(patient_database)
         else:
             # Use `patients` if specified
             assert patients is not None

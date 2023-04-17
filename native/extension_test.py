@@ -25,7 +25,7 @@ def test_helper(tmp_path, capsys):
         print("Done")
 
         concept_root = tmp_path / "concepts"
-        m.test.create_ontology_files(str(concept_root))
+        m.test.create_ontology_files(str(concept_root), True)
 
         patients = tmp_path / "patients"
         m.test.create_database_files(str(patients))
@@ -44,9 +44,6 @@ def test_helper(tmp_path, capsys):
         def f(a):
             return datetime.datetime.fromisoformat(a)
 
-        patient_id = database.get_patient_id_from_original(30)
-        assert database.get_original_patient_id(patient_id) == 30
-
         with pytest.raises(ValueError):
             database.get_code_dictionary().index("not in there")
 
@@ -56,14 +53,15 @@ def test_helper(tmp_path, capsys):
         assert database.get_text_count("Long Text") == 1
         assert database.get_text_count("Missing Text") == 0
 
+        patient_id = 30
         patient = database[patient_id]
 
         assert patient.patient_id == patient_id
+
         assert patient.events == (
             femr.Event(start=f("1990-03-08 09:30:00"), code=0, value=None),
             femr.Event(
                 start=f("1990-03-08 10:30:00"),
-                end=f("1990-03-18 10:50:00"),
                 code=0,
                 value=None,
             ),
@@ -71,20 +69,19 @@ def test_helper(tmp_path, capsys):
                 start=f("1990-03-11 14:30:00"),
                 code=2,
                 value="Long Text",
-                visit_id=0,
             ),
             femr.Event(
                 start=f("1990-03-11 14:30:00"),
                 code=1,
                 value="Short Text",
             ),
-            femr.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1),
-            femr.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5, visit_id=0),
+            femr.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0),
+            femr.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5),
         )
 
         total = 0
-        for patient in database:
-            total += len(patient.events)
+        for patient_id in database:
+            total += len(database[patient_id].events)
         assert total == 9
 
 
