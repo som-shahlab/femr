@@ -199,11 +199,13 @@ def create_batches() -> None:
         dictionary = msgpack.load(f, use_list=False)
 
         if args.is_hierarchical:
-            dict_len = len(dictionary['ontology_rollup'])
+            dict_len = len(dictionary["ontology_rollup"])
         else:
-            dict_len = len(dictionary['regular'])
+            dict_len = len(dictionary["regular"])
 
-        assert args.transformer_vocab_size <= dict_len, f"Transformer vocab size ({args.transformer_vocab_size}) must be <= len(dictionary) ({dict_len})"
+        assert (
+            args.transformer_vocab_size <= dict_len
+        ), f"Transformer vocab size ({args.transformer_vocab_size}) must be <= len(dictionary) ({dict_len})"
 
     data = femr.datasets.PatientDatabase(args.data_path)
 
