@@ -74,7 +74,19 @@ class Event:
         return sort_key(self) < sort_key(other)
 
     def __eq__(self, other: object) -> bool:
-        return self.__dict__ == other.__dict__
+        if other is None:
+            return False
+
+        def get_val(val):
+            other = {}
+            if val.__dict__ is not None:
+                for a, b in val.__dict__.items():
+                    if a not in ('code', 'start', 'value') and b is not None:
+                        other[a] = b
+
+            return (val.code, val.start, val.value, other)
+
+        return get_val(self) == get_val(other)
 
     def __repr__(self) -> str:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())

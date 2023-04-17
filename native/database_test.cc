@@ -99,21 +99,21 @@ TEST(Database, CreateDatabase) {
     PatientDatabase database(destination, true);
 
     EXPECT_EQ(database.size(), 3);
-    EXPECT_EQ(database.get_patient_id_from_original(30).has_value(), true);
-    EXPECT_EQ(database.get_patient_id_from_original(70).has_value(), true);
-    uint32_t patient_id = *database.get_patient_id_from_original(30);
-    EXPECT_EQ(database.get_original_patient_id(patient_id), 30);
-    EXPECT_EQ(database.get_patient_id_from_original(1235).has_value(), false);
-    EXPECT_EQ(database.get_patient_id_from_original(31).has_value(), false);
+    EXPECT_EQ(database.get_patient_offset_from_patient_id(30).has_value(), true);
+    EXPECT_EQ(database.get_patient_offset_from_patient_id(70).has_value(), true);
+    uint32_t patient_offset = *database.get_patient_offset_from_patient_id(30);
+    EXPECT_EQ(database.get_patient_id(patient_offset), 30);
+    EXPECT_EQ(database.get_patient_offset_from_patient_id(1235).has_value(), false);
+    EXPECT_EQ(database.get_patient_offset_from_patient_id(31).has_value(), false);
 
     EXPECT_EQ(database.get_code_count(0), 4);
     EXPECT_EQ(database.get_shared_text_count(0), 2);
 
     PatientDatabaseIterator iterator = database.iterator();
 
-    const Patient& patient = iterator.get_patient(patient_id);
+    const Patient& patient = iterator.get_patient(patient_offset);
 
-    EXPECT_EQ(patient.patient_id, patient_id);
+    EXPECT_EQ(patient.patient_offset, patient_offset);
     EXPECT_EQ(patient.birth_date, absl::CivilDay(1990, 3, 8));
 
     Event f{};
