@@ -77,7 +77,7 @@ class Event:
         if other is None:
             return False
 
-        def get_val(val):
+        def get_val(val: Any) -> Any:
             other = {}
             if val.__dict__ is not None:
                 for a, b in val.__dict__.items():
@@ -86,7 +86,7 @@ class Event:
 
             return (val.code, val.start, val.value, other)
 
-        return get_val(self) == get_val(other)
+        return bool(get_val(self) == get_val(other))
 
     def __repr__(self) -> str:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())

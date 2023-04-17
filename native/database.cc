@@ -785,7 +785,7 @@ absl::Span<const uint64_t> PatientDatabase::get_patient_ids() {
     return read_span<uint64_t>(meta_dictionary, 0);
 }
 
-boost::optional<uint32_t> PatientDatabase::get_patient_offset_from_patient_id(
+boost::optional<uint32_t> PatientDatabase::get_patient_offset(
     uint64_t patient_id) {
     absl::Span<const uint32_t> sorted_span =
         read_span<uint32_t>(meta_dictionary, 1);

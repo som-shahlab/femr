@@ -145,7 +145,7 @@ class PatientDatabase {
         absl::Span<const uint32_t> text_values);
 
     // Map back to original patient ids
-    boost::optional<uint32_t> get_patient_offset_from_patient_id(
+    boost::optional<uint32_t> get_patient_offset(
         uint64_t patient_id);
     uint64_t get_patient_id(uint32_t patient_offset);
     absl::Span<const uint64_t> get_patient_ids();

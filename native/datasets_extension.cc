@@ -234,7 +234,7 @@ void register_datasets_extension(py::module& root) {
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
 
-                boost::optional<uint32_t> patient_offset = self.get_patient_offset_from_patient_id(patient_id);
+                boost::optional<uint32_t> patient_offset = self.get_patient_offset(patient_id);
 
                 if (!patient_offset) {
                     throw py::index_error();
@@ -261,7 +261,7 @@ void register_datasets_extension(py::module& root) {
             py::return_value_policy::reference_internal)
         .def("get_patient_birth_date",
              [](PatientDatabase& self, uint64_t patient_id) {
-                 Patient p = self.get_patient(*self.get_patient_offset_from_patient_id(patient_id));
+                 Patient p = self.get_patient(*self.get_patient_offset(patient_id));
                  return p.birth_date;
              })
         .def("get_code_dictionary", &PatientDatabase::get_code_dictionary,
@@ -284,7 +284,7 @@ void register_datasets_extension(py::module& root) {
                  }
              })
         .def("compute_split", [](PatientDatabase& self, uint32_t seed, uint64_t patient_id) {
-                return self.compute_split(seed, *self.get_patient_offset_from_patient_id(patient_id));
+                return self.compute_split(seed, *self.get_patient_offset(patient_id));
              })
         .def("version_id", &PatientDatabase::version_id)
         .def("database_id", &PatientDatabase::database_id)
