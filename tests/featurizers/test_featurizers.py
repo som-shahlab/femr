@@ -32,7 +32,7 @@ def _assert_featurized_patients_structure(labeled_patients, featurized_patients,
         labels_per_patient
     ), f"len(featurized_patients[1]) = {len(featurized_patients[1])}"
 
-    patient_ids = np.array(sorted([i for i in labeled_patients] * len(labels_per_patient)))
+    patient_ids = np.array(sorted(list(labeled_patients) * len(labels_per_patient)))
     assert np.sum(featurized_patients[1] == patient_ids) == len(labeled_patients) * len(labels_per_patient)
 
     all_labels = np.array(labels_per_patient * len(labeled_patients))
