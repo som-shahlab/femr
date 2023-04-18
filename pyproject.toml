@@ -16,7 +16,7 @@ dependencies = [
     "msgpack >= 1.0.5",
 ]
 requires-python=">3.10"
-version = "0.1.0"
+version = "0.1.0+cu114"
 
 [project.scripts]
 
@@ -64,3 +64,12 @@ target_version = ['py310']
 
 [tool.pydocstyle]
 match = "src/.*\\.py"
+
+[tool.cibuildwheel.linux]
+before-all = [
+  "curl -O -L https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_520.61.05_linux.run",
+  "sh cuda_11.8.0_520.61.05_linux.run",
+  "curl -o /usr/local/bin/bazel -L  https://github.com/bazelbuild/bazelisk/releases/download/v1.16.0/bazelisk-linux-amd64",
+  "chmod +x /usr/local/bin/bazel",
+  "bazel --version",
+]
