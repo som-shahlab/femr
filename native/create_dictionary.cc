@@ -223,18 +223,21 @@ void create_dictionary(const std::string& input, const std::string& output) {
 
         std::sort(std::begin(samples), std::end(samples));
 
-        size_t samples_per_bin = (samples.size() + 10) / 11;
+        size_t samples_per_bin = (samples.size() + 9) / 10;
 
         for (int bin = 0; bin < 10; bin++) {
             double start_val;
             if (bin == 0) {
                 start_val = -std::numeric_limits<double>::max();
             } else {
+                if (bin * samples_per_bin >= samples.size()) {
+                    continue;
+                }
                 start_val = samples[bin * samples_per_bin];
             }
 
             double end_val;
-            if (bin == 9) {
+            if (bin == 9 || (bin + 1) * samples_per_bin >= samples.size()) {
                 end_val = std::numeric_limits<double>::max();
             } else {
                 end_val = samples[(bin + 1) * samples_per_bin];
