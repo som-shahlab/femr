@@ -25,8 +25,18 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Build wheels
+    - name: Build wheels cpu
       uses: pypa/cibuildwheel@v2.12.2
+      if: matrix.version == 'cpu'
+      env:
+        CIBW_BEFORE_ALL_LINUX: bash build/linux_setup.sh
+    
+    - name: Build wheels gpu
+      uses: pypa/cibuildwheel@v2.12.2
+      if: matrix.version == 'gpu'
+      env:
+        CIBW_ENVIRONMENT: PATH=$PATH:/usr/local/cuda/bin
+        CIBW_BEFORE_ALL_LINUX: bash build/linux_setup_cuda.sh
 
     - uses: actions/upload-artifact@v3
       with:
