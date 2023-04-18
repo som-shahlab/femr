@@ -16,7 +16,7 @@ dependencies = [
     "msgpack >= 1.0.5",
 ]
 requires-python=">3.10"
-version = "0.1.0+cu114"
+version = "0.1.0"
 
 [project.scripts]
 

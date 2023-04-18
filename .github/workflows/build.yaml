@@ -31,6 +31,7 @@ jobs:
       env:
         CIBW_BEFORE_ALL_LINUX: bash build/linux_setup.sh
         CIBW_ARCHS_LINUX: x86_64
+        CIBW_ARCHS_MACOS: x86_64 arm64
     
     - name: Build wheels cuda
       uses: pypa/cibuildwheel@v2.12.2
