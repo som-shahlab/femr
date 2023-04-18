@@ -30,13 +30,15 @@ jobs:
       if: matrix.version == 'cpu'
       env:
         CIBW_BEFORE_ALL_LINUX: bash build/linux_setup.sh
+        CIBW_ARCHS_LINUX: x86_64
     
-    - name: Build wheels gpu
+    - name: Build wheels cuda
       uses: pypa/cibuildwheel@v2.12.2
-      if: matrix.version == 'gpu'
+      if: matrix.version == 'cuda'
       env:
         CIBW_ENVIRONMENT: PATH=$PATH:/usr/local/cuda/bin
         CIBW_BEFORE_ALL_LINUX: bash build/linux_setup_cuda.sh
+        CIBW_ARCHS_LINUX: x86_64
 
     - uses: actions/upload-artifact@v3
       with:
