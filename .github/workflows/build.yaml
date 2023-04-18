@@ -1,0 +1,36 @@
+name: Build wheels
+
+on:
+  push:
+    branches:
+     - main
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: ["ubuntu-latest", "macos-latest"]
+        python-version: ["3.10"]
+        version: ["cpu", "cuda"]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - uses: Jimver/cuda-toolkit@v0.2.10
+      if: matrix.version == "cuda" && matrix.os == "macos-latest"
+      id: cuda-toolkit
+      with:
+        cuda: '11.8.0'
+
+    - name: Build wheels
+      uses: pypa/cibuildwheel@v2.12.2
+
+    - uses: actions/upload-artifact@v3
+      with:
+        path: ./wheelhouse/*.whl
