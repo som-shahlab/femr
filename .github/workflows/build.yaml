@@ -23,7 +23,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - uses: Jimver/cuda-toolkit@v0.2.10
-      if: matrix.version == "cuda" && matrix.os == "macos-latest"
+      if: matrix.version == 'cuda' && matrix.os == 'macos-latest'
       id: cuda-toolkit
       with:
         cuda: '11.8.0'
