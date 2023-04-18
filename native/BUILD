@@ -479,3 +479,12 @@ test_suite(
 	name = "non_flaky_test",
 	tags = ["-flaky"],
 )
+
+cc_binary(
+    name="convert_dictionary_formats",
+    srcs = ["convert_dictionary_formats.cc"],
+    deps = [
+        ":database",
+        "@json",
+    ]
+)
