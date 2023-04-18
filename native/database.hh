@@ -156,12 +156,12 @@ class PatientDatabase {
 
     uint32_t compute_split(uint32_t seed, uint32_t patient_offset) {
         uint32_t patient_id = get_patient_id(patient_offset);
-        uint32_t network_patient_offset = htonl(patient_id);
+        uint32_t network_patient_id = htonl(patient_id);
         uint32_t network_seed = htonl(seed);
 
         char to_hash[sizeof(uint32_t) * 2];
         memcpy(to_hash, &network_seed, sizeof(uint32_t));
-        memcpy(to_hash + sizeof(uint32_t), &network_patient_offset,
+        memcpy(to_hash + sizeof(uint32_t), &network_patient_id,
                sizeof(uint32_t));
 
         std::vector<unsigned char> hash(picosha2::k_digest_size);
