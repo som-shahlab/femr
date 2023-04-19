@@ -1,4 +1,4 @@
-#include "dataloader_extension.hh"
+# include "dataloader_extension.hh"
 
 #include <nlohmann/json.hpp>
 
@@ -195,9 +195,12 @@ class LabeledPatientsTask : public Task {
 
 class CLMBRTask : public Task {
    public:
-    CLMBRTask(json config) {
+    CLMBRTask(json config, PatientDatabase& data) {
         // Might be empty, in which case we train on everyone
-        patient_offsets = config.value("patient_offsets", std::vector<uint32_t>());
+        std::vector<uint64_t> patient_ids = config.value("patient_ids", std::vector<uint64_t>());
+        for (uint64_t patient_id : patient_ids) {
+            patient_offsets.push_back(*data.get_patient_offset(patient_id));
+        }
         vocab_size = config["vocab_size"];
     }
 
@@ -268,9 +271,12 @@ class CLMBRTask : public Task {
 
 class SurvivalCLMBRTask : public Task {
    public:
-    SurvivalCLMBRTask(json config, Ontology& ontology) {
+    SurvivalCLMBRTask(json config, PatientDatabase& data, Ontology& ontology) {
         // Might be empty, in which case we train on everyone
-        patient_offsets = config.value("patient_offsets", std::vector<uint32_t>());
+        std::vector<uint64_t> patient_ids = config.value("patient_ids", std::vector<uint64_t>());
+        for (uint64_t patient_id : patient_ids) {
+            patient_offsets.push_back(*data.get_patient_offset(patient_id));
+        }
         json survival_dict = config["survival_dict"];
         survival_dictionary = get_mapping(ontology, survival_dict["codes"]);
         vocab_size = survival_dict["codes"].size();
@@ -488,9 +494,9 @@ std::unique_ptr<Task> create_task(json config, PatientDatabase& data, Ontology& 
     if (type == "labeled_patients") {
         return std::make_unique<LabeledPatientsTask>(config, data);
     } else if (type == "clmbr") {
-        return std::make_unique<CLMBRTask>(config);
+        return std::make_unique<CLMBRTask>(config, data);
     } else if (type == "survival_clmbr") {
-        return std::make_unique<SurvivalCLMBRTask>(config, ontology);
+        return std::make_unique<SurvivalCLMBRTask>(config, data, ontology);
     }
 
     throw std::runtime_error("Invalid task type " + type);
@@ -677,7 +683,8 @@ class BatchCreator {
         age_mean = config["transformer"]["dictionary"]["age_stats"]["mean"];
         age_std = config["transformer"]["dictionary"]["age_stats"]["std"];
 
-        patient_offsets = Eigen::Tensor<uint32_t, 1>(1 << (max_size - min_size));
+        (void) data.get_patient_id(0);
+        patient_ids = Eigen::Tensor<uint64_t, 1>(1 << (max_size - min_size));
         offsets = Eigen::Tensor<uint32_t, 1>(1 << (max_size - min_size));
         if (lookup.is_hierarchical) {
             if (SPARSE_FALLBACK) {
@@ -706,7 +713,7 @@ class BatchCreator {
         task->start_batch();
         this->max_length = max_length;
 
-        patient_offsets.setConstant(0);
+        patient_ids.setConstant(0);
         offsets.setConstant(0);
 
         valid_tokens.setConstant(false);
@@ -736,7 +743,7 @@ class BatchCreator {
         }
         const Patient& p = iter.get_patient(patient_offset);
 
-        patient_offsets(batch_index) = patient_offset;
+        patient_ids(batch_index) = data.get_patient_id(patient_offset);
 
         if (!task->needs_exact() && offset != 0) {
             if (token_dropout != 0) {
@@ -1053,7 +1060,7 @@ class BatchCreator {
         py::dict result;
         result["num_patients"] = batch_index;
         result["num_indices"] = label_indices.size();
-        result["patient_offsets"] = patient_offsets;
+        result["patient_ids"] = patient_ids;
         result["offsets"] = offsets;
         result["transformer"] = transformer;
         result["task"] = task_dict;
@@ -1070,7 +1077,7 @@ class BatchCreator {
     SplitMix64 rng;
     double token_dropout;
 
-    Eigen::Tensor<uint32_t, 1> patient_offsets;
+    Eigen::Tensor<uint64_t, 1> patient_ids;
     Eigen::Tensor<uint32_t, 1> offsets;
 
     Eigen::Tensor<uint32_t, 1> tokens;
