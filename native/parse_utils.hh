@@ -8,14 +8,16 @@
 template <typename T>
 void attempt_parse_or_die(std::string_view text, T& value) {
     if (!absl::SimpleAtoi(text, &value)) {
-        throw std::runtime_error("Could not parse numeric value \"" + std::string(text) + "\"");
+        throw std::runtime_error("Could not parse numeric value \"" +
+                                 std::string(text) + "\"");
     }
 }
 
 template <typename T>
 void attempt_parse_time_or_die(std::string_view text, T& value) {
     if (!absl::ParseCivilTime(text, &value)) {
-        throw std::runtime_error("Could not parse date \"" + std::string(text) + "\"");
+        throw std::runtime_error("Could not parse date \"" + std::string(text) +
+                                 "\"");
     }
 }
 

@@ -33,7 +33,8 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
     {
         uintmax_t file_size = boost::filesystem::file_size(path);
 
-        if (file_size > static_cast<uintmax_t>(std::numeric_limits<ssize_t>::max())) {
+        if (file_size >
+            static_cast<uintmax_t>(std::numeric_limits<ssize_t>::max())) {
             throw std::runtime_error(absl::StrCat(
                 "Cannot map file larger than ssize_t::max ", path.string()));
         }
@@ -80,7 +81,12 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
     }
 }
 
-Dictionary::Dictionary(Dictionary&& other): fd(other.fd), mmap_data(other.mmap_data), length(other.length), values_(other.values_), possib_sorted_values(other.possib_sorted_values) {
+Dictionary::Dictionary(Dictionary&& other)
+    : fd(other.fd),
+      mmap_data(other.mmap_data),
+      length(other.length),
+      values_(other.values_),
+      possib_sorted_values(other.possib_sorted_values) {
     other.mmap_data = nullptr;
     other.fd = -1;
 }

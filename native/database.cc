@@ -66,11 +66,12 @@ struct Entry {
         data;  // of size 1 + num_unique + num_event
                // stores data, then unique values, then event metadata
 
-    bool operator<(const Entry& r) const { return patient_offset > r.patient_offset; }
+    bool operator<(const Entry& r) const {
+        return patient_offset > r.patient_offset;
+    }
 };
 
-void write_patient_to_buffer(uint32_t start_unique,
-                             uint64_t patient_id,
+void write_patient_to_buffer(uint32_t start_unique, uint64_t patient_id,
                              const Patient& current_patient,
                              std::vector<uint32_t>& buffer) {
     if (current_patient.birth_date < epoch) {
@@ -93,8 +94,8 @@ void write_patient_to_buffer(uint32_t start_unique,
             static_cast<int64_t>(event.start_age_in_minutes) - last_age;
         if (delta < 0) {
             throw std::runtime_error(absl::StrCat(
-                "Patient days are not sorted in order ", patient_id,
-                " with ", event.start_age_in_minutes, " ", delta));
+                "Patient days are not sorted in order ", patient_id, " with ",
+                event.start_age_in_minutes, " ", delta));
         }
         if (delta > std::numeric_limits<uint32_t>::max()) {
             throw std::runtime_error("Out of bounds error?");
@@ -435,8 +436,8 @@ void reader_thread(
         uint32_t offset = offset_and_unique >> 32;
         uint32_t start_unique = offset_and_unique & 0xfffffffful;
 
-        write_patient_to_buffer(start_unique, patient_id,
-                                current_patient, buffer);
+        write_patient_to_buffer(start_unique, patient_id, current_patient,
+                                buffer);
 
         if (byte_buffer.size() <
             streamvbyte_max_compressedbytes(buffer.size())) {
@@ -789,13 +790,12 @@ boost::optional<uint32_t> PatientDatabase::get_patient_offset(
     uint64_t patient_id) {
     absl::Span<const uint32_t> sorted_span =
         read_span<uint32_t>(meta_dictionary, 1);
-    const auto* iter = std::lower_bound(
-        std::begin(sorted_span), std::end(sorted_span), patient_id,
-        [&](uint32_t index, uint64_t original) {
-            return get_patient_id(index) < original;
-        });
-    if (iter == std::end(sorted_span) ||
-        get_patient_id(*iter) != patient_id) {
+    const auto* iter =
+        std::lower_bound(std::begin(sorted_span), std::end(sorted_span),
+                         patient_id, [&](uint32_t index, uint64_t original) {
+                             return get_patient_id(index) < original;
+                         });
+    if (iter == std::end(sorted_span) || get_patient_id(*iter) != patient_id) {
         return {};
     } else {
         return *iter;
@@ -837,7 +837,8 @@ std::string_view PatientDatabase::get_event_metadata(uint32_t patient_offset,
     absl::Span<const uint32_t> event_offsets =
         read_span<uint32_t>(*event_metadata_dictionary, patient_offset * 2);
 
-    std::string_view data = (*event_metadata_dictionary)[patient_offset * 2 + 1];
+    std::string_view data =
+        (*event_metadata_dictionary)[patient_offset * 2 + 1];
     uint32_t end;
     if (event_index == event_offsets.size() - 1) {
         end = data.size();

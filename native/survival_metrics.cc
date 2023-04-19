@@ -208,12 +208,10 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
     return {result, survival_plot_result};
 }
 
-std::vector<double> apply_breslow(
-    const Eigen::Tensor<double, 1>& times,
-    const Eigen::Tensor<double, 1>& time_bins,
-    const Eigen::Tensor<double, 2>& hazards,
-    const Eigen::Tensor<double, 2>& breslow) {
-
+std::vector<double> apply_breslow(const Eigen::Tensor<double, 1>& times,
+                                  const Eigen::Tensor<double, 1>& time_bins,
+                                  const Eigen::Tensor<double, 2>& hazards,
+                                  const Eigen::Tensor<double, 2>& breslow) {
     ssize_t num_elem = hazards.dimension(0);
     ssize_t num_times = hazards.dimension(1);
 
@@ -237,7 +235,9 @@ std::vector<double> apply_breslow(
     std::vector<size_t> time_indices;
 
     for (ssize_t i = 0; i < num_times; i++) {
-        auto iter = std::lower_bound(std::begin(breslow_times), std::end(breslow_times), time_bins[i], std::less_equal<double>{});
+        auto iter =
+            std::lower_bound(std::begin(breslow_times), std::end(breslow_times),
+                             time_bins[i], std::less_equal<double>{});
         time_indices.push_back(iter - std::begin(breslow_times));
     }
 
@@ -250,7 +250,8 @@ std::vector<double> apply_breslow(
 
         ssize_t current_time_bin = 0;
 
-        while (current_time_bin < (num_times - 1) && time > time_bins[current_time_bin + 1]) {
+        while (current_time_bin < (num_times - 1) &&
+               time > time_bins[current_time_bin + 1]) {
             size_t start = time_indices[current_time_bin];
             size_t end = time_indices[current_time_bin + 1];
 
@@ -261,15 +262,19 @@ std::vector<double> apply_breslow(
         }
 
         size_t start = time_indices[current_time_bin];
-        auto iter = std::lower_bound(std::begin(breslow_times), std::end(breslow_times), time, std::less_equal<double>{});
+        auto iter =
+            std::lower_bound(std::begin(breslow_times), std::end(breslow_times),
+                             time, std::less_equal<double>{});
         size_t end = iter - std::begin(breslow_times);
 
         double total = breslow(end - 1, 0) - breslow(start - 1, 0);
 
         size_t offset = (iter == std::end(breslow_times)) ? 1 : 0;
 
-        double bin_delta = breslow(end - offset, 0) - breslow(end - (1 + offset), 0);
-        double bin_time = breslow_times[end - offset] - breslow_times[end - (1 + offset)];
+        double bin_delta =
+            breslow(end - offset, 0) - breslow(end - (1 + offset), 0);
+        double bin_time =
+            breslow_times[end - offset] - breslow_times[end - (1 + offset)];
         double rate = bin_delta / bin_time;
 
         total += rate * (time - breslow_times[end - 1]);
@@ -282,7 +287,9 @@ std::vector<double> apply_breslow(
             prob = 0.999;
         }
         // if (prob == 1 && time != 0) {
-        //    std::cout<<"What in the world .. " << total_hazard << " " << time << " " << hazards(i, current_time_bin) << " " << total << std::endl;
+        //    std::cout<<"What in the world .. " << total_hazard << " " << time
+        //    << " " << hazards(i, current_time_bin) << " " << total <<
+        //    std::endl;
         // }
         result.push_back(prob);
     }
@@ -334,12 +341,11 @@ Eigen::Tensor<double, 2> estimate_breslow(
 
     auto resolve = [&]() {
         if (current_dead.size() != 0) {
-            double val = current_dead.size() * 1/ current_denom;
+            double val = current_dead.size() * 1 / current_denom;
 
             for (size_t dead : current_dead) {
                 current_denom -= hazards(dead, current_bucket_index);
             }
-
 
             current_sum += val;
             estimator.push_back(std::make_pair(current_sum, last_time));
@@ -438,12 +444,11 @@ Eigen::Tensor<double, 2> estimate_optimal(
 
     auto resolve = [&]() {
         if (current_dead.size() != 0) {
-            double val = current_dead.size() * 1/ current_denom;
+            double val = current_dead.size() * 1 / current_denom;
 
             for (size_t dead : current_dead) {
                 current_denom -= hazards(dead, current_bucket_index);
             }
-
 
             current_sum += val;
             estimator.push_back(std::make_pair(current_sum, last_time));

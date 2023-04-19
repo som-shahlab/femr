@@ -35,11 +35,12 @@ void keep_alive(py::handle nurse, py::handle patient) {
 namespace {
 class EventWrapper {
    public:
-    EventWrapper(py::module pickle, py::object python_event, PatientDatabase* database,
-                 uint32_t patient_offset, absl::CivilSecond birth_date,
-                 uint32_t event_index, const Event& event)
+    EventWrapper(py::module pickle, py::object python_event,
+                 PatientDatabase* database, uint32_t patient_offset,
+                 absl::CivilSecond birth_date, uint32_t event_index,
+                 const Event& event)
         : m_pickle(pickle),
-	  m_python_event(python_event),
+          m_python_event(python_event),
           m_database(database),
           m_patient_offset(patient_offset),
           m_birth_date(birth_date),
@@ -119,9 +120,8 @@ class EventWrapper {
 
     py::object to_python_event() {
         using namespace pybind11::literals;
-    	return m_python_event(
-                "code"_a = code(), "start"_a = start(),
-                "value"_a = value(), **metadata());
+        return m_python_event("code"_a = code(), "start"_a = start(),
+                              "value"_a = value(), **metadata());
     }
 
    private:
@@ -229,12 +229,13 @@ void register_datasets_extension(py::module& root) {
         .def(
             "__getitem__",
             [python_patient, python_event, pickle](py::object self_object,
-                                     uint64_t patient_id) {
+                                                   uint64_t patient_id) {
                 using namespace pybind11::literals;
 
                 PatientDatabase& self = self_object.cast<PatientDatabase&>();
 
-                boost::optional<uint32_t> patient_offset = self.get_patient_offset(patient_id);
+                boost::optional<uint32_t> patient_offset =
+                    self.get_patient_offset(patient_id);
 
                 if (!patient_offset) {
                     throw py::index_error();
@@ -246,22 +247,26 @@ void register_datasets_extension(py::module& root) {
 
                 for (size_t i = 0; i < p.events.size(); i++) {
                     const Event& event = p.events[i];
-                    events[i] = EventWrapper(pickle, python_event, &self, *patient_offset,
-                                             birth_date, i, event);
+                    events[i] =
+                        EventWrapper(pickle, python_event, &self,
+                                     *patient_offset, birth_date, i, event);
                 }
 
                 return python_patient("patient_id"_a = patient_id,
                                       "events"_a = events);
             },
             py::return_value_policy::reference_internal)
-        .def("__iter__", [](PatientDatabase& self) {
+        .def(
+            "__iter__",
+            [](PatientDatabase& self) {
                 auto span = self.get_patient_ids();
                 return py::make_iterator(std::begin(span), std::end(span));
             },
             py::return_value_policy::reference_internal)
         .def("get_patient_birth_date",
              [](PatientDatabase& self, uint64_t patient_id) {
-                 Patient p = self.get_patient(*self.get_patient_offset(patient_id));
+                 Patient p =
+                     self.get_patient(*self.get_patient_offset(patient_id));
                  return p.birth_date;
              })
         .def("get_code_dictionary", &PatientDatabase::get_code_dictionary,
@@ -283,8 +288,10 @@ void register_datasets_extension(py::module& root) {
                      return 0;
                  }
              })
-        .def("compute_split", [](PatientDatabase& self, uint32_t seed, uint64_t patient_id) {
-                return self.compute_split(seed, *self.get_patient_offset(patient_id));
+        .def("compute_split",
+             [](PatientDatabase& self, uint32_t seed, uint64_t patient_id) {
+                 return self.compute_split(
+                     seed, *self.get_patient_offset(patient_id));
              })
         .def("version_id", &PatientDatabase::version_id)
         .def("database_id", &PatientDatabase::database_id)
@@ -348,5 +355,4 @@ void register_datasets_extension(py::module& root) {
              })
         .attr("__bases__") =
         py::make_tuple(abc_sequence) + dictionary_binding.attr("__bases__");
-
 }

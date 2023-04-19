@@ -38,7 +38,7 @@ void register_iterable(py::module& m, const char* name) {
                  if (index < 0) {
                      index = span.size() + index;
                  }
-                 if (index >= (ssize_t) span.size() || index < 0) {
+                 if (index >= (ssize_t)span.size() || index < 0) {
                      throw py::index_error();
                  }
                  return span[index];

@@ -20,7 +20,8 @@ int main() {
 
     uint32_t total = 0;
 
-    for (uint32_t patient_offset = 0; patient_offset < database.size(); patient_offset++) {
+    for (uint32_t patient_offset = 0; patient_offset < database.size();
+         patient_offset++) {
         const Patient& p = iter.get_patient(patient_offset);
 
         uint32_t valid_events = 0;
@@ -36,8 +37,7 @@ int main() {
         }
     }
 
-
-    std::cout<<"Got " << total << std::endl;
+    std::cout << "Got " << total << std::endl;
 
     // std::ofstream o(
     //     "/local-scratch/nigam/projects/ethanid/femr/native/results/"

@@ -25,12 +25,16 @@ struct DictEntry {
     // Only for text dictionary entries
     std::string text_string;
 
-    std::tuple<double, DictEntryType, std::string, std::string, double, double> get_sort_tuple() const {
-        return std::make_tuple(weight, type, code_string, text_string, val_start, val_end);
+    std::tuple<double, DictEntryType, std::string, std::string, double, double>
+    get_sort_tuple() const {
+        return std::make_tuple(weight, type, code_string, text_string,
+                               val_start, val_end);
     }
 
-    bool operator<(const DictEntry& other) const { return get_sort_tuple() < other.get_sort_tuple(); }
+    bool operator<(const DictEntry& other) const {
+        return get_sort_tuple() < other.get_sort_tuple();
+    }
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DictEntry, type, code_string, weight, val_start,
-                                   val_end, text_string)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DictEntry, type, code_string, weight,
+                                   val_start, val_end, text_string)
 };
