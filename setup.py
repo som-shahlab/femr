@@ -70,7 +70,7 @@ class cmake_build_ext(build_ext):
                 ), "Cannot build C++ extension"
 
             subprocess.run(
-                args=["bazel"] + bazel_extra_args + ["build", "-c", "dbg", ext.target] + extra_args,
+                args=["bazel"] + bazel_extra_args + ["build", "-c", "opt", ext.target] + extra_args,
                 cwd=ext.sourcedir,
                 env=env,
                 check=True,
