@@ -2,7 +2,7 @@ build --cxxopt="-std=c++17"
 build --cxxopt="-Wall"
 build --cxxopt="-mavx2"
 build --copt="-mavx2"
-build --@rules_cuda//cuda:archs=compute_70
+build --@rules_cuda//cuda:archs=compute_70:compute_70,sm_70,sm_75,sm_80,sm_86
 build --@rules_cuda//cuda:copts=-Xptxas="-v"
 build --@rules_cuda//cuda:copts="--use_fast_math"
 
