@@ -5,7 +5,7 @@ on:
     types: [ published ]
 
 jobs:
-  build:
+  build_wheels:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
