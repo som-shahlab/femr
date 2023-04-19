@@ -30,7 +30,7 @@ struct DictEntry {
     }
 
     bool operator<(const DictEntry& other) const { return get_sort_tuple() < other.get_sort_tuple(); }
-    
+
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(DictEntry, type, code_string, weight, val_start,
                                    val_end, text_string)
 };

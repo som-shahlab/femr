@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import importlib.metadata
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
@@ -101,7 +102,7 @@ class Event:
         for a, b in d.items():
             self.__dict__[a] = b
 
-import importlib.metadata
+
 try:
     # __package__ allows for the case where __name__ is "__main__"
     __version__ = importlib.metadata.version(__package__ or __name__)

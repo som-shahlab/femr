@@ -65,4 +65,3 @@ target_version = ['py310']
 
 [tool.pydocstyle]
 match = "src/.*\\.py"
-
