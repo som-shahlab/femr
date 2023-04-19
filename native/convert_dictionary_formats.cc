@@ -1,15 +1,20 @@
-const char* extract_location = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2023_02_08_extract_v8";
-const char* source_dict_location = "/local-scratch/nigam/projects/clmbr_text_assets/data/clmbr_lr_0.0001_wd_0.0_id_0.0_td_0.0_rt_global_maxiter_10000000_hs_768_is_3072_nh_12_nl_6_aw_512_obs/dictionary";
-const char* destination_dict_location = "/local-scratch/nigam/projects/ethanid/femr_develop/femr/native/output_dict";
-
-#include "database.hh"
-
+const char* extract_location =
+    "/local-scratch/nigam/projects/ethanid/"
+    "som-rit-phi-starr-prod.starr_omop_cdm5_deid_2023_02_08_extract_v8";
+const char* source_dict_location =
+    "/local-scratch/nigam/projects/clmbr_text_assets/data/"
+    "clmbr_lr_0.0001_wd_0.0_id_0.0_td_0.0_rt_global_maxiter_10000000_hs_768_is_"
+    "3072_nh_12_nl_6_aw_512_obs/dictionary";
+const char* destination_dict_location =
+    "/local-scratch/nigam/projects/ethanid/femr_develop/femr/native/"
+    "output_dict";
 
 #include <nlohmann/json.hpp>
 
+#include "database.hh"
+
 using json = nlohmann::json;
 #include <fstream>
-
 
 json read_file(std::string filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -24,7 +29,8 @@ json convert_entries(PatientDatabase& data, json entries) {
     for (uint32_t i = 0; i < actual_data->size(); i++) {
         json entry = (*actual_data)[i];
         entry["code_string"] = data.get_code_dictionary()[entry["code"]];
-        entry["text_string"] = data.get_shared_text_dictionary()[entry["text_value"]];
+        entry["text_string"] =
+            data.get_shared_text_dictionary()[entry["text_value"]];
         entry.erase("text_value");
         entry.erase("code");
         result.push_back(entry);
@@ -34,7 +40,6 @@ json convert_entries(PatientDatabase& data, json entries) {
 }
 
 int main() {
-
     PatientDatabase database(extract_location, false, false);
 
     json input = read_file(source_dict_location);

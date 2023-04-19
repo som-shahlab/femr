@@ -145,8 +145,7 @@ class PatientDatabase {
         absl::Span<const uint32_t> text_values);
 
     // Map back to original patient ids
-    boost::optional<uint32_t> get_patient_offset(
-        uint64_t patient_id);
+    boost::optional<uint32_t> get_patient_offset(uint64_t patient_id);
     uint64_t get_patient_id(uint32_t patient_offset);
     absl::Span<const uint64_t> get_patient_ids();
 
@@ -249,9 +248,8 @@ first_argument<R> proccess_patients_in_parallel(PatientDatabase& database,
     database.iterator().get_patient(0);
 
     for (size_t i = 0; i < num_threads; i++) {
-        threads.emplace_back(
-            std::thread([i, &temp_results, &database, &func,
-                         &pids_per_thread]() {
+        threads.emplace_back(std::thread(
+            [i, &temp_results, &database, &func, &pids_per_thread]() {
                 PatientDatabaseIterator iter = database.iterator();
                 uint32_t start_pid = pids_per_thread * i;
                 uint32_t end_pid = std::min(

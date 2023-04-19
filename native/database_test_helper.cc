@@ -75,10 +75,13 @@ void create_database_files(const boost::filesystem::path& patients) {
 
         writer.add_row({"30", "32", "1990-03-08T09:30:00", "", ""});
         writer.add_row({"30", "32", "1990-03-08T10:30:00", "", ""});
-        writer.add_row({"30", "323", "1990-03-11T14:30:00", "Long Text", "gASVEQAAAAAAAAB9lIwIdmlzaXRfaWSUSwFzLg=="});
+        writer.add_row({"30", "323", "1990-03-11T14:30:00", "Long Text",
+                        "gASVEQAAAAAAAAB9lIwIdmlzaXRfaWSUSwFzLg=="});
         writer.add_row({"30", "326", "1990-03-11T14:30:00", "Short Text", ""});
-        writer.add_row({"30", "326", "1990-03-14T14:30:00", "34", "gASVEQAAAAAAAAB9lIwIdmlzaXRfaWSUSwFzLg=="});
-        writer.add_row({"30", "326", "1990-03-15T14:30:00", "34.5", "gASVEQAAAAAAAAB9lIwIdmlzaXRfaWSUSwFzLg=="});
+        writer.add_row({"30", "326", "1990-03-14T14:30:00", "34",
+                        "gASVEQAAAAAAAAB9lIwIdmlzaXRfaWSUSwFzLg=="});
+        writer.add_row({"30", "326", "1990-03-15T14:30:00", "34.5",
+                        "gASVEQAAAAAAAAB9lIwIdmlzaXRfaWSUSwFzLg=="});
     }
     {
         CSVWriter<ZstdWriter> writer(
