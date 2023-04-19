@@ -59,10 +59,11 @@ uint32_t round_to_nearest_bin(uint32_t value, uint32_t skip = 1) {
 
 class LabeledPatientsTask : public Task {
    public:
-    LabeledPatientsTask(json config) {
+    LabeledPatientsTask(json config, PatientDatabase& data) {
         labeler_type = config["labeler_type"];
         for (json label : config["labels"]) {
-            uint32_t patient_offset = label[0];
+            uint64_t patient_id = label[0];
+            uint32_t patient_offset = *data.get_patient_offset(patient_id);
             uint32_t age_in_minutes = label[1];
             json value = label[2];
             labels[patient_offset].push_back(std::make_pair(age_in_minutes, value));
@@ -482,10 +483,10 @@ class SurvivalCLMBRTask : public Task {
     std::vector<uint32_t> time_bins;
 };
 
-std::unique_ptr<Task> create_task(json config, Ontology& ontology) {
+std::unique_ptr<Task> create_task(json config, PatientDatabase& data, Ontology& ontology) {
     std::string type = config["type"];
     if (type == "labeled_patients") {
-        return std::make_unique<LabeledPatientsTask>(config);
+        return std::make_unique<LabeledPatientsTask>(config, data);
     } else if (type == "clmbr") {
         return std::make_unique<CLMBRTask>(config);
     } else if (type == "survival_clmbr") {
@@ -667,7 +668,7 @@ class BatchCreator {
                  config["transformer"]["vocab_size"],
                  config["transformer"].value("is_hierarchical", false),
                  data.get_ontology(), data),
-          task(create_task(config["task"], data.get_ontology())),
+          task(create_task(config["task"], data, data.get_ontology())),
           rng(config["seed"]),
           token_dropout(_token_dropout) {
         uint32_t min_size = config["transformer"]["min_size"];
@@ -1231,7 +1232,7 @@ void create_batches(const std::string& target_path,
 
     absl::flat_hash_set<uint32_t> valid_patients;
 
-    auto task = create_task(config["task"], data.get_ontology());
+    auto task = create_task(config["task"], data, data.get_ontology());
 
     if (task->get_patient_offsets().size() != 0) {
         for (uint32_t patient_offset : task->get_patient_offsets()) {

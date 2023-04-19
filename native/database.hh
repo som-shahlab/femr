@@ -250,8 +250,8 @@ first_argument<R> proccess_patients_in_parallel(PatientDatabase& database,
 
     for (size_t i = 0; i < num_threads; i++) {
         threads.emplace_back(
-            std::thread([i, &temp_results, &database, &func, &reducer,
-                         &num_threads, &pids_per_thread]() {
+            std::thread([i, &temp_results, &database, &func,
+                         &pids_per_thread]() {
                 PatientDatabaseIterator iter = database.iterator();
                 uint32_t start_pid = pids_per_thread * i;
                 uint32_t end_pid = std::min(
