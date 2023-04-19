@@ -1,10 +1,9 @@
 import toml
 
-with open('pyproject.toml') as f:
-  data = toml.load(f)
+with open("pyproject.toml") as f:
+    data = toml.load(f)
 
-data['project']['name'] += '-cuda'
+data["project"]["name"] += "-cuda"
 
-with open('pyproject.toml', 'w') as f:
-  toml.dump(data, f)
-
+with open("pyproject.toml", "w") as f:
+    toml.dump(data, f)
