@@ -11,7 +11,32 @@
 
 # Installation
 
-To install **FEMR** run the following, replacing `<FEMR_ENV>` with the desired name of your conda environment:
+There are two variants of the **FEMR** package, a CPU only version and a CUDA enabled version.
+
+## How to install **FEMR** without CUDA
+
+```bash
+pip install femr
+```
+
+## How to install **FEMR** with CUDA support
+
+Note that CUDA-enabled **FEMR** requires jax in order to function.
+
+```bash
+pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install "femr_cuda[models]"
+```
+
+# Development
+
+The following guides are for developers who want to contribute to **FEMR**.
+
+## Building from source
+
+In some scenarios (such as contributing to **FEMR**), you might want to compile the package from source.
+
+In order to do so, follow the following instructions.
 
 ```bash
 conda create -n FEMR_ENV python=3.10 bazel=6 -c conda-forge -y
@@ -23,25 +48,6 @@ git clone https://github.com/som-shahlab/femr.git
 cd femr
 pip install -e .
 ```
-
-## Dependencies for Training CLMBR
-
-The tutorial to run CLMBR model is in `tutorials/4_train_clmbr_model.py`. However, before running this script, some additional dependencies need to be installed.
-Please follow the steps below:
-
-1. Jax is one of the important package to train clmbr, but before installing that, you will need to have cuda and cudnn installed. For Nero users, please follow the
-instructions above to install cuda. Additionally, install the latest version of cudnn from nvidia. You will need to create developer account and download the file for specific version
-of your system. For Nero users, please go to this [link](https://developer.nvidia.com/rdp/cudnn-archive) and download the file
-`Download cuDNN v8.7.0 (November 28th, 2022), for CUDA 11.x` -> `Local Installer for Linux x86_64 (Tar)` on your local computer and transfer it
-over to your local folder in nero. Then follow the instruction [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
-section 1.3. Note that you need to copy over cudnn files to your local cuda. For example,
-
-- `cp cudnn-*-archive/include/cudnn*.h <path_to_your_cuda>/include`
-- `cp -P cudnn-*-archive/lib/libcudnn* <path_to_your_cuda>/lib64`
-- `chmod a+r <path_to_your_cuda>/include/cudnn*.h <path_to_your_cuda>/lib64/libcudnn*`
-
-2. Install Jax by running `pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`, as shown [here](https://github.com/google/jax#installation).
-3. Run `pip install -e .[models]`
 
 ### Special note for NERO users
 
@@ -80,9 +86,6 @@ nano ~/.bashrc
 
 7. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
 
-# Development
-
-The following guides are for developers who want to contribute to **FEMR**.
 
 ## Precommit checks
 
