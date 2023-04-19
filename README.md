@@ -64,7 +64,7 @@ As a side note for Nero/Carina users, do not use your home directory to save the
 
 If you are using Nero, you will need to install CUDA manually until the CUDA version on Nero is updated. To do so, follow these steps:
 
-1. Download version 11.1.1 of CUDA onto your local machine [from here](https://developer.nvidia.com/cuda-11.1.1-download-archive?target_os=Linux&target_arch=x86_64&target_distro=Ubuntu&target_version=1804&target_type=runfilelocal)
+1. Download version 11.8 of CUDA onto your local machine [from here](https://developer.nvidia.com/cuda-11-8-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=18.04&target_type=runfile_local)
 2. Copy your CUDA download from your local machine onto Nero, into whatever folder you'd like. We'll refer to the path to this folder as `<PATH_TO_CUDA_INSTALLER>` from now on.
     - *Note:* Nero doesn't work with `scp`. You can use an alternative like `pscp`, which functions basically identically to `scp`. You can install `pscp` on a Mac by using `brew install putty`.
 3. `ssh` into Nero using `ssh <username>@nero-nigam.compute.stanford.edu`
@@ -72,7 +72,16 @@ If you are using Nero, you will need to install CUDA manually until the CUDA ver
 5. The CUDA installer will pop-up a window during installation. Uncheck all of the boxes it presents except for the box labeled "cuda toolkit".
 6. After the installation completes, the installer will print out two paths to your console. Take note of these paths, and copy them into your `.bashrc` file by running the following commands.
 
- You may need to restart your terminal for the changes to be reflected.
+7. Install cuDNN v8.7.0 (November 28th, 2022) for CUDA. Go to this [link](https://developer.nvidia.com/rdp/cudnn-archive) and download the file
+`Download cuDNN v8.7.0 (November 28th, 2022), for CUDA 11.x` -> `Local Installer for Linux x86_64 (Tar)` on your local computer and transfer it
+over to your local folder in nero. Then follow the instruction [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
+section 1.3. Note that you need to copy over cudnn files to your local cuda. For example,
+
+- `cp cudnn-*-archive/include/cudnn*.h <path_to_your_cuda>/include`
+- `cp -P cudnn-*-archive/lib/libcudnn* <path_to_your_cuda>/lib64`
+- `chmod a+r <path_to_your_cuda>/include/cudnn*.h <path_to_your_cuda>/lib64/libcudnn*`
+
+8. Add the following to your .bashrc file. You may need to restart your terminal for the changes to be reflected.
 
 ```bash
 export PATH="<INSTALL_PATH>/bin:$PATH"
@@ -84,7 +93,7 @@ To write in a .bashrc file, use
 nano ~/.bashrc
 ```
 
-7. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
+9. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
 
 
 ## Precommit checks
