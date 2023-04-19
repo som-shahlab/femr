@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "femr"
-description = ""
+description = "Framework for Electronic Medical Records. A python package for building models using EHR data."
+readme = "README.md"
 dependencies = [
     "numpy >= 1.22",
     "scipy >= 1.6",
