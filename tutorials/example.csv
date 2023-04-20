@@ -9,3 +9,5 @@ patient_id,start,code,value,units,dosage
 3,2022-06-05,Drug/Atorvastatin,,mg,50
 3,2022-07-06,Drug/Multivitamins,,ml,5
 3,2022-06-05,Note/ProgressNote,Patient Bob came to the clinic today,,
+3,2022-06-06,Note/ProgressNote,"Complicated notes generally need escaping , "" 
+ example"
