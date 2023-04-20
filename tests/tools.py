@@ -76,7 +76,9 @@ def create_events(tmp_path: pathlib.Path) -> femr.datasets.EventCollection:
     for i in range(7):
         with contextlib.closing(events.create_writer()) as writer:
             for patient_id, event in ALL_EVENTS[i * events_per_chunk : (i + 1) * events_per_chunk]:
-                raw_event = femr.datasets.RawEvent(start=event.start, concept_id=int(event.code), value=event.value, visit_id=event.visit_id)
+                raw_event = femr.datasets.RawEvent(
+                    start=event.start, concept_id=int(event.code), value=event.value, visit_id=event.visit_id
+                )
                 writer.add_event(patient_id, raw_event)
 
     return events

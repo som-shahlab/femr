@@ -109,12 +109,19 @@ def test_constructor():
     ontology = DummyOntology_Generic()
     labeler = DummyLabeler1(ontology, "severe")  # type: ignore
     assert labeler.severity == "severe"
-    assert set(labeler.outcome_codes) == {'OMOP_CONCEPT_A', 'OMOP_CONCEPT_A_CHILD2', 'OMOP_CONCEPT_B_CHILD', 'OMOP_CONCEPT_A_CHILD', 'OMOP_CONCEPT_B', 'OMOP_CONCEPT_A_CHILD_CHILD'}
+    assert set(labeler.outcome_codes) == {
+        "OMOP_CONCEPT_A",
+        "OMOP_CONCEPT_A_CHILD2",
+        "OMOP_CONCEPT_B_CHILD",
+        "OMOP_CONCEPT_A_CHILD",
+        "OMOP_CONCEPT_B",
+        "OMOP_CONCEPT_A_CHILD_CHILD",
+    }
 
     # Constructor 2
     labeler = DummyLabeler2(ontology, "normal")
     assert labeler.severity == "normal"
-    assert set(labeler.outcome_codes) == {'OMOP_CONCEPT_B', 'OMOP_CONCEPT_B_CHILD'}
+    assert set(labeler.outcome_codes) == {"OMOP_CONCEPT_B", "OMOP_CONCEPT_B_CHILD"}
 
 
 def test_labeling(tmp_path: pathlib.Path):
@@ -343,7 +350,7 @@ class DummyOntology_Specific:
 
 
 def test_thrombocytopenia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1', 'child_1_1', 'LOINC/LP393218-5', 'LOINC/LG32892-8', 'child_2'}
+    outcome_codes = {"child_1", "child_1_1", "LOINC/LP393218-5", "LOINC/LG32892-8", "child_2"}
     labeler = _create_specific_labvalue_labeler(
         ThrombocytopeniaLabValueLabeler,
         "severe",
@@ -366,7 +373,7 @@ def test_thrombocytopenia(tmp_path: pathlib.Path):
 
 
 def test_hyperkalemia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1_1', 'child_2', 'child_1', 'LOINC/LP386618-5', 'LOINC/LG10990-6', 'LOINC/LG7931-1'}
+    outcome_codes = {"child_1_1", "child_2", "child_1", "LOINC/LP386618-5", "LOINC/LG10990-6", "LOINC/LG7931-1"}
     labeler = _create_specific_labvalue_labeler(
         HyperkalemiaLabValueLabeler,
         "severe",
@@ -389,7 +396,7 @@ def test_hyperkalemia(tmp_path: pathlib.Path):
 
 
 def test_hypoglycemia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_2', 'child_1_1', 'SNOMED/33747003', 'LOINC/LP416145-3', 'child_1'}
+    outcome_codes = {"child_2", "child_1_1", "SNOMED/33747003", "LOINC/LP416145-3", "child_1"}
     labeler = _create_specific_labvalue_labeler(
         HypoglycemiaLabValueLabeler,
         "severe",
@@ -412,7 +419,7 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
 
 
 def test_hyponatremia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1', 'child_1_1', 'LOINC/LG11363-5'}
+    outcome_codes = {"child_1", "child_1_1", "LOINC/LG11363-5"}
     labeler = _create_specific_labvalue_labeler(
         HyponatremiaLabValueLabeler,
         "severe",
@@ -435,7 +442,7 @@ def test_hyponatremia(tmp_path: pathlib.Path):
 
 
 def test_anemia(tmp_path: pathlib.Path):
-    outcome_codes: set = {'LOINC/LP392452-1', 'child_1_1', 'child_1'}
+    outcome_codes: set = {"LOINC/LP392452-1", "child_1_1", "child_1"}
     labeler = _create_specific_labvalue_labeler(
         AnemiaLabValueLabeler,
         "severe",

@@ -32,7 +32,11 @@ def remove_nones(
 
     new_events = []
     for event in patient.events:
-        if event.value is None and (event.concept_id, event.start.date()) in has_value and not do_not_apply_to_filter(event):
+        if (
+            event.value is None
+            and (event.concept_id, event.start.date()) in has_value
+            and not do_not_apply_to_filter(event)
+        ):
             continue
         new_events.append(event)
 

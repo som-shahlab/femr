@@ -230,7 +230,14 @@ def test_omop_concept_code_labeler(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=10))
     ontology = DummyOntology_OMOPConcept()
     labeler = DummyLabeler_OMOPConcept(ontology, time_horizon, prediction_codes=["1", "2"])  # type: ignore
-    assert set(labeler.outcome_codes) == {'OMOP_CONCEPT_A_CHILD_CHILD', 'OMOP_CONCEPT_B', 'OMOP_CONCEPT_B_CHILD', 'OMOP_CONCEPT_A_CHILD2', 'OMOP_CONCEPT_A', 'OMOP_CONCEPT_A_CHILD'}
+    assert set(labeler.outcome_codes) == {
+        "OMOP_CONCEPT_A_CHILD_CHILD",
+        "OMOP_CONCEPT_B",
+        "OMOP_CONCEPT_B_CHILD",
+        "OMOP_CONCEPT_A_CHILD2",
+        "OMOP_CONCEPT_A",
+        "OMOP_CONCEPT_A_CHILD",
+    }
     assert labeler.prediction_codes == ["1", "2"]
     assert labeler.get_time_horizon() == time_horizon
 
@@ -328,7 +335,14 @@ def test_LupusCodeLabeler() -> None:
     ontology = DummyOntology_Lupus()
     labeler = LupusCodeLabeler(ontology, time_horizon)  # type: ignore
     # Check that we selected the right codes
-    assert set(labeler.outcome_codes) == {'SNOMED_55464009', 'SNOMED/201436003', 'Lupus_child_nine', 'SNOMED/55464009', 'Lupus_child_ten', 'Lupus_child_seven'}
+    assert set(labeler.outcome_codes) == {
+        "SNOMED_55464009",
+        "SNOMED/201436003",
+        "Lupus_child_nine",
+        "SNOMED/55464009",
+        "Lupus_child_ten",
+        "Lupus_child_seven",
+    }
 
     run_test_for_labeler(labeler, events_with_labels, help_text="LupusCodeLabeler")
 
@@ -376,37 +390,64 @@ def _create_specific_labvalue_labeler(LabelerClass, outcome_codes: set):
 
 
 def test_thrombocytopenia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1_1', 'child_2', 'SNOMED/89627008', 'child_1', 'SNOMED/267447008'}
+    outcome_codes = {"child_1_1", "child_2", "SNOMED/89627008", "child_1", "SNOMED/267447008"}
     _create_specific_labvalue_labeler(ThrombocytopeniaCodeLabeler, outcome_codes)
 
 
 def test_hyperkalemia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1', 'SNOMED/14140009', 'child_1_1'}
+    outcome_codes = {"child_1", "SNOMED/14140009", "child_1_1"}
     _create_specific_labvalue_labeler(HyperkalemiaCodeLabeler, outcome_codes)
 
 
 def test_hypoglycemia(tmp_path: pathlib.Path):
-    outcome_codes = {'SNOMED/120731000119103', 'child_2', 'child_1', 'SNOMED/52767006', 'SNOMED/719216001', 'SNOMED/302866003', 'SNOMED/267384006', 'SNOMED/421725003', 'SNOMED/237637005', 'SNOMED/237633009', 'SNOMED/190448007', 'child_1_1', 'SNOMED/421437000', 'SNOMED/230796005', 'SNOMED/84371000119108'}
+    outcome_codes = {
+        "SNOMED/120731000119103",
+        "child_2",
+        "child_1",
+        "SNOMED/52767006",
+        "SNOMED/719216001",
+        "SNOMED/302866003",
+        "SNOMED/267384006",
+        "SNOMED/421725003",
+        "SNOMED/237637005",
+        "SNOMED/237633009",
+        "SNOMED/190448007",
+        "child_1_1",
+        "SNOMED/421437000",
+        "SNOMED/230796005",
+        "SNOMED/84371000119108",
+    }
     _create_specific_labvalue_labeler(HypoglycemiaCodeLabeler, outcome_codes)
 
 
 def test_hyponatremia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_2', 'child_1', 'SNOMED/89627008', 'SNOMED/267447008', 'child_1_1'}
+    outcome_codes = {"child_2", "child_1", "SNOMED/89627008", "SNOMED/267447008", "child_1_1"}
     _create_specific_labvalue_labeler(HyponatremiaCodeLabeler, outcome_codes)
 
 
 def test_anemia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1', 'SNOMED/713496008', 'SNOMED/691411000119101', 'SNOMED/691401000119104', 'SNOMED/767657005', 'child_2', 'SNOMED/111570005', 'SNOMED/271737000', 'SNOMED/713349004', 'child_1_1'}
+    outcome_codes = {
+        "child_1",
+        "SNOMED/713496008",
+        "SNOMED/691411000119101",
+        "SNOMED/691401000119104",
+        "SNOMED/767657005",
+        "child_2",
+        "SNOMED/111570005",
+        "SNOMED/271737000",
+        "SNOMED/713349004",
+        "child_1_1",
+    }
     _create_specific_labvalue_labeler(AnemiaCodeLabeler, outcome_codes)
 
 
 def test_neutropenia(tmp_path: pathlib.Path):
-    outcome_codes = {'child_1', 'SNOMED/165517008', 'child_1_1'}
+    outcome_codes = {"child_1", "SNOMED/165517008", "child_1_1"}
     _create_specific_labvalue_labeler(NeutropeniaCodeLabeler, outcome_codes)
 
 
 def test_aki(tmp_path: pathlib.Path):
-    outcome_codes = {'child_2', 'child_1_1', 'child_1', 'SNOMED/298015003', 'SNOMED/14669001', 'SNOMED/35455006'}
+    outcome_codes = {"child_2", "child_1_1", "child_1", "SNOMED/298015003", "SNOMED/14669001", "SNOMED/35455006"}
     _create_specific_labvalue_labeler(AKICodeLabeler, outcome_codes)
 
 
