@@ -109,7 +109,9 @@ def map_omop_concept_codes_to_femr_codes(
     codes: Set[str] = set()
     for omop_concept_code in omop_concept_codes:
         try:
-            codes.update(_get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code})
+            codes.update(
+                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
+            )
         except IndexError:
             raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
     return codes

@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import collections
 import datetime
+import hashlib
 import multiprocessing
 import pprint
+import struct
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Literal, Optional, Sequence, Tuple, Union, cast
-import hashlib
-import struct
 
 import numpy as np
 from nptyping import NDArray
@@ -553,6 +553,7 @@ class NLabelsPerPatientLabeler(Labeler):
 
     def get_labeler_type(self) -> LabelType:
         return self.labeler.get_labeler_type()
+
 
 def compute_random_num(seed: int, num_1: int, num_2: int):
     network_num_1 = struct.pack("!I", num_1)

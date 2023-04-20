@@ -53,7 +53,9 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
         for row in reader:
             assert "/" in row["code"], f"Code must include vocabulary type with a / prefix, but {row} doesn't have one"
             event = RawEvent(
-                start=datetime.datetime.fromisoformat(row["start"]), concept_id=concept_map[row["code"]], value=row["value"]
+                start=datetime.datetime.fromisoformat(row["start"]),
+                concept_id=concept_map[row["code"]],
+                value=row["value"],
             )
             for k, v in row.items():
                 if k not in ("start", "code", "value", "patient_id"):

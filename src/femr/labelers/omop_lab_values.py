@@ -350,9 +350,7 @@ class CeliacTestLabeler(Labeler):
 
     def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
         self.lab_codes = _get_all_children(ontology, "LNC/31017-7")
-        self.celiac_codes = _get_all_children(ontology, "ICD9CM/579.0") | _get_all_children(
-            ontology, "ICD10CM/K90.0"
-        )
+        self.celiac_codes = _get_all_children(ontology, "ICD9CM/579.0") | _get_all_children(ontology, "ICD10CM/K90.0")
 
         self.pos_value = "Positive"
         self.neg_value = "Negative"

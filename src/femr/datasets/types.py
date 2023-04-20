@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import datetime
+from dataclasses import dataclass
+from typing import Any, List
 
-from typing import List, Any
 
 @dataclass
 class RawPatient:
@@ -15,6 +15,7 @@ class RawPatient:
     def resort(self) -> None:
         """Resort the events to maintain the day invariant"""
         self.events.sort()
+
 
 class RawEvent:
     """An event with a patient record.

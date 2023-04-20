@@ -15,6 +15,7 @@ class Patient:
     patient_id: int
     events: Tuple[Event]
 
+
 class Event:
     """An event with a patient record.
 
@@ -75,6 +76,7 @@ class Event:
     def __repr__(self) -> str:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
         return f"Event({val_str})"
+
 
 try:
     # __package__ allows for the case where __name__ is "__main__"

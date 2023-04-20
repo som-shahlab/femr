@@ -174,6 +174,7 @@ def get_femr_code(ontology, target_code, dummy_concepts: List[str] = []):
     femr_concept_id = f"dummy/{dummy_concepts[target_code]}"
     return femr_concept_id
 
+
 def assert_labels_are_accurate(
     labeled_patients: LabeledPatients,
     patient_id: int,

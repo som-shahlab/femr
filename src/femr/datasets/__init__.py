@@ -3,20 +3,19 @@ from __future__ import annotations
 
 import collections.abc
 import contextlib
+import datetime
 import functools
 import itertools
-from dataclasses import dataclass
-import datetime
 import multiprocessing.pool
 import os
+from dataclasses import dataclass
 from typing import Any, Callable, ContextManager, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from femr.datasets.types import *
 from femr.datasets import fileio
+from femr.datasets.types import *
 from femr.extension import datasets as extension_datasets
-
 
 
 def _get_sort_key(pid_and_event: Tuple[int, RawEvent]) -> Any:
@@ -184,7 +183,8 @@ class PatientCollection:
     def transform(
         self,
         target_path: str,
-        transform: Callable[[RawPatient], Optional[RawPatient]] | Sequence[Callable[[RawPatient], Optional[RawPatient]]],
+        transform: Callable[[RawPatient], Optional[RawPatient]]
+        | Sequence[Callable[[RawPatient], Optional[RawPatient]]],
         num_threads: int = 1,
         stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> PatientCollection:

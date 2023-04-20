@@ -32,9 +32,7 @@ def test_helper(tmp_path, capsys):
 
         target = tmp_path / "database"
 
-        m.convert_patient_collection_to_patient_database(
-            str(patients), str(concept_root), str(target), ",", 1
-        )
+        m.convert_patient_collection_to_patient_database(str(patients), str(concept_root), str(target), ",", 1)
 
         database = m.PatientDatabase(str(target), False)
 
@@ -52,27 +50,31 @@ def test_helper(tmp_path, capsys):
         assert patient.patient_id == patient_id
 
         assert patient.events == (
-            femr.Event(start=f("1990-03-08 09:30:00"), code='bar/foo', value=None),
+            femr.Event(start=f("1990-03-08 09:30:00"), code="bar/foo", value=None),
             femr.Event(
                 start=f("1990-03-08 10:30:00"),
-                code='bar/foo',
+                code="bar/foo",
                 value=None,
             ),
             femr.Event(
                 start=f("1990-03-11 14:30:00"),
-                code='bar/parent of foo',
+                code="bar/parent of foo",
                 value="Long Text",
             ),
             femr.Event(
                 start=f("1990-03-11 14:30:00"),
-                code='lol/lmao',
+                code="lol/lmao",
                 value="Short Text",
             ),
-            femr.Event(start=f("1990-03-14 14:30:00"), code='lol/lmao', value=34.0),
-            femr.Event(start=f("1990-03-15 14:30:00"), code='lol/lmao', value=34.5),
+            femr.Event(start=f("1990-03-14 14:30:00"), code="lol/lmao", value=34.0),
+            femr.Event(start=f("1990-03-15 14:30:00"), code="lol/lmao", value=34.5),
         )
 
-        assert set(database.get_ontology().get_all_parents('bar/foo')) == {'bar/foo', 'bar/parent of foo', 'bar/grandparent of foo'}
+        assert set(database.get_ontology().get_all_parents("bar/foo")) == {
+            "bar/foo",
+            "bar/parent of foo",
+            "bar/grandparent of foo",
+        }
 
         total = 0
         for patient_id in database:
