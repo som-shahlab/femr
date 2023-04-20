@@ -34,25 +34,6 @@ from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locall
 
 
 class DummyOntology_Generic:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "two",
-            "OMOP_CONCEPT_A",
-            "OMOP_CONCEPT_B",
-            "five",
-            "six",
-            "OMOP_CONCEPT_A_CHILD",
-            "OMOP_CONCEPT_A_CHILD_CHILD",
-            "nine",
-            "ten",
-            "eleven",
-            "OMOP_CONCEPT_B_CHILD",
-            "OMOP_CONCEPT_A_CHILD",
-            "fourteen",
-        ]
-
     def get_children(self, parent_code: str) -> List[str]:
         if parent_code == "OMOP_CONCEPT_A":
             return ["OMOP_CONCEPT_A_CHILD", "OMOP_CONCEPT_A_CHILD2"]
@@ -329,17 +310,7 @@ class DummyOntology_Specific:
     def __init__(self, new_codes: List[str]):
         self.new_codes = new_codes + ["", ""]
 
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "child_1_1",  # two
-            "child_1",  # three
-            "child_2",  # four
-            "five",
-        ] + self.new_codes
-
-    def get_children(self, parent_code: int) -> List[int]:
+    def get_children(self, parent_code: str) -> List[str]:
         if parent_code == "child_1":
             return ["child_1_1"]
         elif parent_code == self.new_codes[0]:

@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-from femr.labelers.core import *
+from femr.labelers.core import *  # noqa

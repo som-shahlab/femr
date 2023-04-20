@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import importlib.metadata
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Sequence
 
 
 @dataclass
@@ -13,7 +13,7 @@ class Patient:
     """A patient."""
 
     patient_id: int
-    events: Tuple[Event]
+    events: Sequence[Event]
 
 
 class Event:

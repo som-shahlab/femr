@@ -3,18 +3,16 @@ from __future__ import annotations
 
 import collections.abc
 import contextlib
-import datetime
 import functools
 import itertools
 import multiprocessing.pool
 import os
-from dataclasses import dataclass
 from typing import Any, Callable, ContextManager, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from femr.datasets import fileio
-from femr.datasets.types import *
+from femr.datasets.types import RawEvent, RawPatient
 from femr.extension import datasets as extension_datasets
 
 

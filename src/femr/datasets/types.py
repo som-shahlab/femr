@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, Dict, List, Tuple
 
 
 @dataclass

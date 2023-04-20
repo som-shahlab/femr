@@ -8,7 +8,7 @@ import os
 import resource
 from typing import Callable, Dict, Optional, Sequence
 
-from femr.datasets import EventCollection, PatientCollection, RawEvent, RawPatient
+from femr.datasets import EventCollection, PatientCollection, RawPatient
 from femr.extractors.csv import run_csv_extractors
 from femr.extractors.omop import get_omop_csv_extractors
 from femr.transforms import delta_encode, remove_nones, remove_short_patients

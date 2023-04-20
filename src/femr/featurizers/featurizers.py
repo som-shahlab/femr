@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Deque, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Union
+from typing import Deque, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from .. import Patient
 from ..extension import datasets as extension_datasets

@@ -91,7 +91,7 @@ def create_patients_list(num_patients: int, events: List[femr.Event]) -> List[fe
         patients.append(
             femr.Patient(
                 patient_id,
-                events,
+                tuple(events),
             )
         )
     return patients

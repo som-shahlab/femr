@@ -303,7 +303,7 @@ def test_readmission(tmp_path: pathlib.Path):
 
 
 class DummyMortalityOntology:
-    def get_children(self, code: int) -> List[int]:
+    def get_children(self, code: str) -> List[str]:
         if code == "Death Type/OMOP generated":
             return ["DEATH_CHILD"]
         return []
