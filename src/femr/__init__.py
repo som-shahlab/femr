@@ -76,6 +76,15 @@ class Event:
     def __repr__(self) -> str:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
         return f"Event({val_str})"
+    
+    def __getstate__(self) -> Dict[str, Any]:
+        """Make this object pickleable (write)"""
+        return self.__dict__
+
+    def __setstate__(self, d: Dict[str, Any]) -> None:
+        """Make this object pickleable (read)"""
+        for a, b in d.items():
+            self.__dict__[a] = b
 
 
 try:

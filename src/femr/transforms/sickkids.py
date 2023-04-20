@@ -21,7 +21,7 @@ def replace_categorical_measurement_results(patient: RawPatient) -> RawPatient:
 def replace_default_birthdate(patient: RawPatient) -> Optional[RawPatient]:
     """Replace default birthdate in SickKids OMOP (1-1-1) with (1900-1-1)."""
     for event in patient.events:
-        if event.code == OMOP_BIRTH and event.start == datetime.datetime(1, 1, 1):
+        if event.concept_id == OMOP_BIRTH and event.start == datetime.datetime(1, 1, 1):
             event.start = datetime.datetime(1900, 1, 1)
 
     patient.resort()

@@ -66,8 +66,8 @@ class RawEvent:
     def __lt__(self, other: RawEvent) -> bool:
         def sort_key(
             a: RawEvent,
-        ) -> datetime.datetime:
-            return a.start
+        ) -> Tuple[datetime.datetime, int]:
+            return (a.start, a.concept_id)
 
         return sort_key(self) < sort_key(other)
 

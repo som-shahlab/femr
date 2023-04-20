@@ -34,16 +34,6 @@ from tools import (
 
 
 class DummyOntology_GetInpatients:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "Visit/OP",
-            "three",
-            "four",
-            "five",
-        ]
-
     def get_children(self, *args) -> List[int]:
         return []
 
@@ -54,7 +44,7 @@ def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
         # Admission `start` cannot be after `end`
         # fmt: off
         events_with_labels = [
-            (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
+            (event((2020, 1, 2), "Visit/IP", end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
         patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -63,7 +53,7 @@ def test_get_inpatient_admission_events(tmp_path: pathlib.Path):
         # Every admission must have an `end` time
         # fmt: off
         events_with_labels = [
-            (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
+            (event((2020, 1, 1), "Visit/IP", omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
         patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -75,17 +65,17 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
     events_with_labels: EventsWithLabels = [
         # fmt: off
         # admission code + visit_occurrence
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 2), omop_table='visit_occurrence'), True),
-        (event((2001, 1, 1, 1, 1, 1), 1, end=datetime.datetime(2002, 12, 4, 4, 13, 11), omop_table='visit_occurrence'), True),
+        (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 2), omop_table='visit_occurrence'), True),
+        (event((2001, 1, 1, 1, 1, 1), "Visit/IP", end=datetime.datetime(2002, 12, 4, 4, 13, 11), omop_table='visit_occurrence'), True),
         # not admission code + visit_occurrence
         (event((2009, 1, 1), 0, end=datetime.datetime(2009, 1, 2), omop_table='visit_occurrence'), 'skip'),
-        (event((2009, 10, 1), 2, end=datetime.datetime(2009, 10, 2), omop_table='visit_occurrence'), 'skip'),
+        (event((2009, 10, 1), "Visit/OP", end=datetime.datetime(2009, 10, 2), omop_table='visit_occurrence'), 'skip'),
         # admission code + not visit_occurrence
-        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 10, 2), omop_table='visit_detail'), 'skip'),
-        (event((2011, 1, 1), 1, end=datetime.datetime(2011, 10, 2)), 'skip'),
+        (event((2010, 1, 1), "Visit/IP", end=datetime.datetime(2010, 10, 2), omop_table='visit_detail'), 'skip'),
+        (event((2011, 1, 1), "Visit/IP", end=datetime.datetime(2011, 10, 2)), 'skip'),
         # single point in time event -- drop it
-        (event((2012, 10, 1), 2, end=datetime.datetime(2012, 10, 1), omop_table='visit_occurrence'), 'skip'),
-        (event((2013, 10, 1, 1, 1, 1), 2, end=datetime.datetime(2013, 10, 1, 1, 1, 1), omop_table='visit_occurrence'), 'skip'),
+        (event((2012, 10, 1), "Visit/OP", end=datetime.datetime(2012, 10, 1), omop_table='visit_occurrence'), 'skip'),
+        (event((2013, 10, 1, 1, 1, 1), "Visit/OP", end=datetime.datetime(2013, 10, 1, 1, 1, 1), omop_table='visit_occurrence'), 'skip'),
         # fmt: on
     ]
     patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -102,7 +92,7 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
         # Every admission must have an `end` time
         # fmt: off
         events_with_labels = [
-            (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
+            (event((2020, 1, 1), "Visit/IP", omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
         patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -111,7 +101,7 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
         # Admission `start` cannot be after `end`
         # fmt: off
         events_with_labels = [
-            (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
+            (event((2020, 1, 2), "Visit/IP", end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
         patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -128,14 +118,6 @@ def test_get_inpatient_admission_discharge_times(tmp_path: pathlib.Path):
 
 
 class DummyAdmissionDischargeOntology:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "two",
-            "three",
-        ]
-
     def get_children(self, *args) -> List[int]:
         return []
 
@@ -166,20 +148,20 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
     events_with_labels: EventsWithLabels = [
         # fmt: off
         #
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 2), omop_table='visit_occurrence'), True),
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 31), visit_id=2, omop_table='visit_occurrence'), True),
-        (event((1999, 1, 1), 1, end=datetime.datetime(2001, 1, 31), visit_id=2, omop_table='visit_occurrence'), True),
-        (event((2010, 1, 31), 1, end=datetime.datetime(2010, 1, 31, 0,0, 1), visit_id=3, omop_table='visit_occurrence'), True),
+        (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 2), omop_table='visit_occurrence'), True),
+        (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 31), visit_id=2, omop_table='visit_occurrence'), True),
+        (event((1999, 1, 1), "Visit/IP", end=datetime.datetime(2001, 1, 31), visit_id=2, omop_table='visit_occurrence'), True),
+        (event((2010, 1, 31), "Visit/IP", end=datetime.datetime(2010, 1, 31, 0,0, 1), visit_id=3, omop_table='visit_occurrence'), True),
         #
-        (event((2000, 1, 10), 1, end=datetime.datetime(2000, 1, 12), omop_table='visit_detail'), 'skip'),
+        (event((2000, 1, 10), "Visit/IP", end=datetime.datetime(2000, 1, 12), omop_table='visit_detail'), 'skip'),
         (event((2000, 1, 31), 3), "skip"),
-        (event((2000, 1, 31), 1, end=datetime.datetime(2000, 1, 31), omop_table='visit_occurrence'), 'skip'),
+        (event((2000, 1, 31), "Visit/IP", end=datetime.datetime(2000, 1, 31), omop_table='visit_occurrence'), 'skip'),
         (event((2000, 1, 31), 0, end=datetime.datetime(2000, 2, 1), omop_table='visit_occurrence'), 'skip'),
         (event((2015, 1, 10), 0), "skip"),
         (event((2015, 1, 10), 3), "skip"),
         (event((2015, 1, 20), 2), "skip"),
         #
-        (event((2005, 1, 30), 1, end=datetime.datetime(2005, 1, 31, 0,0, 1), omop_table='visit_occurrence'), True),
+        (event((2005, 1, 30), "Visit/IP", end=datetime.datetime(2005, 1, 31, 0,0, 1), omop_table='visit_occurrence'), True),
         # fmt: on
     ]
     _run_test_admission_discharge_placeholder(
@@ -193,7 +175,7 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
         # fmt: off
         (event((2000, 1, 1), 0, end=datetime.datetime(2000, 1, 2)), "skip"),
         (event((2000, 1, 31), 3), "skip"),
-        (event((2000, 1, 31), 1, end=datetime.datetime(2000, 1, 31)), "skip"),
+        (event((2000, 1, 31), "Visit/IP", end=datetime.datetime(2000, 1, 31)), "skip"),
         # fmt: on
     ]
     _run_test_admission_discharge_placeholder(
@@ -205,11 +187,11 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
     # Overlapping admission/discharges
     events_with_labels = [
         # fmt: off
-        ( event( (2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), omop_table="visit_occurrence", ), True),
-        ( event( (2020, 1, 1), 1, end=datetime.datetime(2020, 1, 15), omop_table="visit_occurrence", ), True),
-        ( event( (2020, 1, 1), 1, end=datetime.datetime(2020, 1, 30), omop_table="visit_occurrence", ), True),
-        ( event( (2020, 1, 15), 1, end=datetime.datetime(2020, 2, 15), omop_table="visit_occurrence", ), True),
-        ( event( (2019, 1, 1), 1, end=datetime.datetime(2021, 1, 30), omop_table="visit_occurrence", ), True),
+        ( event( (2020, 1, 1), "Visit/IP", end=datetime.datetime(2020, 1, 30), omop_table="visit_occurrence", ), True),
+        ( event( (2020, 1, 1), "Visit/IP", end=datetime.datetime(2020, 1, 15), omop_table="visit_occurrence", ), True),
+        ( event( (2020, 1, 1), "Visit/IP", end=datetime.datetime(2020, 1, 30), omop_table="visit_occurrence", ), True),
+        ( event( (2020, 1, 15), "Visit/IP", end=datetime.datetime(2020, 2, 15), omop_table="visit_occurrence", ), True),
+        ( event( (2019, 1, 1), "Visit/IP", end=datetime.datetime(2021, 1, 30), omop_table="visit_occurrence", ), True),
         # fmt: on
     ]
     _run_test_admission_discharge_placeholder(
@@ -223,7 +205,7 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
         # Every admission must have an `end` time
         # fmt: off
         events_with_labels = [
-            (event((2020, 1, 1), 1, omop_table="visit_occurrence", ), "skip"),
+            (event((2020, 1, 1), "Visit/IP", omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
         patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -232,7 +214,7 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
         # Admission `start` cannot be after `end`
         # fmt: off
         events_with_labels = [
-            (event((2020, 1, 2), 1, end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
+            (event((2020, 1, 2), "Visit/IP", end=datetime.datetime(2020, 1, 1, 23, 59, 59, 59), omop_table="visit_occurrence", ), "skip"),
         ]
         # fmt: on
         patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -249,14 +231,6 @@ def test_admission_discharge_placeholder(tmp_path: pathlib.Path):
 
 
 class DummyReadmissionOntology:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "two",
-            "three",
-        ]
-
     def get_children(self, *args) -> List[int]:
         return []
 
@@ -268,28 +242,28 @@ def test_readmission(tmp_path: pathlib.Path):
     labeler = InpatientReadmissionLabeler(ontology, time_horizon)  # type: ignore
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 2), omop_table='visit_occurrence'), True),
+        (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 2), omop_table='visit_occurrence'), True),
         (event((2000, 1, 22), 3), "skip"),
-        (event((2000, 1, 31), 1, end=datetime.datetime(2000, 1, 31, 1), omop_table='visit_occurrence'), False),
+        (event((2000, 1, 31), "Visit/IP", end=datetime.datetime(2000, 1, 31, 1), omop_table='visit_occurrence'), False),
         #
-        (event((2005, 1, 1), 1, end=datetime.datetime(2005, 1, 2), omop_table='visit_occurrence'), False),
+        (event((2005, 1, 1), "Visit/IP", end=datetime.datetime(2005, 1, 2), omop_table='visit_occurrence'), False),
         (event((2005, 1, 15), 2), "skip"),
         #
-        (event((2005, 1, 1), 1, end=datetime.datetime(2005, 1, 1), omop_table='visit_occurrence'), 'skip'),
+        (event((2005, 1, 1), "Visit/IP", end=datetime.datetime(2005, 1, 1), omop_table='visit_occurrence'), 'skip'),
         #
-        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 3, 1), omop_table='visit_occurrence'), True),
+        (event((2010, 1, 1), "Visit/IP", end=datetime.datetime(2010, 3, 1), omop_table='visit_occurrence'), True),
         (event((2010, 3, 10), 0), "skip"),
-        (event((2010, 3, 30, 23, 59), 1, end=datetime.datetime(2010, 4, 1), omop_table='visit_occurrence'), False),
+        (event((2010, 3, 30, 23, 59), "Visit/IP", end=datetime.datetime(2010, 4, 1), omop_table='visit_occurrence'), False),
         (event((2010, 4, 10), 4), "skip"),
         #
-        (event((2015, 1, 1), 1, end=datetime.datetime(2015, 1, 2), omop_table='visit_occurrence'), False),
+        (event((2015, 1, 1), "Visit/IP", end=datetime.datetime(2015, 1, 2), omop_table='visit_occurrence'), False),
         (event((2015, 1, 10), 0), "skip"),
         (event((2015, 1, 10), 3), "skip"),
         (event((2015, 1, 20), 2), "skip"),
-        (event((2015, 3, 1), 1, end=datetime.datetime(2015, 3, 2), omop_table='visit_occurrence'), False),
+        (event((2015, 3, 1), "Visit/IP", end=datetime.datetime(2015, 3, 2), omop_table='visit_occurrence'), False),
         #
-        (event((2020, 1, 1), 1, end=datetime.datetime(2020, 1, 3), omop_table='visit_occurrence'), True),
-        (event((2020, 1, 10), 1, end=datetime.datetime(2020, 1, 20), omop_table='visit_occurrence'), "out of range"),
+        (event((2020, 1, 1), "Visit/IP", end=datetime.datetime(2020, 1, 3), omop_table='visit_occurrence'), True),
+        (event((2020, 1, 10), "Visit/IP", end=datetime.datetime(2020, 1, 20), omop_table='visit_occurrence'), "out of range"),
         # fmt: on
     ]
     patient = femr.Patient(0, [x[0] for x in events_with_labels])
@@ -329,19 +303,9 @@ def test_readmission(tmp_path: pathlib.Path):
 
 
 class DummyMortalityOntology:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "Death Type/OMOP generated",
-            "DEATH_CHILD",
-            "four",
-            "Condition Type/OMOP4822053",
-        ]
-
     def get_children(self, code: int) -> List[int]:
-        if code == 2:
-            return [3]
+        if code == "Death Type/OMOP generated":
+            return ["DEATH_CHILD"]
         return []
 
 
@@ -352,28 +316,28 @@ def test_mortality(tmp_path: pathlib.Path):
         # fmt: off
         #
         # test different outcome codes
-        (event((2001, 1, 1), 1, end=datetime.datetime(2001, 1, 11), omop_table='visit_occurrence'), True),  # admission
-        (event((2001, 1, 10), 2), "skip"),  # event
-        (event((2002, 1, 1), 1, end=datetime.datetime(2002, 1, 11), omop_table='visit_occurrence'), True),  # admission
-        (event((2002, 1, 10), 3), "skip"),  # event
-        (event((2003, 1, 1), 1, end=datetime.datetime(2003, 1, 11), omop_table='visit_occurrence'), True),  # admission
-        (event((2003, 1, 10), 5), "skip"),  # event
+        (event((2001, 1, 1), "Visit/IP", end=datetime.datetime(2001, 1, 11), omop_table='visit_occurrence'), True),  # admission
+        (event((2001, 1, 10), "Death Type/OMOP generated"), "skip"),  # event
+        (event((2002, 1, 1), "Visit/IP", end=datetime.datetime(2002, 1, 11), omop_table='visit_occurrence'), True),  # admission
+        (event((2002, 1, 10), "DEATH_CHILD"), "skip"),  # event
+        (event((2003, 1, 1), "Visit/IP", end=datetime.datetime(2003, 1, 11), omop_table='visit_occurrence'), True),  # admission
+        (event((2003, 1, 10), "Condition Type/OMOP4822053"), "skip"),  # event
         #
         # not outcome
-        (event((2004, 1, 1), 1, end=datetime.datetime(2004, 1, 10), omop_table='visit_occurrence'), False),  # admission
+        (event((2004, 1, 1), "Visit/IP", end=datetime.datetime(2004, 1, 10), omop_table='visit_occurrence'), False),  # admission
         (event((2004, 1, 9), 0), "skip"),
         #
         # outcome outside of visit
-        (event((2005, 1, 30), 1, end=datetime.datetime(2005, 2, 10), omop_table='visit_occurrence'), False),  # admission
-        (event((2005, 2, 10, 1), 2), "skip"),
-        (event((2006, 1, 30), 1, end=datetime.datetime(2006, 2, 10), omop_table='visit_occurrence'), False),  # admission
-        (event((2006, 1, 29, 1), 2), "skip"),
+        (event((2005, 1, 30), "Visit/IP", end=datetime.datetime(2005, 2, 10), omop_table='visit_occurrence'), False),  # admission
+        (event((2005, 2, 10, 1), "Death Type/OMOP generated"), "skip"),
+        (event((2006, 1, 30), "Visit/IP", end=datetime.datetime(2006, 2, 10), omop_table='visit_occurrence'), False),  # admission
+        (event((2006, 1, 29, 1), "Death Type/OMOP generated"), "skip"),
         #
         # NOTE: No censoring since we have the end of the admission
-        (event((2006, 1, 2), 1, end=datetime.datetime(2006, 5, 10), omop_table='visit_occurrence'), False),
+        (event((2006, 1, 2), "Visit/IP", end=datetime.datetime(2006, 5, 10), omop_table='visit_occurrence'), False),
         # fmt: on
     ]
-    assert labeler.outcome_codes == {2, 3, 5}, f"{labeler.outcome_codes} != {{2, 3, 5}}"
+    assert labeler.outcome_codes == {'Condition Type/OMOP4822053', 'Death Type/OMOP generated', 'DEATH_CHILD'} 
     true_prediction_times: List[datetime.datetime] = [
         move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
     ]
@@ -395,12 +359,6 @@ def test_mortality(tmp_path: pathlib.Path):
 
 
 class DummyLOSOntology:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-        ]
-
     def get_children(self, *args) -> List[int]:
         return []
 
@@ -411,13 +369,13 @@ def test_long_admission(tmp_path: pathlib.Path):
     labeler = InpatientLongAdmissionLabeler(ontology, long_time)  # type: ignore
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 10), omop_table='visit_occurrence'), True),
-        (event((2004, 4, 30), 1, end=datetime.datetime(2004, 5, 10), omop_table='visit_occurrence'), True),
+        (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 10), omop_table='visit_occurrence'), True),
+        (event((2004, 4, 30), "Visit/IP", end=datetime.datetime(2004, 5, 10), omop_table='visit_occurrence'), True),
         #
-        (event((2006, 1, 2), 1, end=datetime.datetime(2006, 1, 5), omop_table='visit_occurrence'), False),
+        (event((2006, 1, 2), "Visit/IP", end=datetime.datetime(2006, 1, 5), omop_table='visit_occurrence'), False),
         (event((2006, 1, 3), 0), "skip"),
-        (event((2008, 1, 1), 1, end=datetime.datetime(2008, 1, 7, 23, 59), omop_table='visit_occurrence'), False),
-        (event((2010, 1, 1), 1, end=datetime.datetime(2010, 1, 1), omop_table='visit_occurrence'), 'skip'),
+        (event((2008, 1, 1), "Visit/IP", end=datetime.datetime(2008, 1, 7, 23, 59), omop_table='visit_occurrence'), False),
+        (event((2010, 1, 1), "Visit/IP", end=datetime.datetime(2010, 1, 1), omop_table='visit_occurrence'), 'skip'),
         # fmt: on
     ]
     assert labeler.long_time == long_time

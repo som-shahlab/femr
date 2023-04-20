@@ -102,7 +102,7 @@ def move_visit_start_to_first_event_start(patient: RawPatient) -> RawPatient:
 def move_to_day_end(patient: RawPatient) -> RawPatient:
     """We assume that everything coded at midnight should actually be moved to the end of the day."""
     for event in patient.events:
-        if event.code == OMOP_BIRTH:
+        if event.concept_id == OMOP_BIRTH:
             continue
 
         event.start = _move_date_to_end(event.start)
@@ -119,7 +119,7 @@ def move_pre_birth(patient: RawPatient) -> Optional[RawPatient]:
     """Move all events to after the birth of a patient."""
     birth_date = None
     for event in patient.events:
-        if event.code == OMOP_BIRTH:
+        if event.concept_id == OMOP_BIRTH:
             birth_date = event.start
 
     if birth_date is None:
@@ -166,7 +166,7 @@ def move_billing_codes(patient: RawPatient) -> RawPatient:
     for event in patient.events:
         # For events that share the same code/start time, we find the lowest visit ID
         if event.clarity_table in all_billing_codes and event.visit_id is not None:
-            key = (event.start, event.code)
+            key = (event.start, event.concept_id)
             if key not in lowest_visit:
                 lowest_visit[key] = event.visit_id
             else:
@@ -186,7 +186,7 @@ def move_billing_codes(patient: RawPatient) -> RawPatient:
     new_events = []
     for event in patient.events:
         if event.clarity_table in all_billing_codes:
-            key = (event.start, event.code)
+            key = (event.start, event.concept_id)
             if event.visit_id != lowest_visit.get(key, None):
                 # Drop this event as we already have it, just with a different visit_id?
                 # We only keep the copy of the event associated with the lowest visit id

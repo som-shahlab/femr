@@ -84,7 +84,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     # Create Labeler
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-    labeler = CodeLabeler([3], time_horizon, prediction_codes=[2])
+    labeler = CodeLabeler(["3"], time_horizon, prediction_codes=["2"])
 
     # Create LabeledPatients
     patients_to_labels = {}
