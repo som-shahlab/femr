@@ -13,10 +13,10 @@ import zstandard
 
 import femr
 import femr.datasets
-from femr.labelers.core import Label, LabeledPatients, Labeler
+from femr.labelers import Label, LabeledPatients, Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
-EventsWithLabels = List[Tuple[femr.Event, Union[bool, str]]]
+EventsWithLabels = List[Tuple[femr.datasets.RawEvent, Union[bool, str]]]
 
 
 def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
@@ -32,9 +32,9 @@ def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
         year, month, day, hour, minute, seconds = date
     else:
         raise ValueError(f"Invalid date: {date}")
-    return femr.Event(
+    return femr.datasets.RawEvent(
         start=datetime.datetime(year, month, day, hour, minute, seconds),
-        code=code,
+        concept_id=str(code),
         value=value,
         visit_id=visit_id,
         **kwargs,
@@ -61,7 +61,7 @@ NUM_PATIENTS = 10
 
 DUMMY_CONCEPTS: List[str] = ["zero", "one", "two", "three", "four"]
 
-ALL_EVENTS: List[Tuple[int, femr.Event]] = []
+ALL_EVENTS: List[Tuple[int, femr.datasets.RawEvent]] = []
 for patient_id in range(NUM_PATIENTS):
     ALL_EVENTS.extend((patient_id, event) for event in DUMMY_EVENTS)
 
@@ -81,12 +81,12 @@ def create_events(tmp_path: pathlib.Path) -> femr.datasets.EventCollection:
     return events
 
 
-def create_patients_list(num_patients: int, events: List[femr.Event]) -> List[femr.Patient]:
+def create_patients_list(num_patients: int, events: List[femr.datasets.RawEvent]) -> List[femr.Patient]:
     """Creates a list of patients, each with the same events contained in `events`"""
     patients: List[femr.Patient] = []
     for patient_id in range(num_patients):
         patients.append(
-            femr.Patient(
+            femr.datasets.RawPatient(
                 patient_id,
                 events,
             )
@@ -172,9 +172,7 @@ def get_femr_code(ontology, target_code, dummy_concepts: List[str] = []):
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
     femr_concept_id = f"dummy/{dummy_concepts[target_code]}"
-    femr_target_code = ontology.get_dictionary().index(femr_concept_id)
-    return femr_target_code
-
+    return femr_concept_id
 
 def assert_labels_are_accurate(
     labeled_patients: LabeledPatients,

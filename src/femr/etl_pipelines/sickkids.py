@@ -17,8 +17,7 @@ import os
 import resource
 from typing import Callable, Dict, Optional, Sequence
 
-from femr import Event, Patient
-from femr.datasets import EventCollection, PatientCollection
+from femr.datasets import EventCollection, PatientCollection, RawEvent, RawPatient, RawEvent
 from femr.extractors.csv import run_csv_extractors
 from femr.extractors.omop import get_omop_csv_extractors
 from femr.transforms import delta_encode, remove_nones
@@ -26,15 +25,15 @@ from femr.transforms.sickkids import replace_categorical_measurement_results, re
 from femr.transforms.stanford import move_pre_birth, move_to_day_end, move_visit_start_to_first_event_start
 
 
-def _is_visit_event(e: Event) -> bool:
+def _is_visit_event(e: RawEvent) -> bool:
     return e.omop_table == "visit_occurrence"
 
 
-def _get_sk_transformations() -> Sequence[Callable[[Patient], Optional[Patient]]]:
+def _get_sk_transformations() -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving except
     # replace_categorical_measurement_results
-    transforms: Sequence[Callable[[Patient], Optional[Patient]]] = [
+    transforms: Sequence[Callable[[RawPatient], Optional[RawPatient]]] = [
         replace_default_birthdate,
         move_pre_birth,
         move_visit_start_to_first_event_start,

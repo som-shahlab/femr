@@ -6,7 +6,7 @@ import pathlib
 import sys
 from typing import List
 
-from femr.labelers.core import TimeHorizon
+from femr.labelers import TimeHorizon
 from femr.labelers.omop import (
     AKICodeLabeler,
     AnemiaCodeLabeler,

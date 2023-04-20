@@ -33,10 +33,102 @@ void keep_alive(py::handle nurse, py::handle patient) {
 }
 
 namespace {
+
+class OntologyWrapper {
+   public:
+    OntologyWrapper(Ontology& _ontology) : ontology(_ontology) {}
+
+    py::str get_code_str(uint32_t code_index) {
+        if (code_index >= main_dictionary.size()) {
+            main_dictionary.resize((code_index + 1) * 2);
+        }
+        auto& val = main_dictionary[code_index];
+        if (!val.has_value()) {
+            val.emplace(ontology.get_dictionary()[code_index]);
+        }
+        return *val;
+    }
+
+    template <typename F>
+    py::tuple get_generic(std::string_view code_str, F f) {
+        auto possible_entry = ontology.get_dictionary().find(code_str);
+        if (!possible_entry) {
+            throw py::index_error();
+        }
+        auto result = f(*possible_entry);
+        py::tuple converted_result(result.size());
+
+        for (size_t i = 0; i < result.size(); i++) {
+            converted_result[i] = get_code_str(result[i]);
+        }
+
+        return converted_result;
+    }
+
+    py::tuple get_parents(std::string_view code_str) {
+        return get_generic(code_str, [this](uint32_t code) {
+            return ontology.get_parents(code);
+        });
+    }
+
+    py::tuple get_children(std::string_view code_str) {
+        return get_generic(code_str, [this](uint32_t code) {
+            return ontology.get_children(code);
+        });
+    }
+
+    py::tuple get_all_parents(std::string_view code_str) {
+        return get_generic(code_str, [this](uint32_t code) {
+            return ontology.get_all_parents(code);
+        });
+    }
+
+    std::string_view get_text_description(std::string_view code_str) {
+        auto possible_entry = ontology.get_dictionary().find(code_str);
+        if (!possible_entry) {
+            throw py::index_error();
+        }
+        return ontology.get_text_description(*possible_entry);
+    }
+
+    py::str get_code_from_concept_id(uint64_t concept_id) {
+        auto possible_entry = ontology.get_code_from_concept_id(concept_id);
+        if (!possible_entry) {
+            throw py::index_error();
+        }
+        return get_code_str(*possible_entry);
+    }
+
+    uint64_t get_concept_id_from_code(std::string_view code_str) {
+        auto possible_entry = ontology.get_dictionary().find(code_str);
+        if (!possible_entry) {
+            throw py::index_error();
+        }
+        return ontology.get_concept_id_from_code(*possible_entry);
+    }
+
+   private:
+    std::vector<boost::optional<py::str>> main_dictionary;
+    Ontology& ontology;
+};
+
+class PatientDatabaseWrapper : public PatientDatabase {
+   public:
+    PatientDatabaseWrapper(const boost::filesystem::path& path, bool read_all,
+                           bool read_all_unique_text = false)
+        : PatientDatabase(path, read_all, read_all_unique_text),
+          ontology_wrapper(get_ontology()) {}
+
+    OntologyWrapper& get_ontology_wrapper() { return ontology_wrapper; }
+
+   private:
+    OntologyWrapper ontology_wrapper;
+};
+
 class EventWrapper {
    public:
     EventWrapper(py::module pickle, py::object python_event,
-                 PatientDatabase* database, uint32_t patient_offset,
+                 PatientDatabaseWrapper* database, uint32_t patient_offset,
                  absl::CivilSecond birth_date, uint32_t event_index,
                  const Event& event)
         : m_pickle(pickle),
@@ -49,7 +141,8 @@ class EventWrapper {
 
     py::object code() {
         if (!m_code) {
-            m_code.emplace(py::cast(m_event.code));
+            m_code.emplace(
+                m_database->get_ontology_wrapper().get_code_str(m_event.code));
         }
         return *m_code;
     }
@@ -128,7 +221,7 @@ class EventWrapper {
     py::module m_pickle;
     py::object m_python_event;
 
-    PatientDatabase* m_database;
+    PatientDatabaseWrapper* m_database;
     uint32_t m_patient_offset;
     absl::CivilSecond m_birth_date;
     uint32_t m_event_index;
@@ -139,6 +232,7 @@ class EventWrapper {
     boost::optional<py::object> m_value;
     boost::optional<py::object> m_metadata;
 };
+
 }  // namespace
 
 void register_datasets_extension(py::module& root) {
@@ -216,23 +310,21 @@ void register_datasets_extension(py::module& root) {
     });
 
     m.def("convert_patient_collection_to_patient_database",
-          convert_patient_collection_to_patient_database,
-          py::return_value_policy::move);
+          convert_patient_collection_to_patient_database);
 
-    py::class_<PatientDatabase> database_binding(m, "PatientDatabase");
+    py::class_<PatientDatabaseWrapper> database_binding(m, "PatientDatabase");
 
     database_binding
         .def(py::init<const char*, bool, bool>(), py::arg("filename"),
              py::arg("read_all") = false,
              py::arg("read_all_unique_text") = false)
-        .def("__len__", [](PatientDatabase& self) { return self.size(); })
+        .def("__len__",
+             [](PatientDatabaseWrapper& self) { return self.size(); })
         .def(
             "__getitem__",
-            [python_patient, python_event, pickle](py::object self_object,
+            [python_patient, python_event, pickle](PatientDatabaseWrapper& self,
                                                    uint64_t patient_id) {
                 using namespace pybind11::literals;
-
-                PatientDatabase& self = self_object.cast<PatientDatabase&>();
 
                 boost::optional<uint32_t> patient_offset =
                     self.get_patient_offset(patient_id);
@@ -258,69 +350,43 @@ void register_datasets_extension(py::module& root) {
             py::return_value_policy::reference_internal)
         .def(
             "__iter__",
-            [](PatientDatabase& self) {
+            [](PatientDatabaseWrapper& self) {
                 auto span = self.get_patient_ids();
                 return py::make_iterator(std::begin(span), std::end(span));
             },
             py::return_value_policy::reference_internal)
         .def("get_patient_birth_date",
-             [](PatientDatabase& self, uint64_t patient_id) {
+             [](PatientDatabaseWrapper& self, uint64_t patient_id) {
                  Patient p =
                      self.get_patient(*self.get_patient_offset(patient_id));
                  return p.birth_date;
              })
-        .def("get_code_dictionary", &PatientDatabase::get_code_dictionary,
+        .def("get_ontology", &PatientDatabaseWrapper::get_ontology_wrapper,
              py::return_value_policy::reference_internal)
-        .def("get_ontology", &PatientDatabase::get_ontology,
-             py::return_value_policy::reference_internal)
-        .def("get_code_count", &PatientDatabase::get_code_count)
-        .def("get_text_count",
-             [](PatientDatabase& self, std::string data) -> uint32_t {
-                 auto iter = self.get_shared_text_dictionary().find(data);
-                 if (iter) {
-                     return self.get_shared_text_count(*iter);
-                 }
-
-                 auto dict = self.get_unique_text_dictionary();
-                 if (dict != nullptr && dict->find(data)) {
-                     return 1;
-                 } else {
-                     return 0;
-                 }
-             })
         .def("compute_split",
-             [](PatientDatabase& self, uint32_t seed, uint64_t patient_id) {
+             [](PatientDatabaseWrapper& self, uint32_t seed,
+                uint64_t patient_id) {
                  return self.compute_split(
                      seed, *self.get_patient_offset(patient_id));
              })
-        .def("version_id", &PatientDatabase::version_id)
-        .def("database_id", &PatientDatabase::database_id)
+        .def("version_id", &PatientDatabaseWrapper::version_id)
+        .def("database_id", &PatientDatabaseWrapper::database_id)
         .def("close",
-             [](const PatientDatabase& self) {
+             [](const PatientDatabaseWrapper& self) {
                  // TODO: Implement this to save memory and file pointers
              })
         .attr("__bases__") =
         py::make_tuple(abc_mapping) + database_binding.attr("__bases__");
 
-    py::class_<Ontology>(m, "Ontology")
-        .def("get_parents", &Ontology::get_parents,
-             py::return_value_policy::reference_internal)
-        .def("get_children", &Ontology::get_children,
-             py::return_value_policy::reference_internal)
-        .def("get_all_parents", &Ontology::get_all_parents,
-             py::return_value_policy::reference_internal)
-        .def("get_dictionary", &Ontology::get_dictionary,
-             py::return_value_policy::reference_internal)
-        .def("get_text_description",
-             [](Ontology& self, uint32_t index) {
-                 if (index >= self.get_dictionary().size()) {
-                     throw py::index_error();
-                 }
-                 auto descr = self.get_text_description(index);
-                 return py::str(descr.data(), descr.size());
-             })
-        .def("get_code_from_concept_id", &Ontology::get_code_from_concept_id)
-        .def("get_concept_id_from_code", &Ontology::get_concept_id_from_code);
+    py::class_<OntologyWrapper>(m, "Ontology")
+        .def("get_parents", &OntologyWrapper::get_parents)
+        .def("get_children", &OntologyWrapper::get_children)
+        .def("get_all_parents", &OntologyWrapper::get_all_parents)
+        .def("get_text_description", &OntologyWrapper::get_text_description)
+        .def("get_code_from_concept_id",
+             &OntologyWrapper::get_code_from_concept_id)
+        .def("get_concept_id_from_code",
+             &OntologyWrapper::get_concept_id_from_code);
 
     py::class_<EventWrapper>(m, "EventWrapper")
         .def_property_readonly("code", &EventWrapper::code)

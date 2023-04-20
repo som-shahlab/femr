@@ -8,7 +8,7 @@ import warnings
 from typing import List
 
 from femr import Patient
-from femr.labelers.core import TimeHorizon, TimeHorizonEventLabeler
+from femr.labelers import TimeHorizon, TimeHorizonEventLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

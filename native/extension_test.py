@@ -32,9 +32,11 @@ def test_helper(tmp_path, capsys):
 
         target = tmp_path / "database"
 
-        database = m.convert_patient_collection_to_patient_database(
+        m.convert_patient_collection_to_patient_database(
             str(patients), str(concept_root), str(target), ",", 1
         )
+
+        database = m.PatientDatabase(str(target), False)
 
         print(database.version_id())
         print(database.database_id())
@@ -44,40 +46,33 @@ def test_helper(tmp_path, capsys):
         def f(a):
             return datetime.datetime.fromisoformat(a)
 
-        with pytest.raises(ValueError):
-            database.get_code_dictionary().index("not in there")
-
-        assert database.get_code_dictionary().index("bar/foo") is not None
-        assert database.get_code_count(database.get_code_dictionary().index("bar/foo")) == 4
-        assert database.get_text_count("Short Text") == 2
-        assert database.get_text_count("Long Text") == 1
-        assert database.get_text_count("Missing Text") == 0
-
         patient_id = 30
         patient = database[patient_id]
 
         assert patient.patient_id == patient_id
 
         assert patient.events == (
-            femr.Event(start=f("1990-03-08 09:30:00"), code=0, value=None),
+            femr.Event(start=f("1990-03-08 09:30:00"), code='bar/foo', value=None),
             femr.Event(
                 start=f("1990-03-08 10:30:00"),
-                code=0,
+                code='bar/foo',
                 value=None,
             ),
             femr.Event(
                 start=f("1990-03-11 14:30:00"),
-                code=2,
+                code='bar/parent of foo',
                 value="Long Text",
             ),
             femr.Event(
                 start=f("1990-03-11 14:30:00"),
-                code=1,
+                code='lol/lmao',
                 value="Short Text",
             ),
-            femr.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0),
-            femr.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5),
+            femr.Event(start=f("1990-03-14 14:30:00"), code='lol/lmao', value=34.0),
+            femr.Event(start=f("1990-03-15 14:30:00"), code='lol/lmao', value=34.5),
         )
+
+        assert set(database.get_ontology().get_all_parents('bar/foo')) == {'bar/foo', 'bar/parent of foo', 'bar/grandparent of foo'}
 
         total = 0
         for patient_id in database:

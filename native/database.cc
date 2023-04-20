@@ -412,7 +412,7 @@ void reader_thread(
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
     CSVReader<ZstdReader> reader(
-        patient_file, {"patient_id", "code", "start", "value", "metadata"},
+        patient_file, {"patient_id", "concept_id", "start", "value", "metadata"},
         ',');
 
     uint64_t patient_id = 0;
@@ -536,7 +536,7 @@ void reader_thread(
     queue.wait_enqueue(boost::none);
 }
 
-PatientDatabase convert_patient_collection_to_patient_database(
+void convert_patient_collection_to_patient_database(
     const boost::filesystem::path& patient_root,
     const boost::filesystem::path& concept_root,
     const boost::filesystem::path& target, char delimiter, size_t num_threads) {
@@ -702,8 +702,6 @@ PatientDatabase convert_patient_collection_to_patient_database(
         meta.add_value(element_to_view(&extract_id));
     }
     std::cout << "Done with meta " << absl::Now() << std::endl;
-
-    return PatientDatabase(target, false);
 }
 
 PatientDatabaseIterator::PatientDatabaseIterator(PatientDatabase* d)

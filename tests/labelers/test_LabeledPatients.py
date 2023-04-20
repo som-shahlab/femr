@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 import femr.datasets
-from femr.labelers.core import Label, LabeledPatients, TimeHorizon
+from femr.labelers import Label, LabeledPatients, TimeHorizon
 from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing

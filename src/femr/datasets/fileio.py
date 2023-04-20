@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import zstandard
 
-from .. import Event, Patient
+from femr.datasets.types import RawEvent, RawPatient
 
 
 def _encode_value(a: float | str | None) -> str:
@@ -46,21 +46,21 @@ class EventWriter:
         self.rows_written = 0
         self.writer = csv.DictWriter(
             self.o,
-            fieldnames=["patient_id", "start", "code", "value", "metadata"],
+            fieldnames=["patient_id", "start", "concept_id", "value", "metadata"],
         )
         self.writer.writeheader()
 
-    def add_event(self, patient_id: int, event: Event) -> None:
+    def add_event(self, patient_id: int, event: RawEvent) -> None:
         """Add an event to the record."""
         self.rows_written += 1
         data: Dict[str, Any] = {}
 
         data["patient_id"] = patient_id
         data["start"] = event.start.isoformat()
-        data["code"] = str(event.code)
+        data["concept_id"] = str(event.concept_id)
         data["value"] = _encode_value(event.value)
         data["metadata"] = base64.b64encode(
-            pickle.dumps({a: b for a, b in event.__dict__.items() if a not in ("start", "code", "value")})
+            pickle.dumps({a: b for a, b in event.__dict__.items() if a not in ("start", "concept_id", "value")})
         ).decode("utf8")
 
         self.writer.writerow(data)
@@ -82,17 +82,17 @@ class EventReader:
         self.o = io.TextIOWrapper(decompressor.stream_reader(open(self.filename, "rb")))
         self.reader = csv.DictReader(self.o)
 
-    def __iter__(self) -> Iterator[Tuple[int, Event]]:
+    def __iter__(self) -> Iterator[Tuple[int, RawEvent]]:
         """Iterate over each event."""
         for row in self.reader:
             id = int(row["patient_id"])
 
-            code = int(row["code"])
+            concept_id = int(row["concept_id"])
             start = datetime.datetime.fromisoformat(row["start"])
             value = _decode_value(row["value"])
             metadata = pickle.loads(base64.b64decode(row["metadata"]))
 
-            yield (id, Event(start=start, code=code, value=value, **metadata))
+            yield (id, RawEvent(start=start, concept_id=concept_id, value=value, **metadata))
 
     def close(self) -> None:
         """Close the event file."""
@@ -106,14 +106,14 @@ class PatientReader:
         """Open the file with the given filename."""
         self.reader = EventReader(filename)
 
-    def __iter__(self) -> Iterator[Patient]:
+    def __iter__(self) -> Iterator[RawPatient]:
         """Iterate over each patient."""
         last_id: Optional[int] = None
-        current_events: List[Event] = []
+        current_events: List[RawEvent] = []
         for id, event in self.reader:
             if id != last_id:
                 if last_id is not None:
-                    patient = Patient(patient_id=last_id, events=current_events)
+                    patient = RawPatient(patient_id=last_id, events=current_events)
                     yield patient
                 last_id = id
                 current_events = [event]
@@ -121,7 +121,7 @@ class PatientReader:
                 current_events.append(event)
 
         if last_id is not None:
-            patient = Patient(patient_id=last_id, events=current_events)
+            patient = RawPatient(patient_id=last_id, events=current_events)
             yield patient
 
     def close(self) -> None:
@@ -140,7 +140,7 @@ class PatientWriter:
         """Open a file for writing."""
         self.writer = EventWriter(path)
 
-    def add_patient(self, patient: Patient) -> None:
+    def add_patient(self, patient: RawPatient) -> None:
         """Add a patient to the record."""
         for event in patient.events:
             self.writer.add_event(patient.patient_id, event)

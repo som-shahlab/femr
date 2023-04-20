@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import pytest
 
 import femr.datasets
-from femr.labelers.core import TimeHorizon
+from femr.labelers import TimeHorizon
 from femr.labelers.omop import move_datetime_to_end_of_day
 from femr.labelers.omop_lab_values import (
     AnemiaLabValueLabeler,

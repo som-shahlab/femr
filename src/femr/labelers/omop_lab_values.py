@@ -6,7 +6,7 @@ from abc import abstractmethod
 from typing import Any, Callable, List, Optional, Set
 
 from femr import Event, Patient
-from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon
+from femr.labelers import Label, Labeler, LabelType, TimeHorizon
 from femr.labelers.omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_codes_to_femr_codes
 from femr.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler
 
@@ -53,7 +53,7 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         """Matches lab test on any femr code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
         self.severity: str = severity
-        self.outcome_codes: Set[int] = map_omop_concept_codes_to_femr_codes(
+        self.outcome_codes: Set[str] = map_omop_concept_codes_to_femr_codes(
             ontology,
             self.original_omop_concept_codes,
             is_ontology_expansion=True,
@@ -349,10 +349,9 @@ class CeliacTestLabeler(Labeler):
     """
 
     def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
-        dictionary = ontology.get_dictionary()
-        self.lab_codes = _get_all_children(ontology, dictionary.index("LNC/31017-7"))
-        self.celiac_codes = _get_all_children(ontology, dictionary.index("ICD9CM/579.0")) | _get_all_children(
-            ontology, dictionary.index("ICD10CM/K90.0")
+        self.lab_codes = _get_all_children(ontology, "LNC/31017-7")
+        self.celiac_codes = _get_all_children(ontology, "ICD9CM/579.0") | _get_all_children(
+            ontology, "ICD10CM/K90.0"
         )
 
         self.pos_value = "Positive"

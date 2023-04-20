@@ -208,7 +208,7 @@ class PatientDatabase {
     Dictionary meta_dictionary;
 };
 
-PatientDatabase convert_patient_collection_to_patient_database(
+void convert_patient_collection_to_patient_database(
     const boost::filesystem::path& patient_root,
     const boost::filesystem::path& concept,
     const boost::filesystem::path& target, char delimiter, size_t num_threads);

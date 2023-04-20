@@ -10,9 +10,9 @@ import scipy.sparse
 
 import femr
 import femr.datasets
-from femr.featurizers.core import ColumnValue, FeaturizerList
+from femr.featurizers import ColumnValue, FeaturizerList
 from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from femr.labelers.core import TimeHorizon
+from femr.labelers import TimeHorizon
 from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing

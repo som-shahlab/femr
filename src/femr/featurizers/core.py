@@ -11,7 +11,7 @@ from nptyping import NDArray
 
 from femr import Patient
 from femr.extension import datasets as extension_datasets
-from femr.labelers.core import Label, LabeledPatients
+from femr.labelers import Label, LabeledPatients
 
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology

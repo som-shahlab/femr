@@ -14,8 +14,7 @@ from typing import Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 import zstandard
 
-from femr import Event
-from femr.datasets import EventCollection
+from femr.datasets import EventCollection, RawEvent
 
 # Note that we want to support huge CSV records
 csv.field_size_limit(sys.maxsize)
@@ -38,7 +37,7 @@ class CSVExtractor(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
+    def get_events(self, row: Mapping[str, str]) -> Sequence[RawEvent]:
         """Return the events generated for a particular row."""
         ...
 

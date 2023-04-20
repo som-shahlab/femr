@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 import pytest
 
 import femr.datasets
-from femr.labelers.core import LabeledPatients, TimeHorizon
+from femr.labelers import LabeledPatients, TimeHorizon
 from femr.labelers.omop import (
     get_inpatient_admission_discharge_times,
     get_inpatient_admission_events,
