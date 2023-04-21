@@ -457,6 +457,7 @@ cc_library(
     ],
     deps=[
         ":flatmap",
+	":database",
     ],
 )
 
@@ -487,4 +488,15 @@ cc_binary(
         ":database",
         "@json",
     ]
+)
+
+cc_test(
+    name="survival_test",
+    srcs=[
+        "survival_test.cc",
+    ],
+    deps=[
+        ":survival",
+        "@gtest//:gtest_main",
+    ],
 )

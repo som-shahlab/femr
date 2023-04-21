@@ -11,6 +11,7 @@ import threading
 from typing import Any, List, Optional, Tuple, TypeVar
 
 import jax
+import math
 import msgpack
 import numpy as np
 
@@ -173,9 +174,20 @@ def create_batches() -> None:
         "--is_hierarchical", default=False, action="store_true", help="Whether to use hierarchical embeddings"
     )
     parser.add_argument(
-        "--subset_fraction", default=None, type=float, help="Whether to use a subset of the data for training"
+        "--seed", default=97, type=int, help="The random seed used for data splitting"
+    )
+    parser.add_argument(
+        "--val_start", default=70, type=int, help="The start of the validation split (and thus end of the train split)",
+    )
+    parser.add_argument(
+        "--test_start", default=85, type=int, help="The start of the test split (and thus end of the val split)",
+    )
+    parser.add_argument(
+        "--batch_size", default=int(1 << 14), type=int, help="The batch size (in events). Must be a power of two",
     )
     parser.add_argument("--note_embedding_data", default=None, type=str, help="Note embedding data when using notes")
+    parser.add_argument("--limit_to_patients_file", default=None, type=str, help="A file containing the only patient_ids to allow in batches")
+    parser.add_argument("--limit_before_date", default=None, type=str, help="Limit the batches to before a given date")
 
     args = parser.parse_args()
 
@@ -265,25 +277,34 @@ def create_batches() -> None:
         rootLogger.error("Invalid task?")
         exit()
 
-    if args.subset_fraction is None:
-        train_end = 70
-    else:
-        train_end = int(args.subset_fraction * 70)
+    if args.limit_to_patients_file:
+        with open(args.limit_to_patients_file) as f:
+            ids_to_limit = [int(a) for a in f]
+        task["patient_ids"] = ids_to_limit
+
+    if args.limit_before_date:
+        limit_date = datetime.date.fromisoformat(args.limit_before_date)
+        task["limit_date"] = limit_date.isoformat()
+
+    
+    max_size = math.log2(args.batch_size)
+    assert int(max_size) == max_size, "Batch size must be a power of two"
+    max_size = int(max_size)
 
     loader_config: Any = {
         "transformer": {
             "vocab_size": args.transformer_vocab_size,
             "dictionary": dictionary,
             "min_size": 5,
-            "max_size": 14,
+            "max_size": max_size,
             "is_hierarchical": args.is_hierarchical,
         },
         "task": task,
-        "seed": 97,
+        "seed": args.seed,
         "splits": [
-            ["train", 0, train_end],
-            ["dev", 70, 85],
-            ["test", 85, 100],
+            ["train", 0, args.val_start],
+            ["dev", args.val_start, args.test_start],
+            ["test", args.test_start, 100],
         ],
     }
 

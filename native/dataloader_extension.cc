@@ -24,6 +24,7 @@ namespace py = pybind11;
 #include "database.hh"
 #include "flatmap.hh"
 #include "npy.hh"
+#include "parse_utils.hh"
 #include "pybind11/eigen/tensor.h"
 #include "survival.hh"
 
@@ -31,11 +32,39 @@ const bool SPARSE_FALLBACK = false;
 
 class Task {
    public:
+    Task(json config, PatientDatabase& data) {
+        std::vector<uint64_t> patient_ids =
+            config.value("patient_ids", std::vector<uint64_t>());
+        for (uint64_t patient_id : patient_ids) {
+            patient_offsets_from_file.push_back(
+                *data.get_patient_offset(patient_id));
+        }
+
+        std::string time_string = config.value("limit_date", "");
+        if (time_string != "") {
+            absl::CivilDay date;
+            attempt_parse_time_or_die(time_string, date);
+            limit_date.emplace(date);
+        }
+    }
+
     virtual ~Task(){};
 
-    virtual const std::vector<uint32_t>& get_patient_offsets() = 0;
+    virtual const std::vector<uint32_t>& get_patient_offsets() {
+        return patient_offsets_from_file;
+    }
+
     virtual void start_batch() = 0;
-    virtual void start_patient(const Patient& p) = 0;
+
+    virtual void start_patient(const Patient& p) {
+        if (limit_date) {
+            int32_t censor_age_days =
+                (int32_t)std::max((int64_t)0, *limit_date - p.birth_date);
+            max_age = censor_age_days * 24 * 60;
+        } else {
+            max_age = std::numeric_limits<uint32_t>::max();
+        }
+    }
     virtual bool needs_exact() const { return false; }
 
     virtual bool add_event_data(int current_year, uint32_t current_age,
@@ -46,6 +75,13 @@ class Task {
 
     virtual void prepare_batch_data(uint32_t num_representations) = 0;
     virtual py::dict get_batch_data() const = 0;
+
+    uint32_t get_max_age() { return max_age; }
+
+   protected:
+    uint32_t max_age;
+    std::vector<uint32_t> patient_offsets_from_file;
+    boost::optional<absl::CivilDay> limit_date;
 };
 
 uint32_t round_to_nearest_bin(uint32_t value, uint32_t skip = 1) {
@@ -59,12 +95,20 @@ uint32_t round_to_nearest_bin(uint32_t value, uint32_t skip = 1) {
 
 class LabeledPatientsTask : public Task {
    public:
-    LabeledPatientsTask(json config, PatientDatabase& data) {
+    LabeledPatientsTask(json config, PatientDatabase& data)
+        : Task(config, data) {
+        absl::flat_hash_set<uint32_t> patient_whitelist(
+            std::begin(patient_offsets_from_file),
+            std::end(patient_offsets_from_file));
+
         labeler_type = config["labeler_type"];
         for (json label : config["labels"]) {
             uint64_t patient_id = label[0];
             uint32_t patient_offset = *data.get_patient_offset(patient_id);
             uint32_t age_in_minutes = label[1];
+            if (patient_whitelist.count(patient_offset) == 0) {
+                continue;
+            }
             json value = label[2];
             labels[patient_offset].push_back(
                 std::make_pair(age_in_minutes, value));
@@ -79,10 +123,13 @@ class LabeledPatientsTask : public Task {
     const std::vector<uint32_t>& get_patient_offsets() override {
         return patient_offsets;
     }
+
     void start_batch() override { batch_labels.clear(); }
     bool needs_exact() const override { return true; }
 
     void start_patient(const Patient& p) override {
+        Task::start_patient(p);
+
         current_patient_iter = labels.find(p.patient_offset);
         if (current_patient_iter == std::end(labels)) {
             throw std::runtime_error("Trying to process an invalid patient");
@@ -159,10 +206,17 @@ class LabeledPatientsTask : public Task {
             final_batch_event_times.setConstant(0);
 
             for (uint32_t i = 0; i < batch_labels.size(); i++) {
-                final_batch_censor(i) = batch_labels[i].second["is_censored"];
-                final_batch_event_times(i) =
-                    batch_labels[i].second["event_time"].get<uint32_t>() -
-                    batch_labels[i].first;
+                if (batch_labels[i].second["event_time"].get<uint32_t>() >
+                    max_age) {
+                    final_batch_censor(i) = true;
+                    final_batch_event_times(i) = max_age;
+                } else {
+                    final_batch_censor(i) =
+                        batch_labels[i].second["is_censored"];
+                    final_batch_event_times(i) =
+                        batch_labels[i].second["event_time"].get<uint32_t>() -
+                        batch_labels[i].first;
+                }
             }
         }
     }
@@ -192,27 +246,19 @@ class LabeledPatientsTask : public Task {
                         std::vector<std::pair<uint32_t, json>>>::const_iterator
         current_patient_iter;
     std::vector<std::pair<uint32_t, json>>::const_iterator current_label_iter;
+    uint32_t max_age;
 };
 
 class CLMBRTask : public Task {
    public:
-    CLMBRTask(json config, PatientDatabase& data) {
+    CLMBRTask(json config, PatientDatabase& data) : Task(config, data) {
         // Might be empty, in which case we train on everyone
-        std::vector<uint64_t> patient_ids =
-            config.value("patient_ids", std::vector<uint64_t>());
-        for (uint64_t patient_id : patient_ids) {
-            patient_offsets.push_back(*data.get_patient_offset(patient_id));
-        }
         vocab_size = config["vocab_size"];
-    }
-
-    const std::vector<uint32_t>& get_patient_offsets() override {
-        return patient_offsets;
     }
 
     void start_batch() override { batch_labels.clear(); }
 
-    void start_patient(const Patient& p) override {}
+    void start_patient(const Patient& p) override { Task::start_patient(p); }
 
     bool add_event_data(int current_year, uint32_t current_age,
                         const std::vector<uint32_t>& next_features,
@@ -273,21 +319,13 @@ class CLMBRTask : public Task {
 
 class SurvivalCLMBRTask : public Task {
    public:
-    SurvivalCLMBRTask(json config, PatientDatabase& data, Ontology& ontology) {
+    SurvivalCLMBRTask(json config, PatientDatabase& data, Ontology& ontology)
+        : Task(config, data) {
         // Might be empty, in which case we train on everyone
-        std::vector<uint64_t> patient_ids =
-            config.value("patient_ids", std::vector<uint64_t>());
-        for (uint64_t patient_id : patient_ids) {
-            patient_offsets.push_back(*data.get_patient_offset(patient_id));
-        }
         json survival_dict = config["survival_dict"];
         survival_dictionary = get_mapping(ontology, survival_dict["codes"]);
         vocab_size = survival_dict["codes"].size();
         time_bins = survival_dict["time_bins"].get<std::vector<uint32_t>>();
-    }
-
-    const std::vector<uint32_t>& get_patient_offsets() override {
-        return patient_offsets;
     }
 
     void start_batch() override {
@@ -296,7 +334,8 @@ class SurvivalCLMBRTask : public Task {
     }
 
     void start_patient(const Patient& p) override {
-        calculator.preprocess_patient(p, survival_dictionary);
+        Task::start_patient(p);
+        calculator.preprocess_patient(p, survival_dictionary, max_age);
         last_prediction_age = 0;
     }
 
@@ -785,21 +824,6 @@ class BatchCreator {
                 npy::LoadArrayFromNumpy(event_indices_stream, shape,
                                         fortran_order, current_indices);
 
-                if (false) {
-                    std::cout << "Reading event indices ... " << std::endl;
-                    std::cout << "Shape: ";
-                    for (const auto& a : shape) {
-                        std::cout << a << " ";
-                    }
-                    std::cout << std::endl;
-
-                    std::cout << "Values: ";
-                    for (const auto& a : current_indices) {
-                        std::cout << a << " ";
-                    }
-                    std::cout << std::endl;
-                }
-
                 auto embedding_entry =
                     reader->get_int(p.patient_offset * 2 + 1);
 
@@ -831,6 +855,10 @@ class BatchCreator {
              event_index++) {
             const Event& event = p.events[event_index];
 
+            if (event.start_age_in_minutes >= task->get_max_age()) {
+                continue;
+            }
+
             if (token_dropout != 0 && rng.next_float() < token_dropout) {
                 continue;
             }
@@ -842,22 +870,6 @@ class BatchCreator {
 
             bool is_note = (note_iter != std::end(current_indices)) &&
                            ((size_t)*note_iter == event_index);
-
-            if (false && is_note) {
-                std::cout << "What in the world " << p.patient_offset << " "
-                          << event_index << " " << int(event.value_type) << " "
-                          << event.text_value << std::endl;
-                std::cout << "Lol?" << std::endl;
-                const Dictionary* dict;
-                if (event.value_type == ValueType::UNIQUE_TEXT) {
-                    dict = data.get_unique_text_dictionary();
-                } else {
-                    dict = &(data.get_shared_text_dictionary());
-                }
-                std::string_view item = (*dict)[event.text_value];
-                std::cout << "Got it next " << item.size() << std::endl;
-                std::cout << "Sure " << std::string(item) << std::endl;
-            }
 
             std::vector<uint32_t> features;
             if (!is_note) {
