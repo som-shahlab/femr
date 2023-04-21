@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "database.hh"
+#include <iostream>
 #include "flatmap.hh"
 
 struct SurvivalEvent {
@@ -47,19 +48,25 @@ struct SurvivalCalculator {
 
     void preprocess_patient(
         const Patient& p,
-        const FlatMap<std::vector<uint32_t>>& survival_dictionary) {
-        preprocess_patient(p, [&](uint32_t code) {
-            auto iter = survival_dictionary.find(code);
-            if (iter == nullptr) {
-                return absl::Span<const uint32_t>();
-            } else {
-                return absl::Span<const uint32_t>(*iter);
-            }
-        });
+        const FlatMap<std::vector<uint32_t>>& survival_dictionary,
+        uint32_t max_age = std::numeric_limits<uint32_t>::max()) {
+        preprocess_patient(
+            p,
+            [&](uint32_t code) {
+                auto iter = survival_dictionary.find(code);
+                if (iter == nullptr) {
+                    return absl::Span<const uint32_t>();
+                } else {
+                    return absl::Span<const uint32_t>(*iter);
+                }
+            },
+            max_age);
     }
 
     template <typename F>
-    void preprocess_patient(const Patient& p, F get_all_parents) {
+    void preprocess_patient(
+        const Patient& p, F get_all_parents,
+        uint32_t max_age = std::numeric_limits<uint32_t>::max()) {
         future_times.clear();
         survival_events.clear();
 
@@ -72,7 +79,9 @@ struct SurvivalCalculator {
                 }
             }
         }
+
         final_age = p.events[p.events.size() - 1].start_age_in_minutes;
+        final_age = std::min(final_age, max_age);
 
         for (uint32_t code : future_times.keys()) {
             auto* item = future_times.find(code);
@@ -81,6 +90,12 @@ struct SurvivalCalculator {
             event.code = code;
             event.times = std::move(*item);
             assert(event.times.size() > 0);
+
+            event.times.erase(
+                std::remove_if(
+                    event.times.begin(), event.times.end(),
+                    [this](uint32_t time) { return time > final_age; }),
+                event.times.end());
 
             std::sort(std::begin(event.times), std::end(event.times),
                       std::greater<uint32_t>());
@@ -92,7 +107,9 @@ struct SurvivalCalculator {
                 }
             }
 
-            survival_events.emplace_back(std::move(event));
+            if (event.times.size() > 0) {
+                survival_events.emplace_back(std::move(event));
+            }
         }
     }
 
