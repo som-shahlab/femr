@@ -7,7 +7,7 @@ from typing import List, cast
 
 import femr
 import femr.datasets
-from femr.labelers.core import TimeHorizon
+from femr.labelers import TimeHorizon
 from femr.labelers.omop import OpioidOverdoseLabeler
 
 # Needed to import `tools` for local testing

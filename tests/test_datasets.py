@@ -9,20 +9,20 @@ import femr
 import femr.datasets
 
 dummy_events = [
-    femr.Event(start=datetime.datetime(1995, 1, 3), code=0, value=float(34)),
-    femr.Event(
+    femr.datasets.RawEvent(start=datetime.datetime(1995, 1, 3), concept_id=0, value=float(34)),
+    femr.datasets.RawEvent(
         start=datetime.datetime(2010, 1, 3),
-        code=1,
+        concept_id=1,
         value="test_value",
     ),
-    femr.Event(
+    femr.datasets.RawEvent(
         start=datetime.datetime(2010, 1, 5),
-        code=2,
+        concept_id=2,
         value=None,
     ),
 ]
 
-all_events: List[Tuple[int, femr.Event]] = []
+all_events: List[Tuple[int, femr.datasets.RawEvent]] = []
 
 for patient_id in range(10, 25):
     all_events.extend((patient_id, event) for event in dummy_events)
@@ -87,15 +87,15 @@ def test_patients(tmp_path: pathlib.Path) -> None:
         assert patient.events == dummy_events
 
 
-def transform_func(a: femr.Patient) -> Optional[femr.Patient]:
+def transform_func(a: femr.datasets.RawPatient) -> Optional[femr.datasets.RawPatient]:
     if a.patient_id == 10:
         return None
-    return femr.Patient(
+    return femr.datasets.RawPatient(
         patient_id=a.patient_id,
         events=[
-            femr.Event(
+            femr.datasets.RawEvent(
                 start=event.start,
-                code=event.code,
+                concept_id=event.concept_id,
                 value="foo",
             )
             for event in a.events
@@ -115,9 +115,9 @@ def test_transform_patients(tmp_path: pathlib.Path) -> None:
 
     for patient in all_patients:
         better_dummy_events = [
-            femr.Event(
+            femr.datasets.RawEvent(
                 start=event.start,
-                code=event.code,
+                concept_id=event.concept_id,
                 value="foo",
             )
             for event in dummy_events

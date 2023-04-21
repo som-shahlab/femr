@@ -11,22 +11,22 @@ from typing import Any, Callable, ContextManager, Dict, Iterable, Iterator, List
 
 import numpy as np
 
-from femr import Event, Patient
 from femr.datasets import fileio
+from femr.datasets.types import RawEvent, RawPatient
 from femr.extension import datasets as extension_datasets
 
 
-def _get_sort_key(pid_and_event: Tuple[int, Event]) -> Any:
+def _get_sort_key(pid_and_event: Tuple[int, RawEvent]) -> Any:
     """Get the sort key for an event."""
     return (pid_and_event[0], pid_and_event[1].start)
 
 
 def _sort_readers(
     events: EventCollection,
-    reader_funcs: Sequence[Callable[[], ContextManager[Iterable[Tuple[int, Event]]]]],
+    reader_funcs: Sequence[Callable[[], ContextManager[Iterable[Tuple[int, RawEvent]]]]],
 ) -> None:
     """Sort the provided reader_funcs and write out to the provided events."""
-    items: List[Tuple[int, Event]] = []
+    items: List[Tuple[int, RawEvent]] = []
     for reader_func in reader_funcs:
         with reader_func() as reader:
             items.extend(reader)
@@ -39,7 +39,7 @@ def _sort_readers(
 
 def _create_event_reader(
     path: str,
-) -> ContextManager[Iterable[Tuple[int, Event]]]:
+) -> ContextManager[Iterable[Tuple[int, RawEvent]]]:
     """Create an event writer with a contextmanger."""
     return contextlib.closing(fileio.EventReader(path))
 
@@ -55,7 +55,7 @@ class EventCollection:
 
     def sharded_readers(
         self,
-    ) -> Sequence[Callable[[], ContextManager[Iterable[Tuple[int, Event]]]]]:
+    ) -> Sequence[Callable[[], ContextManager[Iterable[Tuple[int, RawEvent]]]]]:
         """Return a list of reader functions.
 
         Each resulting reader can be used in a multiprocessing.Pool to enable multiprocessing.
@@ -65,7 +65,7 @@ class EventCollection:
         ]
 
     @contextlib.contextmanager
-    def reader(self) -> Iterator[Iterable[Tuple[int, Event]]]:
+    def reader(self) -> Iterator[Iterable[Tuple[int, RawEvent]]]:
         """Return a contextmanager that allows iteration over all of the events."""
         with contextlib.ExitStack() as stack:
             sub_readers = [stack.enter_context(reader()) for reader in self.sharded_readers()]
@@ -102,7 +102,7 @@ class EventCollection:
                 [
                     ("patient_id", np.uint64),
                     ("start", np.datetime64),
-                    ("code", np.uint64),
+                    ("concept_id", np.uint64),
                 ]
             ),
             ",",
@@ -112,16 +112,16 @@ class EventCollection:
         return PatientCollection(target_path)
 
 
-def _sharded_patient_reader(path: str) -> ContextManager[Iterable[Patient]]:
+def _sharded_patient_reader(path: str) -> ContextManager[Iterable[RawPatient]]:
     """Get a contextmanager for reading patients from a particular path."""
     return contextlib.closing(fileio.PatientReader(path))
 
 
 def _transform_single_reader(
     target_path: str,
-    transforms: Sequence[Callable[[Patient], Optional[Patient]]],
+    transforms: Sequence[Callable[[RawPatient], Optional[RawPatient]]],
     capture_statistics: bool,
-    reader_func: Callable[[], ContextManager[Iterable[Patient]]],
+    reader_func: Callable[[], ContextManager[Iterable[RawPatient]]],
 ) -> Optional[Dict[str, Dict[str, int]]]:
     """Transform a single PatientReader, writing to a particular target_path."""
     if capture_statistics:
@@ -131,7 +131,7 @@ def _transform_single_reader(
             for p in reader:
                 if capture_statistics:
                     current_event_count = len(p.events)
-                current_patient: Optional[Patient] = p
+                current_patient: Optional[RawPatient] = p
                 for transform in transforms:
                     assert current_patient is not None
                     current_patient = transform(current_patient)
@@ -164,7 +164,7 @@ class PatientCollection:
 
     def sharded_readers(
         self,
-    ) -> Sequence[Callable[[], ContextManager[Iterable[Patient]]]]:
+    ) -> Sequence[Callable[[], ContextManager[Iterable[RawPatient]]]]:
         """Return a list of contextmanagers that allow sharded iteration of Patients."""
         return [
             functools.partial(_sharded_patient_reader, os.path.join(self.path, child))
@@ -172,7 +172,7 @@ class PatientCollection:
         ]
 
     @contextlib.contextmanager
-    def reader(self) -> Iterator[Iterable[Patient]]:
+    def reader(self) -> Iterator[Iterable[RawPatient]]:
         """Return a single contextmanager that allows iteration over Patients."""
         with contextlib.ExitStack() as stack:
             sub_readers = [stack.enter_context(reader()) for reader in self.sharded_readers()]
@@ -181,7 +181,8 @@ class PatientCollection:
     def transform(
         self,
         target_path: str,
-        transform: Callable[[Patient], Optional[Patient]] | Sequence[Callable[[Patient], Optional[Patient]]],
+        transform: Callable[[RawPatient], Optional[RawPatient]]
+        | Sequence[Callable[[RawPatient], Optional[RawPatient]]],
         num_threads: int = 1,
         stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> PatientCollection:

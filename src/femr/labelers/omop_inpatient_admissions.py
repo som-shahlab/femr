@@ -170,8 +170,8 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
         visit_end_adjust_func: Callable = identity,
     ):
-        femr_codes: Set[int] = map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts())
-        self.outcome_codes: Set[int] = femr_codes
+        femr_codes: Set[str] = map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts())
+        self.outcome_codes: Set[str] = femr_codes
         super().__init__(
             ontology=ontology,
             visit_start_adjust_func=visit_start_adjust_func,

@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import collections
 import datetime
+import hashlib
 import multiprocessing
 import pprint
+import struct
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
@@ -17,8 +19,6 @@ from nptyping import NDArray
 from femr import Patient
 from femr.datasets import PatientDatabase
 from femr.extension import datasets as extension_datasets
-
-from . import compute_random_num
 
 
 @dataclass(frozen=True)
@@ -553,3 +553,21 @@ class NLabelsPerPatientLabeler(Labeler):
 
     def get_labeler_type(self) -> LabelType:
         return self.labeler.get_labeler_type()
+
+
+def compute_random_num(seed: int, num_1: int, num_2: int):
+    network_num_1 = struct.pack("!I", num_1)
+    network_num_2 = struct.pack("!I", num_2)
+    network_seed = struct.pack("!I", seed)
+
+    to_hash = network_seed + network_num_1 + network_num_2
+
+    hash_object = hashlib.sha256()
+    hash_object.update(to_hash)
+    hash_value = hash_object.digest()
+
+    result = 0
+    for i in range(len(hash_value)):
+        result = (result * 256 + hash_value[i]) % 100
+
+    return result

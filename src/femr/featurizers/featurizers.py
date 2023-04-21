@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Deque, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Deque, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from .. import Patient
 from ..extension import datasets as extension_datasets
-from ..labelers.core import Label
+from ..labelers import Label
 from . import OnlineStatistics
 from .core import ColumnValue, Featurizer
 
@@ -109,8 +109,8 @@ class AgeFeaturizer(Featurizer):
 
 def _reshuffle_count_time_bins(
     time_bins: List[datetime.timedelta],
-    codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]],
-    code_counts_per_bin: Dict[int, Dict[int, int]],
+    codes_per_bin: Dict[int, Deque[Tuple[str, datetime.datetime]]],
+    code_counts_per_bin: Dict[int, Dict[str, int]],
     label: Label,
 ):
     # From closest bin to prediction time -> farthest bin
@@ -157,8 +157,8 @@ class CountFeaturizer(Featurizer):
     def __init__(
         self,
         is_ontology_expansion: bool = False,
-        excluded_codes: Union[set, List[int]] = [],
-        included_codes: Union[set, List[int]] = [],
+        excluded_codes: Iterable[str] = [],
+        included_codes: Iterable[str] = [],
         time_bins: Optional[List[datetime.timedelta]] = None,
         is_keep_only_none_valued_events: bool = True,
     ):
@@ -172,9 +172,9 @@ class CountFeaturizer(Featurizer):
                     Where "->" denotes "is a parent of" relationship (i.e. A is a parent of B, B is a parent of C).
                     Then if we see 2 occurrences of Code "C", we count 2 occurrences of Code "B" and Code "A".
 
-            excluded_codes (List[int], optional): A list of femr codes that we will ignore. Defaults to [].
+            excluded_codes (List[str], optional): A list of femr codes that we will ignore. Defaults to [].
 
-            included_codes (List[int], optional): A list of all unique event codes that we will include in our count.
+            included_codes (List[str], optional): A list of all unique event codes that we will include in our count.
 
             time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets.
                 Starts from the label time, and works backwards according to each successive value in `time_bins`.
@@ -206,21 +206,21 @@ class CountFeaturizer(Featurizer):
                 which will make this run slower.
         """
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.included_codes: set = set(included_codes) if not isinstance(included_codes, set) else included_codes
-        self.excluded_codes: set = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
+        self.included_codes: Set[str] = set(included_codes) if not isinstance(included_codes, set) else included_codes
+        self.excluded_codes: Set[str] = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
         self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
 
         # Map code to its feature's corresponding column index
         # NOTE: Must be sorted to preserve set ordering across instantiations
-        self.code_to_column_index: Dict[int, int] = {code: idx for idx, code in enumerate(sorted(self.included_codes))}
+        self.code_to_column_index: Dict[str, int] = {code: idx for idx, code in enumerate(sorted(self.included_codes))}
 
         if self.time_bins is not None:
             assert len(set(self.time_bins)) == len(
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
-    def get_codes(self, code: int, ontology: extension_datasets.Ontology) -> Iterator[int]:
+    def get_codes(self, code: str, ontology: extension_datasets.Ontology) -> Iterator[str]:
         if code not in self.excluded_codes:
             if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(code):
@@ -259,7 +259,7 @@ class CountFeaturizer(Featurizer):
             raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
 
         # Aggregating count featurizers
-        all_codes: List[int] = [c for f in featurizers for c in f.included_codes]
+        all_codes: List[str] = [c for f in featurizers for c in f.included_codes]
 
         template_featurizer: CountFeaturizer = featurizers[0]
         new_featurizer: CountFeaturizer = CountFeaturizer(
@@ -292,7 +292,7 @@ class CountFeaturizer(Featurizer):
             # Count the number of times each code appears in the patient's timeline
             # [key] = column idx
             # [value] = count of occurrences of events with that code (up to the label at `label_idx`)
-            code_counter: Dict[int, int] = defaultdict(int)
+            code_counter: Dict[str, int] = defaultdict(int)
 
             label_idx = 0
             for event in patient.events:
@@ -331,17 +331,17 @@ class CountFeaturizer(Featurizer):
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
             time_bins: List[datetime.timedelta] = sorted([x for x in self.time_bins if x is not None])
 
-            codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
+            codes_per_bin: Dict[int, Deque[Tuple[str, datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
             }
 
-            code_counts_per_bin: Dict[int, Dict[int, int]] = {
+            code_counts_per_bin: Dict[int, Dict[str, int]] = {
                 i: defaultdict(int) for i in range(len(self.time_bins) + 1)
             }
 
             label_idx = 0
             for event in patient.events:
-                code: int = event.code  # type: ignore
+                code = event.code
                 while event.start > labels[label_idx].time:
                     _reshuffle_count_time_bins(
                         time_bins,

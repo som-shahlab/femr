@@ -7,9 +7,9 @@ from typing import List, Optional
 
 import femr
 import femr.datasets
-from femr.featurizers.core import FeaturizerList
+from femr.featurizers import FeaturizerList
 from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from femr.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
+from femr.labelers import NLabelsPerPatientLabeler, TimeHorizon
 from femr.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
 from femr.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,

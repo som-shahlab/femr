@@ -13,8 +13,7 @@ from typing import Iterable, Mapping, Set, Tuple
 
 import zstandard
 
-from femr import Event
-from femr.datasets import EventCollection, PatientCollection
+from femr.datasets import EventCollection, PatientCollection, RawEvent
 
 
 def get_concept_ids_from_file(filename: str) -> Set[str]:
@@ -53,8 +52,10 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
         reader = csv.DictReader(f)
         for row in reader:
             assert "/" in row["code"], f"Code must include vocabulary type with a / prefix, but {row} doesn't have one"
-            event = Event(
-                start=datetime.datetime.fromisoformat(row["start"]), code=concept_map[row["code"]], value=row["value"]
+            event = RawEvent(
+                start=datetime.datetime.fromisoformat(row["start"]),
+                concept_id=concept_map[row["code"]],
+                value=row["value"],
             )
             for k, v in row.items():
                 if k not in ("start", "code", "value", "patient_id"):

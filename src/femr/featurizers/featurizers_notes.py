@@ -15,7 +15,7 @@ from transformers import AutoModel, AutoTokenizer
 
 from .. import Event, Patient
 from ..datasets import PatientDatabase
-from ..labelers.core import Label, LabeledPatients
+from ..labelers import Label, LabeledPatients
 from .core import ColumnValue
 
 NotesTokenized: TypeAlias = Dict[str, TensorType["n_notes", "max_note_token_count", int]]  # type: ignore # noqa

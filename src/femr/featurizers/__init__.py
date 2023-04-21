@@ -4,6 +4,8 @@ import copy
 import math
 from typing import List
 
+from femr.featurizers.core import *  # noqa
+
 
 class OnlineStatistics:
     """
