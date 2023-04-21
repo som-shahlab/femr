@@ -8,7 +8,7 @@ import warnings
 from typing import List
 
 from femr import Patient
-from femr.labelers.core import TimeHorizon, TimeHorizonEventLabeler
+from femr.labelers import TimeHorizon, TimeHorizonEventLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,7 +19,7 @@ class DummyLabeler(TimeHorizonEventLabeler):
     """Dummy labeler that returns True if the event's `code` is in `self.outcome_codes`."""
 
     def __init__(self, outcome_codes: List[int], time_horizon: TimeHorizon, allow_same_time: bool = True):
-        self.outcome_codes: List[int] = outcome_codes
+        self.outcome_codes: List[str] = [str(a) for a in outcome_codes]
         self.time_horizon: TimeHorizon = time_horizon
         self.allow_same_time = allow_same_time
 

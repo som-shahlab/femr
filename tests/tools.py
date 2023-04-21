@@ -13,7 +13,7 @@ import zstandard
 
 import femr
 import femr.datasets
-from femr.labelers.core import Label, LabeledPatients, Labeler
+from femr.labelers import Label, LabeledPatients, Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
 EventsWithLabels = List[Tuple[femr.Event, Union[bool, str]]]
@@ -34,7 +34,7 @@ def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
         raise ValueError(f"Invalid date: {date}")
     return femr.Event(
         start=datetime.datetime(year, month, day, hour, minute, seconds),
-        code=code,
+        code=str(code),
         value=value,
         visit_id=visit_id,
         **kwargs,
@@ -76,7 +76,10 @@ def create_events(tmp_path: pathlib.Path) -> femr.datasets.EventCollection:
     for i in range(7):
         with contextlib.closing(events.create_writer()) as writer:
             for patient_id, event in ALL_EVENTS[i * events_per_chunk : (i + 1) * events_per_chunk]:
-                writer.add_event(patient_id, event)
+                raw_event = femr.datasets.RawEvent(
+                    start=event.start, concept_id=int(event.code), value=event.value, visit_id=event.visit_id
+                )
+                writer.add_event(patient_id, raw_event)
 
     return events
 
@@ -88,7 +91,7 @@ def create_patients_list(num_patients: int, events: List[femr.Event]) -> List[fe
         patients.append(
             femr.Patient(
                 patient_id,
-                events,
+                tuple(events),
             )
         )
     return patients
@@ -172,8 +175,7 @@ def get_femr_code(ontology, target_code, dummy_concepts: List[str] = []):
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
     femr_concept_id = f"dummy/{dummy_concepts[target_code]}"
-    femr_target_code = ontology.get_dictionary().index(femr_concept_id)
-    return femr_target_code
+    return femr_concept_id
 
 
 def assert_labels_are_accurate(

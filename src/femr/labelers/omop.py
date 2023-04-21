@@ -34,19 +34,19 @@ def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
     return date.replace(hour=23, minute=59, second=59)
 
 
-def get_visit_codes(ontology: extension_datasets.Ontology) -> List[int]:
-    return [y for x in get_visit_concepts() for y in _get_all_children(ontology, ontology.get_dictionary().index(x))]
+def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
+    return {y for x in get_visit_concepts() for y in _get_all_children(ontology, x)}
 
 
 def get_inpatient_admission_codes(
     ontology: extension_datasets.Ontology,
-) -> Set[int]:
+) -> Set[str]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return set([ontology.get_dictionary().index(x) for x in get_inpatient_admission_concepts()])
+    return set(get_inpatient_admission_concepts())
 
 
 def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
-    admission_codes: Set[int] = get_inpatient_admission_codes(ontology)
+    admission_codes: Set[str] = get_inpatient_admission_codes(ontology)
     events: List[Event] = []
     for e in patient.events:
         if e.code in admission_codes and e.omop_table == "visit_occurrence":
@@ -82,18 +82,18 @@ def map_omop_concept_ids_to_femr_codes(
     ontology: extension_datasets.Ontology,
     omop_concept_ids: List[int],
     is_ontology_expansion: bool = True,
-) -> Set[int]:
+) -> Set[str]:
     """Maps OMOP concept IDs (e.g. 3939430) => femr codes (e.g. 123).
     If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
     """
-    codes: Set[int] = set()
+    codes: Set[str] = set()
     for omop_concept_id in omop_concept_ids:
         # returns `None` if `omop_concept_id` is not found in the ontology
-        femr_code: Optional[int] = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
-        if femr_code is None:
-            print(f"OMOP Concept ID {omop_concept_id} not found in ontology")
-        else:
+        try:
+            femr_code: str = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
             codes.update(_get_all_children(ontology, femr_code) if is_ontology_expansion else {femr_code})
+        except IndexError:
+            print(f"OMOP Concept ID {omop_concept_id} not found in ontology")
     return codes
 
 
@@ -102,27 +102,28 @@ def map_omop_concept_codes_to_femr_codes(
     ontology: extension_datasets.Ontology,
     omop_concept_codes: List[str],
     is_ontology_expansion: bool = True,
-) -> Set[int]:
+) -> Set[str]:
     """Maps OMOP codes (e.g. "LOINC/123") => femr codes (e.g. 123).
     If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
     """
-    codes: Set[int] = set()
+    codes: Set[str] = set()
     for omop_concept_code in omop_concept_codes:
         try:
-            femr_code = ontology.get_dictionary().index(omop_concept_code)
-        except ValueError:
+            codes.update(
+                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
+            )
+        except IndexError:
             raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
-        codes.update(_get_all_children(ontology, femr_code) if is_ontology_expansion else {femr_code})
     return codes
 
 
 # TODO - move this into the ontology class
-def _get_all_children(ontology: extension_datasets.Ontology, code: int) -> Set[int]:
+def _get_all_children(ontology: extension_datasets.Ontology, code: str) -> Set[str]:
     children_code_set = set([code])
     parent_deque = deque([code])
 
     while len(parent_deque) > 0:
-        temp_parent_code: int = parent_deque.popleft()
+        temp_parent_code: str = parent_deque.popleft()
         for temp_child_code in ontology.get_children(temp_parent_code):
             children_code_set.add(temp_child_code)
             parent_deque.append(temp_child_code)
@@ -264,9 +265,9 @@ class CodeLabeler(TimeHorizonEventLabeler):
 
     def __init__(
         self,
-        outcome_codes: List[int],
+        outcome_codes: List[str],
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
@@ -280,9 +281,9 @@ class CodeLabeler(TimeHorizonEventLabeler):
             prediction_time_adjustment_func (Optional[Callable]). A function that takes in a `datetime.datetime`
                 and returns a different `datetime.datetime`. Defaults to the identity function.
         """
-        self.outcome_codes: List[int] = outcome_codes
+        self.outcome_codes: List[str] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
-        self.prediction_codes: Optional[List[int]] = prediction_codes
+        self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -327,10 +328,10 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
     ):
-        outcome_codes: List[int] = list(
+        outcome_codes: List[str] = list(
             map_omop_concept_codes_to_femr_codes(
                 ontology,
                 self.original_omop_concept_codes,
@@ -361,7 +362,7 @@ class MortalityCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
     ):
         """Create a Mortality labeler."""
@@ -386,7 +387,7 @@ class LupusCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
     ):
         concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
@@ -413,11 +414,9 @@ class HighHbA1cCodeLabeler(Labeler):
         """Create a High HbA1c (i.e. diabetes) labeler."""
         self.last_trigger_timedelta = last_trigger_timedelta
 
-        HbA1c_str: str = "LOINC/4548-4"
-        self.hba1c_lab_code = ontology.get_dictionary().index(HbA1c_str)
+        self.hba1c_lab_code: str = "LOINC/4547-4"
 
-        diabetes_str: str = "SNOMED/44054006"
-        diabetes_code = ontology.get_dictionary().index(diabetes_str)
+        diabetes_code: str = "SNOMED/44054006"
         self.diabetes_codes = _get_all_children(ontology, diabetes_code)
 
     def label(self, patient: Patient) -> List[Label]:
@@ -567,7 +566,6 @@ class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
     def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
         self.time_horizon: TimeHorizon = time_horizon
 
-        dictionary = ontology.get_dictionary()
         icd9_codes: List[str] = [
             "E850.0",
             "E850.1",
@@ -579,13 +577,13 @@ class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
         ]
         icd10_codes: List[str] = ["T40.0", "T40.1", "T40.2", "T40.3", "T40.4"]
 
-        self.overdose_codes: Set[int] = set()
+        self.overdose_codes: Set[str] = set()
         for code in icd9_codes:
-            self.overdose_codes |= _get_all_children(ontology, dictionary.index("ICD9CM/" + code))
+            self.overdose_codes |= _get_all_children(ontology, "ICD9CM/" + code)
         for code in icd10_codes:
-            self.overdose_codes |= _get_all_children(ontology, dictionary.index("ICD10CM/" + code))
+            self.overdose_codes |= _get_all_children(ontology, "ICD10CM/" + code)
 
-        self.opioid_codes = _get_all_children(ontology, dictionary.index("ATC/N02A"))
+        self.opioid_codes = _get_all_children(ontology, "ATC/N02A")
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.overdose_codes`."""
@@ -620,7 +618,7 @@ class IsMaleLabeler(Labeler):
     """
 
     def __init__(self, ontology: extension_datasets.Ontology):
-        self.male_code: int = ontology.get_dictionary().index("Gender/M")
+        self.male_code: str = "Gender/M"
 
     def label(self, patient: Patient) -> List[Label]:
         """Label this patient as Male (TRUE) or not (FALSE)."""

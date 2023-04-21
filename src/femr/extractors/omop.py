@@ -6,7 +6,7 @@ import dataclasses
 import datetime
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from femr import Event
+from femr.datasets import RawEvent
 from femr.extractors.csv import CSVExtractor
 
 OMOP_BIRTH = 4216316
@@ -21,7 +21,7 @@ class _DemographicsConverter(CSVExtractor):
     def get_file_prefix(self) -> str:
         return "person"
 
-    def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
+    def get_events(self, row: Mapping[str, str]) -> Sequence[RawEvent]:
         if row.get("birth_datetime", ""):
             birth = datetime.datetime.fromisoformat(row["birth_datetime"])
         else:
@@ -44,16 +44,16 @@ class _DemographicsConverter(CSVExtractor):
 
         return [
             # 4216316 is the OMOP birth code
-            Event(
+            RawEvent(
                 start=birth,
-                code=4216316,
+                concept_id=4216316,
                 omop_table="person",
                 clarity_table=row.get("load_table_id"),
             )
         ] + [
-            Event(
+            RawEvent(
                 start=birth,
-                code=int(row[target]),
+                concept_id=int(row[target]),
                 omop_table="person",
                 clarity_table=row.get("load_table_id"),
                 source_code=row.get(target.replace("_concept_id", "_source_value")),
@@ -105,7 +105,7 @@ class _ConceptTableConverter(CSVExtractor):
         else:
             return self.prefix
 
-    def get_events(self, row: Mapping[str, str]) -> Sequence[Event]:
+    def get_events(self, row: Mapping[str, str]) -> Sequence[RawEvent]:
         def normalize_to_float_if_possible(field_name: Optional[str], value: str | float | None) -> str | float | None:
             if field_name is not None and field_name in row:
                 val = _try_numeric(row[field_name])
@@ -117,15 +117,15 @@ class _ConceptTableConverter(CSVExtractor):
         value = normalize_to_float_if_possible(self.numeric_value_field, value)
 
         concept_id_field = self.concept_id_field or (self.prefix + "_concept_id")
-        code = int(row[concept_id_field])
-        if code == 0:
+        concept_id = int(row[concept_id_field])
+        if concept_id == 0:
             # The following are worth recovering even without the code ...
             if self.prefix == "note":
-                code = 26
+                concept_id = 26
             elif self.prefix == "visit":
-                code = 8
+                concept_id = 8
             elif self.prefix == "visit_detail":
-                code = 8
+                concept_id = 8
             else:
                 return []
 
@@ -168,7 +168,7 @@ class _ConceptTableConverter(CSVExtractor):
         if source_code is not None:
             metadata["source_code"] = source_code
 
-        return [Event(start=start, code=code, value=value, **metadata)]
+        return [RawEvent(start=start, concept_id=concept_id, value=value, **metadata)]
 
 
 def get_omop_csv_extractors() -> Sequence[CSVExtractor]:

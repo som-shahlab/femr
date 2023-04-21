@@ -71,7 +71,7 @@ void create_database_files(const boost::filesystem::path& patients) {
     {
         CSVWriter<ZstdWriter> writer(
             (patients / boost::filesystem::unique_path(pattern)).string(),
-            {"patient_id", "code", "start", "value", "metadata"}, ',');
+            {"patient_id", "concept_id", "start", "value", "metadata"}, ',');
 
         writer.add_row({"30", "32", "1990-03-08T09:30:00", "", ""});
         writer.add_row({"30", "32", "1990-03-08T10:30:00", "", ""});
@@ -86,7 +86,7 @@ void create_database_files(const boost::filesystem::path& patients) {
     {
         CSVWriter<ZstdWriter> writer(
             (patients / boost::filesystem::unique_path(pattern)).string(),
-            {"patient_id", "code", "start", "value", "metadata"}, ',');
+            {"patient_id", "concept_id", "start", "value", "metadata"}, ',');
 
         writer.add_row({"70", "32", "1990-03-08T09:30:00", "", ""});
         writer.add_row({"70", "323", "1990-03-08T14:30:00", "Short Text", ""});

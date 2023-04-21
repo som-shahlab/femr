@@ -1,22 +1,23 @@
-"""The fundamental underlying Patient and Event datatypes for femr."""
-
 from __future__ import annotations
 
 import datetime
-import importlib.metadata
 from dataclasses import dataclass
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, List, Tuple
 
 
 @dataclass
-class Patient:
+class RawPatient:
     """A patient."""
 
     patient_id: int
-    events: Sequence[Event]
+    events: List[RawEvent]
+
+    def resort(self) -> None:
+        """Resort the events to maintain the day invariant"""
+        self.events.sort()
 
 
-class Event:
+class RawEvent:
     """An event with a patient record.
 
     NOTE: Non-None field types must be specified in the order you want them decoded.
@@ -29,7 +30,7 @@ class Event:
     """
 
     start: datetime.datetime
-    code: str
+    concept_id: int
     value: float | str | None
 
     # This class can also contain any number of other optional fields
@@ -43,12 +44,12 @@ class Event:
     def __init__(
         self,
         start: datetime.datetime,
-        code: str,
+        concept_id: int,
         value: float | str | None = None,
         **kwargs: Any,
     ) -> None:
         self.start = start
-        self.code = code
+        self.concept_id = concept_id
         self.value = value
 
         for a, b in kwargs.items():
@@ -58,6 +59,18 @@ class Event:
     def __getattr__(self, __name: str) -> Any:
         return None
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if value is not None:
+            self.__dict__[name] = value
+
+    def __lt__(self, other: RawEvent) -> bool:
+        def sort_key(
+            a: RawEvent,
+        ) -> Tuple[datetime.datetime, int]:
+            return (a.start, a.concept_id)
+
+        return sort_key(self) < sort_key(other)
+
     def __eq__(self, other: object) -> bool:
         if other is None:
             return False
@@ -66,16 +79,16 @@ class Event:
             other = {}
             if val.__dict__ is not None:
                 for a, b in val.__dict__.items():
-                    if a not in ("code", "start", "value") and b is not None:
+                    if a not in ("concept_id", "start", "value") and b is not None:
                         other[a] = b
 
-            return (val.code, val.start, val.value, other)
+            return (val.concept_id, val.start, val.value, other)
 
         return bool(get_val(self) == get_val(other))
 
     def __repr__(self) -> str:
         val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
-        return f"Event({val_str})"
+        return f"RawEvent({val_str})"
 
     def __getstate__(self) -> Dict[str, Any]:
         """Make this object pickleable (write)"""
@@ -85,10 +98,3 @@ class Event:
         """Make this object pickleable (read)"""
         for a, b in d.items():
             self.__dict__[a] = b
-
-
-try:
-    # __package__ allows for the case where __name__ is "__main__"
-    __version__ = importlib.metadata.version(__package__ or __name__)
-except importlib.metadata.PackageNotFoundError:
-    __version__ = "0.0.0"

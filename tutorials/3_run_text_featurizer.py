@@ -7,7 +7,7 @@ from typing import Callable, List
 import femr
 from femr.datasets import PatientDatabase
 from femr.featurizers.featurizers_notes import NoteFeaturizer
-from femr.labelers.core import LabeledPatients
+from femr.labelers import LabeledPatients
 from femr.transforms.notes import (
     join_all_notes,
     keep_only_last_n_chars,

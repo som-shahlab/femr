@@ -3,7 +3,7 @@
 import datetime
 from typing import Dict, Optional, Tuple
 
-from femr import Patient
+from femr.datasets import RawPatient
 from femr.extractors.omop import OMOP_BIRTH
 
 
@@ -16,7 +16,7 @@ def _move_date_to_end(
         return d
 
 
-def move_visit_start_to_day_start(patient: Patient) -> Patient:
+def move_visit_start_to_day_start(patient: RawPatient) -> RawPatient:
     """Assign visit start times of 12:00 AM to the start of the day (12:01 AM)
 
     This avoids visits being pushed to the end of the day by e.g., functions that map
@@ -39,7 +39,7 @@ def move_visit_start_to_day_start(patient: Patient) -> Patient:
     return patient
 
 
-def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
+def move_visit_start_to_first_event_start(patient: RawPatient) -> RawPatient:
     """Assign visit start times to equal start time of first event in visit
 
     This function assigns the start time associated with each visit to be
@@ -99,10 +99,10 @@ def move_visit_start_to_first_event_start(patient: Patient) -> Patient:
     return patient
 
 
-def move_to_day_end(patient: Patient) -> Patient:
+def move_to_day_end(patient: RawPatient) -> RawPatient:
     """We assume that everything coded at midnight should actually be moved to the end of the day."""
     for event in patient.events:
-        if event.code == OMOP_BIRTH:
+        if event.concept_id == OMOP_BIRTH:
             continue
 
         event.start = _move_date_to_end(event.start)
@@ -115,11 +115,11 @@ def move_to_day_end(patient: Patient) -> Patient:
     return patient
 
 
-def move_pre_birth(patient: Patient) -> Optional[Patient]:
+def move_pre_birth(patient: RawPatient) -> Optional[RawPatient]:
     """Move all events to after the birth of a patient."""
     birth_date = None
     for event in patient.events:
-        if event.code == OMOP_BIRTH:
+        if event.concept_id == OMOP_BIRTH:
             birth_date = event.start
 
     if birth_date is None:
@@ -145,7 +145,7 @@ def move_pre_birth(patient: Patient) -> Optional[Patient]:
     return patient
 
 
-def move_billing_codes(patient: Patient) -> Patient:
+def move_billing_codes(patient: RawPatient) -> RawPatient:
     """Move billing codes to the end of each visit.
 
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
@@ -166,7 +166,7 @@ def move_billing_codes(patient: Patient) -> Patient:
     for event in patient.events:
         # For events that share the same code/start time, we find the lowest visit ID
         if event.clarity_table in all_billing_codes and event.visit_id is not None:
-            key = (event.start, event.code)
+            key = (event.start, event.concept_id)
             if key not in lowest_visit:
                 lowest_visit[key] = event.visit_id
             else:
@@ -186,7 +186,7 @@ def move_billing_codes(patient: Patient) -> Patient:
     new_events = []
     for event in patient.events:
         if event.clarity_table in all_billing_codes:
-            key = (event.start, event.code)
+            key = (event.start, event.concept_id)
             if event.visit_id != lowest_visit.get(key, None):
                 # Drop this event as we already have it, just with a different visit_id?
                 # We only keep the copy of the event associated with the lowest visit id

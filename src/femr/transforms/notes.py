@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from .. import Event
 from ..featurizers.featurizers_notes import Note
-from ..labelers.core import Label
+from ..labelers import Label
 
 
 def remove_short_notes(notes: List[Note], label: Label, min_char_count: int = 0, **kwargs) -> List[Note]:
@@ -50,7 +50,7 @@ def join_all_notes(notes: List[Note], label: Label, **kwargs) -> List[Note]:
     text: str = " ".join([note[1].value for note in notes])  # type: ignore
     # Give it an arbitrary `start` and `code` (b/c merged notes don't have one)
     last_note_start: datetime.datetime = notes[-1].event.start
-    note = Event(start=last_note_start, code=0, value=text)
+    note = Event(start=last_note_start, code="", value=text)
     return [Note(0, note)]
 
 
