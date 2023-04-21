@@ -31,7 +31,7 @@ CLMBR_BATCHES = os.path.join(TEMP_STORAGE, "clmbr_batches")
 
 if not os.path.exists(CLMBR_BATCHES):
     assert 0 == os.system(
-        f"clmbr_create_batches {CLMBR_BATCHES} --data_path {EXTRACT_LOCATION} --dictionary {DICTIONARY_PATH} --task clmbr --limit_before_date 2017-01-01"
+        f"clmbr_create_batches {CLMBR_BATCHES} --data_path {EXTRACT_LOCATION} --dictionary {DICTIONARY_PATH} --task clmbr"
     )
 
 """

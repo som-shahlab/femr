@@ -824,21 +824,6 @@ class BatchCreator {
                 npy::LoadArrayFromNumpy(event_indices_stream, shape,
                                         fortran_order, current_indices);
 
-                if (false) {
-                    std::cout << "Reading event indices ... " << std::endl;
-                    std::cout << "Shape: ";
-                    for (const auto& a : shape) {
-                        std::cout << a << " ";
-                    }
-                    std::cout << std::endl;
-
-                    std::cout << "Values: ";
-                    for (const auto& a : current_indices) {
-                        std::cout << a << " ";
-                    }
-                    std::cout << std::endl;
-                }
-
                 auto embedding_entry =
                     reader->get_int(p.patient_offset * 2 + 1);
 
