@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import logging
+import math
 import os
 import pickle
 import queue
@@ -11,7 +12,6 @@ import threading
 from typing import Any, List, Optional, Tuple, TypeVar
 
 import jax
-import math
 import msgpack
 import numpy as np
 
@@ -173,20 +173,32 @@ def create_batches() -> None:
     parser.add_argument(
         "--is_hierarchical", default=False, action="store_true", help="Whether to use hierarchical embeddings"
     )
+    parser.add_argument("--seed", default=97, type=int, help="The random seed used for data splitting")
     parser.add_argument(
-        "--seed", default=97, type=int, help="The random seed used for data splitting"
+        "--val_start",
+        default=70,
+        type=int,
+        help="The start of the validation split (and thus end of the train split)",
     )
     parser.add_argument(
-        "--val_start", default=70, type=int, help="The start of the validation split (and thus end of the train split)",
+        "--test_start",
+        default=85,
+        type=int,
+        help="The start of the test split (and thus end of the val split)",
     )
     parser.add_argument(
-        "--test_start", default=85, type=int, help="The start of the test split (and thus end of the val split)",
-    )
-    parser.add_argument(
-        "--batch_size", default=int(1 << 14), type=int, help="The batch size (in events). Must be a power of two",
+        "--batch_size",
+        default=int(1 << 14),
+        type=int,
+        help="The batch size (in events). Must be a power of two",
     )
     parser.add_argument("--note_embedding_data", default=None, type=str, help="Note embedding data when using notes")
-    parser.add_argument("--limit_to_patients_file", default=None, type=str, help="A file containing the only patient_ids to allow in batches")
+    parser.add_argument(
+        "--limit_to_patients_file",
+        default=None,
+        type=str,
+        help="A file containing the only patient_ids to allow in batches",
+    )
     parser.add_argument("--limit_before_date", default=None, type=str, help="Limit the batches to before a given date")
 
     args = parser.parse_args()
@@ -286,7 +298,6 @@ def create_batches() -> None:
         limit_date = datetime.date.fromisoformat(args.limit_before_date)
         task["limit_date"] = limit_date.isoformat()
 
-    
     max_size = math.log2(args.batch_size)
     assert int(max_size) == max_size, "Batch size must be a power of two"
     max_size = int(max_size)
