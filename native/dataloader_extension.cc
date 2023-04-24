@@ -9,6 +9,7 @@ namespace py = pybind11;
 #include <boost/optional/optional_io.hpp>
 #include <cstdint>
 #include <iomanip>
+#include <malloc.h>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <queue>
@@ -714,7 +715,8 @@ class BatchCreator {
    public:
     BatchCreator(PatientDatabase& _data, const json& config,
                  double _token_dropout = 0)
-        : data(_data),
+	: max_size(config["transformer"]["max_size"]),
+          data(_data),
           iter(data.iterator()),
           lookup(config["transformer"]["dictionary"],
                  config["transformer"]["vocab_size"],
@@ -724,7 +726,6 @@ class BatchCreator {
           rng(config["seed"]),
           token_dropout(_token_dropout) {
         uint32_t min_size = config["transformer"]["min_size"];
-        uint32_t max_size = config["transformer"]["max_size"];
 
         age_mean = config["transformer"]["dictionary"]["age_stats"]["mean"];
         age_std = config["transformer"]["dictionary"]["age_stats"]["std"];
@@ -752,6 +753,7 @@ class BatchCreator {
             reader.emplace(note_path.c_str(), true);
         }
     }
+    const uint32_t max_size;
 
     void start_batch(uint32_t max_length) {
         batch_index = 0;
@@ -1332,13 +1334,16 @@ class BatchLoader {
                 double _token_dropout = 0)
         : data(path_to_data, false),
           batch_info(read_file(batch_info_path)),
-          config(batch_info["config"]),
-          batch_creator(data, config, _token_dropout),
-          batches(batch_info["batches"]) {}
+          batch_creator(data, (*batch_info)["config"], _token_dropout),
+          batches((*batch_info)["batches"]) {
+		  batch_info.reset();
+		  malloc_trim(0);
+	  }
 
     size_t get_number_of_batches(const std::string& split) {
         return batches[split].size();
     }
+
     py::dict get_batch(const std::string& split, uint32_t index) {
         {
             py::gil_scoped_release release;
@@ -1359,7 +1364,7 @@ class BatchLoader {
 
             const auto& batch = batch_vector[index];
 
-            uint32_t max_size = config["transformer"]["max_size"];
+            uint32_t max_size = batch_creator.max_size;
             uint32_t size = batch.first;
             uint32_t num_per_batch = 1 << (max_size - size);
             uint32_t batch_size = 1 << size;
@@ -1381,8 +1386,7 @@ class BatchLoader {
 
    private:
     PatientDatabase data;
-    json batch_info;
-    json config;
+    boost::optional<json> batch_info;
     BatchCreator batch_creator;
     std::map<std::string,
              std::vector<std::pair<uint32_t,
