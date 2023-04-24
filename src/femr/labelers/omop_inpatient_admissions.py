@@ -109,9 +109,14 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return end of admission as prediction timm."""
         times: List[datetime.datetime] = []
-        for __, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
+        admission_times = set()
+        for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(discharge_time)
+            # Ignore patients who are readmitted the same day they were discharged b/c of data leakage
+            if prediction_time.replace(hour=0, minute=0, second=0, microsecond=0) in admission_times:
+                continue
             times.append(prediction_time)
+            admission_times.add(admission_time.replace(hour=0, minute=0, second=0, microsecond=0))
         times = sorted(list(set(times)))
         return times
 
@@ -143,11 +148,28 @@ class InpatientLongAdmissionLabeler(Labeler):
         self.prediction_time_adjustment_func = prediction_time_adjustment_func
 
     def label(self, patient: Patient) -> List[Label]:
-        """Label all admissions with admission length > `self.long_time`"""
+        """
+        Label all admissions with admission length > `self.long_time`
+        Exclude admission if time of discharge or death < prediction time
+        """
         labels: List[Label] = []
         for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             is_long_admission: bool = (discharge_time - admission_time) >= self.long_time
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(admission_time)
+
+            # exclude if discharge or death occurred before prediction time
+            death_concepts: Set[str] = map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts())
+            death_times: List[datetime.datetime] = []
+            for e in patient.events:
+                if e.code in death_concepts:
+                    death_times.append(e.start)
+
+            if prediction_time > discharge_time:
+                continue
+
+            if death_times and prediction_time > min(death_times):
+                continue
+
             labels.append(Label(prediction_time, is_long_admission))
         return labels
 
@@ -185,3 +207,46 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
             if e.code in self.outcome_codes:
                 times.append(e.start)
         return times
+
+    def label(self, patient: Patient) -> List[Label]:
+        """
+        Label all inpatient mortality with prediction_time <= death_time <= discharge
+        Exclude admission if time of discharge or death < prediction time
+        """
+        visits: List[Event] = self.get_visit_events(patient)
+        prediction_start_times: List[datetime.datetime] = [
+            self.visit_start_adjust_func(visit.start) for visit in visits
+        ]
+        prediction_end_times: List[datetime.datetime] = [self.visit_end_adjust_func(visit.end) for visit in visits]
+        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        death_time = min(outcome_times) if outcome_times else None
+        results: List[Label] = []
+
+        # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
+        for prediction_start, prediction_end in zip(prediction_start_times, prediction_end_times):
+            # exclude if prediction time > discharge time
+            if prediction_start > prediction_end:
+                continue
+
+            # exclude if deathtime > discharge time
+            if death_time is not None and prediction_start > death_time:
+                continue
+
+            # TRUE if an event occurs within the visit
+            is_outcome_occurs_in_time_horizon: bool = (
+                death_time is not None
+                and (
+                    # outcome occurs after visit starts
+                    prediction_start
+                    <= death_time
+                )
+                and (
+                    # outcome occurs before visit ends
+                    death_time
+                    <= prediction_end
+                )
+            )
+
+            results.append(Label(time=prediction_start, value=is_outcome_occurs_in_time_horizon))
+
+        return results
