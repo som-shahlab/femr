@@ -279,14 +279,14 @@ def train_model() -> None:
     )
     def compute_loss(params, non_fit_params, rng, config, batch, requires_logits=False):
         total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
-        loss, logits = model.apply(total_params, rng, config, batch, is_training=False)
+        loss, logits = model.apply(total_params, rng, config, batch, is_training=False)[:2]
         if requires_logits:
             return loss, logits
         else:
             return loss, None
 
     def compute_total_loss(split, params, non_fit_params, rng, config):
-        num_to_get = min(500, loader.get_number_of_batches(split))
+        num_to_get = min(200, loader.get_number_of_batches(split))
         total_loss = 0
         total_indices = 0
 
@@ -355,7 +355,7 @@ def train_model() -> None:
     @functools.partial(jax.value_and_grad)
     def loss_value_and_grad(params, non_fit_params, loss_scale, rng, config, batch):
         total_params = params | hk.data_structures.to_mutable_dict(non_fit_params)
-        loss, _ = model.apply(total_params, rng, config, batch, is_training=True)
+        loss, _ = model.apply(total_params, rng, config, batch, is_training=True)[:2]
 
         assert loss.dtype == jnp.float32
 
