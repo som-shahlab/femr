@@ -315,7 +315,7 @@ void register_datasets_extension(py::module& root) {
     py::class_<PatientDatabaseWrapper> database_binding(m, "PatientDatabase");
 
     database_binding
-        .def(py::init<const char*, bool, bool>(), py::arg("filename"),
+        .def(py::init<std::string, bool, bool>(), py::arg("filename"),
              py::arg("read_all") = false,
              py::arg("read_all_unique_text") = false)
         .def("__len__",
