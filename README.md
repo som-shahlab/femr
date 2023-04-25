@@ -51,7 +51,7 @@ pip install -e .
 
 ### Special note for NERO users
 
-As Nero does not have internet access, you must run the following before running the code below.
+As Nero does not have internet access, you must run the following before running the code above.
 
 ```bash
 export DISTDIR=/local-scratch/nigam/distdir
