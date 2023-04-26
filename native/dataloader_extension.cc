@@ -9,7 +9,6 @@ namespace py = pybind11;
 #include <boost/optional/optional_io.hpp>
 #include <cstdint>
 #include <iomanip>
-#include <malloc.h>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <queue>
@@ -25,6 +24,7 @@ namespace py = pybind11;
 #include "database.hh"
 #include "flatmap.hh"
 #include "npy.hh"
+#include "malloc_trim.hh"
 #include "parse_utils.hh"
 #include "pybind11/eigen/tensor.h"
 #include "survival.hh"
@@ -1341,7 +1341,7 @@ class BatchLoader {
           batch_creator(data, (*batch_info)["config"], _token_dropout),
           batches((*batch_info)["batches"]) {
 		  batch_info.reset();
-		  malloc_trim(0);
+		  malloc_trim_wrapper();
 	  }
 
     size_t get_number_of_batches(const std::string& split) {

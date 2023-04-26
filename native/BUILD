@@ -78,6 +78,7 @@ pybind_library(
         "dataloader_extension.cc",
     ],
     deps=[
+        ":malloc_trim",
         ":create_dictionary",
         ":create_survival_dictionary",
         ":constdb",
@@ -458,6 +459,15 @@ cc_library(
     deps=[
         ":flatmap",
 	":database",
+    ],
+)
+
+cc_library(
+    name="malloc_trim",
+    hdrs=[
+        "malloc_trim.hh",
+    ],
+    deps=[
     ],
 )
 
