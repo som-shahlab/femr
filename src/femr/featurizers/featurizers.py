@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict, deque
-from typing import Deque, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import Callable, Deque, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
-from .. import Patient
+from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from ..labelers import Label
 from . import OnlineStatistics
@@ -159,6 +159,7 @@ class CountFeaturizer(Featurizer):
         is_ontology_expansion: bool = False,
         excluded_codes: Iterable[str] = [],
         included_codes: Iterable[str] = [],
+        excluded_event_filter: Optional[Callable[[Event], bool]] = None,
         time_bins: Optional[List[datetime.timedelta]] = None,
         is_keep_only_none_valued_events: bool = True,
     ):
@@ -208,6 +209,7 @@ class CountFeaturizer(Featurizer):
         self.is_ontology_expansion: bool = is_ontology_expansion
         self.included_codes: Set[str] = set(included_codes) if not isinstance(included_codes, set) else included_codes
         self.excluded_codes: Set[str] = set(excluded_codes) if not isinstance(excluded_codes, set) else excluded_codes
+        self.excluded_event_filter = excluded_event_filter
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
         self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
 
@@ -238,6 +240,9 @@ class CountFeaturizer(Featurizer):
             if self.is_keep_only_none_valued_events and event.value is not None:
                 # If we only want to keep events with no value, then skip this event
                 # because it has a non-None value
+                continue
+            # Check for excluded events
+            if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                 continue
             # If we haven't seen this code before, then add it to our list of included codes
             if event.code not in self.included_codes:
@@ -296,6 +301,8 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
+                if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                    continue
                 while event.start > labels[label_idx].time:
                     label_idx += 1
                     # Create all features for label at index `label_idx`

@@ -17,7 +17,7 @@ from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import create_database, get_femr_code, load_from_pkl, run_test_locally, save_to_pkl
+from tools import create_database, get_femr_code, load_from_pkl, run_test_locally, save_to_pkl  # type: ignore
 
 
 def _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient):
@@ -124,6 +124,41 @@ def test_count_featurizer(tmp_path: pathlib.Path):
         3,
     )
     _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+
+
+def test_count_featurizer_exclude_filter(tmp_path: pathlib.Path):
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = femr.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
+
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
+
+    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    labels = labeler.label(patient)
+
+    count_nonempty_columns = lambda lol: len([x for x in lol if x])  # lol -> list of lists
+
+    # Test filtering all codes
+    featurizer = CountFeaturizer(excluded_event_filter=lambda _: True, time_bins=[datetime.timedelta(days=0)])
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert count_nonempty_columns(patient_features) == 0
+
+    # Test filtering no codes
+    featurizer = CountFeaturizer(excluded_event_filter=lambda _: False, time_bins=[datetime.timedelta(days=0)])
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert featurizer.get_num_columns() == 3  # Same behavior as previous test
+
+    # TODO: Add test that simulates expected behavior
 
 
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
