@@ -321,12 +321,15 @@ def test_mortality(tmp_path: pathlib.Path):
             (event((2001, 1, 1), "Visit/IP", end=datetime.datetime(2001, 1, 11), omop_table='visit_occurrence'), False),  # admission
             (event((2002, 1, 1), "Visit/IP", end=datetime.datetime(2002, 1, 11), omop_table='visit_occurrence'), True),  # admission
             (event((2002, 1, 10), outcome_code), "skip"),  # event
-            (event((2003, 1, 1), "Visit/IP", end=datetime.datetime(2003, 1, 11), omop_table='visit_occurrence'), "skip"),  # admission
+            (event((2003, 1, 1), "Visit/IP", end=datetime.datetime(2003, 1, 11), omop_table='visit_occurrence'), "skip"),
+            # admission
             # fmt: on
         ]
         assert labeler.outcome_codes == {"Condition Type/OMOP4822053", "Death Type/OMOP generated", "DEATH_CHILD"}
         true_prediction_times: List[datetime.datetime] = [
-            move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
+            move_datetime_to_end_of_day(x[0].start)
+            for x in events_with_labels
+            if isinstance(x[1], bool) or x[1] is None
         ]
         run_test_for_labeler(
             labeler,
