@@ -105,9 +105,13 @@ class LabeledPatientsTask : public Task {
         labeler_type = config["labeler_type"];
         for (json label : config["labels"]) {
             uint64_t patient_id = label[0];
-            uint32_t patient_offset = *data.get_patient_offset(patient_id);
+            boost::optional<uint32_t> possible_offset = data.get_patient_offset(patient_id);
+            if (!possible_offset) {
+                throw std::runtime_error(absl::StrCat("Labeled patient ", patient_id, " could not be found in extract"));
+            }
+            uint32_t patient_offset = *possible_offset;
             uint32_t age_in_minutes = label[1];
-            if (patient_whitelist.count(patient_offset) == 0) {
+            if (patient_whitelist.size() > 0 && patient_whitelist.count(patient_offset) == 0) {
                 continue;
             }
             json value = label[2];
@@ -133,7 +137,7 @@ class LabeledPatientsTask : public Task {
 
         current_patient_iter = labels.find(p.patient_offset);
         if (current_patient_iter == std::end(labels)) {
-            throw std::runtime_error("Trying to process an invalid patient");
+            throw std::runtime_error(absl::StrCat("Trying to process an invalid patient ", p.patient_offset));
         }
 
         current_label_iter = std::begin(current_patient_iter->second);
