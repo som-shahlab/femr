@@ -4,7 +4,7 @@ import datetime
 from collections import defaultdict, deque
 from typing import Callable, Deque, Dict, Iterator, List, Optional, Tuple, Union
 
-from .. import Patient
+from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from ..labelers.core import Label
 from . import OnlineStatistics
@@ -157,8 +157,8 @@ class CountFeaturizer(Featurizer):
     def __init__(
         self,
         is_ontology_expansion: bool = False,
-        exclusion_criteria: Union[set, Callable, None] = None,
-        exact_codes_set: Union[set[int], None] = None,
+        excluded_codes: Union[set, Callable[[Event], bool], None] = None,
+        included_codes: Union[set, None] = None,
         time_bins: Optional[List[datetime.timedelta]] = None,
         is_keep_only_none_valued_events: bool = True,
     ):
@@ -172,9 +172,9 @@ class CountFeaturizer(Featurizer):
                     Where "->" denotes "is a parent of" relationship (i.e. A is a parent of B, B is a parent of C).
                     Then if we see 2 occurrences of Code "C", we count 2 occurrences of Code "B" and Code "A".
 
-            exclusion_criteria: Criteria for codes that we will ignore. Defaults to no criteria
+            excluded_codes (set[int], optional): A set of femr codes that we will ignore. Can pass function to execute.
 
-            exact_codes_set: Exact set of unique event codes that we will include in our count.
+            included_codes (List[int], optional): A set of all unique event codes that we will include in our count.
 
             time_bins (Optional[List[datetime.timedelta]], optional): Group counts into buckets.
                 Starts from the label time, and works backwards according to each successive value in `time_bins`.
@@ -205,42 +205,37 @@ class CountFeaturizer(Featurizer):
                 Setting this to FALSE will include all events, including those with values (e.g. lab values),
                 which will make this run slower.
         """
-        # Avoids error _if_ these variables are ever mutated
-        # I.e. https://stackoverflow.com/a/26320917
-        if exact_codes_set is None:
-            exact_codes_set = set()
-        if exclusion_criteria is None:
-            exclusion_criteria = set()
-
+        if included_codes is None:
+            included_codes = set()
+        if excluded_codes is None:
+            excluded_codes = set()
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.exact_codes_set = exact_codes_set
-        self.exclusion_criteria = exclusion_criteria
+        self.included_codes: set = set(included_codes)
+        self.excluded_codes: Union[set, Callable] = (
+            set(excluded_codes) if not callable(excluded_codes) else excluded_codes
+        )
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
         self.is_keep_only_none_valued_events: bool = is_keep_only_none_valued_events
 
         # Map code to its feature's corresponding column index
         # NOTE: Must be sorted to preserve set ordering across instantiations
-        self.code_to_column_index: Dict[int, int] = {code: idx for idx, code in enumerate(sorted(self.exact_codes_set))}
+        self.code_to_column_index: Dict[int, int] = {code: idx for idx, code in enumerate(sorted(self.included_codes))}
 
         if self.time_bins is not None:
             assert len(set(self.time_bins)) == len(
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
-    def event_is_excluded(self, event) -> bool:
-        """Check if `event` should be included"""
-        if isinstance(self.exclusion_criteria, set):
-            return event.code in self.exclusion_criteria
-        elif callable(self.exclusion_criteria):
-            try:
-                return self.exclusion_criteria(event)
-            except Exception as e:
-                raise ValueError(f"Runtime error when checking event {event}") from e
+    def include_event(self, event) -> bool:
+        if callable(self.excluded_codes):
+            return not self.excluded_codes(event)
+        elif event.code in self.included_codes:
+            return True
         else:
-            raise ValueError(f"Invalid type for `self.exclusion_criteria`: {type(self.exclusion_criteria)}")
+            return event.code not in self.excluded_codes
 
     def get_codes(self, event, ontology: extension_datasets.Ontology) -> Iterator[int]:
-        if not self.event_is_excluded(event):
+        if self.include_event(event):
             if self.is_ontology_expansion:
                 for subcode in ontology.get_all_parents(event.code):
                     yield subcode
@@ -259,10 +254,10 @@ class CountFeaturizer(Featurizer):
                 # because it has a non-None value
                 continue
             # If we haven't seen this code before, then add it to our list of included codes
-            if event.code not in self.exact_codes_set:
+            if event.code not in self.included_codes:
                 # NOTE: Ordering of below two lines is important if want column indexes to start at 0
                 self.code_to_column_index[event.code] = len(self.code_to_column_index)
-                self.exact_codes_set.add(event.code)
+                self.included_codes.add(event.code)
 
     @classmethod
     def aggregate_preprocessed_featurizers(  # type: ignore[override]
@@ -278,13 +273,13 @@ class CountFeaturizer(Featurizer):
             raise ValueError("You must pass in at least one featurizer to `aggregate_preprocessed_featurizers`")
 
         # Aggregating count featurizers
-        all_codes = {c for f in featurizers for c in f.exact_codes_set}
+        all_codes: set[int] = {c for f in featurizers for c in f.included_codes}
 
         template_featurizer: CountFeaturizer = featurizers[0]
         new_featurizer: CountFeaturizer = CountFeaturizer(
             is_ontology_expansion=template_featurizer.is_ontology_expansion,
-            exclusion_criteria=template_featurizer.exclusion_criteria,
-            exact_codes_set=all_codes,
+            excluded_codes=template_featurizer.excluded_codes,
+            included_codes=all_codes,
             time_bins=template_featurizer.time_bins,
             is_keep_only_none_valued_events=template_featurizer.is_keep_only_none_valued_events,
         )
@@ -292,9 +287,9 @@ class CountFeaturizer(Featurizer):
 
     def get_num_columns(self) -> int:
         if self.time_bins is None:
-            return len(self.exact_codes_set)
+            return len(self.included_codes)
         else:
-            return len(self.time_bins) * len(self.exact_codes_set)
+            return len(self.time_bins) * len(self.included_codes)
 
     def featurize(
         self,
@@ -335,7 +330,7 @@ class CountFeaturizer(Featurizer):
                 for code in self.get_codes(event, ontology):
                     # Increment the count for this event's code (plus any parent codes
                     # if we are doing ontology expansion, as handled in `self.get_codes`)
-                    if code in self.exact_codes_set:
+                    if code in self.included_codes:
                         code_counter[code] += 1
 
             if label_idx < len(labels):
@@ -373,7 +368,7 @@ class CountFeaturizer(Featurizer):
                     all_columns.append(
                         [
                             ColumnValue(
-                                self.code_to_column_index[code] + i * len(self.exact_codes_set),
+                                self.code_to_column_index[code] + i * len(self.included_codes),
                                 count,
                             )
                             for i in range(len(self.time_bins))
@@ -390,7 +385,7 @@ class CountFeaturizer(Featurizer):
                 for code in self.get_codes(event, ontology):
                     # Increment the count for this event's code (plus any parent codes
                     # if we are doing ontology expansion, as handled in `self.get_codes`)
-                    if code in self.exact_codes_set:
+                    if code in self.included_codes:
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1
 
@@ -405,7 +400,7 @@ class CountFeaturizer(Featurizer):
                     all_columns.append(
                         [
                             ColumnValue(
-                                self.code_to_column_index[code] + i * len(self.exact_codes_set),
+                                self.code_to_column_index[code] + i * len(self.included_codes),
                                 count,
                             )
                             for i in range(len(self.time_bins))
@@ -420,4 +415,4 @@ class CountFeaturizer(Featurizer):
         return True
 
     def __repr__(self) -> str:
-        return f"CountFeaturizer(number of included codes={len(self.exact_codes_set)})"
+        return f"CountFeaturizer(number of included codes={len(self.included_codes)})"

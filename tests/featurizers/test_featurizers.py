@@ -17,7 +17,7 @@ from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import create_database, get_femr_code, load_from_pkl, run_test_locally, save_to_pkl
+from tools import create_database, get_femr_code, load_from_pkl, run_test_locally, save_to_pkl  # type: ignore
 
 
 def _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient):
@@ -124,9 +124,9 @@ def test_count_featurizer(tmp_path: pathlib.Path):
         3,
     )
     _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
-    patient: femr.Patient = cast(femr.Patient, database[0])
+
     labels = labeler.label(patient)
-    featurizer = CountFeaturizer(exclusion_criteria={get_femr_code(ontology, 2)})
+    featurizer = CountFeaturizer(excluded_codes={get_femr_code(ontology, 2)})
     featurizer.preprocess(patient, labels)
 
     assert featurizer.get_num_columns() == 2, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
@@ -147,10 +147,53 @@ def test_count_featurizer_filter(tmp_path: pathlib.Path):
 
     patient: femr.Patient = cast(femr.Patient, database[0])
     labels = labeler.label(patient)
-    featurizer = CountFeaturizer(exclusion_criteria={get_femr_code(ontology, 2)})
+    featurizer = CountFeaturizer(excluded_codes={get_femr_code(ontology, 2)})
     featurizer.preprocess(patient, labels)
 
     assert featurizer.get_num_columns() == 2, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+
+
+def test_count_featurizer_exclude_filter(tmp_path: pathlib.Path):
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = femr.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
+
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
+
+    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    labels = labeler.label(patient)
+
+    count_nonempty_columns = lambda lol: len([x for x in lol if x])  # lol -> list of lists
+
+    # Test filtering _all_ codes
+    featurizer = CountFeaturizer(excluded_codes=lambda _: True, time_bins=[datetime.timedelta(days=0)])
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert count_nonempty_columns(patient_features) == 0
+
+    # Test filtering no codes
+    featurizer = CountFeaturizer(excluded_codes=lambda _: False, time_bins=[datetime.timedelta(days=0)])
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert featurizer.get_num_columns() == 3  # Same test as previous
+
+    # Test filtering just some codes
+    # TODO: Does this test even make sense?
+    featurizer = CountFeaturizer(
+        excluded_codes=lambda e: e.start > datetime.datetime(2015, 1, 1), time_bins=[datetime.timedelta(days=0)]
+    )
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert count_nonempty_columns(patient_features) == 2
 
 
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
@@ -181,9 +224,9 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     featurizer.preprocess(patient, labels)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
-    exact_codes_set = set([e.code for e in patient.events if e.value is None])
+    included_codes = set([e.code for e in patient.events if e.value is None])
 
-    assert featurizer.exact_codes_set == exact_codes_set, f"featurizer.exact_codes_set = {featurizer.exact_codes_set}"
+    assert featurizer.included_codes == included_codes, f"featurizer.included_codes = {featurizer.included_codes}"
     assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
     assert patient_features[0] == [
