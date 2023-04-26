@@ -110,7 +110,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             patients_to_labels (Dict[int, List[Label]]): [key] = patient ID, [value] = labels for this patient
             labeler_type (LabelType): Type of labeler
         """
-        self.patients_to_labels: Dict[int, List[Label]] = {k: v for k, v in patients_to_labels.items() if len(v) > 0}
+        self.patients_to_labels: Dict[int, List[Label]] = patients_to_labels
         self.labeler_type: LabelType = labeler_type
 
     def get_labels_from_patient_idx(self, idx: int) -> List[Label]:
