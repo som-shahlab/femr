@@ -312,41 +312,28 @@ class DummyMortalityOntology:
 def test_mortality(tmp_path: pathlib.Path):
     ontology = DummyMortalityOntology()
     labeler = InpatientMortalityLabeler(ontology)  # type: ignore
-    events_with_labels: EventsWithLabels = [
-        # fmt: off
-        #
-        # test different outcome codes
-        (event((2001, 1, 1), "Visit/IP", end=datetime.datetime(2001, 1, 11), omop_table='visit_occurrence'), True),  # admission
-        (event((2001, 1, 10), "Death Type/OMOP generated"), "skip"),  # event
-        (event((2002, 1, 1), "Visit/IP", end=datetime.datetime(2002, 1, 11), omop_table='visit_occurrence'), True),  # admission
-        (event((2002, 1, 10), "DEATH_CHILD"), "skip"),  # event
-        (event((2003, 1, 1), "Visit/IP", end=datetime.datetime(2003, 1, 11), omop_table='visit_occurrence'), True),  # admission
-        (event((2003, 1, 10), "Condition Type/OMOP4822053"), "skip"),  # event
-        #
-        # not outcome
-        (event((2004, 1, 1), "Visit/IP", end=datetime.datetime(2004, 1, 10), omop_table='visit_occurrence'), False),  # admission
-        (event((2004, 1, 9), 0), "skip"),
-        #
-        # outcome outside of visit
-        (event((2005, 1, 30), "Visit/IP", end=datetime.datetime(2005, 2, 10), omop_table='visit_occurrence'), False),  # admission
-        (event((2005, 2, 10, 1), "Death Type/OMOP generated"), "skip"),
-        (event((2006, 1, 30), "Visit/IP", end=datetime.datetime(2006, 2, 10), omop_table='visit_occurrence'), False),  # admission
-        (event((2006, 1, 29, 1), "Death Type/OMOP generated"), "skip"),
-        #
-        # NOTE: No censoring since we have the end of the admission
-        (event((2006, 1, 2), "Visit/IP", end=datetime.datetime(2006, 5, 10), omop_table='visit_occurrence'), False),
-        # fmt: on
-    ]
-    assert labeler.outcome_codes == {"Condition Type/OMOP4822053", "Death Type/OMOP generated", "DEATH_CHILD"}
-    true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
-    ]
-    run_test_for_labeler(
-        labeler,
-        events_with_labels,
-        true_prediction_times=true_prediction_times,
-        help_text="test_mortality",
-    )
+    for outcome_code in ["Death Type/OMOP generated", "DEATH_CHILD", "Condition Type/OMOP4822053"]:
+        events_with_labels: EventsWithLabels = [
+            # fmt: off
+            #
+            # test different outcome codes
+            (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 1), omop_table='visit_occurrence'), "skip"),  # admission
+            (event((2001, 1, 1), "Visit/IP", end=datetime.datetime(2001, 1, 11), omop_table='visit_occurrence'), False),  # admission
+            (event((2002, 1, 1), "Visit/IP", end=datetime.datetime(2002, 1, 11), omop_table='visit_occurrence'), True),  # admission
+            (event((2002, 1, 10), outcome_code), "skip"),  # event
+            (event((2003, 1, 1), "Visit/IP", end=datetime.datetime(2003, 1, 11), omop_table='visit_occurrence'), "skip"),  # admission
+            # fmt: on
+        ]
+        assert labeler.outcome_codes == {"Condition Type/OMOP4822053", "Death Type/OMOP generated", "DEATH_CHILD"}
+        true_prediction_times: List[datetime.datetime] = [
+            move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
+        ]
+        run_test_for_labeler(
+            labeler,
+            events_with_labels,
+            true_prediction_times=true_prediction_times,
+            help_text="test_mortality",
+        )
 
 
 #############################################

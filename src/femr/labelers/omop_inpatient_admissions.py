@@ -228,7 +228,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
         for prediction_start, prediction_end in zip(prediction_start_times, prediction_end_times):
             # exclude if prediction time > discharge time
-            if prediction_start > prediction_end:
+            if prediction_start >= prediction_end:
                 continue
 
             # exclude if deathtime > discharge time
