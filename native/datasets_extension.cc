@@ -366,8 +366,12 @@ void register_datasets_extension(py::module& root) {
         .def("compute_split",
              [](PatientDatabaseWrapper& self, uint32_t seed,
                 uint64_t patient_id) {
-                 return self.compute_split(
-                     seed, *self.get_patient_offset(patient_id));
+	         auto potential_offset = self.get_patient_offset(patient_id);
+		 if (!potential_offset) {
+                    throw py::index_error();
+		 }
+
+                 return self.compute_split(seed, *potential_offset);
              })
         .def("version_id", &PatientDatabaseWrapper::version_id)
         .def("database_id", &PatientDatabaseWrapper::database_id)
