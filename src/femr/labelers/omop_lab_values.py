@@ -139,6 +139,7 @@ class ThrombocytopeniaLabValueLabeler(InpatientLabValueLabeler):
     original_omop_concept_codes = [
         "LOINC/LP393218-5",
         "LOINC/LG32892-8",
+        "LOINC/777-3",
     ]
 
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
@@ -162,6 +163,8 @@ class HyperkalemiaLabValueLabeler(InpatientLabValueLabeler):
         "LOINC/LG7931-1",
         "LOINC/LP386618-5",
         "LOINC/LG10990-6",
+        "LOINC/6298-4",
+        "LOINC/2823-3",
     ]
 
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
@@ -202,6 +205,8 @@ class HypoglycemiaLabValueLabeler(InpatientLabValueLabeler):
     original_omop_concept_codes = [
         "SNOMED/33747003",
         "LOINC/LP416145-3",
+        "LOINC/14749-6",
+        "LOINC/15074-8",
     ]
 
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
@@ -235,9 +240,7 @@ class HyponatremiaLabValueLabeler(InpatientLabValueLabeler):
     """lab-based definition for hyponatremia based on blood sodium concentration (mmol/L).
     Thresholds: mild (<=135),moderate(<130),severe(<125), and abnormal range."""
 
-    original_omop_concept_codes = [
-        "LOINC/LG11363-5",
-    ]
+    original_omop_concept_codes = ["LOINC/LG11363-5", "LOINC/2951-2", "LOINC/2947-0"]
 
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
         if raw_value.lower() in ["normal", "adequate"]:
@@ -276,6 +279,8 @@ class AnemiaLabValueLabeler(InpatientLabValueLabeler):
                 # Original OMOP concept ID: 8840
                 # NOTE: This weird *10 / 100 is how Lawrence did it
                 value = value / 100
+            elif unit.startswith("g/l"):
+                value = value
             else:
                 raise ValueError(f"Unknown unit: {unit}")
         else:
