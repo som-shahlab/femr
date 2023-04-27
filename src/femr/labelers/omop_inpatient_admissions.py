@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Any, Callable, List, Set, Optional
+from typing import Any, Callable, List, Optional, Set
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -145,7 +145,9 @@ class InpatientLongAdmissionLabeler(Labeler):
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.long_time: datetime.timedelta = long_time
-        self.prediction_time_adjustment_func = prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+        self.prediction_time_adjustment_func = (
+            prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+        )
 
     def label(self, patient: Patient) -> List[Label]:
         """

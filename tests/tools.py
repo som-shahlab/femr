@@ -187,7 +187,7 @@ def assert_labels_are_accurate(
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
     assert patient_id in labeled_patients, f"patient_id={patient_id} not in labeled_patients"
     generated_labels: List[Label] = labeled_patients[patient_id]
-    
+
     # Check that length of lists of labels are the same
     assert len(generated_labels) == len(
         true_labels

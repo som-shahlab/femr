@@ -3,16 +3,20 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
-import piton
 import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, TimeHorizon
-from piton.labelers.omop import Harutyunyan_DecompensationLabeler, Harutyunyan_MortalityLabeler, Harutyunyan_LengthOfStayLabeler
-
 import pytest
+
+import piton
+from piton.labelers.core import Label, LabeledPatients, TimeHorizon
+from piton.labelers.omop import (
+    Harutyunyan_DecompensationLabeler,
+    Harutyunyan_LengthOfStayLabeler,
+    Harutyunyan_MortalityLabeler,
+)
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import EventsWithLabels, event, run_test_locally, run_test_for_labeler, assert_labels_are_accurate
+from tools import EventsWithLabels, assert_labels_are_accurate, event, run_test_for_labeler, run_test_locally
 
 
 class DummyOntology:
@@ -26,11 +30,12 @@ class DummyOntology:
 
     def get_children(self, *args) -> List[int]:
         return []
-    
+
+
 def test_Harutyunyan_DecompensationLabeler() -> None:
     """Hourly binary prediction task on whether the patient dies in the next 24 hours."""
     ontology = DummyOntology()
-    labeler = Harutyunyan_DecompensationLabeler(ontology) # type: ignore
+    labeler = Harutyunyan_DecompensationLabeler(ontology)  # type: ignore
     events_with_labels: EventsWithLabels = [
         # fmt: off
         # exclude ICU admissions < 4 hours
@@ -48,17 +53,19 @@ def test_Harutyunyan_DecompensationLabeler() -> None:
         # fmt: on
     ]
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
-    true_labels: List[Tuple[datetime.datetime, bool]] = [(events_with_labels[4][0].start + datetime.timedelta(hours=x), False) for x in range(4, 20)] + \
-        [(events_with_labels[4][0].start + datetime.timedelta(hours=x), True) for x in range(20, 44)] + \
-        [(events_with_labels[6][0].start + datetime.timedelta(hours=x), False) for x in range(4, 44)]
-    labeled_patients: LabeledPatients = labeler.apply(patients=[ patient ])
-    
+    true_labels: List[Tuple[datetime.datetime, bool]] = (
+        [(events_with_labels[4][0].start + datetime.timedelta(hours=x), False) for x in range(4, 20)]
+        + [(events_with_labels[4][0].start + datetime.timedelta(hours=x), True) for x in range(20, 44)]
+        + [(events_with_labels[6][0].start + datetime.timedelta(hours=x), False) for x in range(4, 44)]
+    )
+    labeled_patients: LabeledPatients = labeler.apply(patients=[patient])
+
     # Check accuracy of Labels
     assert_labels_are_accurate(
         labeled_patients,
         patient.patient_id,
         true_labels,
-        help_text='| test_Harutyunyan_DecompensationLabeler',
+        help_text="| test_Harutyunyan_DecompensationLabeler",
     )
 
     with pytest.raises(RuntimeError):
@@ -71,11 +78,12 @@ def test_Harutyunyan_DecompensationLabeler() -> None:
         ]
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
-        
+
+
 def test_Harutyunyan_MortalityLabeler() -> None:
     # TODO
     ontology = DummyOntology()
-    labeler = Harutyunyan_MortalityLabeler(ontology) # type: ignore
+    labeler = Harutyunyan_MortalityLabeler(ontology)  # type: ignore
     events_with_labels: EventsWithLabels = [
         # fmt: off
         # exclude ICU admissions < 48 hours
@@ -105,7 +113,7 @@ def test_Harutyunyan_MortalityLabeler() -> None:
     true_prediction_times: List[datetime.datetime] = [
         labeler.visit_start_adjust_func(x[0].start) for x in events_with_labels if isinstance(x[1], bool)
     ]
-    true_outcome_times: List[datetime.datetime] = [ x[0].start for x in events_with_labels if x[0].code == 3 ]
+    true_outcome_times: List[datetime.datetime] = [x[0].start for x in events_with_labels if x[0].code == 3]
     run_test_for_labeler(
         labeler,
         events_with_labels,
@@ -125,9 +133,10 @@ def test_Harutyunyan_MortalityLabeler() -> None:
         patient = piton.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
 
+
 def test_Harutyunyan_LengthOfStayLabeler() -> None:
     ontology = DummyOntology()
-    labeler = Harutyunyan_LengthOfStayLabeler(ontology) # type: ignore
+    labeler = Harutyunyan_LengthOfStayLabeler(ontology)  # type: ignore
     events_with_labels: EventsWithLabels = [
         # fmt: off
         # exclude ICU admissions < 4 hours
@@ -145,17 +154,19 @@ def test_Harutyunyan_LengthOfStayLabeler() -> None:
         # fmt: on
     ]
     patient = piton.Patient(0, [x[0] for x in events_with_labels])
-    true_labels: List[Tuple[datetime.datetime, bool]] = [(events_with_labels[4][0].start + datetime.timedelta(hours=x), False) for x in range(4, 20)] + \
-        [(events_with_labels[4][0].start + datetime.timedelta(hours=x), True) for x in range(20, 44)] + \
-        [(events_with_labels[6][0].start + datetime.timedelta(hours=x), False) for x in range(4, 44)]
-    labeled_patients: LabeledPatients = labeler.apply(patients=[ patient ])
-    
+    true_labels: List[Tuple[datetime.datetime, bool]] = (
+        [(events_with_labels[4][0].start + datetime.timedelta(hours=x), False) for x in range(4, 20)]
+        + [(events_with_labels[4][0].start + datetime.timedelta(hours=x), True) for x in range(20, 44)]
+        + [(events_with_labels[6][0].start + datetime.timedelta(hours=x), False) for x in range(4, 44)]
+    )
+    labeled_patients: LabeledPatients = labeler.apply(patients=[patient])
+
     # Check accuracy of Labels
     assert_labels_are_accurate(
         labeled_patients,
         patient.patient_id,
         true_labels,
-        help_text='| test_Harutyunyan_LengthOfStayLabeler',
+        help_text="| test_Harutyunyan_LengthOfStayLabeler",
     )
 
     with pytest.raises(RuntimeError):

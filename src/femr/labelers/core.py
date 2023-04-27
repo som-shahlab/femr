@@ -171,19 +171,18 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         )
 
     def get_num_patients(self, is_include_empty_labels: bool = False) -> int:
-        """Return the total number of patients. Defaults to only patients with at least one label. 
-            If `is_include_empty_labels = True`, include patients with zero associated labels.
+        """Return the total number of patients. Defaults to only patients with at least one label.
+        If `is_include_empty_labels = True`, include patients with zero associated labels.
         """
         if is_include_empty_labels:
             return len(self)
-        return len({ key: val for key, val in self.get_patients_to_labels().items() if len(val) > 0 })
+        return len({key: val for key, val in self.get_patients_to_labels().items() if len(val) > 0})
 
     def get_patients_with_labels(self) -> List[int]:
-        """Return the IDs of patients with at least one label.
-        """
-        patient_ids: List[int] = [ key for key, val in self.get_patients_to_labels().items() if len(val) > 0  ]
+        """Return the IDs of patients with at least one label."""
+        patient_ids: List[int] = [key for key, val in self.get_patients_to_labels().items() if len(val) > 0]
         return patient_ids
-    
+
     def get_patients_with_label_values(self, values: List[Any]) -> List[int]:
         """Return the IDs of patients with at least one label whose value is in `values`."""
         patient_ids: set = set()
@@ -475,7 +474,7 @@ class TimeHorizonEventLabeler(Labeler):
 
     def is_apply_censoring(self) -> bool:
         """If TRUE, then a censored patient with no outcome -> IGNORED.
-            If FALSE, then a censored patient with no outcome -> FALSE.
+        If FALSE, then a censored patient with no outcome -> FALSE.
         """
         return True
 
@@ -510,7 +509,9 @@ class TimeHorizonEventLabeler(Labeler):
         last_time = None
         for time_idx, time in enumerate(prediction_times):
             if last_time is not None:
-                assert time > last_time, f"Must be ascending prediction times, instead got last_prediction_time={last_time} <= prediction_time={time} for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx} | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
+                assert (
+                    time > last_time
+                ), f"Must be ascending prediction times, instead got last_prediction_time={last_time} <= prediction_time={time} for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx} | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
 
             last_time = time
 
