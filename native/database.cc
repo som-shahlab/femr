@@ -484,12 +484,7 @@ void reader_thread(
         uint64_t patient_offset;
         attempt_parse_or_die(reader.get_row()[0], patient_offset);
         uint64_t code;
-        // try {
         attempt_parse_or_die(reader.get_row()[1], code);
-        // } catch {
-        //     std::cout << "Error in `database.cc` for patient_id" << patient_id;
-        //     std::cout << absl::StrJoin(reader.get_row(), "-");
-        // }
         absl::CivilSecond start;
         attempt_parse_time_or_die(reader.get_row()[2], start);
 
@@ -1008,17 +1003,11 @@ get_parents(std::vector<uint64_t>& raw_codes,
             ParentMap result;
 
             while (reader.next_row()) {
-                // try {
-                    const auto& rel_id = reader.get_row()[2];
-                    uint64_t concept_id_1;
-                    attempt_parse_or_die(reader.get_row()[0], concept_id_1);
-                    uint64_t concept_id_2;
-                    attempt_parse_or_die(reader.get_row()[1], concept_id_2); // ERROR HERE
-                // }
-                // catch (const std::exception &e) {
-                //     // TODO -- print out filename of reader
-                //     std::runtime_error("Could not parse concept_relationship table from file. Concept ID 1: " + std::string(reader.get_row()[0])) + " Concept ID 1: " + std::string(reader.get_row()[1]);
-                // }
+                const auto& rel_id = reader.get_row()[2];
+                uint64_t concept_id_1;
+                attempt_parse_or_die(reader.get_row()[0], concept_id_1);
+                uint64_t concept_id_2;
+                attempt_parse_or_die(reader.get_row()[1], concept_id_2);
 
                 bool is_non_standard =
                     standard_code_map.count(concept_id_2) == 0;
