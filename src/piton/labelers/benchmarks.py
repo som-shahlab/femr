@@ -300,7 +300,7 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
 ##########################################################
 
 class FewShotCodeLabeler(CodeLabeler):
-    """Predict if patient will be diagnosed with `self.root_concept_code` in the next 365 days.
+    """Predict if patient will be diagnosed with `self.root_concept_code` in the next (1, 365) days.
         Make prediction at end of day of discharge from inpatient admission.
     """
     root_concept_code = None # OMOP concept code for outcome, e.g. "SNOMED/57054005"
@@ -313,7 +313,7 @@ class FewShotCodeLabeler(CodeLabeler):
         outcome_codes = list(
             map_omop_concept_codes_to_femr_codes(ontology, [ self.root_concept_code ], is_ontology_expansion=True)
         )
-        time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
+        time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=7), datetime.timedelta(days=365))
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
