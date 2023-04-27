@@ -7,7 +7,12 @@ from typing import Any, Callable, List, Optional, Set
 
 from femr import Event, Patient
 from femr.labelers import Label, Labeler, LabelType, TimeHorizon
-from femr.labelers.omop import _get_all_children, get_inpatient_admission_events, map_omop_concept_codes_to_femr_codes, OMOPConceptCodeLabeler
+from femr.labelers.omop import (
+    OMOPConceptCodeLabeler,
+    _get_all_children,
+    get_inpatient_admission_events,
+    map_omop_concept_codes_to_femr_codes,
+)
 from femr.labelers.omop_inpatient_admissions import WithinInpatientVisitLabeler
 
 from ..extension import datasets as extension_datasets
@@ -29,20 +34,21 @@ def identity(x: Any) -> Any:
 ##########################################################
 ##########################################################
 
+
 class InstantLabValueLabeler(Labeler):
     """Apply a multi-class label for the outcome of a lab test.
-    
-        Prediction Time: Immediately before lab result is returned (i.e. 1 minute before)
-        Time Horizon: The next immediate result for this lab test
-        Label: Severity level of lab
-        
-        Excludes:
-            - Labels that occur at the same exact time as the very first event in a patient's history
+
+    Prediction Time: Immediately before lab result is returned (i.e. 1 minute before)
+    Time Horizon: The next immediate result for this lab test
+    Label: Severity level of lab
+
+    Excludes:
+        - Labels that occur at the same exact time as the very first event in a patient's history
     """
-    
+
     # parent OMOP concept codes, from which all the outcomes are derived (as children in our ontology)
     original_omop_concept_codes: List[str] = []
-    
+
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
@@ -81,13 +87,13 @@ class InstantLabValueLabeler(Labeler):
         return "categorical"
 
     def label_to_int(self, label: str) -> int:
-        if label == 'normal':
+        if label == "normal":
             return 0
-        elif label == 'mild':
+        elif label == "mild":
             return 1
-        elif label == 'moderate':
+        elif label == "moderate":
             return 2
-        elif label == 'severe':
+        elif label == "severe":
             return 3
         raise ValueError(f"Invalid label without a corresponding int: {label}")
 
@@ -104,15 +110,15 @@ class TomasevLabValueLabeler(Labeler):
     # TODO
     """Every 6 hours after admission, predict the maximum value for a lab value within the next 48 hours.
     Inspired by Tomasev et al. 2021
-    
+
         Prediction Time: Every 360 minutes after admission
         Time Horizon: Next 48 hours
         Label: Max value of lab over next 48 hours
     """
-    
+
     # parent OMOP concept codes, from which all the outcomes are derived (as children in our ontology)
     original_omop_concept_codes: List[str] = []
-    
+
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
@@ -150,13 +156,13 @@ class TomasevLabValueLabeler(Labeler):
         return "categorical"
 
     def label_to_int(self, label: str) -> int:
-        if label == 'normal':
+        if label == "normal":
             return 0
-        elif label == 'mild':
+        elif label == "mild":
             return 1
-        elif label == 'moderate':
+        elif label == "moderate":
             return 2
-        elif label == 'severe':
+        elif label == "severe":
             return 3
         raise ValueError(f"Invalid label without a corresponding int: {label}")
 
@@ -167,6 +173,7 @@ class TomasevLabValueLabeler(Labeler):
         need to use `.startswith()` to check for the unit you want.
         """
         return "normal"
+
 
 class ThrombocytopeniaInstantLabValueLabeler(InstantLabValueLabeler):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L).
@@ -336,6 +343,7 @@ class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
 ##########################################################
 ##########################################################
 
+
 class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
     """Apply a label for whether a patient has at 1+ explicitly
     coded occurrence(s) of Hypoglycemia in `time_horizon`."""
@@ -415,25 +423,24 @@ class NeutropeniaCodeLabeler(OMOPConceptCodeLabeler):
         'SNOMED/165517008',
     ]
     # fmt: on
-    
 
 
 class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
     """Apply a label based on 1+ ocurrences of an outcome defined by a lab value during an ICU visit
-    
+
     Hourly binary prediction task on whether the patient dies in the next 24 hours.
     Make prediction every 60 minutes after ICU admission, starting at hour 4.
-    
+
     Excludes:
         - ICU admissions with no length-of-stay (i.e. `event.end is None` )
         - ICU admissions < 4 hours
         - ICU admissions with no events
     """
-    
+
     """Apply a label based on 1+ occurrence(s) of an outcome defined by a lab value during each INPATIENT visit
         where that lab test has a result recorded (thus, we're conditioning on ordering the lab test).
 
-    Prediction Time: 4 hours into 
+    Prediction Time: 4 hours into
     Time Horizon: Within an INPATIENT visit
     Label: TRUE if any lab value comes back with severity level == `self.severity` during the visit, 0 otherwise.
     """

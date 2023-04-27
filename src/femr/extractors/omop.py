@@ -196,7 +196,7 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
-            prefix="death", 
+            prefix="death",
             concept_id_field="death_type_concept_id",
             is_drop_events_without_start=True,
         ),
@@ -206,7 +206,7 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             is_drop_events_without_start=True,
         ),
         _ConceptTableConverter(
-            prefix="device_exposure", 
+            prefix="device_exposure",
             concept_id_field="device_concept_id",
             is_drop_events_without_start=True,
         ),

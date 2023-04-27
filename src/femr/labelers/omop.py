@@ -12,7 +12,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-
 from piton.datasets import PatientDatabase
 
 from .. import Event, Patient
@@ -41,41 +40,45 @@ def get_death_concepts() -> List[str]:
         "Condition Type/OMOP4822053",
     ]
 
+
 def get_icu_visit_detail_concepts() -> List[str]:
     return [
         # All care sites with "ICU" (case insensitive) in the name
-        'CARE_SITE/7928450', 
-        'CARE_SITE/7930385', 
-        'CARE_SITE/7930600', 
-        'CARE_SITE/7928852', 
-        'CARE_SITE/7928619', 
-        'CARE_SITE/7929727', 
-        'CARE_SITE/7928675', 
-        'CARE_SITE/7930225', 
-        'CARE_SITE/7928759', 
-        'CARE_SITE/7928227', 
-        'CARE_SITE/7928810', 
-        'CARE_SITE/7929179', 
-        'CARE_SITE/7928650', 
-        'CARE_SITE/7929351', 
-        'CARE_SITE/7928457', 
-        'CARE_SITE/7928195', 
-        'CARE_SITE/7930681', 
-        'CARE_SITE/7930670', 
-        'CARE_SITE/7930176', 
-        'CARE_SITE/7931420', 
-        'CARE_SITE/7929149', 
-        'CARE_SITE/7930857', 
-        'CARE_SITE/7931186', 
-        'CARE_SITE/7930934', 
-        'CARE_SITE/7930924',
+        "CARE_SITE/7928450",
+        "CARE_SITE/7930385",
+        "CARE_SITE/7930600",
+        "CARE_SITE/7928852",
+        "CARE_SITE/7928619",
+        "CARE_SITE/7929727",
+        "CARE_SITE/7928675",
+        "CARE_SITE/7930225",
+        "CARE_SITE/7928759",
+        "CARE_SITE/7928227",
+        "CARE_SITE/7928810",
+        "CARE_SITE/7929179",
+        "CARE_SITE/7928650",
+        "CARE_SITE/7929351",
+        "CARE_SITE/7928457",
+        "CARE_SITE/7928195",
+        "CARE_SITE/7930681",
+        "CARE_SITE/7930670",
+        "CARE_SITE/7930176",
+        "CARE_SITE/7931420",
+        "CARE_SITE/7929149",
+        "CARE_SITE/7930857",
+        "CARE_SITE/7931186",
+        "CARE_SITE/7930934",
+        "CARE_SITE/7930924",
     ]
+
 
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
     return date.replace(hour=23, minute=59, second=59)
 
 
-def does_exist_event_within_time_range(patient: Patient, start: datetime.datetime, end: datetime.datetime, exclude_event_idxs: List[int] = []) -> bool:
+def does_exist_event_within_time_range(
+    patient: Patient, start: datetime.datetime, end: datetime.datetime, exclude_event_idxs: List[int] = []
+) -> bool:
     """Return True if there is at least one event within the given time range for this patient.
     If `exclude_event_idxs` is provided, exclude events with those indexes in `patient.events` from the search."""
     excluded = set(exclude_event_idxs)
@@ -86,10 +89,13 @@ def does_exist_event_within_time_range(patient: Patient, start: datetime.datetim
             return True
     return False
 
-def map_omop_concepts_to_femr_codes(ontology: extension_datasets.Ontology, 
-                                    concepts: List[str],
-                                    is_get_children: bool = True, 
-                                    is_silent_not_found_error: bool = True) -> Set[int]:
+
+def map_omop_concepts_to_femr_codes(
+    ontology: extension_datasets.Ontology,
+    concepts: List[str],
+    is_get_children: bool = True,
+    is_silent_not_found_error: bool = True,
+) -> Set[int]:
     """Converts OMOP concept names (strings from OHDSI, e.g. SNOMED/19303) to FEMR event codes (integers internal to FEMR).
 
     Args:
@@ -114,23 +120,38 @@ def map_omop_concepts_to_femr_codes(ontology: extension_datasets.Ontology,
                 raise ValueError(f"Concept {x} not found in `ontology`.")
     return codes
 
+
 def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return map_omop_concepts_to_femr_codes(ontology, get_visit_concepts(), is_get_children=True, is_silent_not_found_error=True)
+    return map_omop_concepts_to_femr_codes(
+        ontology, get_visit_concepts(), is_get_children=True, is_silent_not_found_error=True
+    )
+
 
 def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return map_omop_concepts_to_femr_codes(ontology, get_icu_visit_detail_concepts(), is_get_children=True, is_silent_not_found_error=True)
+    return map_omop_concepts_to_femr_codes(
+        ontology, get_icu_visit_detail_concepts(), is_get_children=True, is_silent_not_found_error=True
+    )
+
 
 def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[int]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return map_omop_concepts_to_femr_codes(ontology, get_inpatient_admission_concepts(), is_get_children=False, is_silent_not_found_error=True)
+    return map_omop_concepts_to_femr_codes(
+        ontology, get_inpatient_admission_concepts(), is_get_children=False, is_silent_not_found_error=True
+    )
+
 
 def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return map_omop_concepts_to_femr_codes(ontology, get_outpatient_visit_concepts(), is_get_children=False, is_silent_not_found_error=True)
+    return map_omop_concepts_to_femr_codes(
+        ontology, get_outpatient_visit_concepts(), is_get_children=False, is_silent_not_found_error=True
+    )
 
 
-def get_icu_events(patient: Patient, ontology: extension_datasets.Ontology, is_return_idx: bool = False) -> Union[List[Event], List[Tuple[int, Event]]]:
+def get_icu_events(
+    patient: Patient, ontology: extension_datasets.Ontology, is_return_idx: bool = False
+) -> Union[List[Event], List[Tuple[int, Event]]]:
     """Return all ICU events for this patient.
-    If `is_return_idx` is True, then return a list of tuples (event, idx) where `idx` is the index of the event in `patient.events`."""
+    If `is_return_idx` is True, then return a list of tuples (event, idx) where `idx` is the index of the event in `patient.events`.
+    """
     icu_visit_detail_codes: Set[int] = get_icu_visit_detail_codes(ontology)
     events: Union[List[Event], List[Tuple[int, Event]]] = []
     for idx, e in enumerate(patient.events):
@@ -138,17 +159,20 @@ def get_icu_events(patient: Patient, ontology: extension_datasets.Ontology, is_r
         if e.code in icu_visit_detail_codes and e.omop_table == "visit_detail":
             # Error checking
             if e.start is None or e.end is None:
-                raise RuntimeError(f"Event {e} for patient {patient.patient_id} cannot have `None` as its `start` or `end` attribute.")
+                raise RuntimeError(
+                    f"Event {e} for patient {patient.patient_id} cannot have `None` as its `start` or `end` attribute."
+                )
             elif e.start > e.end:
                 raise RuntimeError(f"Event {e} for patient {patient.patient_id} cannot have `start` after `end`.")
             # Drop single point in time events
             if e.start == e.end:
                 continue
             if is_return_idx:
-                events.append((idx, e)) # type: ignore
+                events.append((idx, e))  # type: ignore
             else:
                 events.append(e)
     return events
+
 
 def get_outpatient_visit_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
     admission_codes: Set[int] = get_outpatient_visit_codes(ontology)
@@ -165,6 +189,7 @@ def get_outpatient_visit_events(patient: Patient, ontology: extension_datasets.O
                 continue
             events.append(e)
     return events
+
 
 def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
     admission_codes: Set[str] = get_inpatient_admission_codes(ontology)
@@ -309,7 +334,9 @@ class WithinVisitLabeler(Labeler):
         # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
         results: List[Label] = []
         curr_outcome_idx: int = 0
-        for prediction_idx, (prediction_start, prediction_end) in enumerate(zip(prediction_start_times, prediction_end_times)):
+        for prediction_idx, (prediction_start, prediction_end) in enumerate(
+            zip(prediction_start_times, prediction_end_times)
+        ):
             # Error checking
             if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] is None:
                 raise RuntimeError(
@@ -376,6 +403,7 @@ class WithinVisitLabeler(Labeler):
     def get_labeler_type(self) -> LabelType:
         return "boolean"
 
+
 ##########################################################
 ##########################################################
 # Abstract classes derived from TimeHorizonEventLabeler
@@ -407,7 +435,9 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.outcome_codes: List[str] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[int]] = prediction_codes
-        self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+        self.prediction_time_adjustment_func: Callable = (
+            prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+        )
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
@@ -452,7 +482,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[int]] = None,
-        prediction_time_adjustment_func: Optional[Callable] = None
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         outcome_codes: List[int] = list(
             map_omop_concept_codes_to_femr_codes(
@@ -465,7 +495,9 @@ class OMOPConceptCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity,
+            prediction_time_adjustment_func=prediction_time_adjustment_func
+            if prediction_time_adjustment_func
+            else identity,
         )
 
 
@@ -474,6 +506,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
 # Labeling functions derived from CodeLabeler
 ##########################################################
 ##########################################################
+
 
 class MortalityCodeLabeler(CodeLabeler):
     """Apply a label for whether or not a patient dies within the `time_horizon`.
@@ -496,7 +529,9 @@ class MortalityCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+            prediction_time_adjustment_func=prediction_time_adjustment_func
+            if prediction_time_adjustment_func
+            else identity,
         )
 
 
@@ -588,6 +623,7 @@ class HighHbA1cCodeLabeler(Labeler):
 ##########################################################
 ##########################################################
 
+
 def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
@@ -617,7 +653,7 @@ def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optio
         "Support Devices",
     ]
 
-    chexpert_df[labels_str] = (chexpert_df[labels_str] == 1)*1
+    chexpert_df[labels_str] = (chexpert_df[labels_str] == 1) * 1
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
@@ -625,11 +661,12 @@ def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optio
         patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
 
         if num_labels is not None and num_labels < len(patient_df):
-            patient_df = patient_df.sample(n = num_labels, random_state=0)
+            patient_df = patient_df.sample(n=num_labels, random_state=0)
         labels: List[Label] = labeling_function.label(patient, patient_df)
         patients_to_labels[patient_id] = labels
 
     return patients_to_labels
+
 
 class ChexpertLabeler(Labeler):
     """CheXpert labeler.
@@ -651,7 +688,7 @@ class ChexpertLabeler(Labeler):
         """Return a list of all times when the patient has a radiology report"""
 
         chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
-        
+
         patient_df = chexpert_df.sort_values(by=["time_stamp"], ascending=True)
 
         start_time, _ = self.get_patient_start_end_times(patient)
@@ -743,7 +780,9 @@ class ChexpertLabeler(Labeler):
         pid_parts = np.array_split(pids, num_threads)
 
         # Multiprocessing
-        tasks = [(self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts]
+        tasks = [
+            (self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts
+        ]
 
         with multiprocessing.Pool(num_threads) as pool:
             results: List[Dict[int, List[Label]]] = list(pool.imap(chexpert_apply_labeling_function, tasks))

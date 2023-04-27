@@ -10,6 +10,7 @@ from typing import List
 
 import zstandard
 
+
 def fix_drug_exposure_file_dates(path_to_file: str):
     # Change `visit_start_date` -> `visit_detail_start_date`
 
@@ -33,7 +34,7 @@ def fix_visit_detail_file_dates(path_to_file: str):
             fieldnames[i] = "visit_detail_start_datetime"
         elif field == "visit_end_datetime":
             fieldnames[i] = "visit_detail_end_datetime"
-    
+
     # Write rest of file unchanged
     exit()
     with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(path_to_file, "wb"))) as o:
@@ -63,5 +64,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    
+
     fix_visit_detail(args.source)

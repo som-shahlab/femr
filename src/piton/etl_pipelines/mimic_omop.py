@@ -7,10 +7,9 @@ import json
 import logging
 import os
 import resource
-from typing import Callable, Dict, Optional, Sequence
 import shutil
+from typing import Callable, Dict, Optional, Sequence
 
-from piton import Event, Patient
 from piton.datasets import EventCollection, PatientCollection
 from piton.extractors.csv import run_csv_extractors
 from piton.extractors.omop import get_omop_csv_extractors
@@ -22,8 +21,12 @@ from piton.transforms.stanford import (
     move_visit_start_to_first_event_start,
 )
 
+from piton import Event, Patient
+
+
 def _is_visit_event(e: Event) -> bool:
     return e.omop_table == "visit_occurrence"
+
 
 def _get_mimic_omop_transformations() -> Sequence[Callable[[Patient], Optional[Patient]]]:
     """Get the list of current OMOP transformations."""
@@ -46,6 +49,7 @@ def _get_mimic_omop_transformations() -> Sequence[Callable[[Patient], Optional[P
     ]
 
     return transforms
+
 
 def etl_mimic_omop_program() -> None:
     """Extract data from a MIMIC-III-OMOP source to create a piton PatientDatabase."""
