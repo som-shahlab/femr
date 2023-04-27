@@ -556,9 +556,9 @@ class NLabelsPerPatientLabeler(Labeler):
 
 
 def compute_random_num(seed: int, num_1: int, num_2: int):
-    network_num_1 = struct.pack("!I", num_1)
-    network_num_2 = struct.pack("!I", num_2)
-    network_seed = struct.pack("!I", seed)
+    network_num_1 = struct.pack("!q", num_1)
+    network_num_2 = struct.pack("!q", num_2)
+    network_seed = struct.pack("!q", seed)
 
     to_hash = network_seed + network_num_1 + network_num_2
 

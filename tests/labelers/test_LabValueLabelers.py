@@ -321,7 +321,7 @@ class DummyOntology_Specific:
 
 
 def test_thrombocytopenia(tmp_path: pathlib.Path):
-    outcome_codes = {"child_1", "child_1_1", "LOINC/LP393218-5", "LOINC/LG32892-8", "child_2"}
+    outcome_codes = {"child_1", "child_1_1", "LOINC/LP393218-5", "LOINC/LG32892-8", "child_2", "LOINC/777-3"}
     labeler = _create_specific_labvalue_labeler(
         ThrombocytopeniaLabValueLabeler,
         "severe",
@@ -344,7 +344,16 @@ def test_thrombocytopenia(tmp_path: pathlib.Path):
 
 
 def test_hyperkalemia(tmp_path: pathlib.Path):
-    outcome_codes = {"child_1_1", "child_2", "child_1", "LOINC/LP386618-5", "LOINC/LG10990-6", "LOINC/LG7931-1"}
+    outcome_codes = {
+        "child_1_1",
+        "child_2",
+        "child_1",
+        "LOINC/LP386618-5",
+        "LOINC/LG10990-6",
+        "LOINC/LG7931-1",
+        "LOINC/6298-4",
+        "LOINC/2823-3",
+    }
     labeler = _create_specific_labvalue_labeler(
         HyperkalemiaLabValueLabeler,
         "severe",
@@ -367,7 +376,15 @@ def test_hyperkalemia(tmp_path: pathlib.Path):
 
 
 def test_hypoglycemia(tmp_path: pathlib.Path):
-    outcome_codes = {"child_2", "child_1_1", "SNOMED/33747003", "LOINC/LP416145-3", "child_1"}
+    outcome_codes = {
+        "child_2",
+        "child_1_1",
+        "SNOMED/33747003",
+        "LOINC/LP416145-3",
+        "child_1",
+        "LOINC/14749-6",
+        "LOINC/15074-8",
+    }
     labeler = _create_specific_labvalue_labeler(
         HypoglycemiaLabValueLabeler,
         "severe",
@@ -390,7 +407,7 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
 
 
 def test_hyponatremia(tmp_path: pathlib.Path):
-    outcome_codes = {"child_1", "child_1_1", "LOINC/LG11363-5"}
+    outcome_codes = {"child_1", "child_1_1", "child_2", "LOINC/LG11363-5", "LOINC/2951-2", "LOINC/2947-0"}
     labeler = _create_specific_labvalue_labeler(
         HyponatremiaLabValueLabeler,
         "severe",
