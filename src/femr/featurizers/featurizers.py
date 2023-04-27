@@ -348,6 +348,8 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
+                if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                    continue
                 code = event.code
                 while event.start > labels[label_idx].time:
                     _reshuffle_count_time_bins(
