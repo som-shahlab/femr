@@ -7,22 +7,22 @@ from typing import Dict, Mapping, Sequence
 
 import zstandard as zst
 
-import piton
-import piton.datasets
-from piton.extractors.csv import run_csv_extractors
+import femr
+import femr.datasets
+from femr.extractors.csv import run_csv_extractors
 
 
-class DummyConverter(piton.extractors.csv.CSVExtractor):
+class DummyConverter(femr.extractors.csv.CSVExtractor):
     def get_patient_id_field(self) -> str:
         return "patient_id"
 
     def get_file_prefix(self) -> str:
         return "temp"
 
-    def get_events(self, row: Mapping[str, str]) -> Sequence[piton.Event]:
-        e = piton.Event(
+    def get_events(self, row: Mapping[str, str]) -> Sequence[femr.datasets.RawEvent]:
+        e = femr.datasets.RawEvent(
             start=datetime.datetime(int(row["event_start"]), 1, 1),
-            code=int(row["event_code"]),
+            concept_id=int(row["event_code"]),
             value=row["event_value"],
             metadata="test",
         )
@@ -63,7 +63,7 @@ def run_test(tmp_path: pathlib.Path):
     with event_collection.reader() as event_reader:
         results = []
         for p, e in event_reader:
-            results.append((p, e.start.year, e.code, e.value))
+            results.append((p, e.start.year, e.concept_id, e.value))
         assert results == ROWS, "Events extracted from file do not match expected events."
 
 

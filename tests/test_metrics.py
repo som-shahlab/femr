@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import sklearn.metrics
 
-import piton.metrics
+import femr.metrics
 
 
 def test_c_statistic():
@@ -64,7 +64,7 @@ def test_c_statistic():
 
     expected = total_auroc / total_weight
 
-    actual = piton.metrics.compute_c_statistic(times, is_censor, time_bins, hazards)[0]
+    actual = femr.metrics.compute_c_statistic(times, is_censor, time_bins, hazards)[0]
 
     assert actual == expected
 
@@ -91,15 +91,15 @@ def test_calibration():
 
     expected = np.ones(shape=(B,)) / B
 
-    dummy = piton.metrics.compute_calibration(dummy_probs, np.zeros_like(dummy_probs), B)
+    dummy = femr.metrics.compute_calibration(dummy_probs, np.zeros_like(dummy_probs), B)
 
     assert np.allclose(expected, dummy, atol=0.01)
 
-    valid = piton.metrics.compute_calibration(valid_probs, c, B)
+    valid = femr.metrics.compute_calibration(valid_probs, c, B)
 
     assert np.allclose(expected, valid, atol=0.01)
 
-    invalid = piton.metrics.compute_calibration(invalid_probs, c, B)
+    invalid = femr.metrics.compute_calibration(invalid_probs, c, B)
 
     assert not np.allclose(expected, invalid, atol=0.01)
 
@@ -124,8 +124,8 @@ def test_breslow():
 
     times = [0, 1]
 
-    breslow = piton.metrics.estimate_breslow(t[: size // 10], c[: size // 10], times, hazard[: size // 10, :])
-    cdf = piton.metrics.apply_breslow(t, times, hazard, breslow)
+    breslow = femr.metrics.estimate_breslow(t[: size // 10], c[: size // 10], times, hazard[: size // 10, :])
+    cdf = femr.metrics.apply_breslow(t, times, hazard, breslow)
 
     valid_probs = scipy.stats.expon.cdf(t, scale=1 / event_h)
 

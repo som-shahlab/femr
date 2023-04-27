@@ -5,10 +5,10 @@ import os
 import sys
 from typing import List, cast
 
-import piton
-import piton.datasets
-from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import OpioidOverdoseLabeler
+import femr
+import femr.datasets
+from femr.labelers import TimeHorizon
+from femr.labelers.omop import OpioidOverdoseLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

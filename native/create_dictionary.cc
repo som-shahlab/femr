@@ -171,7 +171,7 @@ void create_dictionary(const std::string& input, const std::string& output) {
         double weight = *result.code_counts.find(code);
         DictEntry entry;
         entry.type = DictEntryType::CODE;
-        entry.code = code;
+        entry.code_string = database.get_code_dictionary()[code];
         // Weight is the Shanon entropy
         entry.weight = weight * log(weight) + (1 - weight) * log(1 - weight);
 
@@ -190,7 +190,7 @@ void create_dictionary(const std::string& input, const std::string& output) {
 
         DictEntry entry;
         entry.type = DictEntryType::CODE;
-        entry.code = code;
+        entry.code_string = database.get_code_dictionary()[code];
         // Make sure to use the hierarchical Shanon entropy formula
         entry.weight =
             baseline * (weight * log(weight) + (1 - weight) * log(1 - weight));
@@ -203,8 +203,8 @@ void create_dictionary(const std::string& input, const std::string& output) {
         for (const auto& e : *text_entries) {
             DictEntry entry;
             entry.type = DictEntryType::TEXT;
-            entry.code = code;
-            entry.text_value = e.first;
+            entry.code_string = database.get_code_dictionary()[code];
+            entry.text_string = database.get_shared_text_dictionary()[e.first];
             entry.weight =
                 e.second * log(e.second) + (1 - e.second) * log(1 - e.second);
 
@@ -223,18 +223,21 @@ void create_dictionary(const std::string& input, const std::string& output) {
 
         std::sort(std::begin(samples), std::end(samples));
 
-        size_t samples_per_bin = (samples.size() + 10) / 11;
+        size_t samples_per_bin = (samples.size() + 9) / 10;
 
         for (int bin = 0; bin < 10; bin++) {
             double start_val;
             if (bin == 0) {
                 start_val = -std::numeric_limits<double>::max();
             } else {
+                if (bin * samples_per_bin >= samples.size()) {
+                    continue;
+                }
                 start_val = samples[bin * samples_per_bin];
             }
 
             double end_val;
-            if (bin == 9) {
+            if (bin == 9 || (bin + 1) * samples_per_bin >= samples.size()) {
                 end_val = std::numeric_limits<double>::max();
             } else {
                 end_val = samples[(bin + 1) * samples_per_bin];
@@ -246,7 +249,7 @@ void create_dictionary(const std::string& input, const std::string& output) {
 
             DictEntry entry;
             entry.type = DictEntryType::NUMERIC;
-            entry.code = code;
+            entry.code_string = database.get_code_dictionary()[code];
             entry.val_start = start_val;
             entry.val_end = end_val;
             entry.weight =

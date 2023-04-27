@@ -4,6 +4,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+from typing import List
 
 import setuptools
 from setuptools.command.build_ext import build_ext
@@ -24,6 +25,19 @@ def has_nvcc():
         return False
 
 
+def can_build_simple(sourcedir, env, bazel_extra_args):
+    try:
+        subprocess.run(
+            args=["bazel"] + bazel_extra_args + ["build", "-c", "opt", "simple_test"],
+            cwd=sourcedir,
+            env=env,
+            check=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 class cmake_build_ext(build_ext):
     def build_extensions(self) -> None:
         bazel_extensions = [a for a in self.extensions if isinstance(a, BazelExtension)]
@@ -40,7 +54,8 @@ class cmake_build_ext(build_ext):
                 **source_env,
             }
 
-            extra_args = []
+            bazel_extra_args: List[str] = []
+            extra_args: List[str] = []
 
             if source_env.get("DISTDIR"):
                 extra_args.extend(["--distdir", source_env["DISTDIR"]])
@@ -48,9 +63,17 @@ class cmake_build_ext(build_ext):
             if has_nvcc():
                 extra_args.extend(["--//:cuda=enabled"])
 
+            if source_env.get("MACOSX_DEPLOYMENT_TARGET"):
+                extra_args.extend(["--macos_minimum_os", source_env["MACOSX_DEPLOYMENT_TARGET"]])
+
+            if not can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args):
+                bazel_extra_args.extend(["--noworkspace_rc", "--bazelrc=backupbazelrc"])
+                assert can_build_simple(
+                    sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args
+                ), "Cannot build C++ extension"
+
             subprocess.run(
-                # "opt" == optimized build
-                args=["bazel", "build", "-c", "opt", ext.target] + extra_args,
+                args=["bazel"] + bazel_extra_args + ["build", "-c", "opt", ext.target] + extra_args,
                 cwd=ext.sourcedir,
                 env=env,
                 check=True,
@@ -70,7 +93,7 @@ class cmake_build_ext(build_ext):
 
 setuptools.setup(
     ext_modules=[
-        BazelExtension("piton.extension", "extension.so", "native"),
+        BazelExtension("femr.extension", "extension.so", "native"),
     ],
     cmdclass={"build_ext": cmake_build_ext},
     zip_safe=False,

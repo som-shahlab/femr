@@ -93,7 +93,7 @@ struct Event {
 };
 
 struct Patient {
-    uint32_t patient_id;
+    uint32_t patient_offset;
     absl::CivilDay birth_date;
     std::vector<Event> events;
 };
@@ -102,7 +102,7 @@ class PatientDatabase;
 
 class PatientDatabaseIterator {
    public:
-    Patient& get_patient(uint32_t patient_id);
+    Patient& get_patient(uint32_t patient_offset);
 
    private:
     PatientDatabaseIterator(PatientDatabase* d);
@@ -123,7 +123,7 @@ class PatientDatabase {
     PatientDatabaseIterator iterator();
     friend PatientDatabaseIterator;
 
-    Patient get_patient(uint32_t patient_id);
+    Patient get_patient(uint32_t patient_offset);
     uint32_t size();
 
     // Dictionary handling
@@ -135,27 +135,27 @@ class PatientDatabase {
     Ontology& get_ontology();
 
     // Indexing
-    absl::Span<const uint32_t> get_patient_ids_with_code(uint32_t code);
-    absl::Span<const uint32_t> get_patient_ids_with_codes(
+    absl::Span<const uint32_t> get_patient_offsets_with_code(uint32_t code);
+    absl::Span<const uint32_t> get_patient_offsets_with_codes(
         absl::Span<const uint32_t> codes);
 
-    absl::Span<const uint32_t> get_patient_ids_with_shared_text(
+    absl::Span<const uint32_t> get_patient_offsets_with_shared_text(
         uint32_t text_value);
-    absl::Span<const uint32_t> get_patient_ids_with_shared_text(
+    absl::Span<const uint32_t> get_patient_offsets_with_shared_text(
         absl::Span<const uint32_t> text_values);
 
     // Map back to original patient ids
-    boost::optional<uint32_t> get_patient_id_from_original(
-        uint64_t original_patient_id);
-    uint64_t get_original_patient_id(uint32_t patient_id);
+    boost::optional<uint32_t> get_patient_offset(uint64_t patient_id);
+    uint64_t get_patient_id(uint32_t patient_offset);
+    absl::Span<const uint64_t> get_patient_ids();
 
     // Count information
     uint32_t get_code_count(uint32_t code);
     uint32_t get_shared_text_count(uint32_t text_value);
 
-    uint32_t compute_split(uint32_t seed, uint32_t patient_id) {
-        uint32_t original_patient_id = get_original_patient_id(patient_id);
-        uint32_t network_patient_id = htonl(original_patient_id);
+    uint32_t compute_split(uint32_t seed, uint32_t patient_offset) {
+        uint32_t patient_id = get_patient_id(patient_offset);
+        uint32_t network_patient_id = htonl(patient_id);
         uint32_t network_seed = htonl(seed);
 
         char to_hash[sizeof(uint32_t) * 2];
@@ -176,7 +176,7 @@ class PatientDatabase {
     }
 
     // Event metadata
-    std::string_view get_event_metadata(uint32_t patient_id,
+    std::string_view get_event_metadata(uint32_t patient_offset,
                                         uint32_t event_index);
 
     // Metadata information
@@ -198,8 +198,8 @@ class PatientDatabase {
     LazyDictionary event_metadata_dictionary;
     bool has_event_metadata;
 
-    // 0 original_patient_ids
-    // 1 sorted_original_patient_ids
+    // 0 patient_ids
+    // 1 sorted_patient_offsets
     // 2 code counts
     // 3 text value counts
     // 4 original_code_ids
@@ -208,7 +208,7 @@ class PatientDatabase {
     Dictionary meta_dictionary;
 };
 
-PatientDatabase convert_patient_collection_to_patient_database(
+void convert_patient_collection_to_patient_database(
     const boost::filesystem::path& patient_root,
     const boost::filesystem::path& concept,
     const boost::filesystem::path& target, char delimiter, size_t num_threads);
@@ -248,9 +248,8 @@ first_argument<R> proccess_patients_in_parallel(PatientDatabase& database,
     database.iterator().get_patient(0);
 
     for (size_t i = 0; i < num_threads; i++) {
-        threads.emplace_back(
-            std::thread([i, &temp_results, &database, &func, &reducer,
-                         &num_threads, &pids_per_thread]() {
+        threads.emplace_back(std::thread(
+            [i, &temp_results, &database, &func, &pids_per_thread]() {
                 PatientDatabaseIterator iter = database.iterator();
                 uint32_t start_pid = pids_per_thread * i;
                 uint32_t end_pid = std::min(

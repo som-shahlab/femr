@@ -4,11 +4,11 @@ import pickle
 import time
 from typing import Callable, List
 
-import piton
-from piton.datasets import PatientDatabase
-from piton.featurizers.featurizers_notes import NoteFeaturizer
-from piton.labelers.core import LabeledPatients
-from piton.transforms.notes import (
+import femr
+from femr.datasets import PatientDatabase
+from femr.featurizers.featurizers_notes import NoteFeaturizer
+from femr.labelers import LabeledPatients
+from femr.transforms.notes import (
     join_all_notes,
     keep_only_last_n_chars,
     keep_only_notes_matching_codes,
@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
     # Choose embedding method
     if args.embedder__method == "cls":
-        embed_method: Callable = piton.featurizers.featurizers_notes.embed_with_cls
+        embed_method: Callable = femr.featurizers.featurizers_notes.embed_with_cls
     else:
         raise ValueError(f"Invalid `embed_method` ({args.embedder__method}) specified")
 

@@ -12,8 +12,8 @@ const char* sequential_mmap(int fd, const char* filename, size_t length);
 
 #ifdef POSIX_FADV_SEQUENTIAL
 const char* sequential_mmap(int fd, const char* filename, size_t length) {
-    int error = posix_fadvise(fd, 0, 0,
-                                  POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+    int error =
+        posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
 
     if (error != 0) {
         printf("Got error trying to set options for %s: %s\n", filename,
@@ -22,7 +22,7 @@ const char* sequential_mmap(int fd, const char* filename, size_t length) {
     }
 
     return (const char*)mmap(nullptr, length, PROT_READ,
-                                      MAP_SHARED | MAP_POPULATE, fd, 0);
+                             MAP_SHARED | MAP_POPULATE, fd, 0);
 }
 #else
 const char* sequential_mmap(int fd, const char* filename, size_t length) {

@@ -6,7 +6,7 @@ import pathlib
 import sys
 from typing import List
 
-from piton.labelers.core import NLabelsPerPatientLabeler
+from femr.labelers import NLabelsPerPatientLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

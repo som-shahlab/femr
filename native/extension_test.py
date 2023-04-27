@@ -6,7 +6,7 @@ import extension.datasets as m
 import numpy as np
 import pytest
 
-import piton
+import femr
 
 
 def test_helper(tmp_path, capsys):
@@ -25,16 +25,16 @@ def test_helper(tmp_path, capsys):
         print("Done")
 
         concept_root = tmp_path / "concepts"
-        m.test.create_ontology_files(str(concept_root))
+        m.test.create_ontology_files(str(concept_root), True)
 
         patients = tmp_path / "patients"
         m.test.create_database_files(str(patients))
 
         target = tmp_path / "database"
 
-        database = m.convert_patient_collection_to_patient_database(
-            str(patients), str(concept_root), str(target), ",", 1
-        )
+        m.convert_patient_collection_to_patient_database(str(patients), str(concept_root), str(target), ",", 1)
+
+        database = m.PatientDatabase(str(target), False)
 
         print(database.version_id())
         print(database.database_id())
@@ -44,47 +44,41 @@ def test_helper(tmp_path, capsys):
         def f(a):
             return datetime.datetime.fromisoformat(a)
 
-        patient_id = database.get_patient_id_from_original(30)
-        assert database.get_original_patient_id(patient_id) == 30
-
-        with pytest.raises(ValueError):
-            database.get_code_dictionary().index("not in there")
-
-        assert database.get_code_dictionary().index("bar/foo") is not None
-        assert database.get_code_count(database.get_code_dictionary().index("bar/foo")) == 4
-        assert database.get_text_count("Short Text") == 2
-        assert database.get_text_count("Long Text") == 1
-        assert database.get_text_count("Missing Text") == 0
-
+        patient_id = 30
         patient = database[patient_id]
 
         assert patient.patient_id == patient_id
+
         assert patient.events == (
-            piton.Event(start=f("1990-03-08 09:30:00"), code=0, value=None),
-            piton.Event(
+            femr.Event(start=f("1990-03-08 09:30:00"), code="bar/foo", value=None),
+            femr.Event(
                 start=f("1990-03-08 10:30:00"),
-                end=f("1990-03-18 10:50:00"),
-                code=0,
+                code="bar/foo",
                 value=None,
             ),
-            piton.Event(
+            femr.Event(
                 start=f("1990-03-11 14:30:00"),
-                code=2,
+                code="bar/parent of foo",
                 value="Long Text",
-                visit_id=0,
             ),
-            piton.Event(
+            femr.Event(
                 start=f("1990-03-11 14:30:00"),
-                code=1,
+                code="lol/lmao",
                 value="Short Text",
             ),
-            piton.Event(start=f("1990-03-14 14:30:00"), code=1, value=34.0, visit_id=1),
-            piton.Event(start=f("1990-03-15 14:30:00"), code=1, value=34.5, visit_id=0),
+            femr.Event(start=f("1990-03-14 14:30:00"), code="lol/lmao", value=34.0),
+            femr.Event(start=f("1990-03-15 14:30:00"), code="lol/lmao", value=34.5),
         )
 
+        assert set(database.get_ontology().get_all_parents("bar/foo")) == {
+            "bar/foo",
+            "bar/parent of foo",
+            "bar/grandparent of foo",
+        }
+
         total = 0
-        for patient in database:
-            total += len(patient.events)
+        for patient_id in database:
+            total += len(database[patient_id].events)
         assert total == 9
 
 

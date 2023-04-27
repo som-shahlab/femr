@@ -11,16 +11,16 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import zstandard
 
-import piton
-import piton.datasets
-from piton.labelers.core import Label, LabeledPatients, Labeler
+import femr
+import femr.datasets
+from femr.labelers import Label, LabeledPatients, Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
-EventsWithLabels = List[Tuple[piton.Event, Union[bool, str]]]
+EventsWithLabels = List[Tuple[femr.Event, Union[bool, str]]]
 
 
 def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
-    """A terser way to create a Piton Event."""
+    """A terser way to create a femr Event."""
     hour, minute, seconds = 0, 0, 0
     if len(date) == 3:
         year, month, day = date
@@ -32,9 +32,9 @@ def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
         year, month, day, hour, minute, seconds = date
     else:
         raise ValueError(f"Invalid date: {date}")
-    return piton.Event(
+    return femr.Event(
         start=datetime.datetime(year, month, day, hour, minute, seconds),
-        code=code,
+        code=str(code),
         value=value,
         visit_id=visit_id,
         **kwargs,
@@ -61,40 +61,43 @@ NUM_PATIENTS = 10
 
 DUMMY_CONCEPTS: List[str] = ["zero", "one", "two", "three", "four"]
 
-ALL_EVENTS: List[Tuple[int, piton.Event]] = []
+ALL_EVENTS: List[Tuple[int, femr.Event]] = []
 for patient_id in range(NUM_PATIENTS):
     ALL_EVENTS.extend((patient_id, event) for event in DUMMY_EVENTS)
 
 
-def create_events(tmp_path: pathlib.Path) -> piton.datasets.EventCollection:
+def create_events(tmp_path: pathlib.Path) -> femr.datasets.EventCollection:
     event_path = os.path.join(tmp_path, "events")
     os.makedirs(event_path, exist_ok=True)
-    events = piton.datasets.EventCollection(event_path)
+    events = femr.datasets.EventCollection(event_path)
     chunks = 7
     events_per_chunk = (len(ALL_EVENTS) + chunks - 1) // chunks
 
     for i in range(7):
         with contextlib.closing(events.create_writer()) as writer:
             for patient_id, event in ALL_EVENTS[i * events_per_chunk : (i + 1) * events_per_chunk]:
-                writer.add_event(patient_id, event)
+                raw_event = femr.datasets.RawEvent(
+                    start=event.start, concept_id=int(event.code), value=event.value, visit_id=event.visit_id
+                )
+                writer.add_event(patient_id, raw_event)
 
     return events
 
 
-def create_patients_list(num_patients: int, events: List[piton.Event]) -> List[piton.Patient]:
+def create_patients_list(num_patients: int, events: List[femr.Event]) -> List[femr.Patient]:
     """Creates a list of patients, each with the same events contained in `events`"""
-    patients: List[piton.Patient] = []
+    patients: List[femr.Patient] = []
     for patient_id in range(num_patients):
         patients.append(
-            piton.Patient(
+            femr.Patient(
                 patient_id,
-                events,
+                tuple(events),
             )
         )
     return patients
 
 
-def create_patients(tmp_path: pathlib.Path) -> piton.datasets.PatientCollection:
+def create_patients(tmp_path: pathlib.Path) -> femr.datasets.PatientCollection:
     return create_events(tmp_path).to_patient_collection(os.path.join(tmp_path, "patients"))
 
 
@@ -168,12 +171,11 @@ def create_database(tmp_path: pathlib.Path, dummy_concepts: List[str] = []) -> N
     ).close()
 
 
-def get_piton_code(ontology, target_code, dummy_concepts: List[str] = []):
+def get_femr_code(ontology, target_code, dummy_concepts: List[str] = []):
     if dummy_concepts == []:
         dummy_concepts = DUMMY_CONCEPTS
-    piton_concept_id = f"dummy/{dummy_concepts[target_code]}"
-    piton_target_code = ontology.get_dictionary().index(piton_concept_id)
-    return piton_target_code
+    femr_concept_id = f"dummy/{dummy_concepts[target_code]}"
+    return femr_concept_id
 
 
 def assert_labels_are_accurate(
@@ -207,7 +209,7 @@ def run_test_for_labeler(
     true_prediction_times: Optional[List[datetime.datetime]] = None,
     help_text: str = "",
 ) -> None:
-    patients: List[piton.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
+    patients: List[femr.Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
         (x[0].start, x[1]) for x in events_with_labels if isinstance(x[1], bool)
     ]
@@ -243,7 +245,7 @@ def run_test_for_labeler(
                 ], f"{labeler.get_outcome_times(p)} != {true_outcome_times} | {help_text}"
 
 
-def create_labeled_patients_list(labeler: Labeler, patients: List[piton.Patient]):
+def create_labeled_patients_list(labeler: Labeler, patients: List[femr.Patient]):
     pat_to_labels = {}
 
     for patient in patients:

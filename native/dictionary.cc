@@ -33,7 +33,8 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
     {
         uintmax_t file_size = boost::filesystem::file_size(path);
 
-        if (file_size > static_cast<uintmax_t>(std::numeric_limits<ssize_t>::max())) {
+        if (file_size >
+            static_cast<uintmax_t>(std::numeric_limits<ssize_t>::max())) {
             throw std::runtime_error(absl::StrCat(
                 "Cannot map file larger than ssize_t::max ", path.string()));
         }
@@ -80,7 +81,12 @@ Dictionary::Dictionary(const boost::filesystem::path& path, bool read_all) {
     }
 }
 
-Dictionary::Dictionary(Dictionary&& other): fd(other.fd), mmap_data(other.mmap_data), length(other.length), values_(other.values_), possib_sorted_values(other.possib_sorted_values) {
+Dictionary::Dictionary(Dictionary&& other)
+    : fd(other.fd),
+      mmap_data(other.mmap_data),
+      length(other.length),
+      values_(other.values_),
+      possib_sorted_values(other.possib_sorted_values) {
     other.mmap_data = nullptr;
     other.fd = -1;
 }
@@ -114,8 +120,12 @@ std::string_view Dictionary::operator[](uint32_t idx) const {
 }
 
 boost::optional<uint32_t> Dictionary::find(std::string_view word) {
+    if (values_.size() == 0) {
+        return boost::none;
+    }
     if (word.data() >= values_.front().data() &&
         word.data() <= values_.back().data()) {
+        printf("Slow path\n");
         // This is an internal reference, we can use a fast path to find it
         auto iter =
             std::lower_bound(std::begin(values_), std::end(values_), word,
@@ -136,6 +146,7 @@ boost::optional<uint32_t> Dictionary::find(std::string_view word) {
         auto iter = std::lower_bound(
             std::begin(sorted), std::end(sorted), word,
             [&](uint32_t a, std::string_view b) { return values_[a] < b; });
+
         if (iter == std::end(sorted) || values_[*iter] != word) {
             return boost::none;
         } else {
@@ -148,7 +159,7 @@ const std::vector<std::string_view>& Dictionary::values() const {
     return values_;
 }
 
-const std::vector<uint32_t>& Dictionary::get_sorted_values() {
+void Dictionary::init_sorted_values() {
     if (!possib_sorted_values) {
         possib_sorted_values.emplace();
         possib_sorted_values->reserve(values_.size());
@@ -160,6 +171,10 @@ const std::vector<uint32_t>& Dictionary::get_sorted_values() {
             std::begin(*possib_sorted_values), std::end(*possib_sorted_values),
             [&](uint32_t a, uint32_t b) { return values_[a] < values_[b]; });
     }
+}
+
+const std::vector<uint32_t>& Dictionary::get_sorted_values() {
+    init_sorted_values();
     return *possib_sorted_values;
 }
 

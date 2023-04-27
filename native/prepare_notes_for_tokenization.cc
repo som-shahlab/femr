@@ -23,19 +23,20 @@ int main() {
     auto iter = database.iterator();
 
     std::ofstream output(
-        "/local-scratch/nigam/projects/ethanid/piton/native/out_text");
+        "/local-scratch/nigam/projects/ethanid/femr/native/out_text");
     std::ofstream output_raw(
-        "/local-scratch/nigam/projects/ethanid/piton/native/out_text_raw");
+        "/local-scratch/nigam/projects/ethanid/femr/native/out_text_raw");
 
     boost::regex date_regex("\\d{2}/\\d{2}/\\d{4}");
     boost::regex longdash_regex("--+");
     boost::regex longunder_regex("__+");
     boost::regex longem_regex("——+");
 
-    for (uint32_t patient_id = 0; patient_id < 10000; patient_id++) {
-        const Patient& p = iter.get_patient(patient_id);
+    for (uint32_t patient_offset = 0; patient_offset < 10000;
+         patient_offset++) {
+        const Patient& p = iter.get_patient(patient_offset);
 
-        // std::cout << "What " << patient_id << std::endl;
+        // std::cout << "What " << patient_offset << std::endl;
         absl::CivilMinute birth_minute = p.birth_date;
 
         for (const auto& event : p.events) {
@@ -131,10 +132,10 @@ int main() {
 
                     if (!valid) {
                         std::cout
-                            << "What " << patient_id << " "
+                            << "What " << patient_offset << " "
                             << database.get_code_dictionary()[event.code] << " "
-                            << database.get_original_patient_id(patient_id)
-                            << " " << text.size() << " " << current_day << text
+                            << database.get_patient_id(patient_offset) << " "
+                            << text.size() << " " << current_day << text
                             << " , " << fixed_text << std::endl;
                     }
                 }

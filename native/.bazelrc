@@ -1,8 +1,8 @@
 build --cxxopt="-std=c++17"
 build --cxxopt="-Wall"
-build --cxxopt="-march=native"
-build --copt="-march=native"
-build --@rules_cuda//cuda:archs=compute_70
+build --cxxopt="-mavx"
+build --copt="-mavx"
+build --@rules_cuda//cuda:archs=compute_70:compute_70,sm_70,sm_75,sm_80,sm_86
 build --@rules_cuda//cuda:copts=-Xptxas="-v"
 build --@rules_cuda//cuda:copts="--use_fast_math"
 

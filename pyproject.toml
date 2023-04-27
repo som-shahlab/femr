@@ -3,8 +3,9 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "piton"
-description = ""
+name = "femr"
+description = "Framework for Electronic Medical Records. A python package for building models using EHR data."
+readme = "README.md"
 dependencies = [
     "numpy >= 1.22",
     "scipy >= 1.6",
@@ -13,23 +14,21 @@ dependencies = [
     "zstandard >= 0.18",
     "icecream == 2.1.3",
     "nptyping == 2.4.1",
-    "pathos == 0.3.0",
-    # This version of dill is needed for multiprocessing abstractmethod support >>
-    "dill @ git+https://github.com/som-shahlab/dill@enums"
+    "msgpack >= 1.0.5",
 ]
-requires-python=">3.10"
-version = "0.1.0"
+requires-python=">3.9"
+version = "0.1.5"
 
 [project.scripts]
-etl_stanford_omop = "piton.etl_pipelines.stanford:etl_starr_omop_program"
-etl_mimic_omop = "piton.etl_pipelines.mimic_omop:etl_mimic_omop_program"
-etl_generic_omop = "piton.etl_pipelines.omop:etl_generic_omop_program"
-
-clmbr_create_batches = "piton.models.dataloader:create_batches"
-clmbr_create_dictionary = "piton.models.scripts:create_dictionary"
-clmbr_create_survival_dictionary = "piton.models.scripts:create_survival_dictionary"
-clmbr_train_model = "piton.models.scripts:train_model"
-clmbr_compute_representations = "piton.models.scripts:compute_representations"
+etl_stanford_omop = "femr.etl_pipelines.stanford:etl_starr_omop_program"
+etl_generic_omop = "femr.etl_pipelines.omop:etl_generic_omop_program"
+etl_simple_femr = "femr.etl_pipelines.simple:etl_simple_femr_program"
+etl_sickkids_omop = "femr.etl_pipelines.sickkids:etl_sk_omop_program"
+clmbr_create_batches = "femr.models.dataloader:create_batches"
+clmbr_create_dictionary = "femr.models.scripts:create_dictionary"
+clmbr_create_survival_dictionary = "femr.models.scripts:create_survival_dictionary"
+clmbr_train_model = "femr.models.scripts:train_model"
+clmbr_compute_representations = "femr.models.scripts:compute_representations"
 
 [project.optional-dependencies]
 build = [
@@ -44,6 +43,11 @@ build = [
     "sphinx-autoapi >= 1.5.1",
     "torchtyping == 0.1.4",
     "transformers == 4.25.1",
+]
+models = [
+   "optax == 0.1.4",
+   "dm-haiku == 0.0.9",
+   "jax == 0.4.8",
 ]
 
 [tool.isort]

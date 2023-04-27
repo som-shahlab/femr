@@ -5,24 +5,19 @@ import pickle
 import time
 from typing import List, Optional
 
-import piton
-import piton.datasets
-from piton.featurizers.core import FeaturizerList
-from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import NLabelsPerPatientLabeler, TimeHorizon
-from piton.labelers.omop import (
-    LupusCodeLabeler,
-    Harutyunyan_DecompensationLabeler,
-    Harutyunyan_MortalityLabeler,
-    ChexpertLabeler,
-)
-from piton.labelers.omop_inpatient_admissions import (
+import femr
+import femr.datasets
+from femr.featurizers import FeaturizerList
+from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
+from femr.labelers import NLabelsPerPatientLabeler, TimeHorizon
+from femr.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
+from femr.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
     InpatientMortalityLabeler,
     InpatientReadmissionLabeler,
 )
-from piton.labelers.omop_lab_values import (
+from femr.labelers.omop_lab_values import (
     AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
@@ -111,12 +106,12 @@ if __name__ == "__main__":
     def print_log(name: str, content: str):
         print(f"{int(time.time() - START_TIME)} | {name} | {content}")
 
-    parser = argparse.ArgumentParser(description="Run Piton featurization")
+    parser = argparse.ArgumentParser(description="Run femr featurization")
 
     parser.add_argument(
         "path_to_patient_database",
         type=str,
-        help="Path of folder to the Piton PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5/'",
+        help="Path of folder to the femr PatientDatabase. Example: '/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v5/'",
     )
 
     parser.add_argument(
@@ -179,7 +174,7 @@ if __name__ == "__main__":
     os.makedirs(PATH_TO_OUTPUT_DIR, exist_ok=True)
 
     # Load PatientDatabase + Ontology
-    database = piton.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
+    database = femr.datasets.PatientDatabase(PATH_TO_PATIENT_DATABASE)
     ontology = database.get_ontology()
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 

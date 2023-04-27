@@ -8,10 +8,10 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-import piton.datasets
-from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import move_datetime_to_end_of_day
-from piton.labelers.omop_lab_values import (
+import femr.datasets
+from femr.labelers import TimeHorizon
+from femr.labelers.omop import move_datetime_to_end_of_day
+from femr.labelers.omop_lab_values import (
     AnemiaLabValueLabeler,
     HyperkalemiaLabValueLabeler,
     HypoglycemiaLabValueLabeler,
@@ -34,32 +34,13 @@ from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locall
 
 
 class DummyOntology_Generic:
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "two",
-            "OMOP_CONCEPT_A",
-            "OMOP_CONCEPT_B",
-            "five",
-            "six",
-            "OMOP_CONCEPT_A_CHILD",
-            "OMOP_CONCEPT_A_CHILD_CHILD",
-            "nine",
-            "ten",
-            "eleven",
-            "OMOP_CONCEPT_B_CHILD",
-            "OMOP_CONCEPT_A_CHILD",
-            "fourteen",
-        ]
-
-    def get_children(self, parent_code: int) -> List[int]:
-        if parent_code == 3:
-            return [7, 13]
-        elif parent_code == 4:
-            return [12]
-        elif parent_code == 7:
-            return [8]
+    def get_children(self, parent_code: str) -> List[str]:
+        if parent_code == "OMOP_CONCEPT_A":
+            return ["OMOP_CONCEPT_A_CHILD", "OMOP_CONCEPT_A_CHILD2"]
+        elif parent_code == "OMOP_CONCEPT_B":
+            return ["OMOP_CONCEPT_B_CHILD"]
+        elif parent_code == "OMOP_CONCEPT_A_CHILD":
+            return ["OMOP_CONCEPT_A_CHILD_CHILD"]
         else:
             return []
 
@@ -109,12 +90,19 @@ def test_constructor():
     ontology = DummyOntology_Generic()
     labeler = DummyLabeler1(ontology, "severe")  # type: ignore
     assert labeler.severity == "severe"
-    assert set(labeler.outcome_codes) == {3, 4, 7, 8, 12, 13}
+    assert set(labeler.outcome_codes) == {
+        "OMOP_CONCEPT_A",
+        "OMOP_CONCEPT_A_CHILD2",
+        "OMOP_CONCEPT_B_CHILD",
+        "OMOP_CONCEPT_A_CHILD",
+        "OMOP_CONCEPT_B",
+        "OMOP_CONCEPT_A_CHILD_CHILD",
+    }
 
     # Constructor 2
     labeler = DummyLabeler2(ontology, "normal")
     assert labeler.severity == "normal"
-    assert set(labeler.outcome_codes) == {4, 12}
+    assert set(labeler.outcome_codes) == {"OMOP_CONCEPT_B", "OMOP_CONCEPT_B_CHILD"}
 
 
 def test_labeling(tmp_path: pathlib.Path):
@@ -125,38 +113,38 @@ def test_labeling(tmp_path: pathlib.Path):
     events_with_labels: EventsWithLabels = [
         # fmt: off
         (event((2000, 1, 3), 0, None), "skip"),
-        (event((2000, 1, 4), 7, None), "skip"),  # lab test
+        (event((2000, 1, 4), "OMOP_CONCEPT_A_CHILD", None), "skip"),  # lab test
         (event((2000, 1, 5), 2, None), "skip"),
         #
-        (event((2002, 1, 3), 1, end=datetime.datetime(2002, 10, 4), omop_table='visit_occurrence'), 'skip'), # admission
+        (event((2002, 1, 3), "Visit/IP", end=datetime.datetime(2002, 10, 4), omop_table='visit_occurrence'), 'skip'), # admission
         #
-        (event((2002, 10, 1), 1, end=datetime.datetime(2002, 10, 10), omop_table='visit_occurrence'), True), # admission
-        (event((2002, 10, 5, 0), 3, None), "skip"),  # lab test - 5
+        (event((2002, 10, 1), "Visit/IP", end=datetime.datetime(2002, 10, 10), omop_table='visit_occurrence'), True), # admission
+        (event((2002, 10, 5, 0), "OMOP_CONCEPT_A", None), "skip"),  # lab test - 5
         (event((2002, 10, 5, 2), 5, None), "skip"),
-        (event((2002, 10, 5, 2), 4, 20.5, unit="mmol/L"), "skip"),  # lab test - 7
+        (event((2002, 10, 5, 2), "OMOP_CONCEPT_B", 20.5, unit="mmol/L"), "skip"),  # lab test - 7
         (event((2002, 10, 5, 3), 6, None), "skip"),
         #
-        (event((2004, 3, 1), 1, end=datetime.datetime(2004, 3, 2, 1), omop_table='visit_occurrence'), True), # admission
-        (event((2004, 3, 2), 12, -20.5, unit="mmol/L"), "skip"),  # lab test - 10
+        (event((2004, 3, 1), "Visit/IP", end=datetime.datetime(2004, 3, 2, 1), omop_table='visit_occurrence'), True), # admission
+        (event((2004, 3, 2), "OMOP_CONCEPT_B_CHILD", -20.5, unit="mmol/L"), "skip"),  # lab test - 10
         #
-        (event((2005, 9, 1), 1, end=datetime.datetime(2005, 9, 4), omop_table='visit_occurrence'), False), # admission
-        (event((2005, 9, 2), 12, 200.5, unit="mmol/L"), "skip"),  # lab test - 12
+        (event((2005, 9, 1), "Visit/IP", end=datetime.datetime(2005, 9, 4), omop_table='visit_occurrence'), False), # admission
+        (event((2005, 9, 2), "OMOP_CONCEPT_B_CHILD", 200.5, unit="mmol/L"), "skip"),  # lab test - 12
         #
-        (event((2006, 5, 1), 1, end=datetime.datetime(2006, 5, 5), omop_table='visit_occurrence'), 'skip'), # admission
+        (event((2006, 5, 1), "Visit/IP", end=datetime.datetime(2006, 5, 5), omop_table='visit_occurrence'), 'skip'), # admission
         (event((2006, 5, 2), 0, None), "skip"),
         (event((2006, 5, 3), 9, None), "skip"),
-        (event((2006, 5, 3, 11), 8, None), "skip"),  # lab test - 16
+        (event((2006, 5, 3, 11), "OMOP_CONCEPT_A_CHILD_CHILD", None), "skip"),  # lab test - 16
         #
-        (event((2008, 1, 3), 1, end=datetime.datetime(2008, 1, 5), omop_table='visit_occurrence'), False), # admission
-        (event((2008, 1, 4), 12, 75.5, unit="mmol/L"), "skip"),  # lab test - 18
+        (event((2008, 1, 3), "Visit/IP", end=datetime.datetime(2008, 1, 5), omop_table='visit_occurrence'), False), # admission
+        (event((2008, 1, 4), "OMOP_CONCEPT_B_CHILD", 75.5, unit="mmol/L"), "skip"),  # lab test - 18
         #
-        (event((2009, 11, 4), 1, end=datetime.datetime(2009, 11, 4, 1), omop_table='visit_occurrence'), True), # admission
-        (event((2009, 11, 4), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 20
+        (event((2009, 11, 4), "Visit/IP", end=datetime.datetime(2009, 11, 4, 1), omop_table='visit_occurrence'), True), # admission
+        (event((2009, 11, 4), "OMOP_CONCEPT_B_CHILD", 45.5, unit="mmol/L"), "skip"),  # lab test - 20
         #
-        (event((2010, 10, 30), 1, end=datetime.datetime(2010, 12, 4), omop_table='visit_occurrence'), 'skip'), # admission
+        (event((2010, 10, 30), "Visit/IP", end=datetime.datetime(2010, 12, 4), omop_table='visit_occurrence'), 'skip'), # admission
         #
-        (event((2011, 1, 3), 1, end=datetime.datetime(2011, 1, 14), omop_table='visit_occurrence'), False), # admission
-        (event((2011, 1, 4), 13, 125.5, unit="mmol/L"), "skip"),
+        (event((2011, 1, 3), "Visit/IP", end=datetime.datetime(2011, 1, 14), omop_table='visit_occurrence'), False), # admission
+        (event((2011, 1, 4), "OMOP_CONCEPT_A_CHILD2", 125.5, unit="mmol/L"), "skip"),
         # fmt: on
     ]
     true_prediction_times: List[datetime.datetime] = [
@@ -180,11 +168,11 @@ def test_labeling(tmp_path: pathlib.Path):
     events_with_labels = [
         # fmt: off
         # yes
-        (event((2002, 1, 3), 1, end=datetime.datetime(2002, 1, 10), omop_table='visit_occurrence'), True), # admission
-        (event((2002, 1, 4), 12, 45.5, unit="mmol/L"), "skip"),  # lab test - 1
+        (event((2002, 1, 3), "Visit/IP", end=datetime.datetime(2002, 1, 10), omop_table='visit_occurrence'), True), # admission
+        (event((2002, 1, 4), "OMOP_CONCEPT_B_CHILD", 45.5, unit="mmol/L"), "skip"),  # lab test - 1
         # no
-        (event((2003, 1, 3), 1, end=datetime.datetime(2003, 1, 10), omop_table='visit_occurrence'), False), # admission
-        (event((2003, 1, 3), 12, 45.5, unit="mmol/L"), "skip"),
+        (event((2003, 1, 3), "Visit/IP", end=datetime.datetime(2003, 1, 10), omop_table='visit_occurrence'), False), # admission
+        (event((2003, 1, 3), "OMOP_CONCEPT_B_CHILD", 45.5, unit="mmol/L"), "skip"),
         # lab test - 3
         # fmt: on
     ]
@@ -209,11 +197,11 @@ def test_labeling(tmp_path: pathlib.Path):
         labeler = DummyLabeler1(ontology, "severe", visit_start_adjust_func=move_datetime_to_end_of_day)  # type: ignore
         events_with_labels = [
             # fmt: off
-            (event((2009, 11, 4), 1, end=datetime.datetime(2009, 11, 4, 1), omop_table='visit_occurrence'), True), # admission
-            (event((2009, 11, 4), 12, 45.5, unit="mmol/L"), "skip"),
+            (event((2009, 11, 4), "Visit/IP", end=datetime.datetime(2009, 11, 4, 1), omop_table='visit_occurrence'), True), # admission
+            (event((2009, 11, 4), "OMOP_CONCEPT_B_CHILD", 45.5, unit="mmol/L"), "skip"),
             # fmt: on
         ]
-        patient = piton.Patient(0, [x[0] for x in events_with_labels])
+        patient = femr.Patient(0, [x[0] for x in events_with_labels])
         labeler.label(patient)
 
 
@@ -267,35 +255,35 @@ def _run_specific_labvalue_test(
     outcome_codes_cyclic_iter = itertools.cycle(outcome_codes)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 1), 1, end=datetime.datetime(2000, 1, 3), omop_table='visit_occurrence'), True),  # admission
+        (event((2000, 1, 1), "Visit/IP", end=datetime.datetime(2000, 1, 3), omop_table='visit_occurrence'), True),  # admission
         (event((2000, 1, 2), next(outcome_codes_cyclic_iter),
                severe_values[0][0], unit=severe_values[0][1]), "skip"),  # lab test - severe - 1
         #
-        (event((2001, 1, 1), 1, end=datetime.datetime(2001, 1, 3), omop_table='visit_occurrence'), False),  # admission
+        (event((2001, 1, 1), "Visit/IP", end=datetime.datetime(2001, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2001, 1, 2), next(outcome_codes_cyclic_iter),
                moderate_values[0][0], unit=moderate_values[0][1]), "skip"),  # lab test - moderate
         #
-        (event((2002, 1, 1), 1, end=datetime.datetime(2002, 1, 3), omop_table='visit_occurrence'), False),  # admission
+        (event((2002, 1, 1), "Visit/IP", end=datetime.datetime(2002, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2002, 1, 2), next(outcome_codes_cyclic_iter),
                mild_values[0][0], unit=mild_values[0][1]), "skip"),  # lab test - mild
         #
-        (event((2003, 1, 1), 1, end=datetime.datetime(2003, 1, 3), omop_table='visit_occurrence'), False),  # admission
+        (event((2003, 1, 1), "Visit/IP", end=datetime.datetime(2003, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2003, 1, 2), next(outcome_codes_cyclic_iter),
                normal_values[0][0], unit=normal_values[0][1]), "skip"),  # lab test - normal
         #
-        (event((2004, 1, 1), 1, end=datetime.datetime(2004, 1, 10), omop_table='visit_occurrence'), True),  # admission
+        (event((2004, 1, 1), "Visit/IP", end=datetime.datetime(2004, 1, 10), omop_table='visit_occurrence'), True),  # admission
         (event((2004, 1, 2), next(outcome_codes_cyclic_iter),
                normal_values[1][0], unit=normal_values[1][1]), "skip"),  # lab test - normal
         (event((2004, 1, 9), next(outcome_codes_cyclic_iter),
                severe_values[1][0], unit=severe_values[1][1]), "skip"),  # lab test - severe - 10
         #
-        (event((2005, 1, 1), 1, end=datetime.datetime(2005, 1, 3), omop_table='visit_occurrence'), False),  # admission
+        (event((2005, 1, 1), "Visit/IP", end=datetime.datetime(2005, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2005, 1, 2), next(outcome_codes_cyclic_iter),
                mild_values[1][0], unit=mild_values[1][1]), "skip"),  # lab test - mild
         (event((2005, 1, 8), next(outcome_codes_cyclic_iter),
                moderate_values[1][0], unit=moderate_values[1][1]), "skip"),  # lab test - moderate
         #
-        (event((2006, 1, 1), 1, end=datetime.datetime(2006, 1, 3), omop_table='visit_occurrence'), False),  # admission
+        (event((2006, 1, 1), "Visit/IP", end=datetime.datetime(2006, 1, 3), omop_table='visit_occurrence'), False),  # admission
         (event((2006, 1, 2), next(outcome_codes_cyclic_iter),
                normal_values[1][0], unit=normal_values[1][1]), "skip"),
         # lab test - normal
@@ -320,30 +308,20 @@ def _run_specific_labvalue_test(
 
 class DummyOntology_Specific:
     def __init__(self, new_codes: List[str]):
-        self.new_codes = new_codes
+        self.new_codes = new_codes + ["", ""]
 
-    def get_dictionary(self):
-        return [
-            "zero",
-            "Visit/IP",
-            "child_1_1",  # two
-            "child_1",  # three
-            "child_2",  # four
-            "five",
-        ] + self.new_codes
-
-    def get_children(self, parent_code: int) -> List[int]:
-        if parent_code == 3:
-            return [2]
-        elif parent_code == 6:
-            return [3]
-        elif parent_code == 7:
-            return [4]
+    def get_children(self, parent_code: str) -> List[str]:
+        if parent_code == "child_1":
+            return ["child_1_1"]
+        elif parent_code == self.new_codes[0]:
+            return ["child_1"]
+        elif parent_code == self.new_codes[1]:
+            return ["child_2"]
         return []
 
 
 def test_thrombocytopenia(tmp_path: pathlib.Path):
-    outcome_codes: set = {2, 3, 4, 6, 7}
+    outcome_codes = {"child_1", "child_1_1", "LOINC/LP393218-5", "LOINC/LG32892-8", "child_2", "LOINC/777-3"}
     labeler = _create_specific_labvalue_labeler(
         ThrombocytopeniaLabValueLabeler,
         "severe",
@@ -366,7 +344,16 @@ def test_thrombocytopenia(tmp_path: pathlib.Path):
 
 
 def test_hyperkalemia(tmp_path: pathlib.Path):
-    outcome_codes: set = {2, 3, 4, 6, 7, 8}
+    outcome_codes = {
+        "child_1_1",
+        "child_2",
+        "child_1",
+        "LOINC/LP386618-5",
+        "LOINC/LG10990-6",
+        "LOINC/LG7931-1",
+        "LOINC/6298-4",
+        "LOINC/2823-3",
+    }
     labeler = _create_specific_labvalue_labeler(
         HyperkalemiaLabValueLabeler,
         "severe",
@@ -389,7 +376,15 @@ def test_hyperkalemia(tmp_path: pathlib.Path):
 
 
 def test_hypoglycemia(tmp_path: pathlib.Path):
-    outcome_codes: set = {2, 3, 4, 6, 7}
+    outcome_codes = {
+        "child_2",
+        "child_1_1",
+        "SNOMED/33747003",
+        "LOINC/LP416145-3",
+        "child_1",
+        "LOINC/14749-6",
+        "LOINC/15074-8",
+    }
     labeler = _create_specific_labvalue_labeler(
         HypoglycemiaLabValueLabeler,
         "severe",
@@ -412,7 +407,7 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
 
 
 def test_hyponatremia(tmp_path: pathlib.Path):
-    outcome_codes: set = {2, 3, 6}
+    outcome_codes = {"child_1", "child_1_1", "child_2", "LOINC/LG11363-5", "LOINC/2951-2", "LOINC/2947-0"}
     labeler = _create_specific_labvalue_labeler(
         HyponatremiaLabValueLabeler,
         "severe",
@@ -435,7 +430,7 @@ def test_hyponatremia(tmp_path: pathlib.Path):
 
 
 def test_anemia(tmp_path: pathlib.Path):
-    outcome_codes: set = {2, 3, 6}
+    outcome_codes: set = {"LOINC/LP392452-1", "child_1_1", "child_1"}
     labeler = _create_specific_labvalue_labeler(
         AnemiaLabValueLabeler,
         "severe",

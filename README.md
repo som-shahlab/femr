@@ -11,10 +11,35 @@
 
 # Installation
 
-To install **FEMR** run the following, replacing `<FEMR_ENV>` with the desired name of your conda environment:
+There are two variants of the **FEMR** package, a CPU only version and a CUDA enabled version.
+
+## How to install **FEMR** without CUDA
 
 ```bash
-conda create -n FEMR_ENV python=3.10 bazel=5.3 clangxx=14 -c conda-forge -y
+pip install femr
+```
+
+## How to install **FEMR** with CUDA support
+
+Note that CUDA-enabled **FEMR** requires jax in order to function.
+
+```bash
+pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install "femr_cuda[models]"
+```
+
+# Development
+
+The following guides are for developers who want to contribute to **FEMR**.
+
+## Building from source
+
+In some scenarios (such as contributing to **FEMR**), you might want to compile the package from source.
+
+In order to do so, follow the following instructions.
+
+```bash
+conda create -n FEMR_ENV python=3.10 bazel=6 -c conda-forge -y
 conda activate FEMR_ENV
 
 export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
@@ -24,62 +49,52 @@ cd femr
 pip install -e .
 ```
 
-### Note: FEMR currently is only tested on Linux. Installation might not work on macOS or Windows. Support for those platforms is currently in progress.
-
 ### Special note for NERO users
 
-As Nero does not have internet access, you must run the following before running the code below.
+As Nero does not have internet access, you must run the following before running the code above.
 
 ```bash
 export DISTDIR=/local-scratch/nigam/distdir
 ```
 
-1. Download the right version of cuda on your local machine and transfer it over a folder in nero [link](https://developer.nvidia.com/cuda-11.1.1-download-archive?target_os=Linux&target_arch=x86_64&target_distro=Ubuntu&target_version=1804&target_type=runfilelocal)
-2. Run the installer as bash command by providing path to install such as `bash <CUDA_PATH> --installpath=<INSTALL_PATH>`, where `<CUDA_PATH>` is the path to the file you downloaded/transferred in step 1 and `<INSTALL_PATH>` is where you'd like to store the CUDA installation files. During installation, uncheck all the boxes except cuda toolkit.
-3. After the installation completes, it will spit out two paths on terminal that should be put into your .bashrc file:
-```bash
-export PATH="<INSTALL_PATH>/bin:$PATH"
-export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
-```
-4. Delete the `/tmp/cuda-installer.log` file or it will create problems (e.g., segmentation fault) for other users
 
-Note: you may need to restart your terminal for the changes to reflect
+### (Optional) Installing CUDA on Nero / Carina
 
-### (Optional) Installing PyTorch
-
-If you are on Nero, you need to install PyTorch using:
-
-```bash
-conda install numpy -y
-pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
-```
-
-If you are on Carina, you need to install PyTorch using:
-
-```bash
-conda install numpy pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
-```
-
-### (Optional) Installing CUDA on Nero
+As a side note for Nero/Carina users, do not use your home directory to save the femr repo and installation files due to limited storage. We recommend using the shared project folder, e.g., on nero, use '/local-scratch/nigam/project/...'
 
 If you are using Nero, you will need to install CUDA manually until the CUDA version on Nero is updated. To do so, follow these steps:
 
-1. Download version 11.1.1 of CUDA onto your local machine [from here](https://developer.nvidia.com/cuda-11.1.1-download-archive?target_os=Linux&target_arch=x86_64&target_distro=Ubuntu&target_version=1804&target_type=runfilelocal)
+1. Download version 11.8 of CUDA onto your local machine [from here](https://developer.nvidia.com/cuda-11-8-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=18.04&target_type=runfile_local)
 2. Copy your CUDA download from your local machine onto Nero, into whatever folder you'd like. We'll refer to the path to this folder as `<PATH_TO_CUDA_INSTALLER>` from now on.
     - *Note:* Nero doesn't work with `scp`. You can use an alternative like `pscp`, which functions basically identically to `scp`. You can install `pscp` on a Mac by using `brew install putty`.
 3. `ssh` into Nero using `ssh <username>@nero-nigam.compute.stanford.edu`
 4. On Nero, run the CUDA installer as a bash command as follows: `bash <PATH_TO_CUDA_INSTALLER> --installpath=<INSTALL_PATH>`, where `<PATH_TO_CUDA_INSTALLER>` is the path to the file you downloaded/transferred in Step #2, and `<INSTALL_PATH>` is where you'd like to save your CUDA installation files. We recommend using `~` or something similar.
 5. The CUDA installer will pop-up a window during installation. Uncheck all of the boxes it presents except for the box labeled "cuda toolkit".
-6. After the installation completes, the installer will print out two paths to your console. Take note of these paths, and copy them into your `.bashrc` file by running the following commands. You may need to restart your terminal for the changes to be reflected.
+6. After the installation completes, the installer will print out two paths to your console. Take note of these paths, and copy them into your `.bashrc` file by running the following commands.
+
+7. Install cuDNN v8.7.0 (November 28th, 2022) for CUDA. Go to this [link](https://developer.nvidia.com/rdp/cudnn-archive) and download the file
+`Download cuDNN v8.7.0 (November 28th, 2022), for CUDA 11.x` -> `Local Installer for Linux x86_64 (Tar)` on your local computer and transfer it
+over to your local folder in nero. Then follow the instruction [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
+section 1.3. Note that you need to copy over cudnn files to your local cuda. For example,
+
+- `cp cudnn-*-archive/include/cudnn*.h <path_to_your_cuda>/include`
+- `cp -P cudnn-*-archive/lib/libcudnn* <path_to_your_cuda>/lib64`
+- `chmod a+r <path_to_your_cuda>/include/cudnn*.h <path_to_your_cuda>/lib64/libcudnn*`
+
+8. Add the following to your .bashrc file. You may need to restart your terminal for the changes to be reflected.
+
 ```bash
 export PATH="<INSTALL_PATH>/bin:$PATH"
 export LD_LIBRARY_PATH="<INSTALL_PATH>/lib64:$LD_LIBRARY_PATH"
 ```
-4. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
 
-# Development
+To write in a .bashrc file, use
+```bash
+nano ~/.bashrc
+```
 
-The following guides are for developers who want to contribute to **FEMR**.
+9. Run `rm /tmp/cuda-installer.log` to remove the installer log (if you don't do this, it will cause a segmentation fault for other users when they try to install CUDA).
+
 
 ## Precommit checks
 
@@ -176,19 +191,12 @@ python3 tools/stanford/download_bigquery.py \
     <PATH_TO_LOCAL_FOLDER_WHERE_DATASET_WILL_BE_DOWNLOADED> \
     --excluded_tables <(Optional)_NAME_OF_TABLE_1_TO_BE_IGNORED> <(Optional)_NAME_OF_TABLE_2_TO_BE_IGNORED> ...
 
-<<<<<<< HEAD
 # Example:
 python3 tools/stanford/download_bigquery.py \
     som-nero-nigam-starr \
     som-nero-nigam-starr.mimic_omop
     ./bigquery_dump/
 ```
-=======
-```bash
-export OMOP_SOURCE=/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_1pcent_2022_11_09
-export EXTRACT_DESTINATION=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09
-export EXTRACT_LOGS=/local-scratch/nigam/projects/mwornow/piton_starr_omop_cdm5_deid_1pcent_2022_11_09_logs
->>>>>>> origin/main
 
 Second, run FEMR on your BigQuery download with the following:
 
@@ -213,22 +221,17 @@ python3 tools/omop/normalize_visit_detail.py --num_threads 20 $OMOP_SOURCE "${EX
 etl_mimic_omop "${EXTRACT_DESTINATION}_visit_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 20
 ```
 
+### (Optional) Installing PyTorch
 
-## Training CLMBR
+If you are on Nero, you need to install PyTorch using:
 
-The tutorial to run CLMBR model is in `tutorials/4_train_clmbr_model.py`. However, before running this script, some additional dependencies need to be installed.
-Please follow the steps below:
+```bash
+conda install numpy -y
+pip install torch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu111
+```
 
-1. Jax is one of the important package to train clmbr, but before installing that, you will need to have cuda and cudnn installed. For Nero users, please follow the
-instructions above to install cuda. Additionally, install the latest version of cudnn from nvidia. You will need to create developer account and download the file for specific version
-of your system. For Nero users, please go to this [link](https://developer.nvidia.com/rdp/cudnn-archive) and download the file
-`Download cuDNN v8.7.0 (November 28th, 2022), for CUDA 11.x` -> `Local Installer for Linux x86_64 (Tar)` on your local computer and transfer it
-over to your local folder in nero. Then follow the instruction [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
-section 1.3. Note that you need to copy over cudnn files to your local cuda. For example,
+If you are on Carina, you need to install PyTorch using:
 
-- `cp cudnn-*-archive/include/cudnn*.h <path_to_your_cuda>/include`
-- `cp -P cudnn-*-archive/lib/libcudnn* <path_to_your_cuda>/lib64`
-- `chmod a+r <path_to_your_cuda>/include/cudnn*.h <path_to_your_cuda>/lib64/libcudnn*`
-
-2. Install Jax by running `pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`, as shown [here](https://github.com/google/jax#installation).
-3. Run `pip install dm-haiku msgpack optax`
+```bash
+conda install numpy pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
+```

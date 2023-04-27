@@ -3,7 +3,7 @@
 #include <random>
 #include <vector>
 
-template<typename T>
+template <typename T>
 class ReservoirSampler {
    public:
     ReservoirSampler(size_t size) : total_size(size), int_dist(0, size - 1) {

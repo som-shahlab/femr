@@ -78,6 +78,7 @@ pybind_library(
         "dataloader_extension.cc",
     ],
     deps=[
+        ":malloc_trim",
         ":create_dictionary",
         ":create_survival_dictionary",
         ":constdb",
@@ -457,6 +458,16 @@ cc_library(
     ],
     deps=[
         ":flatmap",
+	":database",
+    ],
+)
+
+cc_library(
+    name="malloc_trim",
+    hdrs=[
+        "malloc_trim.hh",
+    ],
+    deps=[
     ],
 )
 
@@ -467,5 +478,35 @@ cc_library(
     ],
     deps=[
         "@json",
+    ],
+)
+
+cc_binary(
+    name = "simple_test",
+    srcs = ["simple_test.cc"],
+)
+
+test_suite(
+	name = "non_flaky_test",
+	tags = ["-flaky"],
+)
+
+cc_binary(
+    name="convert_dictionary_formats",
+    srcs = ["convert_dictionary_formats.cc"],
+    deps = [
+        ":database",
+        "@json",
+    ]
+)
+
+cc_test(
+    name="survival_test",
+    srcs=[
+        "survival_test.cc",
+    ],
+    deps=[
+        ":survival",
+        "@gtest//:gtest_main",
     ],
 )

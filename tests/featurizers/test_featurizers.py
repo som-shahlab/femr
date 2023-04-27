@@ -8,16 +8,16 @@ from typing import cast
 import numpy as np
 import scipy.sparse
 
-import piton
-import piton.datasets
-from piton.featurizers.core import ColumnValue, FeaturizerList
-from piton.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
-from piton.labelers.core import TimeHorizon
-from piton.labelers.omop import CodeLabeler
+import femr
+import femr.datasets
+from femr.featurizers import ColumnValue, FeaturizerList
+from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
+from femr.labelers import TimeHorizon
+from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import create_database, get_piton_code, load_from_pkl, run_test_locally, save_to_pkl
+from tools import create_database, get_femr_code, load_from_pkl, run_test_locally, save_to_pkl
 
 
 def _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient):
@@ -32,7 +32,7 @@ def _assert_featurized_patients_structure(labeled_patients, featurized_patients,
         labels_per_patient
     ), f"len(featurized_patients[1]) = {len(featurized_patients[1])}"
 
-    patient_ids = np.array(sorted([i for i in range(len(labeled_patients))] * len(labels_per_patient)))
+    patient_ids = np.array(sorted(list(labeled_patients) * len(labels_per_patient)))
     assert np.sum(featurized_patients[1] == patient_ids) == len(labeled_patients) * len(labels_per_patient)
 
     all_labels = np.array(labels_per_patient * len(labeled_patients))
@@ -48,15 +48,15 @@ def test_age_featurizer(tmp_path: pathlib.Path):
     create_database(tmp_path)
 
     database_path = os.path.join(tmp_path, "target")
-    database = piton.datasets.PatientDatabase(database_path)
+    database = femr.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_outcome_code = get_piton_code(ontology, 2)
-    piton_admission_code = get_piton_code(ontology, 3)
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
 
-    labeler = CodeLabeler([piton_outcome_code], time_horizon, [piton_admission_code])
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
 
-    patient: piton.Patient = cast(piton.Patient, database[0])
+    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
     labels = labeler.label(patient)
     featurizer = AgeFeaturizer(is_normalize=False)
     patient_features = featurizer.featurize(patient, labels, ontology)
@@ -85,15 +85,15 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     create_database(tmp_path)
 
     database_path = os.path.join(tmp_path, "target")
-    database = piton.datasets.PatientDatabase(database_path)
+    database = femr.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_outcome_code = get_piton_code(ontology, 2)
-    piton_admission_code = get_piton_code(ontology, 3)
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
 
-    labeler = CodeLabeler([piton_outcome_code], time_horizon, [piton_admission_code])
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
 
-    patient: piton.Patient = cast(piton.Patient, database[0])
+    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
     labels = labeler.label(patient)
     featurizer = CountFeaturizer()
     featurizer.preprocess(patient, labels)
@@ -131,15 +131,15 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     create_database(tmp_path)
 
     database_path = os.path.join(tmp_path, "target")
-    database = piton.datasets.PatientDatabase(database_path)
+    database = femr.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_outcome_code = get_piton_code(ontology, 2)
-    piton_admission_code = get_piton_code(ontology, 3)
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
 
-    labeler = CodeLabeler([piton_outcome_code], time_horizon, [piton_admission_code])
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
 
-    patient: piton.Patient = cast(piton.Patient, database[0])
+    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
     labels = labeler.label(patient)
     time_bins = [
         datetime.timedelta(days=90),
@@ -195,13 +195,13 @@ def test_complete_featurization(tmp_path: pathlib.Path):
     create_database(tmp_path)
 
     database_path = os.path.join(tmp_path, "target")
-    database = piton.datasets.PatientDatabase(database_path)
+    database = femr.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_outcome_code = get_piton_code(ontology, 2)
-    piton_admission_code = get_piton_code(ontology, 3)
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
 
-    labeler = CodeLabeler([piton_outcome_code], time_horizon, [piton_admission_code])
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
@@ -246,13 +246,13 @@ def test_serialization_and_deserialization(tmp_path: pathlib.Path):
     create_database(tmp_path)
 
     database_path = os.path.join(tmp_path, "target")
-    database = piton.datasets.PatientDatabase(database_path)
+    database = femr.datasets.PatientDatabase(database_path)
     ontology = database.get_ontology()
 
-    piton_outcome_code = get_piton_code(ontology, 2)
-    piton_admission_code = get_piton_code(ontology, 3)
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
 
-    labeler = CodeLabeler([piton_outcome_code], time_horizon, [piton_admission_code])
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
     time_bins = [

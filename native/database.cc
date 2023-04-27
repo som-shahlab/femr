@@ -56,8 +56,8 @@ T read_element(const Dictionary& dict, uint32_t index) {
 }
 
 struct Entry {
-    uint32_t patient_id;
-    uint64_t original_patient_id;
+    uint32_t patient_offset;
+    uint64_t patient_id;
 
     uint32_t num_unique;
     uint32_t num_metadata;
@@ -66,18 +66,19 @@ struct Entry {
         data;  // of size 1 + num_unique + num_event
                // stores data, then unique values, then event metadata
 
-    bool operator<(const Entry& r) const { return patient_id > r.patient_id; }
+    bool operator<(const Entry& r) const {
+        return patient_offset > r.patient_offset;
+    }
 };
 
-void write_patient_to_buffer(uint32_t start_unique,
-                             uint64_t original_patient_id,
+void write_patient_to_buffer(uint32_t start_unique, uint64_t patient_id,
                              const Patient& current_patient,
                              std::vector<uint32_t>& buffer) {
     if (current_patient.birth_date < epoch) {
         throw std::runtime_error(
             absl::StrCat("Cannot have a birth date before epoch (1800) ",
                          absl::FormatCivilTime(current_patient.birth_date),
-                         " for ", original_patient_id));
+                         " for ", patient_id));
     }
     buffer.clear();
     buffer.push_back(start_unique);
@@ -93,8 +94,8 @@ void write_patient_to_buffer(uint32_t start_unique,
             static_cast<int64_t>(event.start_age_in_minutes) - last_age;
         if (delta < 0) {
             throw std::runtime_error(absl::StrCat(
-                "Patient days are not sorted in order ", original_patient_id,
-                " with ", event.start_age_in_minutes, " ", delta));
+                "Patient days are not sorted in order ", patient_id, " with ",
+                event.start_age_in_minutes, " ", delta));
         }
         if (delta > std::numeric_limits<uint32_t>::max()) {
             throw std::runtime_error("Out of bounds error?");
@@ -399,7 +400,7 @@ void read_patient_from_buffer(Patient& current_patient,
         }
     } else {
         throw std::runtime_error(absl::StrCat(
-            "Does not support reading piton databases of version ", version));
+            "Does not support reading femr databases of version ", version));
     }
 }
 
@@ -407,14 +408,14 @@ void reader_thread(
     const boost::filesystem::path& patient_file,
     moodycamel::BlockingReaderWriterCircularBuffer<boost::optional<Entry>>&
         queue,
-    std::atomic<uint64_t>& pid_and_unique_counter,
+    std::atomic<uint64_t>& offset_and_unique_counter,
     const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
     CSVReader<ZstdReader> reader(
-        patient_file, {"patient_id", "code", "start", "value", "metadata"},
+        patient_file, {"patient_id", "concept_id", "start", "value", "metadata"},
         ',');
 
-    uint64_t original_patient_id = 0;
+    uint64_t patient_id = 0;
     Patient current_patient;
     std::vector<std::string> current_unique;
     std::vector<std::string> current_metadata;
@@ -424,19 +425,19 @@ void reader_thread(
     std::vector<uint32_t> buffer;
     std::string byte_buffer;
     auto output_patient = [&]() {
-        if (original_patient_id == 0) {
+        if (patient_id == 0) {
             return;
         }
 
-        uint64_t pid_and_unique = pid_and_unique_counter.fetch_add(
+        uint64_t offset_and_unique = offset_and_unique_counter.fetch_add(
             1ul << 32 | current_unique.size(),
             std::memory_order::memory_order_relaxed);
 
-        uint32_t pid = pid_and_unique >> 32;
-        uint32_t start_unique = pid_and_unique & 0xfffffffful;
+        uint32_t offset = offset_and_unique >> 32;
+        uint32_t start_unique = offset_and_unique & 0xfffffffful;
 
-        write_patient_to_buffer(start_unique, original_patient_id,
-                                current_patient, buffer);
+        write_patient_to_buffer(start_unique, patient_id, current_patient,
+                                buffer);
 
         if (byte_buffer.size() <
             streamvbyte_max_compressedbytes(buffer.size())) {
@@ -451,7 +452,7 @@ void reader_thread(
         if (buffer.size() >= std::numeric_limits<uint32_t>::max()) {
             throw std::runtime_error(absl::StrCat(
                 "Cannot create a patient with more than uint32_t events ... ",
-                original_patient_id, " ", buffer.size()));
+                patient_id, " ", buffer.size()));
         }
 
         uint32_t count = buffer.size();
@@ -462,8 +463,8 @@ void reader_thread(
                     num_bytes);
 
         Entry next_entry;
-        next_entry.patient_id = pid;
-        next_entry.original_patient_id = original_patient_id;
+        next_entry.patient_offset = offset;
+        next_entry.patient_id = patient_id;
         next_entry.num_unique = current_unique.size();
         next_entry.num_metadata = current_metadata.size();
 
@@ -480,13 +481,8 @@ void reader_thread(
     };
 
     while (reader.next_row()) {
-        uint64_t patient_id;
-        // try {
-        attempt_parse_or_die(reader.get_row()[0], patient_id);
-        // } catch {
-        //     std::cout << "Error in `database.cc` for patient_id" << patient_id;
-        //     std::cout << absl::StrJoin(reader.get_row(), "-");
-        // }
+        uint64_t patient_offset;
+        attempt_parse_or_die(reader.get_row()[0], patient_offset);
         uint64_t code;
         // try {
         attempt_parse_or_die(reader.get_row()[1], code);
@@ -497,14 +493,14 @@ void reader_thread(
         absl::CivilSecond start;
         attempt_parse_time_or_die(reader.get_row()[2], start);
 
-        if (patient_id != original_patient_id) {
+        if (patient_offset != patient_id) {
             output_patient();
 
             current_patient.birth_date = absl::CivilDay(start);
             birth_date = absl::CivilSecond(current_patient.birth_date);
             current_patient.events.clear();
 
-            original_patient_id = patient_id;
+            patient_id = patient_offset;
             current_unique.clear();
             current_metadata.clear();
         }
@@ -545,7 +541,7 @@ void reader_thread(
     queue.wait_enqueue(boost::none);
 }
 
-PatientDatabase convert_patient_collection_to_patient_database(
+void convert_patient_collection_to_patient_database(
     const boost::filesystem::path& patient_root,
     const boost::filesystem::path& concept_root,
     const boost::filesystem::path& target, char delimiter, size_t num_threads) {
@@ -581,7 +577,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
         }
     }
 
-    std::vector<uint64_t> original_patient_ids;
+    std::vector<uint64_t> patient_ids;
     {
         DictionaryWriter patients(target / "patients");
         DictionaryWriter event_metadata(target / "event_metadata");
@@ -600,14 +596,14 @@ PatientDatabase convert_patient_collection_to_patient_database(
             queues;
         queues.reserve(files.size());
 
-        std::atomic<uint64_t> patient_and_unique_counter(0);
+        std::atomic<uint64_t> offset_and_unique_counter(0);
 
         for (size_t i = 0; i < files.size(); i++) {
             queues.emplace_back(QUEUE_SIZE);
             threads.emplace_back([i, &files, &queues,
-                                  &patient_and_unique_counter,
+                                  &offset_and_unique_counter,
                                   &text_value_to_index, &code_to_index]() {
-                reader_thread(files[i], queues[i], patient_and_unique_counter,
+                reader_thread(files[i], queues[i], offset_and_unique_counter,
                               code_to_index, text_value_to_index);
             });
         }
@@ -617,7 +613,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
         std::priority_queue<Entry> entry_heap;
 
         auto write_patient = [&](const Entry& entry) {
-            original_patient_ids.push_back(entry.original_patient_id);
+            patient_ids.push_back(entry.patient_id);
 
             patients.add_value(entry.data[0]);
 
@@ -649,11 +645,11 @@ PatientDatabase convert_patient_collection_to_patient_database(
         };
 
         dequeue_many_loop(queues, [&](Entry& entry) {
-            if (entry.patient_id == next_write_patient) {
+            if (entry.patient_offset == next_write_patient) {
                 write_patient(entry);
 
                 while (!entry_heap.empty() &&
-                       entry_heap.top().patient_id == next_write_patient) {
+                       entry_heap.top().patient_offset == next_write_patient) {
                     write_patient(entry_heap.top());
                     entry_heap.pop();
                 }
@@ -677,15 +673,15 @@ PatientDatabase convert_patient_collection_to_patient_database(
     {
         DictionaryWriter meta(target / "meta");
 
-        meta.add_value(container_to_view(original_patient_ids));
+        meta.add_value(container_to_view(patient_ids));
 
         std::vector<uint32_t> sorted_indices;
-        for (size_t i = 0; i < original_patient_ids.size(); i++) {
+        for (size_t i = 0; i < patient_ids.size(); i++) {
             sorted_indices.push_back(i);
         }
         std::sort(std::begin(sorted_indices), std::end(sorted_indices),
                   [&](uint32_t a, uint32_t b) {
-                      return original_patient_ids[a] < original_patient_ids[b];
+                      return patient_ids[a] < patient_ids[b];
                   });
 
         meta.add_value(container_to_view(sorted_indices));
@@ -711,8 +707,6 @@ PatientDatabase convert_patient_collection_to_patient_database(
         meta.add_value(element_to_view(&extract_id));
     }
     std::cout << "Done with meta " << absl::Now() << std::endl;
-
-    return PatientDatabase(target, false);
 }
 
 PatientDatabaseIterator::PatientDatabaseIterator(PatientDatabase* d)
@@ -720,8 +714,8 @@ PatientDatabaseIterator::PatientDatabaseIterator(PatientDatabase* d)
     (void)parent_database->patients->size();
 }
 
-Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
-    std::string_view data = (*(parent_database->patients))[patient_id];
+Patient& PatientDatabaseIterator::get_patient(uint32_t patient_offset) {
+    std::string_view data = (*(parent_database->patients))[patient_offset];
 
     uint32_t count;
     std::memcpy(&count, data.data(), sizeof(count));
@@ -739,7 +733,7 @@ Patient& PatientDatabaseIterator::get_patient(uint32_t patient_id) {
             buffer.data(), count);
     }
 
-    current_patient.patient_id = patient_id;
+    current_patient.patient_offset = patient_offset;
     read_patient_from_buffer(current_patient, buffer, count,
                              parent_database->version_id());
 
@@ -782,26 +776,29 @@ PatientDatabaseIterator PatientDatabase::iterator() {
     return PatientDatabaseIterator(this);
 }
 
-Patient PatientDatabase::get_patient(uint32_t patient_id) {
+Patient PatientDatabase::get_patient(uint32_t patient_offset) {
     auto iter = iterator();
-    return std::move(iter.get_patient(patient_id));
+    return std::move(iter.get_patient(patient_offset));
 }
 
-uint64_t PatientDatabase::get_original_patient_id(uint32_t patient_id) {
-    return read_span<uint64_t>(meta_dictionary, 0)[patient_id];
+uint64_t PatientDatabase::get_patient_id(uint32_t patient_offset) {
+    return read_span<uint64_t>(meta_dictionary, 0)[patient_offset];
 }
 
-boost::optional<uint32_t> PatientDatabase::get_patient_id_from_original(
-    uint64_t original_patient_id) {
+absl::Span<const uint64_t> PatientDatabase::get_patient_ids() {
+    return read_span<uint64_t>(meta_dictionary, 0);
+}
+
+boost::optional<uint32_t> PatientDatabase::get_patient_offset(
+    uint64_t patient_id) {
     absl::Span<const uint32_t> sorted_span =
         read_span<uint32_t>(meta_dictionary, 1);
-    const auto* iter = std::lower_bound(
-        std::begin(sorted_span), std::end(sorted_span), original_patient_id,
-        [&](uint32_t index, uint64_t original) {
-            return get_original_patient_id(index) < original;
-        });
-    if (iter == std::end(sorted_span) ||
-        get_original_patient_id(*iter) != original_patient_id) {
+    const auto* iter =
+        std::lower_bound(std::begin(sorted_span), std::end(sorted_span),
+                         patient_id, [&](uint32_t index, uint64_t original) {
+                             return get_patient_id(index) < original;
+                         });
+    if (iter == std::end(sorted_span) || get_patient_id(*iter) != patient_id) {
         return {};
     } else {
         return *iter;
@@ -834,16 +831,17 @@ Dictionary* PatientDatabase::get_unique_text_dictionary() {
     }
 }
 
-std::string_view PatientDatabase::get_event_metadata(uint32_t patient_id,
+std::string_view PatientDatabase::get_event_metadata(uint32_t patient_offset,
                                                      uint32_t event_index) {
     if (!event_metadata_dictionary) {
         return std::string_view(nullptr, 0);
     }
 
     absl::Span<const uint32_t> event_offsets =
-        read_span<uint32_t>(*event_metadata_dictionary, patient_id * 2);
+        read_span<uint32_t>(*event_metadata_dictionary, patient_offset * 2);
 
-    std::string_view data = (*event_metadata_dictionary)[patient_id * 2 + 1];
+    std::string_view data =
+        (*event_metadata_dictionary)[patient_offset * 2 + 1];
     uint32_t end;
     if (event_index == event_offsets.size() - 1) {
         end = data.size();

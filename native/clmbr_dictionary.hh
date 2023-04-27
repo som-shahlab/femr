@@ -5,15 +5,16 @@
 
 // The type of dictionary entry
 enum class DictEntryType {
-    CODE,
-    NUMERIC,
-    TEXT,
+    CODE = 0,
+    NUMERIC = 1,
+    TEXT = 2,
+    UNUSED = 3,
 };
 
 // The exact dictionary entry
 struct DictEntry {
     DictEntryType type;
-    uint32_t code;
+    std::string code_string;
     double weight;
 
     // Only for numeric dictionary entries
@@ -22,10 +23,18 @@ struct DictEntry {
     double val_end = 0;
 
     // Only for text dictionary entries
-    uint32_t text_value = 0;
+    std::string text_string;
 
-    bool operator<(const DictEntry& other) const { return weight < other.weight; }
+    std::tuple<double, DictEntryType, std::string, std::string, double, double>
+    get_sort_tuple() const {
+        return std::make_tuple(weight, type, code_string, text_string,
+                               val_start, val_end);
+    }
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DictEntry, type, code, weight, val_start,
-                                   val_end, text_value)
+    bool operator<(const DictEntry& other) const {
+        return get_sort_tuple() < other.get_sort_tuple();
+    }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(DictEntry, type, code_string, weight,
+                                   val_start, val_end, text_string)
 };

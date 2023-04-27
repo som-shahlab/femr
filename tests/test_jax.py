@@ -10,7 +10,7 @@ try:
     import numpy as np
     from jax import device_put, devices, grad, jit, random, value_and_grad
 
-    from piton.jax import (
+    from femr.jax import (
         embedding_dot,
         embedding_dot_fallback,
         exp_mean,
