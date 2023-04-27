@@ -326,14 +326,14 @@ class CountFeaturizer(Featurizer):
                     if code in self.included_codes:
                         code_counter[code] += 1
 
-            if label_idx < len(labels):
-                # For all labels that occur past the last event, add all
-                # events' total counts as these labels' feature values (basically,
-                # the featurization of these labels is the count of every single event)
-                for label in labels[label_idx:]:
-                    all_columns.append(
-                        [ColumnValue(self.code_to_column_index[code], count) for code, count in code_counter.items()]
-                    )
+            # For all labels that occur past the last event, add all
+            # events' total counts as these labels' feature values (basically,
+            # the featurization of these labels is the count of every single event)
+            for _ in labels[label_idx:]:
+                all_columns.append(
+                    [ColumnValue(self.code_to_column_index[code], count) for code, count in code_counter.items()]
+                )
+
         else:
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
             time_bins: List[datetime.timedelta] = sorted([x for x in self.time_bins if x is not None])
@@ -391,18 +391,17 @@ class CountFeaturizer(Featurizer):
                     labels[label_idx],
                 )
 
-                if label_idx == len(labels) - 1:
-                    all_columns.append(
-                        [
-                            ColumnValue(
-                                self.code_to_column_index[code] + i * len(self.included_codes),
-                                count,
-                            )
-                            for i in range(len(self.time_bins))
-                            for code, count in code_counts_per_bin[i].items()
-                        ]
-                    )
-                    break
+            for _ in labels[label_idx:]:
+                all_columns.append(
+                    [
+                        ColumnValue(
+                            self.code_to_column_index[code] + i * len(self.included_codes),
+                            count,
+                        )
+                        for i in range(len(self.time_bins))
+                        for code, count in code_counts_per_bin[i].items()
+                    ]
+                )
 
         return all_columns
 

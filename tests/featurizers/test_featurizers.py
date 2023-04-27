@@ -145,20 +145,25 @@ def test_count_featurizer_exclude_filter(tmp_path: pathlib.Path):
     count_nonempty_columns = lambda lol: len([x for x in lol if x])  # lol -> list of lists
 
     # Test filtering all codes
-    featurizer = CountFeaturizer(excluded_event_filter=lambda _: True, time_bins=[datetime.timedelta(days=0)])
+    featurizer = CountFeaturizer(excluded_event_filter=lambda _: True)
     featurizer.preprocess(patient, labels)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert count_nonempty_columns(patient_features) == 0
 
     # Test filtering no codes
-    featurizer = CountFeaturizer(excluded_event_filter=lambda _: False, time_bins=[datetime.timedelta(days=0)])
+    featurizer = CountFeaturizer(excluded_event_filter=lambda _: False)
     featurizer.preprocess(patient, labels)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
-    assert featurizer.get_num_columns() == 3  # Same behavior as previous test
+    assert count_nonempty_columns(patient_features) == 3
 
-    # TODO: Add test that simulates expected behavior
+    # Test filtering single code
+    featurizer = CountFeaturizer(excluded_event_filter=lambda e: e.code == "dummy/three")
+    featurizer.preprocess(patient, labels)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert count_nonempty_columns(patient_features) == 2
 
 
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
