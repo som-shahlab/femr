@@ -192,8 +192,11 @@ void create_dictionary(const std::string& input, const std::string& output) {
         entry.type = DictEntryType::CODE;
         entry.code_string = database.get_code_dictionary()[code];
         // Make sure to use the hierarchical Shanon entropy formula
-        entry.weight =
-            baseline * (weight * log(weight) + (1 - weight) * log(1 - weight));
+	if (weight == 1 || weight == 0) {
+            entry.weight = 0;
+        } else {
+	    entry.weight = baseline * (weight * log(weight) + (1 - weight) * log(1 - weight));
+	}
 
         h_entries.push_back(entry);
     }
