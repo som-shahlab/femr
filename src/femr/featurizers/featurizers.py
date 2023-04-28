@@ -216,8 +216,12 @@ class CountFeaturizer(Featurizer):
         # Map code to its feature's corresponding column index
         # NOTE: Must be sorted to preserve set ordering across instantiations
         self.code_to_column_index: Dict[str, int] = {code: idx for idx, code in enumerate(sorted(self.included_codes))}
+        self.column_index_to_name = {idx: code for code, idx in self.code_to_column_index.items()}
 
         if self.time_bins is not None:
+            raise ValueError(
+                "TODO: There's a bug with time bins -- we're looking into it! Reach-out for status updates."
+            )
             assert len(set(self.time_bins)) == len(
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
@@ -249,6 +253,7 @@ class CountFeaturizer(Featurizer):
                 # NOTE: Ordering of below two lines is important if want column indexes to start at 0
                 self.code_to_column_index[event.code] = len(self.code_to_column_index)
                 self.included_codes.add(event.code)
+                self.column_index_to_name[len(self.code_to_column_index) - 1] = event.code
 
     @classmethod
     def aggregate_preprocessed_featurizers(  # type: ignore[override]
@@ -384,14 +389,13 @@ class CountFeaturizer(Featurizer):
                         codes_per_bin[0].append((code, event.start))
                         code_counts_per_bin[0][code] += 1
 
+            for label in labels[label_idx:]:
                 _reshuffle_count_time_bins(
                     time_bins,
                     codes_per_bin,
                     code_counts_per_bin,
-                    labels[label_idx],
+                    label,
                 )
-
-            for _ in labels[label_idx:]:
                 all_columns.append(
                     [
                         ColumnValue(
@@ -410,3 +414,12 @@ class CountFeaturizer(Featurizer):
 
     def __repr__(self) -> str:
         return f"CountFeaturizer(number of included codes={len(self.included_codes)})"
+
+    def get_column_name(self, column_idx: int) -> str:
+        if self.time_bins is None:
+            return self.column_index_to_name[column_idx]
+        else:
+            return (
+                self.column_index_to_name[column_idx % len(self.included_codes)]
+                + f"_{self.time_bins[column_idx // len(self.included_codes)]}"
+            )
