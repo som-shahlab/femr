@@ -61,7 +61,7 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
                 if k not in ("start", "code", "value", "patient_id"):
                     if v == "":
                         v = None
-                    if k == "end" and v is not None:
+                    elif k == "end":
                         v = datetime.datetime.fromisoformat(v)
 
                     setattr(event, k, v)
@@ -137,8 +137,6 @@ def etl_simple_femr_program() -> None:
         event_dir = os.path.join(args.temp_location, "events")
         patients_dir = os.path.join(args.temp_location, "patients")
         omop_dir = os.path.join(args.temp_location, "omop_dir")
-
-        athena_concepts = set()
 
         if not os.path.exists(event_dir):
             rootLogger.info("Converting to events")
