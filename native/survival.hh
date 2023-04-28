@@ -100,13 +100,6 @@ struct SurvivalCalculator {
             std::sort(std::begin(event.times), std::end(event.times),
                       std::greater<uint32_t>());
 
-            for (const auto& t : event.times) {
-                if (t > 365 * 120 * 60 * 24) {
-                    std::cout << "Should never happen" << std::endl;
-                    abort();
-                }
-            }
-
             if (event.times.size() > 0) {
                 survival_events.emplace_back(std::move(event));
             }
@@ -124,24 +117,10 @@ struct SurvivalCalculator {
                 entry.times.pop_back();
             }
 
-            for (const auto& t : entry.times) {
-                if (t > 365 * 120 * 60 * 24) {
-                    std::cout << "Should never happen second" << std::endl;
-                    abort();
-                }
-            }
-
             if (entry.times.size() > 0) {
                 events.push_back(
                     std::make_pair(entry.times.back() - event_age, entry.code));
                 survival_events[current_index++] = std::move(entry);
-            }
-        }
-
-        for (const auto& t : events) {
-            if (t.first > 365 * 120 * 60 * 24) {
-                std::cout << "Should never happen second" << std::endl;
-                abort();
             }
         }
 
