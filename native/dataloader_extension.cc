@@ -59,9 +59,15 @@ class Task {
 
     virtual void start_patient(const Patient& p) {
         if (limit_date) {
-            int32_t censor_age_days =
-                (int32_t)std::max((int64_t)0, *limit_date - p.birth_date);
-            max_age = censor_age_days * 24 * 60;
+            int64_t censor_age_days = (int64_t)(*limit_date - p.birth_date);
+            int64_t max_age_unnormalized = censor_age_days * 24 * 60 - 1;
+            if (max_age_unnormalized < 0) {
+                max_age = 0;
+            } else if (max_age_unnormalized > (int64_t)std::numeric_limits<uint32_t>::max()) {
+                max_age = std::numeric_limits<uint32_t>::max();
+            } else {
+                max_age = max_age_unnormalized;
+            }
         } else {
             max_age = std::numeric_limits<uint32_t>::max();
         }
@@ -861,7 +867,7 @@ class BatchCreator {
              event_index++) {
             const Event& event = p.events[event_index];
 
-            if (event.start_age_in_minutes >= task->get_max_age()) {
+            if (event.start_age_in_minutes > task->get_max_age()) {
                 continue;
             }
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import warnings
 from abc import abstractmethod
 from collections import deque
 from typing import Any, Callable, List, Optional, Set, Tuple
@@ -113,7 +114,7 @@ def map_omop_concept_codes_to_femr_codes(
                 _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
             )
         except IndexError:
-            raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
+            warnings.warn(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
     return codes
 
 
