@@ -59,11 +59,11 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
             )
             for k, v in row.items():
                 if k not in ("start", "code", "value", "patient_id"):
-                    if v == '':
+                    if v == "":
                         v = None
-                    if k == 'end' and v is not None:
+                    if k == "end" and v is not None:
                         v = datetime.datetime.fromisoformat(v)
-                        
+
                     setattr(event, k, v)
 
             writer.add_event(int(row["patient_id"]), event)
@@ -140,7 +140,6 @@ def etl_simple_femr_program() -> None:
 
         athena_concepts = set()
 
-
         if not os.path.exists(event_dir):
             rootLogger.info("Converting to events")
 
@@ -164,14 +163,14 @@ def etl_simple_femr_program() -> None:
 
                 writer.writeheader()
                 if args.athena_download:
-                    with open(os.path.join(args.athena_download, 'CONCEPT.csv'), 'r') as f:
-                        reader = csv.DictReader(f, delimiter='\t')
+                    with open(os.path.join(args.athena_download, "CONCEPT.csv"), "r") as f:
+                        reader = csv.DictReader(f, delimiter="\t")
                         for row in reader:
-                            del row['invalid_reason']
-                            del row['domain_id']
-                            del row['valid_end_date']
-                            del row['concept_class_id']
-                            del row['valid_start_date']
+                            del row["invalid_reason"]
+                            del row["domain_id"]
+                            del row["valid_end_date"]
+                            del row["concept_class_id"]
+                            del row["valid_start_date"]
                             writer.writerow(row)
                             concept_id_map[f'{row["vocabulary_id"]}/{row["concept_code"]}'] = row["concept_id"]
 
@@ -194,9 +193,9 @@ def etl_simple_femr_program() -> None:
                     concept_id_map[concept_id] = index
 
             if args.athena_download:
-                with open(os.path.join(args.athena_download, 'CONCEPT_RELATIONSHIP.csv'), 'r') as f:
-                    with open(os.path.join(omop_dir, 'concept_relationship.csv'), 'w') as wf:
-                        reader = csv.DictReader(f, delimiter='\t')
+                with open(os.path.join(args.athena_download, "CONCEPT_RELATIONSHIP.csv"), "r") as f:
+                    with open(os.path.join(omop_dir, "concept_relationship.csv"), "w") as wf:
+                        reader = csv.DictReader(f, delimiter="\t")
                         writer = csv.DictWriter(wf, fieldnames=reader.fieldnames)
                         writer.writeheader()
                         for row in reader:
