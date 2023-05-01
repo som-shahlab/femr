@@ -12,12 +12,29 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from piton.datasets import PatientDatabase
+from ..datasets import PatientDatabase
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from .core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
+
+CHEXPERT_LABELS = [
+        "No Finding",
+        "Enlarged Cardiomediastinum",
+        "Cardiomegaly",
+        "Lung Lesion",
+        "Lung Opacity",
+        "Edema",
+        "Consolidation",
+        "Pneumonia",
+        "Atelectasis",
+        "Pneumothorax",
+        "Pleural Effusion",
+        "Pleural Other",
+        "Fracture",
+        "Support Devices",
+    ]
 
 def identity(x: Any) -> Any:
     return x
@@ -636,24 +653,7 @@ def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optio
     chexpert_df = pd.read_csv(path_to_chexpert_csv, sep="\t")
     patients = PatientDatabase(path_to_patient_database)
 
-    labels_str = [
-        "No Finding",
-        "Enlarged Cardiomediastinum",
-        "Cardiomegaly",
-        "Lung Lesion",
-        "Lung Opacity",
-        "Edema",
-        "Consolidation",
-        "Pneumonia",
-        "Atelectasis",
-        "Pneumothorax",
-        "Pleural Effusion",
-        "Pleural Other",
-        "Fracture",
-        "Support Devices",
-    ]
-
-    chexpert_df[labels_str] = (chexpert_df[labels_str] == 1) * 1
+    chexpert_df[CHEXPERT_LABELS] = (chexpert_df[CHEXPERT_LABELS] == 1) * 1
 
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
@@ -718,23 +718,6 @@ class ChexpertLabeler(Labeler):
         patient_df = patient_df.sort_values(by=["time_stamp"], ascending=True)
         start_time, _ = self.get_patient_start_end_times(patient)
 
-        labels_str = [
-            "No Finding",
-            "Enlarged Cardiomediastinum",
-            "Cardiomegaly",
-            "Lung Lesion",
-            "Lung Opacity",
-            "Edema",
-            "Consolidation",
-            "Pneumonia",
-            "Atelectasis",
-            "Pneumothorax",
-            "Pleural Effusion",
-            "Pleural Other",
-            "Fracture",
-            "Support Devices",
-        ]
-
         for idx, row in patient_df.iterrows():
             label_time = row["time_stamp"]
             label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
@@ -743,7 +726,7 @@ class ChexpertLabeler(Labeler):
             if prediction_time <= start_time:
                 continue
 
-            bool_labels = row[labels_str].astype(int).to_list()
+            bool_labels = row[CHEXPERT_LABELS].astype(int).to_list()
             label_string = "".join([str(x) for x in bool_labels])
             label_num = int(label_string, 2)
             labels.append(Label(time=prediction_time, value=label_num))
