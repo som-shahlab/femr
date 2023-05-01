@@ -12,29 +12,29 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from ..datasets import PatientDatabase
 
 from .. import Event, Patient
+from ..datasets import PatientDatabase
 from ..extension import datasets as extension_datasets
 from .core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
-
 CHEXPERT_LABELS = [
-        "No Finding",
-        "Enlarged Cardiomediastinum",
-        "Cardiomegaly",
-        "Lung Lesion",
-        "Lung Opacity",
-        "Edema",
-        "Consolidation",
-        "Pneumonia",
-        "Atelectasis",
-        "Pneumothorax",
-        "Pleural Effusion",
-        "Pleural Other",
-        "Fracture",
-        "Support Devices",
-    ]
+    "No Finding",
+    "Enlarged Cardiomediastinum",
+    "Cardiomegaly",
+    "Lung Lesion",
+    "Lung Opacity",
+    "Edema",
+    "Consolidation",
+    "Pneumonia",
+    "Atelectasis",
+    "Pneumothorax",
+    "Pleural Effusion",
+    "Pleural Other",
+    "Fracture",
+    "Support Devices",
+]
+
 
 def identity(x: Any) -> Any:
     return x

@@ -4,15 +4,14 @@ from __future__ import annotations
 import datetime
 from typing import List, Tuple
 
+from .. import Event, Patient
+from ..extension import datasets as extension_datasets
 from ..labelers.omop_inpatient_admissions import (
     InpatientLongAdmissionLabeler,
     InpatientReadmissionLabeler,
     WithinInpatientVisitLabeler,
     get_inpatient_admission_discharge_times,
 )
-
-from .. import Event, Patient
-from ..extension import datasets as extension_datasets
 from .core import Label, Labeler, LabelType, TimeHorizon
 from .omop import (
     CodeLabeler,

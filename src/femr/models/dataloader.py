@@ -8,8 +8,8 @@ import os
 import pickle
 import queue
 import random
-import threading
 import sys
+import threading
 from typing import Any, List, Optional, Tuple, TypeVar
 
 import jax
