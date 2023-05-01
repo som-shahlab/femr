@@ -44,7 +44,7 @@ def create_survival_dictionary() -> None:
 
     args = parser.parse_args()
 
-    femr.extension.dataloader.create_survival(args.output_file, args.data_path, args.num_buckets, args.size)
+    femr.extension.dataloader.create_survival_dictionary(args.data_path, args.output_file, args.num_buckets, args.size)
 
 
 def train_model() -> None:
@@ -286,7 +286,7 @@ def train_model() -> None:
             return loss, None
 
     def compute_total_loss(split, params, non_fit_params, rng, config):
-        num_to_get = min(200, loader.get_number_of_batches(split))
+        num_to_get = min(50, loader.get_number_of_batches(split))
         total_loss = 0
         total_indices = 0
 
@@ -450,7 +450,7 @@ def train_model() -> None:
     batches = femr.models.dataloader.Batches(
         data_path=args.data_path,
         batch_info_path=batch_info_path,
-        seed=config["seed"],
+        seed=config["seed"] * 100,
         num_batch_threads=args.num_batch_threads,
         token_dropout=args.token_dropout,
         num_epochs=config["n_epochs"],

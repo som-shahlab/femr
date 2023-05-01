@@ -9,6 +9,7 @@ import pickle
 import queue
 import random
 import threading
+import sys
 from typing import Any, List, Optional, Tuple, TypeVar
 
 import jax
@@ -89,6 +90,7 @@ class Batches:
         num_batch_threads: int,
         split: str = "train",
     ):
+        print("Working with seed", seed, file=sys.stderr)
         """Create a multithreaded batch loader for the given batch info."""
         index_queue: queue.Queue[Optional[int]] = queue.Queue(maxsize=300)
         _ = index_queue

@@ -17,7 +17,7 @@ dependencies = [
     "msgpack >= 1.0.5",
 ]
 requires-python=">3.9"
-version = "0.1.5"
+version = "0.1.7"
 
 [project.scripts]
 etl_stanford_omop = "femr.etl_pipelines.stanford:etl_starr_omop_program"

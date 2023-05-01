@@ -59,6 +59,11 @@ def convert_file_to_event_file(args: Tuple[str, Mapping[str, int], EventCollecti
             )
             for k, v in row.items():
                 if k not in ("start", "code", "value", "patient_id"):
+                    if v == "":
+                        v = None
+                    elif k == "end":
+                        v = datetime.datetime.fromisoformat(v)
+
                     setattr(event, k, v)
 
             writer.add_event(int(row["patient_id"]), event)
@@ -92,6 +97,13 @@ def etl_simple_femr_program() -> None:
         type=int,
         help="The number of threads to use",
         default=1,
+    )
+
+    parser.add_argument(
+        "--athena_download",
+        type=str,
+        help="An optional athena download to use for ontologies",
+        default=None,
     )
 
     args = parser.parse_args()
@@ -141,14 +153,29 @@ def etl_simple_femr_program() -> None:
                     concept_ids |= f_concepts
 
             os.mkdir(omop_dir)
-            concept_id_map = {}
             with open(os.path.join(omop_dir, "concept.csv"), "w") as f:
+                concept_id_map = {}
                 writer = csv.DictWriter(
                     f, ["concept_id", "concept_name", "vocabulary_id", "standard_concept", "concept_code"]
                 )
+
                 writer.writeheader()
+                if args.athena_download:
+                    with open(os.path.join(args.athena_download, "CONCEPT.csv"), "r") as f:
+                        reader = csv.DictReader(f, delimiter="\t")
+                        for row in reader:
+                            del row["invalid_reason"]
+                            del row["domain_id"]
+                            del row["valid_end_date"]
+                            del row["concept_class_id"]
+                            del row["valid_start_date"]
+                            writer.writerow(row)
+                            concept_id_map[f'{row["vocabulary_id"]}/{row["concept_code"]}'] = row["concept_id"]
+
                 for i, concept_id in enumerate(concept_ids):
-                    index = i + 1
+                    if concept_id in concept_id_map:
+                        continue
+                    index = i + 11_000_000_000
                     prefix_index = concept_id.index("/")
                     vocab = concept_id[:prefix_index]
                     code = concept_id[prefix_index + 1 :]
@@ -163,7 +190,16 @@ def etl_simple_femr_program() -> None:
                     )
                     concept_id_map[concept_id] = index
 
-            os.mkdir(os.path.join(omop_dir, "concept_relationship"))
+            if args.athena_download:
+                with open(os.path.join(args.athena_download, "CONCEPT_RELATIONSHIP.csv"), "r") as f:
+                    with open(os.path.join(omop_dir, "concept_relationship.csv"), "w") as wf:
+                        reader = csv.DictReader(f, delimiter="\t")
+                        writer = csv.DictWriter(wf, fieldnames=reader.fieldnames)
+                        writer.writeheader()
+                        for row in reader:
+                            writer.writerow(row)
+            else:
+                os.mkdir(os.path.join(omop_dir, "concept_relationship"))
 
             event_collection = EventCollection(event_dir)
             with multiprocessing.Pool(args.num_threads) as pool:
