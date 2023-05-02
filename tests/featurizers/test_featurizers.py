@@ -167,7 +167,6 @@ def test_count_featurizer_exclude_filter(tmp_path: pathlib.Path):
     assert count_nonempty_columns(patient_features) == 2
 
 
-@pytest.mark.skip(reason="Need to verify this test actually does intended behavior")
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     create_database(tmp_path)
@@ -199,21 +198,22 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     assert featurizer.included_codes == included_codes, f"featurizer.included_codes = {featurizer.included_codes}"
     assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
-    assert patient_features[0] == [
+    patient_features = [set(a) for a in patient_features]
+
+    assert patient_features[0] == {
         ColumnValue(column=0, value=1),
-        ColumnValue(column=4, value=1),
-    ], f"patient_features[0] = {patient_features[0]}"
-    assert patient_features[1] == [
+    }, f"patient_features[0] = {patient_features[0]}"
+    assert patient_features[1] == {
         ColumnValue(column=0, value=1),
-        ColumnValue(column=7, value=3),
+        ColumnValue(column=7, value=2),
         ColumnValue(column=6, value=1),
-    ], f"patient_features[1] = {patient_features[1]}"
-    assert patient_features[2] == [
+    }, f"patient_features[1] = {patient_features[1]}"
+    assert patient_features[2] == {
         ColumnValue(column=1, value=2),
         ColumnValue(column=0, value=1),
-        ColumnValue(column=7, value=3),
+        ColumnValue(column=7, value=2),
         ColumnValue(column=6, value=2),
-    ], f"patient_features[2] = {patient_features[2]}"
+    }, f"patient_features[2] = {patient_features[2]}"
 
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
 

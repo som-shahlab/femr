@@ -219,9 +219,6 @@ class CountFeaturizer(Featurizer):
         self.column_index_to_name = {idx: code for code, idx in self.code_to_column_index.items()}
 
         if self.time_bins is not None:
-            raise ValueError(
-                "TODO: There's a bug with time bins -- we're looking into it! Reach-out for status updates."
-            )
             assert len(set(self.time_bins)) == len(
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
@@ -308,6 +305,12 @@ class CountFeaturizer(Featurizer):
             for event in patient.events:
                 if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                     continue
+                
+                if self.is_keep_only_none_valued_events and event.value is not None:
+                    # If we only want to keep events with no value, then skip this event
+                    # because it has a non-None value
+                    continue
+
                 while event.start > labels[label_idx].time:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
@@ -320,10 +323,6 @@ class CountFeaturizer(Featurizer):
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
-                if self.is_keep_only_none_valued_events and event.value is not None:
-                    # If we only want to keep events with no value, then skip this event
-                    # because it has a non-None value
-                    continue
 
                 for code in self.get_codes(event.code, ontology):
                     # Increment the count for this event's code (plus any parent codes
@@ -354,6 +353,10 @@ class CountFeaturizer(Featurizer):
             label_idx = 0
             for event in patient.events:
                 if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                    continue
+                if self.is_keep_only_none_valued_events and event.value is not None:
+                    # If we only want to keep events with no value, then skip this event
+                    # because it has a non-None value
                     continue
                 code = event.code
                 while event.start > labels[label_idx].time:
