@@ -151,7 +151,7 @@ def _run_preprocess_featurizers(args: Tuple[str, List[int], LabeledPatients, Lis
         # Preprocess featurizers
         for featurizer in featurizers:
             if featurizer.is_needs_preprocessing():
-                featurizer.preprocess(patient, labels)
+                featurizer.preprocess(patient, labels, database.get_ontology())
 
     return featurizers
 

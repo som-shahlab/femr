@@ -66,7 +66,7 @@ class cmake_build_ext(build_ext):
             if source_env.get("MACOSX_DEPLOYMENT_TARGET"):
                 extra_args.extend(["--macos_minimum_os", source_env["MACOSX_DEPLOYMENT_TARGET"]])
 
-            if not can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args):
+            if source_env.get("DISABLE_CPU_ARCH") or not can_build_simple(sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args):
                 bazel_extra_args.extend(["--noworkspace_rc", "--bazelrc=backupbazelrc"])
                 assert can_build_simple(
                     sourcedir=ext.sourcedir, env=env, bazel_extra_args=bazel_extra_args

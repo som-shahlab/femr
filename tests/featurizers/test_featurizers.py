@@ -97,20 +97,82 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
     labels = labeler.label(patient)
     featurizer = CountFeaturizer()
-    featurizer.preprocess(patient, labels)
+    featurizer.preprocess(patient, labels, ontology)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert featurizer.get_num_columns() == 3, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+    
+    patient_features = [{ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features]
 
-    assert patient_features[0] == [ColumnValue(column=0, value=1)], f"patient_features[0] = {patient_features[0]}"
-    assert patient_features[1] == [
-        ColumnValue(column=0, value=2),
-        ColumnValue(column=1, value=2),
-    ]
-    assert patient_features[2] == [
-        ColumnValue(column=0, value=3),
-        ColumnValue(column=1, value=4),
-    ]
+    assert patient_features[0] == {ColumnValue(column='dummy/three', value=1)}, f"patient_features[0] = {patient_features[0]}"
+    assert patient_features[1] == {
+        ColumnValue(column='dummy/three', value=2),
+        ColumnValue(column='dummy/two', value=2),
+    }
+    assert patient_features[2] == {
+        ColumnValue(column='dummy/three', value=3),
+        ColumnValue(column='dummy/two', value=4),
+    }
+
+    labeled_patients = labeler.apply(path_to_patient_database=database_path)
+
+    featurizer = CountFeaturizer(is_ontology_expansion=True)
+    featurizer_list = FeaturizerList([featurizer])
+    featurizer_list.preprocess_featurizers(database_path, labeled_patients)
+    featurized_patients = featurizer_list.featurize(database_path, labeled_patients)
+
+    labels_per_patient = [True, False, False]
+    assert featurized_patients[0].shape == (
+        len(labeled_patients) * len(labels_per_patient),
+        3,
+    )
+    _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+
+def test_count_featurizer_with_values(tmp_path: pathlib.Path):
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    create_database(tmp_path)
+
+    database_path = os.path.join(tmp_path, "target")
+    database = femr.datasets.PatientDatabase(database_path)
+    ontology = database.get_ontology()
+
+    femr_outcome_code = get_femr_code(ontology, 2)
+    femr_admission_code = get_femr_code(ontology, 3)
+
+    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
+
+    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    labels = labeler.label(patient)
+    featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
+    featurizer.preprocess(patient, labels, ontology)
+    patient_features = featurizer.featurize(patient, labels, ontology)
+
+    assert featurizer.get_num_columns() == 8, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+    
+    patient_features = [{ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features]
+
+    assert patient_features[0] == {
+        ColumnValue(column='dummy/three', value=1),
+        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
+        ColumnValue(column='dummy/one test_value', value=2),
+        ColumnValue(column='dummy/one test_value', value=2),
+        ColumnValue(column='dummy/two [1.0, inf)', value=1),
+        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
+    }, f"patient_features[0] = {patient_features[0]}"
+    assert patient_features[1] == {
+        ColumnValue(column='dummy/one test_value', value=2),
+        ColumnValue(column='dummy/two [1.0, inf)', value=1),
+        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
+        ColumnValue(column='dummy/three', value=2),
+        ColumnValue(column='dummy/two', value=2),
+    }
+    assert patient_features[2] == {
+        ColumnValue(column='dummy/one test_value', value=2),
+        ColumnValue(column='dummy/two [1.0, inf)', value=1),
+        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
+        ColumnValue(column='dummy/three', value=3),
+        ColumnValue(column='dummy/two', value=4),
+    }
 
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
@@ -147,27 +209,26 @@ def test_count_featurizer_exclude_filter(tmp_path: pathlib.Path):
 
     # Test filtering all codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: True)
-    featurizer.preprocess(patient, labels)
+    featurizer.preprocess(patient, labels, ontology)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert count_nonempty_columns(patient_features) == 0
 
     # Test filtering no codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: False)
-    featurizer.preprocess(patient, labels)
+    featurizer.preprocess(patient, labels, ontology)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert count_nonempty_columns(patient_features) == 3
 
     # Test filtering single code
     featurizer = CountFeaturizer(excluded_event_filter=lambda e: e.code == "dummy/three")
-    featurizer.preprocess(patient, labels)
+    featurizer.preprocess(patient, labels, ontology)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert count_nonempty_columns(patient_features) == 2
 
 
-@pytest.mark.skip(reason="Need to verify this test actually does intended behavior")
 def test_count_bins_featurizer(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     create_database(tmp_path)
@@ -191,29 +252,28 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     featurizer = CountFeaturizer(
         time_bins=time_bins,
     )
-    featurizer.preprocess(patient, labels)
+    featurizer.preprocess(patient, labels, ontology)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
-    included_codes = set([e.code for e in patient.events if e.value is None])
-
-    assert featurizer.included_codes == included_codes, f"featurizer.included_codes = {featurizer.included_codes}"
+    assert set(featurizer.code_to_column_index.keys()) == {'dummy/four', 'dummy/three', 'dummy/two'} , f"featurizer.code_to_column_index = {featurizer.code_to_column_index}"
     assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
-    assert patient_features[0] == [
-        ColumnValue(column=0, value=1),
-        ColumnValue(column=4, value=1),
-    ], f"patient_features[0] = {patient_features[0]}"
-    assert patient_features[1] == [
-        ColumnValue(column=0, value=1),
-        ColumnValue(column=7, value=3),
-        ColumnValue(column=6, value=1),
-    ], f"patient_features[1] = {patient_features[1]}"
-    assert patient_features[2] == [
-        ColumnValue(column=1, value=2),
-        ColumnValue(column=0, value=1),
-        ColumnValue(column=7, value=3),
-        ColumnValue(column=6, value=2),
-    ], f"patient_features[2] = {patient_features[2]}"
+    patient_features = [{ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features]
+
+    assert patient_features[0] == {
+        ColumnValue(column='dummy/three_90 days, 0:00:00', value=1),
+    }, f"patient_features[0] = {patient_features[0]}"
+    assert patient_features[1] == {
+        ColumnValue(column='dummy/three_90 days, 0:00:00', value=1),
+        ColumnValue(column='dummy/two_70000 days, 0:00:00', value=2),
+        ColumnValue(column='dummy/three_70000 days, 0:00:00', value=1),
+    }, f"patient_features[1] = {patient_features[1]}"
+    assert patient_features[2] == {
+        ColumnValue(column='dummy/three_70000 days, 0:00:00', value=2),
+        ColumnValue(column='dummy/two_90 days, 0:00:00', value=2),
+        ColumnValue(column='dummy/three_90 days, 0:00:00', value=1),
+        ColumnValue(column='dummy/two_70000 days, 0:00:00', value=2),
+    }, f"patient_features[2] = {patient_features[2]}"
 
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
 
@@ -230,7 +290,6 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
 
 
-@pytest.mark.skip(reason="Re-verify after time bins are fixed")
 def test_complete_featurization(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
@@ -282,7 +341,6 @@ def test_complete_featurization(tmp_path: pathlib.Path):
     assert the_same.all()
 
 
-@pytest.mark.skip(reason="Re-verify after time bins are fixed")
 def test_serialization_and_deserialization(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 

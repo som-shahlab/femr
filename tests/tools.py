@@ -44,6 +44,7 @@ def event(date: Tuple, code, value=None, visit_id=None, **kwargs):
 DUMMY_EVENTS = [
     event((1995, 1, 3), 0, 34.5),
     event((2010, 1, 1), 1, "test_value"),
+    event((2010, 1, 1), 1, "test_value"),
     event((2010, 1, 5), 2, 1),
     event((2010, 6, 5), 3, None),
     event((2010, 8, 5), 2, None),
