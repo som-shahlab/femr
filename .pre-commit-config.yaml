@@ -23,3 +23,10 @@ repos:
     rev: 5.12.0
     hooks:
     -   id: isort
+-   repo: local
+    hooks:
+      - id: jupyter-nb-clear-output
+        name: jupyter-nb-clear-output
+        files: \.ipynb$
+        language: system
+        entry: jupyter nbconvert --clear-output --inplace
