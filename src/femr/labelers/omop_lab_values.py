@@ -54,7 +54,7 @@ class InstantLabValueLabeler(Labeler):
         ontology: extension_datasets.Ontology,
     ):
         self.ontology = ontology
-        self.outcome_codes: Set[int] = map_omop_concept_codes_to_femr_codes(
+        self.outcome_codes: Set[str] = map_omop_concept_codes_to_femr_codes(
             ontology,
             self.original_omop_concept_codes,
             is_ontology_expansion=True,
@@ -127,7 +127,7 @@ class TomasevLabValueLabeler(Labeler):
         visit_end_adjust_func: Callable = identity,
     ):
         self.ontology = ontology
-        self.outcome_codes: Set[int] = map_omop_concept_codes_to_femr_codes(
+        self.outcome_codes: Set[str] = map_omop_concept_codes_to_femr_codes(
             ontology,
             self.original_omop_concept_codes,
             is_ontology_expansion=True,
@@ -249,7 +249,7 @@ class HypoglycemiaInstantLabValueLabeler(InstantLabValueLabeler):
         "SNOMED/33747003",
         "LOINC/LP416145-3",
         "LOINC/14749-6",
-        "LOINC/15074-8",
+        # "LOINC/15074-8",
     ]
 
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
@@ -458,7 +458,7 @@ class InpatientLabValueLabeler(WithinInpatientVisitLabeler):
         """Matches lab test on any Piton code that maps to one of the `omop_concept_ids`.
         Specify `severity` as one of "mild", "moderate", "severe", or "normal" to determine binary label."""
         self.severity: str = severity
-        self.outcome_codes: Set[int] = map_omop_concept_codes_to_femr_codes(
+        self.outcome_codes: Set[str] = map_omop_concept_codes_to_femr_codes(
             ontology,
             self.original_omop_concept_codes,
             is_ontology_expansion=True,

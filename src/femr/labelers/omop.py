@@ -127,10 +127,10 @@ def map_omop_concepts_to_femr_codes(
     codes = set()
     for x in concepts:
         try:
-            femr_code: int = ontology.get_dictionary().index(x)
-            codes.add(femr_code)
+            # femr_code: int = ontology.get_dictionary().index(x)
+            codes.add(x)
             if is_get_children:
-                for y in _get_all_children(ontology, femr_code):
+                for y in _get_all_children(ontology, x):
                     codes.add(y)
         except:
             if not is_silent_not_found_error:
@@ -245,18 +245,19 @@ def map_omop_concept_ids_to_femr_codes(
     ontology: extension_datasets.Ontology,
     omop_concept_ids: List[int],
     is_ontology_expansion: bool = True,
-) -> Set[int]:
+) -> Set[str]:
     """Maps OMOP concept IDs (e.g. 3939430) => FEMR codes (e.g. 123).
     If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
     """
     codes: Set[str] = set()
     for omop_concept_id in omop_concept_ids:
         # returns `None` if `omop_concept_id` is not found in the ontology
-        femr_code: Optional[int] = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
-        if femr_code is None:
+        code: Optional[str] = ontology.get_code_from_concept_id(omop_concept_id)
+        # femr_code: Optional[int] = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
+        if code is None:
             print(f"OMOP Concept ID {omop_concept_id} not found in ontology")
         else:
-            codes.update(_get_all_children(ontology, femr_code) if is_ontology_expansion else {femr_code})
+            codes.update(_get_all_children(ontology, code) if is_ontology_expansion else {code})
     return codes
 
 
@@ -266,16 +267,17 @@ def map_omop_concept_codes_to_femr_codes(
     omop_concept_codes: List[str],
     is_ontology_expansion: bool = True,
     is_silent_not_found_error: bool = True,
-) -> Set[int]:
+) -> Set[str]:
     """Maps OMOP codes (e.g. "LOINC/123") => FEMR codes (e.g. 123).
     If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
     If `is_silent_not_found_error` is True, then this function will NOT raise an error if a given OMOP concept ID is not found in the ontology.
     """
     codes: Set[str] = set()
+    print(omop_concept_codes)
     for omop_concept_code in omop_concept_codes:
         try:
-            femr_code: int = ontology.get_dictionary().index(omop_concept_code)
-            codes.update(_get_all_children(ontology, femr_code) if is_ontology_expansion else {femr_code})
+            # femr_code: int = ontology.get_dictionary().index(omop_concept_code)
+            codes.update(_get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code})
         except ValueError:
             if not is_silent_not_found_error:
                 raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
@@ -435,7 +437,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self,
         outcome_codes: List[str],
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
@@ -451,7 +453,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         """
         self.outcome_codes: List[str] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
-        self.prediction_codes: Optional[List[int]] = prediction_codes
+        self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = (
             prediction_time_adjustment_func if prediction_time_adjustment_func else identity
         )
@@ -498,7 +500,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         outcome_codes: List[int] = list(
@@ -534,7 +536,7 @@ class MortalityCodeLabeler(CodeLabeler):
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
-        prediction_codes: Optional[List[int]] = None,
+        prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a Mortality labeler."""
@@ -658,7 +660,7 @@ def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optio
     patients_to_labels: Dict[int, List[Label]] = {}
     for patient_id in patient_ids:
         patient: Patient = patients[patient_id]  # type: ignore
-        patient_df = chexpert_df[chexpert_df["piton_patient_id"] == patient_id]
+        patient_df = chexpert_df[chexpert_df["patient_id"] == patient_id]
 
         if num_labels is not None and num_labels < len(patient_df):
             patient_df = patient_df.sample(n=num_labels, random_state=0)
@@ -689,13 +691,13 @@ class ChexpertLabeler(Labeler):
 
         chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
 
-        patient_df = chexpert_df.sort_values(by=["time_stamp"], ascending=True)
+        patient_df = chexpert_df.sort_values(by=["start"], ascending=True)
 
         start_time, _ = self.get_patient_start_end_times(patient)
 
         outcome_times = []
         for idx, row in patient_df.iterrows():
-            label_time = row["time_stamp"]
+            label_time = row["start"]
             label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
             prediction_time = label_time - timedelta(hours=24)
 
@@ -715,11 +717,11 @@ class ChexpertLabeler(Labeler):
     def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:
         labels: List[Label] = []
 
-        patient_df = patient_df.sort_values(by=["time_stamp"], ascending=True)
+        patient_df = patient_df.sort_values(by=["start"], ascending=True)
         start_time, _ = self.get_patient_start_end_times(patient)
 
         for idx, row in patient_df.iterrows():
-            label_time = row["time_stamp"]
+            label_time = row["start"]
             label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
             prediction_time = label_time - timedelta(days=1)
 
@@ -755,7 +757,7 @@ class ChexpertLabeler(Labeler):
         """
         # Split patient IDs across parallelized processes
         chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
-        pids = list(chexpert_df["piton_patient_id"].unique())
+        pids = list(chexpert_df["patient_id"].unique())
 
         if num_patients is not None:
             pids = pids[:num_patients]
