@@ -117,6 +117,7 @@ LABELING_FUNCTIONS: List[str] = [
     "anemia_lab",
 ]
 
+
 if __name__ == "__main__":
     START_TIME = time.time()
 
