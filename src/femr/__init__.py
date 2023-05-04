@@ -17,16 +17,7 @@ class Patient:
 
 
 class Event:
-    """An event with a patient record.
-
-    NOTE: Non-None field types must be specified in the order you want them decoded.
-
-    For example,
-        ```
-            value: float | str | None
-        ```
-    Will attempt to decode the `.value` property as a `None` first, then `float`, then `str`.
-    """
+    """An event within a patient record."""
 
     start: datetime.datetime
     code: str
