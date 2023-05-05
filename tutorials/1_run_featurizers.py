@@ -175,8 +175,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--time_horizon",
         type=str,
-        help=(
-        ),
+        help=(),
     )
 
     # just for debug purpose
@@ -184,8 +183,7 @@ if __name__ == "__main__":
         "--badcodefile",
         type=str,
         default=None,
-        help=(
-        ),
+        help=(),
     )
 
     # Parse CLI args
@@ -210,24 +208,24 @@ if __name__ == "__main__":
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
     # time horizon
-    if TIME_HORIZON == '3to6m':
+    if TIME_HORIZON == "3to6m":
         year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=90), datetime.timedelta(days=180))
-    elif TIME_HORIZON == '3to12m':
+    elif TIME_HORIZON == "3to12m":
         year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=90), datetime.timedelta(days=365))
-    elif TIME_HORIZON == '0to12m':
+    elif TIME_HORIZON == "0to12m":
         year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
-    elif TIME_HORIZON == '0to6m':
+    elif TIME_HORIZON == "0to6m":
         year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-    elif TIME_HORIZON == '0to3m':
+    elif TIME_HORIZON == "0to3m":
         year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=90))
 
     bad_pitoncodes = []
     if BAD_CODES:
-        with open(BAD_CODES, 'r') as f:
+        with open(BAD_CODES, "r") as f:
             for line in f:
-                line=line.replace('\n', '')
+                line = line.replace("\n", "")
                 bad_pitoncodes.append(int(line))
-        print('bad_pitoncodes', bad_pitoncodes)
+        print("bad_pitoncodes", bad_pitoncodes)
 
     # Define the labeling function.
     if args.labeling_function == "admission_discharge":
@@ -235,7 +233,9 @@ if __name__ == "__main__":
     elif args.labeling_function == "mortality":
         labeler = InpatientMortalityLabeler(ontology)
     elif args.labeling_function == "Allmortality":
-        labeler = MortalityCodeLabeler(ontology, year_time_horizon, prediction_codes=femr.labelers.omop.get_inpatient_admission_codes(ontology))    
+        labeler = MortalityCodeLabeler(
+            ontology, year_time_horizon, prediction_codes=femr.labelers.omop.get_inpatient_admission_codes(ontology)
+        )
     elif args.labeling_function == "long_los":
         labeler = InpatientLongAdmissionLabeler(ontology)
     elif args.labeling_function == "readmission":
