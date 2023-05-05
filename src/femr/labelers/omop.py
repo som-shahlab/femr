@@ -26,7 +26,7 @@ def get_inpatient_admission_concepts() -> List[str]:
 
 def get_death_concepts() -> List[str]:
     return [
-        "Death Type/OMOP generated",
+        #"Death Type/OMOP generated",
         "Condition Type/OMOP4822053",
     ]
 

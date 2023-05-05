@@ -93,11 +93,12 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         time_horizon: TimeHorizon = TimeHorizon(
             start=datetime.timedelta(seconds=1), end=datetime.timedelta(days=30)
         ),  # type: ignore
-        prediction_time_adjustment_func: Callable = move_datetime_to_end_of_day,
+        prediction_time_adjustment_func: Callable = identity,  # move_datetime_to_end_of_day,
+        
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
-        self.prediction_time_adjustment_func = prediction_time_adjustment_func
+        self.prediction_time_adjustment_func = identity # prediction_time_adjustment_func
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""
