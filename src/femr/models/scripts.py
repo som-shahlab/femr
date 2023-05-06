@@ -115,6 +115,18 @@ def train_model() -> None:
         task["vocab_size"] = batch_task["vocab_size"]
     elif batch_config["task"]["type"] == "labeled_patients":
         task["labeler_type"] = batch_task["labeler_type"]
+        if task["labeler_type"] == "survival":
+            # Currently need a lot of hacks to get this working right ...
+            with open(
+                "/local-scratch/nigam/projects/ethanid/piton/native/surv_clmbr_batches_new/batch_info.msgpack",
+                "rb",
+            ) as f:
+                old_batch_task = msgpack.load(f)["config"]["task"]
+
+                task["time_bins"] = old_batch_task["survival_dict"]["time_bins"]
+                print(task["time_bins"])
+
+                task["dim"] = 512
     else:
         rootLogger.error("Invalid task? " + batch_task["task"])
         exit()
@@ -454,6 +466,7 @@ def train_model() -> None:
         num_batch_threads=args.num_batch_threads,
         token_dropout=args.token_dropout,
         num_epochs=config["n_epochs"],
+        num_batches=num_train_batches,
     )
 
     rng_sequence = hk.PRNGSequence(rng)
