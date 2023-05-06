@@ -32,15 +32,13 @@ def _index_thread(
     split: str,
     data_path: str,
     batch_info_path: str,
+    num_batches: int,
 ) -> None:
     """Generate indices in random order and add them to the queue."""
-    thread_loader = BatchLoader(data_path, batch_info_path)
-    num_train_batches = thread_loader.get_number_of_batches(split)
-
     rng = random.Random(seed)
     step = 0
     for _ in range(num_epochs):
-        order: List[int] = list(range(num_train_batches))
+        order: List[int] = list(range(num_batches))
         rng.shuffle(order)
 
         for i in order:
@@ -88,6 +86,7 @@ class Batches:
         seed: int,
         num_epochs: int,
         num_batch_threads: int,
+        num_batches: int,
         split: str = "train",
     ):
         print("Working with seed", seed, file=sys.stderr)
@@ -113,6 +112,7 @@ class Batches:
                     "num_epochs",
                     "data_path",
                     "batch_info_path",
+                    "num_batches",
                     "split",
                 )
             },
@@ -250,8 +250,7 @@ def create_batches() -> None:
                     if labeled_patients.labeler_type == "boolean":
                         value = label.value
                     elif labeled_patients.labeler_type == "survival":
-                        event_age = (label.value.event_time - birth_date) / datetime.timedelta(minutes=1)
-                        event_offset = event_age - age
+                        event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
                         if event_offset == 0:
                             continue
@@ -261,7 +260,7 @@ def create_batches() -> None:
                         total_events += not label.value.is_censored
 
                         value = {
-                            "event_time": event_age,
+                            "event_time": event_offset + age,
                             "is_censored": label.value.is_censored,
                         }
                     result_labels.append((int(pid), age, value))

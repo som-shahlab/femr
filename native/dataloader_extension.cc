@@ -59,6 +59,8 @@ class Task {
 
     virtual void start_patient(const Patient& p) {
         if (limit_date) {
+            std::cout<<"Should never happen " << std::endl;
+            abort();
             int64_t censor_age_days = (int64_t)(*limit_date - p.birth_date);
             int64_t max_age_unnormalized = censor_age_days * 24 * 60 - 1;
             if (max_age_unnormalized < 0) {
@@ -180,6 +182,13 @@ class LabeledPatientsTask : public Task {
                 if (using_dropout) {
                     label_to_add->first = current_age;
                 }
+
+                if (label_to_add->second["event_time"].get<uint32_t>() > max_age) {
+                    std::cout<<"This should not be possible " << max_age << " " << label_to_add->second["event_time"].get<uint32_t>() << std::endl;
+                    abort();
+                    label_to_add->second["event_time"] = max_age;
+                    label_to_add->second["is_censored"] = true;
+                }
             }
             batch_labels.push_back(*label_to_add);
         }
@@ -217,17 +226,11 @@ class LabeledPatientsTask : public Task {
             final_batch_event_times.setConstant(0);
 
             for (uint32_t i = 0; i < batch_labels.size(); i++) {
-                if (batch_labels[i].second["event_time"].get<uint32_t>() >
-                    max_age) {
-                    final_batch_censor(i) = true;
-                    final_batch_event_times(i) = max_age;
-                } else {
-                    final_batch_censor(i) =
-                        batch_labels[i].second["is_censored"];
-                    final_batch_event_times(i) =
-                        batch_labels[i].second["event_time"].get<uint32_t>() -
-                        batch_labels[i].first;
-                }
+                final_batch_censor(i) =
+                    batch_labels[i].second["is_censored"];
+                final_batch_event_times(i) =
+                    batch_labels[i].second["event_time"].get<uint32_t>() -
+                    batch_labels[i].first;
             }
         }
     }
@@ -257,7 +260,6 @@ class LabeledPatientsTask : public Task {
                         std::vector<std::pair<uint32_t, json>>>::const_iterator
         current_patient_iter;
     std::vector<std::pair<uint32_t, json>>::const_iterator current_label_iter;
-    uint32_t max_age;
 };
 
 class CLMBRTask : public Task {
