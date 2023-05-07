@@ -202,7 +202,7 @@ if True:
             )
         print("Starting to process", split, datetime.datetime.now())
 
-        #while True:
+        # while True:
         #    next_one = batches.get_next()
         #    if not next_one:
         #        print("Done processing")
@@ -226,7 +226,7 @@ if True:
             )
 
             p_index = batch["transformer"]["label_indices"] // batch["transformer"]["length"]
-            p_index = p_index[:batch['num_indices']]
+            p_index = p_index[: batch["num_indices"]]
 
             reprs.append(repr[: batch["num_indices"], :, :])
             label_ages.append(raw_batch["task"]["label_ages"][: batch["num_indices"]])
@@ -323,9 +323,9 @@ def compute_loss(beta, reprs, log_times, is_events, l=0):
 
 @functools.partial(jax.jit)
 def compute_grad(beta, data, l=0):
-    reprs = data['reprs']
-    log_times = data['log_times']
-    is_events = data['is_events']
+    reprs = data["reprs"]
+    log_times = data["log_times"]
+    is_events = data["is_events"]
     hazards = jnp.dot(reprs, beta)
 
     assert hazards.shape == is_events.shape
@@ -344,9 +344,9 @@ def compute_grad(beta, data, l=0):
 
 @functools.partial(jax.jit)
 def compute_hessian(beta, u, data, l=0):
-    reprs = data['reprs']
-    log_times = data['log_times']
-    is_events = data['is_events']
+    reprs = data["reprs"]
+    log_times = data["log_times"]
+    is_events = data["is_events"]
 
     hazards = jnp.dot(reprs, beta)
     factor = jnp.dot(reprs, u) ** 2
@@ -413,7 +413,7 @@ for frac in [1]:
         print(u @ (hessian @ u.T))
         print(starting_loss)
 
-    data = {'reprs': train_reprs, 'log_times': train_log_times, 'is_events': train_is_events}
+    data = {"reprs": train_reprs, "log_times": train_log_times, "is_events": train_is_events}
 
     best_score = None
     best_hazards = None
@@ -452,8 +452,8 @@ for frac in [1]:
 
             event_time = event_times[mask]
             is_censor = is_censors[mask]
-            #print(split_index, mask.sum(), event_time, is_censor)
-            #print(is_censor.sum(), is_censor.shape)
+            # print(split_index, mask.sum(), event_time, is_censor)
+            # print(is_censor.sum(), is_censor.shape)
 
             limit_time = jnp.quantile(event_time[~is_censor], 0.9)
             is_censor = is_censor.at[event_time > limit_time].set(True)

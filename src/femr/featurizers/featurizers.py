@@ -336,7 +336,11 @@ class CountFeaturizer(Featurizer):
                 self.code_string_to_column_index[(code, val)] = self.num_columns
                 self.num_columns += 1
 
+<<<<<<< HEAD
         for code, values in sorted(list(self.observed_numeric_value.items())):
+=======
+        for code, values in self.observed_numeric_value.items():
+>>>>>>> cf1a29f... [pre-commit.ci] auto fixes from pre-commit.com hooks
             quantiles = sorted(list(set(np.quantile(values.values, np.linspace(0, 1, num=11)[1:-1]))))
             quantiles = [float("-inf")] + quantiles + [float("inf")]
             self.code_value_to_column_index[code] = (self.num_columns, quantiles)

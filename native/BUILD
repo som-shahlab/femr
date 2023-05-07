@@ -491,7 +491,7 @@ cc_binary(
     srcs = ["dataloader.cc"],
     deps = [
         "@eigen",
-        ":database", 
+        ":database",
         ":constdb",
         "@json",
         ":npy",
