@@ -327,16 +327,16 @@ class CountFeaturizer(Featurizer):
 
         self.num_columns = 0
 
-        for code in self.observed_codes:
+        for code in sorted(list(self.observed_codes)):
             self.code_to_column_index[code] = self.num_columns
             self.num_columns += 1
 
-        for (code, val), count in self.observed_string_value.items():
+        for (code, val), count in sorted(list(self.observed_string_value.items())):
             if count > 1:
                 self.code_string_to_column_index[(code, val)] = self.num_columns
                 self.num_columns += 1
 
-        for code, values in self.observed_numeric_value.items():
+        for code, values in sorted(list(self.observed_numeric_value.items())):
             quantiles = sorted(list(set(np.quantile(values.values, np.linspace(0, 1, num=11)[1:-1]))))
             quantiles = [float("-inf")] + quantiles + [float("inf")]
             self.code_value_to_column_index[code] = (self.num_columns, quantiles)
@@ -483,4 +483,7 @@ class CountFeaturizer(Featurizer):
         if self.time_bins is None:
             return helper(column_idx)
         else:
-            return helper(column_idx % self.num_columns) + f"_{self.time_bins[column_idx // self.num_columns]}"
+            return (
+                helper(column_idx % self.num_columns)
+                + f"_{self.time_bins[column_idx // self.num_columns]}"
+            )
