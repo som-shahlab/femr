@@ -16,9 +16,6 @@ import pandas as pd
 import femr
 import femr.datasets
 
-from sklearn.preprocessing import
-
-
 """
 Example running:
 
@@ -95,6 +92,13 @@ if __name__ == "__main__":
         default='all',
     )
 
+    parser.add_argument(
+        "--split_csv",
+        type=str,
+        help="file path towards an canonical train/test splits",
+        default='all',
+    )
+
     # Parse CLI args
     args = parser.parse_args()
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
@@ -160,13 +164,39 @@ if __name__ == "__main__":
     print_log("Featurized Patients", f"Label times shape: {label_times.shape}")
 
     # Train/test splits
-    print_log(
-        "Dataset Split",
-        f"Splitting dataset ({round(percent_train, 3)} / {round(1 - percent_train, 3)}) (train / test), with seed {split_seed}",
-    )
-    hashed_pids = np.array([database.compute_split(split_seed, pid) for pid in patient_ids])
-    train_pids_idx = np.where(hashed_pids < (percent_train * 100))[0]
-    test_pids_idx = np.where(hashed_pids >= (percent_train * 100))[0]
+   
+    
+    if args.split_csv:
+        print_log(
+            "Dataset Split",
+            f"Splitting dataset based on {args.split_csv.split('/')[-1]}",
+        )
+
+        split_df = pd.read_csv(args.split_csv)
+        split_df_grouped = split_df.groupby('split').agg(lambda x: set(x))
+
+        test_pids_idx = []
+        train_pids_idx = []
+        valid_pids_idx = []
+
+        for i, n in enumerate(patient_ids):
+            if n in split_df_grouped.loc['test'].person_id:
+                test_pids_idx.append(i) 
+            elif n in split_df_grouped.loc['train'].person_id:
+                train_pids_idx.append(i)
+            elif n in split_df_grouped.loc['valid'].person_id:
+                valid_pids_idx.append(i)
+
+    else:
+        print_log(
+            "Dataset Split",
+            f"Splitting dataset ({round(percent_train, 3)} / {round(1 - percent_train, 3)}) (train / test), with seed {split_seed}",
+        )
+        hashed_pids = np.array([database.compute_split(split_seed, pid) for pid in patient_ids])
+        train_pids_idx = np.where(hashed_pids < (percent_train * 100))[0]
+        test_pids_idx = np.where(hashed_pids >= (percent_train * 100))[0]
+    
+    
     X_train, y_train = (
         feature_matrix[train_pids_idx],
         label_values[train_pids_idx],
