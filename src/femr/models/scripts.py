@@ -70,6 +70,7 @@ def train_model() -> None:
     parser.add_argument("--n_heads", type=int, default=12, help="Transformer # of heads")
     parser.add_argument("--n_layers", type=int, default=6, help="Transformer # of layers")
     parser.add_argument("--attention_width", type=int, default=512, help="Transformer attention width.")
+    parser.add_argument("--dev_batches_path", type=str, required=False, help="Do early stopping with a different set of batches instead of the development set")
 
     parser.add_argument(
         "--early_stopping_window_steps",
@@ -103,17 +104,19 @@ def train_model() -> None:
         batch_info = msgpack.load(f, use_list=False)
 
     batch_config = batch_info["config"]
+    
+    del batch_info
 
     batch_task = batch_config["task"]
     task = {}
     task["type"] = batch_task["type"]
-    if batch_task["type"] == "survival_clmbr":
+    if task["type"] == "survival_clmbr":
         task["num_time_bins"] = len(batch_task["survival_dict"]["time_bins"])
         task["num_codes"] = len(batch_task["survival_dict"]["codes"])
         task["dim"] = args.clmbr_survival_dim
-    elif batch_config["task"]["type"] == "clmbr":
+    elif task["type"] == "clmbr":
         task["vocab_size"] = batch_task["vocab_size"]
-    elif batch_config["task"]["type"] == "labeled_patients":
+    elif task["type"] == "labeled_patients":
         task["labeler_type"] = batch_task["labeler_type"]
         if task["labeler_type"] == "survival":
             # Currently need a lot of hacks to get this working right ...
@@ -153,6 +156,7 @@ def train_model() -> None:
         "weight_decay": args.weight_decay,
         "n_epochs": 100,
     }
+    del batch_config
 
     logging.info("Got config %s", config)
 
@@ -163,6 +167,10 @@ def train_model() -> None:
         msgpack.dump(config, out)
 
     config = hk.data_structures.to_immutable_dict(config)
+
+    if args.dev_batches_path:
+        dev_batch_info_path = os.path.join(args.dev_batches_path, "batch_info.msgpack")
+        dev_loader = femr.models.dataloader.BatchLoader(args.data_path, dev_batch_info_path)
 
     loader = femr.models.dataloader.BatchLoader(args.data_path, batch_info_path)
 
@@ -197,17 +205,17 @@ def train_model() -> None:
         old_val = params[module][weight]
         params[module][weight] = value.astype(old_val.dtype).reshape(old_val.shape)
 
-    if batch_task["type"] == "survival_clmbr":
+    if task["type"] == "survival_clmbr":
         replace(
             params,
             "EHRTransformer/~/SurvivalCLMBRTask",
             "code_weight_bias",
             jnp.log2(jnp.array(batch_task["survival_dict"]["lambdas"])),
         )
-    elif batch_task["type"] == "clmbr":
+    elif task["type"] == "clmbr":
         pass
-    elif batch_task["type"] == "labeled_patients":
-        if batch_task["labeler_type"] == "survival":
+    elif task["type"] == "labeled_patients":
+        if task["labeler_type"] == "survival":
             replace(
                 params,
                 "EHRTransformer/~/SurvivalTask",
@@ -218,14 +226,16 @@ def train_model() -> None:
         rootLogger.error("Invalid task for postprocess?")
         exit()
 
+    del batch_task
+
     non_fit_params = {}
     if args.start_from_checkpoint is not None:
         with open(os.path.join(args.start_from_checkpoint, "best"), "rb") as f:
             checkpointed_weights = pickle.load(f)
 
             if (
-                batch_task["type"] == "labeled_patients"
-                and batch_task["labeler_type"] == "survival"
+                task["type"] == "labeled_patients"
+                and task["labeler_type"] == "survival"
                 and ("EHRTransformer/~/SurvivalCLMBRTask/~/linear" in checkpointed_weights)
             ):
                 magic_layer = checkpointed_weights["EHRTransformer/~/SurvivalCLMBRTask/~/linear"]
@@ -298,7 +308,15 @@ def train_model() -> None:
             return loss, None
 
     def compute_total_loss(split, params, non_fit_params, rng, config):
-        num_to_get = min(50, loader.get_number_of_batches(split))
+        
+        if split == 'dev' and args.dev_batches_path:
+            split_to_eval = 'train'
+            loader_to_eval = dev_loader
+        else:
+            split_to_eval = split
+            loader_to_eval = loader
+
+        num_to_get = min(50, loader_to_eval.get_number_of_batches(split_to_eval))
         total_loss = 0
         total_indices = 0
 
@@ -309,7 +327,7 @@ def train_model() -> None:
         labels = []
 
         for i in range(num_to_get):
-            batch = loader.get_batch(split, i)
+            batch = loader_to_eval.get_batch(split_to_eval, i)
             if batch["num_indices"] == 0:
                 print("Skipping ", i, " due to no indices")
                 continue
