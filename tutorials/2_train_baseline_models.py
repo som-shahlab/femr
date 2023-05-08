@@ -137,9 +137,9 @@ if __name__ == "__main__":
 
     ### mortality has 'censored' but readmission is ok?
     task = PATH_TO_FEATURIZED_PATIENTS.split('/')[-2]
-    if 'Allmortality' in task:
+    if 'Allmortality_-1label' in task:
 
-        # Ignore all censored data
+        # Ignore all censored labels
         used_idx = np.where(label_values!='censored')[0]
         label_values = label_values[used_idx]
         patient_ids = patient_ids[used_idx]
