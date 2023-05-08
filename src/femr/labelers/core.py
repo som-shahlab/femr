@@ -544,12 +544,8 @@ class NLabelsPerPatientLabeler(Labeler):
             return labels
         elif self.num_labels == -1:
             return labels
-
-        #i.i.d sub-sample
-        selected_i = np.choice(range(len(labels), self.num_labels, replace=False))
-
         hash_to_label_list: List[Tuple[int, int, Label]] = [
-            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in selected_i
+            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))
         ]
         hash_to_label_list.sort(key=lambda a: a[1])
         n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[: self.num_labels]
