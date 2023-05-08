@@ -686,6 +686,15 @@ class ChexpertLabeler(Labeler):
     ):
         self.path_to_chexpert_csv = path_to_chexpert_csv
 
+
+    def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
+        """Return the (start, end) of the patient timeline.
+
+        Returns:
+            Tuple[datetime.datetime, datetime.datetime]: (start, end)
+        """
+        return (patient.events[0].start, patient.events[-1].start)
+
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a list of all times when the patient has a radiology report"""
 
