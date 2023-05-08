@@ -135,7 +135,6 @@ void sort_reader(
             break;
         } else {
             auto source = *item;
-            std::cout<<"Reading " << source.string() << std::endl;
 
             CSVReader<ZstdReader> reader(source.string(), delimiter);
             if (reader.columns != columns) {
@@ -148,7 +147,6 @@ void sort_reader(
                     std::hash<std::string>()(r[sort_indices[0]]) % (num_shards);
                 all_write_queues[index][i].wait_enqueue(std::move(r));
             }
-            std::cout<<"Done reading " << source.string() << std::endl;
         }
     }
 
@@ -256,7 +254,6 @@ void sort_csvs(
     }
 
     std::vector<std::thread> threads;
-    std::cout<<"Starting threads" << std::endl;
 
     for (size_t i = 0; i < num_shards; i++) {
         threads.emplace_back([i, &file_queue, &write_queues, num_shards,
@@ -271,12 +268,10 @@ void sort_csvs(
                         columns, sort_keys, delimiter);
         });
     }
-    std::cout<<"Joining sort threads" << std::endl;
 
     for (auto& thread : threads) {
         thread.join();
     }
-    std::cout<<"Sort threads joined" << std::endl;
 }
 
 void join_csvs(
@@ -358,9 +353,7 @@ void sort_and_join_csvs(
     boost::filesystem::create_directory(target_directory);
     boost::filesystem::path sorted_dir =
         target_directory / boost::filesystem::unique_path();
-    std::cout<<"About to sort"<<std::endl;
     sort_csvs(source_directory, sorted_dir, sort_keys, delimiter, num_shards);
-    std::cout<<"Sorted"<<std::endl;
     std::vector<std::thread> threads;
 
     for (size_t i = 0; i < num_shards; i++) {
@@ -371,12 +364,9 @@ void sort_and_join_csvs(
                           sort_keys, delimiter);
             });
     }
-    std::cout<<"Joining"<<std::endl;
 
     for (size_t i = 0; i < num_shards; i++) {
         threads[i].join();
     }
-    std::cout<<"Joined"<<std::endl;
     boost::filesystem::remove_all(sorted_dir);
-    std::cout<<"Cleaned"<<std::endl;
 }

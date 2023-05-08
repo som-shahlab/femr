@@ -268,7 +268,6 @@ void register_datasets_extension(py::module& root) {
                                    std::string target_path, py::object fields,
                                    char delimiter, int num_threads) {
         std::vector<std::pair<std::string, ColumnValueType>> column_types;
-	std::cout<<"About to convert " << std::endl;
 
         if (py::isinstance<py::list>(fields)) {
             // Assume all string fields
@@ -306,10 +305,8 @@ void register_datasets_extension(py::module& root) {
             throw std::runtime_error(
                 "Invalid type passed as fields to sort_and_join_csvs");
         }
-	std::cout<<"Converting " << std::endl;
         sort_and_join_csvs(source_path, target_path, column_types, delimiter,
                            num_threads);
-	std::cout<<"Converted " << std::endl;
     });
 
     m.def("convert_patient_collection_to_patient_database",
