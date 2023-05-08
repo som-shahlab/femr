@@ -277,7 +277,9 @@ def map_omop_concept_codes_to_femr_codes(
     for omop_concept_code in omop_concept_codes:
         try:
             # femr_code: int = ontology.get_dictionary().index(omop_concept_code)
-            codes.update(_get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code})
+            codes.update(
+                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
+            )
         except ValueError:
             if not is_silent_not_found_error:
                 raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")

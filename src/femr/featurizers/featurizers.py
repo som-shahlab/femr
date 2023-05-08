@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import collections
 import datetime
+import functools
+import random
 from collections import defaultdict, deque
 from typing import Callable, Deque, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
-import functools
-import collections
+import numpy as np
+
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from ..labelers import Label
 from . import OnlineStatistics
 from .core import ColumnValue, Featurizer
-import random
-import numpy as np
 
 
 # TODO - replace this with a more flexible/less hacky way to allow the user to
@@ -119,7 +120,6 @@ def _reshuffle_count_time_bins(
 ):
     # From closest bin to prediction time -> farthest bin
     for bin_idx, bin_end in enumerate(time_bins):
-
         while len(codes_per_bin[bin_idx]) > 0:
             # Get the least recently added event (i.e. farthest back in patient's timeline
             # from the currently processed label)
@@ -148,6 +148,7 @@ def _reshuffle_count_time_bins(
                 if code_counts_per_bin[bin_idx][oldest_event_code] == 0:
                     del code_counts_per_bin[bin_idx][oldest_event_code]
 
+
 class ReservoirSampler:
     def __init__(self, k, rng_seed):
         self.k = k
@@ -165,14 +166,16 @@ class ReservoirSampler:
 
         self.total += 1
 
+
 def exclusion_helper(event, fallback_function, excluded_codes_set):
     if excluded_codes_set is not None:
         if event.code in excluded_codes_set:
             return True
     if fallback_function is not None:
         return fallback_function(event)
-    
+
     return False
+
 
 class CountFeaturizer(Featurizer):
     """
@@ -189,7 +192,7 @@ class CountFeaturizer(Featurizer):
         time_bins: Optional[List[datetime.timedelta]] = None,
         numeric_value_decile: bool = False,
         string_value_combination: bool = False,
-        characters_for_string_values: int = 100
+        characters_for_string_values: int = 100,
     ):
         """
         Args:
@@ -227,10 +230,12 @@ class CountFeaturizer(Featurizer):
                             [label time, -90 days], [-90 days, -180 days], [-180 days, -100 years];]
         """
         self.is_ontology_expansion: bool = is_ontology_expansion
-        self.excluded_event_filter = functools.partial(exclusion_helper, fallback_function=excluded_event_filter, excluded_codes_set=set(excluded_codes))
+        self.excluded_event_filter = functools.partial(
+            exclusion_helper, fallback_function=excluded_event_filter, excluded_codes_set=set(excluded_codes)
+        )
         self.time_bins: Optional[List[datetime.timedelta]] = time_bins
         self.characters_for_string_values: int = characters_for_string_values
-        
+
         self.numeric_value_decile = numeric_value_decile
         self.string_value_combination = string_value_combination
 
@@ -239,7 +244,7 @@ class CountFeaturizer(Featurizer):
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
-        self.observed_codes =  set()
+        self.observed_codes = set()
         self.observed_string_value = collections.defaultdict(int)
         self.observed_numeric_value = collections.defaultdict(functools.partial(ReservoirSampler, 10000, 100))
 
@@ -259,7 +264,7 @@ class CountFeaturizer(Featurizer):
                 if code in self.code_to_column_index:
                     yield self.code_to_column_index[code]
         elif type(event.value) is str:
-            k = (event.code, event.value[:self.characters_for_string_values])
+            k = (event.code, event.value[: self.characters_for_string_values])
             if k in self.code_string_to_column_index:
                 yield self.code_string_to_column_index[k]
         else:
@@ -270,21 +275,19 @@ class CountFeaturizer(Featurizer):
                         yield i + column
 
     def preprocess(self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology):
-        """Add every event code in this patient's timeline to `codes`.
-
-        """
+        """Add every event code in this patient's timeline to `codes`."""
         for event in patient.events:
             # Check for excluded events
             if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                 continue
-            
+
             if event.value is None:
                 for code in self.get_codes(event.code, ontology):
                     # If we haven't seen this code before, then add it to our list of included codes
                     self.observed_codes.add(code)
             elif type(event.value) is str:
                 if self.string_value_combination:
-                    self.observed_string_value[(event.code, event.value[:self.characters_for_string_values])] += 1
+                    self.observed_string_value[(event.code, event.value[: self.characters_for_string_values])] += 1
             else:
                 if self.numeric_value_decile:
                     self.observed_numeric_value[event.code].add(event.value)
@@ -316,7 +319,7 @@ class CountFeaturizer(Featurizer):
     def finalize(self):
         if self.finalized:
             return
-        
+
         self.finalized = True
         self.code_to_column_index = {}
         self.code_string_to_column_index = {}
@@ -332,10 +335,10 @@ class CountFeaturizer(Featurizer):
             if count > 1:
                 self.code_string_to_column_index[(code, val)] = self.num_columns
                 self.num_columns += 1
-        
+
         for code, values in self.observed_numeric_value.items():
             quantiles = sorted(list(set(np.quantile(values.values, np.linspace(0, 1, num=11)[1:-1]))))
-            quantiles = [float('-inf')] + quantiles + [float('inf')]
+            quantiles = [float("-inf")] + quantiles + [float("inf")]
             self.code_value_to_column_index[code] = (self.num_columns, quantiles)
             self.num_columns += len(quantiles) - 1
 
@@ -373,15 +376,12 @@ class CountFeaturizer(Featurizer):
                 while event.start > labels[label_idx].time:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
-                    all_columns.append(
-                        [ColumnValue(code, count) for code, count in code_counter.items()]
-                    )
+                    all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
                     if label_idx >= len(labels):
                         # We've reached the end of the labels for this patient,
                         # so no point in continuing to count events past this point.
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
-
 
                 for column_idx in self.get_columns(event, ontology):
                     code_counter[column_idx] += 1
@@ -390,9 +390,7 @@ class CountFeaturizer(Featurizer):
             # events' total counts as these labels' feature values (basically,
             # the featurization of these labels is the count of every single event)
             for _ in labels[label_idx:]:
-                all_columns.append(
-                    [ColumnValue(code, count) for code, count in code_counter.items()]
-                )
+                all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
 
         else:
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
@@ -470,22 +468,19 @@ class CountFeaturizer(Featurizer):
         def helper(actual_idx):
             for code, idx in self.code_to_column_index.items():
                 if idx == actual_idx:
-                    return code 
+                    return code
             for (code, val), idx in self.code_string_to_column_index.items():
                 if idx == actual_idx:
-                    return f'{code} {val}'
+                    return f"{code} {val}"
 
             for code, (idx, quantiles) in self.code_value_to_column_index.items():
                 offset = actual_idx - idx
                 if 0 <= offset < len(quantiles) - 1:
-                    return f'{code} [{quantiles[offset]}, {quantiles[offset+1]})'
+                    return f"{code} [{quantiles[offset]}, {quantiles[offset+1]})"
 
             raise RuntimeError("Could not find name for " + str(actual_idx))
 
         if self.time_bins is None:
             return helper(column_idx)
         else:
-            return (
-                helper(column_idx % self.num_columns)
-                + f"_{self.time_bins[column_idx // self.num_columns]}"
-            )
+            return helper(column_idx % self.num_columns) + f"_{self.time_bins[column_idx // self.num_columns]}"
