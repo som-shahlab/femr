@@ -9,7 +9,7 @@ import xgboost as xgb
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegressionCV
 from sklearn.metrics import auc, precision_recall_curve
-from sklearn.preprocessing import 
+from sklearn.preprocessing import MaxAbsScaler
 import pandas as pd
 
 import femr
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         label_values = label_values[used_idx]
         patient_ids = patient_ids[used_idx]
         label_times = label_times[used_idx]
-        feature_matrix = feature_matrix[used_idx, :]·
+        feature_matrix = feature_matrix[used_idx, :]
 
         label_values = np.array([1 if n=='True' else 0 for n in label_values])
         label_values = label_values.astype(np.float32)
