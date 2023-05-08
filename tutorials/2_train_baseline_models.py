@@ -16,9 +16,6 @@ import pandas as pd
 import femr
 import femr.datasets
 
-from sklearn.preprocessing import
-
-
 """
 Example running:
 

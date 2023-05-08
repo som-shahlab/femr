@@ -7,8 +7,11 @@
 import os
 import pickle
 
-EXTRACT_LOCATION = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/piton_new3_extract"
-LABELS = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/lupus/labeled_patients.pkl"
+# EXTRACT_LOCATION = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/piton_new3_extract"
+#LABELS = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/lupus/labeled_patients.pkl"
+EXTRACT_LOCATION = "/local-scratch/nigam/projects/zphuo/data/omop_extract_PHI/som-nero-phi-nigam-starr.shahlab_omop_cdm5_subset_2023_05_06_extract_no_observation_v2"
+LABELS = "/local-scratch/nigam/projects/zphuo/data/omop_extract_PHI/Allmortality_10000label_0to12m/labeled_patients.pkl"
+
 TEMP_STORAGE = "trash/clmbr_data"
 
 os.makedirs(TEMP_STORAGE, exist_ok=True)
@@ -38,11 +41,12 @@ if not os.path.exists(CLMBR_BATCHES):
 Given the batches, it is now possible to train CLMBR. By default it will train for 100 epochs, with early stopping.
 """
 
-MODEL_PATH = os.path.join(TEMP_STORAGE, "clmbr_model")
+#MODEL_PATH = os.path.join(TEMP_STORAGE, "clmbr_model")
+MODEL_PATH = '/local-scratch/nigam/projects/zphuo/models/clmbr_lr_1e-05_wd_0.0_id_0.0_td_0.0_rt_global_maxiter_1000000_hs_768_is_3072_nh_12_nl_12_aw_512_obs/clmbr_model_old'
 
 if not os.path.exists(MODEL_PATH):
     assert 0 == os.system(
-        f"clmbr_train_model {MODEL_PATH} --data_path {EXTRACT_LOCATION} --batches_path {CLMBR_BATCHES} --learning_rate 1e-4 --rotary_type per_head --num_batch_threads 3 --max_iter 1000"
+        f"clmbr_train_model {MODEL_PATH} --data_path {EXTRACT_LOCATION} --batches_path {CLMBR_BATCHES} --learning_rate 1e-4 --rotary_type per_head --num_batch_threads 3 --max_iter 1"
     )
 
 """
