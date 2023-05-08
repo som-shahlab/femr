@@ -101,17 +101,21 @@ def test_count_featurizer(tmp_path: pathlib.Path):
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert featurizer.get_num_columns() == 3, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
-    
-    patient_features = [{ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features]
 
-    assert patient_features[0] == {ColumnValue(column='dummy/three', value=1)}, f"patient_features[0] = {patient_features[0]}"
+    patient_features = [
+        {ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features
+    ]
+
+    assert patient_features[0] == {
+        ColumnValue(column="dummy/three", value=1)
+    }, f"patient_features[0] = {patient_features[0]}"
     assert patient_features[1] == {
-        ColumnValue(column='dummy/three', value=2),
-        ColumnValue(column='dummy/two', value=2),
+        ColumnValue(column="dummy/three", value=2),
+        ColumnValue(column="dummy/two", value=2),
     }
     assert patient_features[2] == {
-        ColumnValue(column='dummy/three', value=3),
-        ColumnValue(column='dummy/two', value=4),
+        ColumnValue(column="dummy/three", value=3),
+        ColumnValue(column="dummy/two", value=4),
     }
 
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
@@ -127,6 +131,7 @@ def test_count_featurizer(tmp_path: pathlib.Path):
         3,
     )
     _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+
 
 def test_count_featurizer_with_values(tmp_path: pathlib.Path):
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
@@ -148,30 +153,32 @@ def test_count_featurizer_with_values(tmp_path: pathlib.Path):
     patient_features = featurizer.featurize(patient, labels, ontology)
 
     assert featurizer.get_num_columns() == 8, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
-    
-    patient_features = [{ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features]
+
+    patient_features = [
+        {ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features
+    ]
 
     assert patient_features[0] == {
-        ColumnValue(column='dummy/three', value=1),
-        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
-        ColumnValue(column='dummy/one test_value', value=2),
-        ColumnValue(column='dummy/one test_value', value=2),
-        ColumnValue(column='dummy/two [1.0, inf)', value=1),
-        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
+        ColumnValue(column="dummy/three", value=1),
+        ColumnValue(column="dummy/zero [34.5, inf)", value=1),
+        ColumnValue(column="dummy/one test_value", value=2),
+        ColumnValue(column="dummy/one test_value", value=2),
+        ColumnValue(column="dummy/two [1.0, inf)", value=1),
+        ColumnValue(column="dummy/zero [34.5, inf)", value=1),
     }, f"patient_features[0] = {patient_features[0]}"
     assert patient_features[1] == {
-        ColumnValue(column='dummy/one test_value', value=2),
-        ColumnValue(column='dummy/two [1.0, inf)', value=1),
-        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
-        ColumnValue(column='dummy/three', value=2),
-        ColumnValue(column='dummy/two', value=2),
+        ColumnValue(column="dummy/one test_value", value=2),
+        ColumnValue(column="dummy/two [1.0, inf)", value=1),
+        ColumnValue(column="dummy/zero [34.5, inf)", value=1),
+        ColumnValue(column="dummy/three", value=2),
+        ColumnValue(column="dummy/two", value=2),
     }
     assert patient_features[2] == {
-        ColumnValue(column='dummy/one test_value', value=2),
-        ColumnValue(column='dummy/two [1.0, inf)', value=1),
-        ColumnValue(column='dummy/zero [34.5, inf)', value=1),
-        ColumnValue(column='dummy/three', value=3),
-        ColumnValue(column='dummy/two', value=4),
+        ColumnValue(column="dummy/one test_value", value=2),
+        ColumnValue(column="dummy/two [1.0, inf)", value=1),
+        ColumnValue(column="dummy/zero [34.5, inf)", value=1),
+        ColumnValue(column="dummy/three", value=3),
+        ColumnValue(column="dummy/two", value=4),
     }
 
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
@@ -255,24 +262,30 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     featurizer.preprocess(patient, labels, ontology)
     patient_features = featurizer.featurize(patient, labels, ontology)
 
-    assert set(featurizer.code_to_column_index.keys()) == {'dummy/four', 'dummy/three', 'dummy/two'} , f"featurizer.code_to_column_index = {featurizer.code_to_column_index}"
+    assert set(featurizer.code_to_column_index.keys()) == {
+        "dummy/four",
+        "dummy/three",
+        "dummy/two",
+    }, f"featurizer.code_to_column_index = {featurizer.code_to_column_index}"
     assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
-    patient_features = [{ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features]
+    patient_features = [
+        {ColumnValue(column=featurizer.get_column_name(v.column), value=v.value) for v in a} for a in patient_features
+    ]
 
     assert patient_features[0] == {
-        ColumnValue(column='dummy/three_90 days, 0:00:00', value=1),
+        ColumnValue(column="dummy/three_90 days, 0:00:00", value=1),
     }, f"patient_features[0] = {patient_features[0]}"
     assert patient_features[1] == {
-        ColumnValue(column='dummy/three_90 days, 0:00:00', value=1),
-        ColumnValue(column='dummy/two_70000 days, 0:00:00', value=2),
-        ColumnValue(column='dummy/three_70000 days, 0:00:00', value=1),
+        ColumnValue(column="dummy/three_90 days, 0:00:00", value=1),
+        ColumnValue(column="dummy/two_70000 days, 0:00:00", value=2),
+        ColumnValue(column="dummy/three_70000 days, 0:00:00", value=1),
     }, f"patient_features[1] = {patient_features[1]}"
     assert patient_features[2] == {
-        ColumnValue(column='dummy/three_70000 days, 0:00:00', value=2),
-        ColumnValue(column='dummy/two_90 days, 0:00:00', value=2),
-        ColumnValue(column='dummy/three_90 days, 0:00:00', value=1),
-        ColumnValue(column='dummy/two_70000 days, 0:00:00', value=2),
+        ColumnValue(column="dummy/three_70000 days, 0:00:00", value=2),
+        ColumnValue(column="dummy/two_90 days, 0:00:00", value=2),
+        ColumnValue(column="dummy/three_90 days, 0:00:00", value=1),
+        ColumnValue(column="dummy/two_70000 days, 0:00:00", value=2),
     }, f"patient_features[2] = {patient_features[2]}"
 
     labeled_patients = labeler.apply(path_to_patient_database=database_path)
