@@ -162,7 +162,7 @@ class Featurizer(ABC):
     A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
     """
 
-    def preprocess(self, patient: Patient, labels: List[Label]):
+    def preprocess(self, patient: Patient, labels: List[Label], ontology: Ontology):
         """Preprocess the featurizer on the given patient and label indices.
         This should do nothing if `is_needs_preprocessing()` returns FALSE,
         i.e. the featurizer doesn't need preprocessing.
