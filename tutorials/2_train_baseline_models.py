@@ -164,8 +164,6 @@ if __name__ == "__main__":
     print_log("Featurized Patients", f"Label times shape: {label_times.shape}")
 
     # Train/test splits
-   
-    
     if args.split_csv:
         print_log(
             "Dataset Split",
