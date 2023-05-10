@@ -9,7 +9,7 @@ import logging
 import multiprocessing
 import os
 import resource
-from typing import Iterable, Mapping, Set, Tuple
+from typing import Dict, Iterable, List, Mapping, Set, Tuple
 
 import zstandard
 
@@ -142,6 +142,7 @@ def etl_simple_femr_program() -> None:
             rootLogger.info("Converting to events")
 
             assert os.path.exists(args.simple_source), "Input file / directory is missing?"
+            input_files: List[str]
             if os.path.isdir(args.simple_source):
                 input_files = [os.path.join(args.simple_source, fname) for fname in os.listdir(args.simple_source)]
             else:
@@ -154,7 +155,7 @@ def etl_simple_femr_program() -> None:
 
             os.mkdir(omop_dir)
             with open(os.path.join(omop_dir, "concept.csv"), "w") as f:
-                concept_id_map = {}
+                concept_id_map: Dict[str, int] = {}
                 writer = csv.DictWriter(
                     f, ["concept_id", "concept_name", "vocabulary_id", "standard_concept", "concept_code"]
                 )
@@ -170,7 +171,7 @@ def etl_simple_femr_program() -> None:
                             del row["concept_class_id"]
                             del row["valid_start_date"]
                             writer.writerow(row)
-                            concept_id_map[f'{row["vocabulary_id"]}/{row["concept_code"]}'] = row["concept_id"]
+                            concept_id_map[f'{row["vocabulary_id"]}/{row["concept_code"]}'] = int(row["concept_id"])
 
                 for i, concept_id in enumerate(concept_ids):
                     if concept_id in concept_id_map:
@@ -194,6 +195,7 @@ def etl_simple_femr_program() -> None:
                 with open(os.path.join(args.athena_download, "CONCEPT_RELATIONSHIP.csv"), "r") as f:
                     with open(os.path.join(omop_dir, "concept_relationship.csv"), "w") as wf:
                         reader = csv.DictReader(f, delimiter="\t")
+                        assert reader.fieldnames is not None
                         writer = csv.DictWriter(wf, fieldnames=reader.fieldnames)
                         writer.writeheader()
                         for row in reader:
