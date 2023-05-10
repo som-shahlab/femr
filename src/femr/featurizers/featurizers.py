@@ -41,7 +41,7 @@ class AgeFeaturizer(Featurizer):
     def get_num_columns(self) -> int:
         return 1
 
-    def preprocess(self, patient: Patient, labels: List[Label], ontology: ontology_ext.Ontology):
+    def preprocess(self, patient: Patient, labels: List[Label], ontology: extension_datasets.Ontology):
         """Save the age of this patient (in years) at each label, to use for normalization."""
         if not self.is_needs_preprocessing():
             return
@@ -114,8 +114,8 @@ class AgeFeaturizer(Featurizer):
 
 def _reshuffle_count_time_bins(
     time_bins: List[datetime.timedelta],
-    codes_per_bin: Dict[int, Deque[Tuple[str, datetime.datetime]]],
-    code_counts_per_bin: Dict[int, Dict[str, int]],
+    codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]],
+    code_counts_per_bin: Dict[int, Dict[int, int]],
     label: Label,
 ):
     # From closest bin to prediction time -> farthest bin
@@ -244,9 +244,11 @@ class CountFeaturizer(Featurizer):
                 self.time_bins
             ), f"You cannot have duplicate values in the `time_bins` argument. You passed in: {self.time_bins}"
 
-        self.observed_codes = set()
-        self.observed_string_value = collections.defaultdict(int)
-        self.observed_numeric_value = collections.defaultdict(functools.partial(ReservoirSampler, 10000, 100))
+        self.observed_codes: Set[str] = set()
+        self.observed_string_value: Dict[Tuple[str, str], int] = collections.defaultdict(int)
+        self.observed_numeric_value: Dict[str, ReservoirSampler] = collections.defaultdict(
+            functools.partial(ReservoirSampler, 10000, 100)
+        )
 
         self.finalized = False
 
@@ -309,10 +311,10 @@ class CountFeaturizer(Featurizer):
 
         for featurizer in featurizers[1:]:
             template_featurizer.observed_codes |= featurizer.observed_codes
-            for k, v in template_featurizer.observed_string_value.items():
-                featurizer.observed_string_value[k] += v
-            for k, v in template_featurizer.observed_numeric_value.items():
-                featurizer.observed_numeric_value[k].values += v.values
+            for k1, v1 in template_featurizer.observed_string_value.items():
+                featurizer.observed_string_value[k1] += v1
+            for k2, v2 in template_featurizer.observed_numeric_value.items():
+                featurizer.observed_numeric_value[k2].values += v2.values
 
         return template_featurizer
 
@@ -396,11 +398,11 @@ class CountFeaturizer(Featurizer):
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
             time_bins: List[datetime.timedelta] = sorted([x for x in self.time_bins if x is not None])
 
-            codes_per_bin: Dict[int, Deque[Tuple[str, datetime.datetime]]] = {
+            codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
             }
 
-            code_counts_per_bin: Dict[int, Dict[str, int]] = {
+            code_counts_per_bin: Dict[int, Dict[int, int]] = {
                 i: defaultdict(int) for i in range(len(self.time_bins) + 1)
             }
 
@@ -462,7 +464,7 @@ class CountFeaturizer(Featurizer):
         return True
 
     def __repr__(self) -> str:
-        return f"CountFeaturizer(number of included codes={self.self.num_columns})"
+        return f"CountFeaturizer(number of included codes={self.num_columns})"
 
     def get_column_name(self, column_idx: int) -> str:
         def helper(actual_idx):
@@ -483,7 +485,4 @@ class CountFeaturizer(Featurizer):
         if self.time_bins is None:
             return helper(column_idx)
         else:
-            return (
-                helper(column_idx % self.num_columns)
-                + f"_{self.time_bins[column_idx // self.num_columns]}"
-            )
+            return helper(column_idx % self.num_columns) + f"_{self.time_bins[column_idx // self.num_columns]}"
