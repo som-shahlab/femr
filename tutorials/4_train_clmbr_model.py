@@ -6,7 +6,7 @@
 
 import os
 import pickle
-
+import argparse
 
 if __name__ == "__main__":
 
@@ -30,13 +30,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    # EXTRACT_LOCATION = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/piton_new3_extract"
-    #LABELS = "/local-scratch/nigam/projects/ethanid/shared_tutorial_files/lupus/labeled_patients.pkl"
-    # EXTRACT_LOCATION = "/local-scratch/nigam/projects/zphuo/data/omop_extract_PHI/som-nero-phi-nigam-starr.shahlab_omop_cdm5_subset_2023_05_06_extract_no_observation_v2"
-    # LABELS = "/local-scratch/nigam/projects/zphuo/data/omop_extract_PHI/Allmortality_10000label_0to12m/labeled_patients.pkl"
-    #MODEL_PATH = '/local-scratch/nigam/projects/zphuo/models/clmbr_lr_1e-05_wd_0.0_id_0.0_td_0.0_rt_global_maxiter_1000000_hs_768_is_3072_nh_12_nl_12_aw_512_obs/clmbr_model_old'
-
 
     EXTRACT_LOCATION: str =  args.path_to_patient_database
     LABELS: str = args.path_to_labeled_patients
