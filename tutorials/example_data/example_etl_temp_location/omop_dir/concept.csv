@@ -1,0 +1,11 @@
+concept_id,concept_name,vocabulary_id,standard_concept,concept_code
+11000000000,Race/Race,Race,,Race
+11000000001,ICD10CM/E11.4,ICD10CM,,E11.4
+11000000002,Drug/Atorvastatin,Drug,,Atorvastatin
+11000000003,ICD10CM/E10.1,ICD10CM,,E10.1
+11000000004,Gender/Gender,Gender,,Gender
+11000000005,Vitals/HbA1c,Vitals,,HbA1c
+11000000006,Vitals/Blood Pressure,Vitals,,Blood Pressure
+11000000007,Drug/Multivitamins,Drug,,Multivitamins
+11000000008,Note/ProgressNote,Note,,ProgressNote
+11000000009,Birth/Birth,Birth,,Birth

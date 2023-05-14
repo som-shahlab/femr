@@ -1,0 +1,4 @@
+2023-05-13 16:44:41,933 [MainThread  ] [INFO ]  Extracting from OMOP with arguments Namespace(simple_source='./example_data/example.csv', target_location='/Users/ericpan/GitHub/femr/tutorials/example_data/example_etl_output', temp_location='/Users/ericpan/GitHub/femr/tutorials/example_data/example_etl_temp_location', num_threads=1, athena_download=None)
+2023-05-13 16:44:41,933 [MainThread  ] [INFO ]  Converting to events
+2023-05-13 16:44:42,153 [MainThread  ] [INFO ]  Converting to patients
+2023-05-13 16:44:42,155 [MainThread  ] [INFO ]  Converting to extract
