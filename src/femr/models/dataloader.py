@@ -178,7 +178,7 @@ def create_batches() -> None:
     parser.add_argument("--seed", default=97, type=int, help="The random seed used for data splitting")
     parser.add_argument(
         "--val_start",
-        default=70,
+        default=80,
         type=int,
         help="The start of the validation split (and thus end of the train split)",
     )
