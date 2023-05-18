@@ -76,7 +76,12 @@ def train_model() -> None:
         required=False,
         help="Do early stopping with a different set of batches instead of the development set",
     )
-    parser.add_argument("--dev_batches_path", type=str, required=False, help="Do early stopping with a different set of batches instead of the development set")
+    parser.add_argument(
+        "--dev_batches_path",
+        type=str,
+        required=False,
+        help="Do early stopping with a different set of batches instead of the development set",
+    )
     parser.add_argument("--linear_probe_head", type=str, default=None)
 
     parser.add_argument(
@@ -224,7 +229,7 @@ def train_model() -> None:
     elif task["type"] == "labeled_patients":
         if task["labeler_type"] == "survival":
             if args.linear_probe_head:
-                with open(args.linear_probe_head, 'rb') as f:
+                with open(args.linear_probe_head, "rb") as f:
                     linear_probe = pickle.load(f)
 
                 replace(

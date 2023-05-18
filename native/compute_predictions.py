@@ -33,7 +33,6 @@ import femr.datasets
 import femr.extension.dataloader
 import femr.models.transformer
 
-
 T = TypeVar("T")
 
 with open(args.batch_info_path, "rb") as f:
@@ -240,7 +239,7 @@ for a, b in predictions.items():
 logits = np.stack(logits, axis=0)
 is_censor = np.array(is_censor, dtype=bool)
 event_time = np.array(event_time)
-    
+
 limit_time = np.quantile(event_time[~is_censor], 0.9)
 is_censor[event_time > limit_time] = True
 event_time[event_time > limit_time] = limit_time

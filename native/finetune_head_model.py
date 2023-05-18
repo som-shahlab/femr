@@ -528,12 +528,12 @@ for frac in [1]:
             print("Missing!", k)
 
     if args.probe is not None:
-        with open(args.probe, 'wb') as f:
+        with open(args.probe, "wb") as f:
             pickle.dump(best_beta, f)
 
     print(len(predictions), num_expected_labels)
 
     assert len(predictions) == num_expected_labels
 
-    with open(args.target_path, 'wb') as f:
+    with open(args.target_path, "wb") as f:
         pickle.dump(predictions, open(args.target_path, "wb"))
