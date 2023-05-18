@@ -1,0 +1,5 @@
+2023-05-18 11:03:35,670 [MainThread  ] [INFO ]  Preparing batches with Namespace(directory='./example_data/batches', data_path='./example_data/example_etl_output', dictionary_path='./example_data/dictionary', task='clmbr', transformer_vocab_size=5, clmbr_survival_dictionary_path=None, labeled_patients_path=None, is_hierarchical=False, seed=97, val_start=70, test_start=85, batch_size=16384, note_embedding_data=None, limit_to_patients_file=None, limit_before_date=None)
+2023-05-18 11:03:35,671 [MainThread  ] [INFO ]  Wrote config ...
+2023-05-18 11:03:35,671 [MainThread  ] [INFO ]  Starting to load
+2023-05-18 11:03:35,672 [MainThread  ] [INFO ]  Loaded
+2023-05-18 11:03:35,673 [MainThread  ] [INFO ]  Number of train patients 1
