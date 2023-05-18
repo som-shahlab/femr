@@ -76,6 +76,8 @@ def train_model() -> None:
         required=False,
         help="Do early stopping with a different set of batches instead of the development set",
     )
+    parser.add_argument("--dev_batches_path", type=str, required=False, help="Do early stopping with a different set of batches instead of the development set")
+    parser.add_argument("--linear_probe_head", type=str, default=None)
 
     parser.add_argument(
         "--early_stopping_window_steps",
@@ -221,12 +223,29 @@ def train_model() -> None:
         pass
     elif task["type"] == "labeled_patients":
         if task["labeler_type"] == "survival":
-            replace(
-                params,
-                "EHRTransformer/~/SurvivalTask",
-                "code_weight_bias",
-                jnp.log2(jnp.array(batch_task["lambda"])),
-            )
+            if args.linear_probe_head:
+                with open(args.linear_probe_head, 'rb') as f:
+                    linear_probe = pickle.load(f)
+
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight_bias",
+                    jnp.array([linear_probe[-1]]),
+                )
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight",
+                    jnp.array(linear_probe[:-1]),
+                )
+            else:
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight_bias",
+                    jnp.log2(jnp.array(batch_task["lambda"])),
+                )
     else:
         rootLogger.error("Invalid task for postprocess?")
         exit()

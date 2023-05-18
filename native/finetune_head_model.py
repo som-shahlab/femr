@@ -14,6 +14,7 @@ parser.add_argument("--batch_info_path", type=str, required=True)
 parser.add_argument("--model_dir", type=str, required=True)
 parser.add_argument("--labeled_patients_path", type=str, required=True)
 parser.add_argument("--subsample_frac", type=int, default=None)
+parser.add_argument("--probe", type=str, default=None)
 
 args = parser.parse_args()
 
@@ -418,6 +419,7 @@ for frac in [1]:
     best_score = None
     best_hazards = None
     best_test = None
+    best_beta = None
 
     start_l, end_l = -5, 1
     for l_exp in np.linspace(end_l, start_l, num=20):
@@ -468,10 +470,10 @@ for frac in [1]:
 
         for i, name in enumerate(["train", "dev", "test"]):
             score = get_c(i)
-            # print(name, score)
+            print(name, score)
             if name == "dev":
                 if best_score is None or score > best_score:
-                    best_score, best_hazards = score, hazards
+                    best_score, best_hazards, best_beta = score, hazards, np.array(beta)
                     best_test = get_c(2)
 
     print("Got best:", best_test)
@@ -525,8 +527,13 @@ for frac in [1]:
         if inverse_map[k] not in found_patients:
             print("Missing!", k)
 
+    if args.probe is not None:
+        with open(args.probe, 'wb') as f:
+            pickle.dump(best_beta, f)
+
     print(len(predictions), num_expected_labels)
 
     assert len(predictions) == num_expected_labels
 
-    pickle.dump(predictions, open(args.target_path, "wb"))
+    with open(args.target_path, 'wb') as f:
+        pickle.dump(predictions, open(args.target_path, "wb"))

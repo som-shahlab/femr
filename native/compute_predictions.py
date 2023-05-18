@@ -33,6 +33,7 @@ import femr.datasets
 import femr.extension.dataloader
 import femr.models.transformer
 
+
 T = TypeVar("T")
 
 with open(args.batch_info_path, "rb") as f:
@@ -48,6 +49,8 @@ config = hk.data_structures.to_immutable_dict(config)
 loader = femr.extension.dataloader.BatchLoader(args.data_path, args.batch_info_path)
 
 data = femr.datasets.PatientDatabase(args.data_path)
+
+inverse_map = {pid: i for i, pid in enumerate(data.keys())}
 
 logging.info(
     "Loaded batches %s %s",
@@ -176,6 +179,7 @@ for dev_index in range(num_dev):
         batch["task"]["is_censor"],
     ):
         p_index = index // batch["transformer"]["length"]
+
         p_offset = index % batch["transformer"]["length"]
 
         if p_index >= batch["num_patients"]:
@@ -183,13 +187,13 @@ for dev_index in range(num_dev):
 
         # print(index, age, logit, event_time, is_censor)
 
-        pid = int(batch["patient_ids"][p_index])
+        pid = int(raw_batch["patient_ids"][p_index])
 
         birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
 
         prediction_date = birth_date + datetime.timedelta(minutes=int(age))
 
-        k = (pid, prediction_date)
+        k = (inverse_map[pid], prediction_date)
         v = (
             int(p_offset),
             np.array(logit),
@@ -214,7 +218,7 @@ for dev_index in range(num_dev):
 found_patients = {k[0] for k in predictions}
 
 for k in actual_patients_to_evaluate:
-    if k not in found_patients:
+    if inverse_map[k] not in found_patients:
         print("Missing!", k)
 
 print(len(predictions), num_expected_labels)
@@ -236,6 +240,10 @@ for a, b in predictions.items():
 logits = np.stack(logits, axis=0)
 is_censor = np.array(is_censor, dtype=bool)
 event_time = np.array(event_time)
+    
+limit_time = np.quantile(event_time[~is_censor], 0.9)
+is_censor[event_time > limit_time] = True
+event_time[event_time > limit_time] = limit_time
 
 print(logits.shape, is_censor.shape, event_time.shape)
 
