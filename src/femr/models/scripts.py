@@ -1,4 +1,5 @@
 import argparse
+import collections
 import datetime
 import functools
 import json
@@ -621,6 +622,14 @@ def compute_representations() -> None:
     config = hk.data_structures.to_immutable_dict(config)
     batch_info_path = os.path.join(args.batches_path, "batch_info.msgpack")
 
+    with open(batch_info_path, "rb") as f:
+        batch_info = msgpack.load(f, use_list=False)
+
+    patient_labels = collections.defaultdict(list)
+
+    for pid, age, label in batch_info['config']['task']['labels']:
+        patient_labels[pid].append((age, label))
+
     loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
 
     def model_fn(config, batch):
@@ -642,7 +651,7 @@ def compute_representations() -> None:
 
     database = femr.datasets.PatientDatabase(args.data_path)
 
-    results = []
+    results = collections.defaultdict(list)
 
     for split in ("train", "dev", "test"):
         for dev_index in range(loader.get_number_of_batches(split)):
@@ -667,30 +676,52 @@ def compute_representations() -> None:
                 label_age = raw_batch["task"]["label_ages"][i]
 
                 offset = raw_batch["offsets"][p_index[i]]
-                results.append((label_pid, label_age, offset, r))
+                results[label_pid].append((label_age, offset, r))
 
-    results.sort(key=lambda a: a[:3])
+    assert set(results.keys()) == set(patient_labels.keys())
+
 
     label_times = []
-
     data_matrix = []
     label_pids = []
-    label_ages = []
 
-    last_label_idx = None
+    for pid in results:
+        representations = results[pid]
+        labels = patient_labels[pid]
+        representations.sort()
+        labels.sort()
 
-    for pid, age, offset, r in results:
-        # Ignore duplicate
-        if (pid, age) == last_label_idx:
-            continue
-        last_label_idx = (pid, age)
+        # The same representation can come with multiple offsets
+        # We always want the first represention, which has the lowest offset
+        best_representations = []
+        for age, offset, r in representations:
+            if len(best_representations) != 0 and age == best_representations[-1][0]:
+                continue
+            best_representations.append((age, r))
 
-        birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
-        label_time = birth_date + datetime.timedelta(minutes=int(age))
-        label_times.append(label_time)
-        data_matrix.append(r)
-        label_pids.append(pid)
-        label_ages.append(age)
+        representations = best_representations
+
+        current_repr_index = 0
+        for label_idx, (label_age, label_value) in enumerate(labels):
+            while True:
+                next_repr_index = current_repr_index + 1
+                if next_repr_index >= len(representations):
+                    break
+                
+                next_time = representations[next_repr_index][0]
+                if next_time > label_age:
+                    break
+
+                current_repr_index += 1
+
+            r = representations[current_repr_index][1]
+
+            birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
+            label_time = birth_date + datetime.timedelta(minutes=int(age))
+
+            label_times.append(label_time)
+            data_matrix.append(r)
+            label_pids.append(pid)
 
     result = {
         "data_path": args.data_path,

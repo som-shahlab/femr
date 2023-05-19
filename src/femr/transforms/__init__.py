@@ -5,14 +5,6 @@ from typing import Any, Callable, Dict, Optional, Set, Tuple
 from femr.datasets import RawEvent, RawPatient
 
 
-def remove_short_patients(patient: RawPatient, min_num_dates: int = 3) -> Optional[RawPatient]:
-    """Remove patients with too few timepoints."""
-    if len(set(event.start.date() for event in patient.events)) <= min_num_dates:
-        return None
-    else:
-        return patient
-
-
 def remove_nones(
     patient: RawPatient,
     do_not_apply_to_filter: Optional[Callable[[RawEvent], bool]] = None,
