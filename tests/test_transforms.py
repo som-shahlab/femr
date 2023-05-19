@@ -4,7 +4,7 @@ import datetime
 
 import femr
 from femr.extractors.omop import OMOP_BIRTH
-from femr.transforms import delta_encode, remove_nones, remove_short_patients
+from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
     move_billing_codes,
     move_pre_birth,
@@ -34,30 +34,6 @@ def test_pre_birth() -> None:
     )
 
     assert move_pre_birth(patient) == expected
-
-
-def test_remove_small() -> None:
-    patient = femr.datasets.RawPatient(
-        patient_id=123,
-        events=[
-            femr.datasets.RawEvent(start=datetime.datetime(1999, 7, 2), concept_id=1234),
-            femr.datasets.RawEvent(start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH),
-            femr.datasets.RawEvent(start=datetime.datetime(1999, 7, 11), concept_id=12345),
-            femr.datasets.RawEvent(start=datetime.datetime(1999, 7, 13), concept_id=12345),
-        ],
-    )
-
-    invalid = femr.datasets.RawPatient(
-        patient_id=123,
-        events=[
-            femr.datasets.RawEvent(start=datetime.datetime(1999, 7, 9), concept_id=OMOP_BIRTH),
-            femr.datasets.RawEvent(start=datetime.datetime(1999, 7, 11), concept_id=12345),
-        ],
-    )
-
-    assert remove_short_patients(patient) == patient
-
-    assert remove_short_patients(invalid) is None
 
 
 def test_move_visit_start_to_day_start() -> None:

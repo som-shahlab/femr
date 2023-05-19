@@ -11,7 +11,7 @@ from typing import Callable, Dict, Optional, Sequence
 from femr.datasets import EventCollection, PatientCollection, RawPatient
 from femr.extractors.csv import run_csv_extractors
 from femr.extractors.omop import get_omop_csv_extractors
-from femr.transforms import delta_encode, remove_nones, remove_short_patients
+from femr.transforms import delta_encode, remove_nones
 
 
 def _get_generic_omop_transformations() -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
@@ -20,7 +20,6 @@ def _get_generic_omop_transformations() -> Sequence[Callable[[RawPatient], Optio
     transforms: Sequence[Callable[[RawPatient], Optional[RawPatient]]] = [
         remove_nones,
         delta_encode,
-        remove_short_patients,
     ]
 
     return transforms
