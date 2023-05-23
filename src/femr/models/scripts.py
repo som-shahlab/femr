@@ -717,7 +717,7 @@ def compute_representations() -> None:
             r = representations[current_repr_index][1]
 
             birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
-            label_time = birth_date + datetime.timedelta(minutes=int(age))
+            label_time = birth_date + datetime.timedelta(minutes=int(label_age))
 
             label_times.append(label_time)
             data_matrix.append(r)
