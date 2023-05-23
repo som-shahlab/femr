@@ -13,6 +13,7 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Literal, Optional, Sequence, Tuple, Union, cast
 
+import pandas as pd
 import numpy as np
 from nptyping import NDArray
 
@@ -571,3 +572,11 @@ def compute_random_num(seed: int, num_1: int, num_2: int):
         result = (result * 256 + hash_value[i]) % 100
 
     return result
+
+def load_labeled_patients_from_csv(path_to_csv: str, labeler_type: str) -> LabeledPatients:
+    """Load the CSV at `path_to_csv` into a LabeledPatient object and return it"""
+    df = pd.read_csv(path_to_csv)
+    patients_to_labels: Dict[int, List[Label]] = collections.defaultdict(list)
+    for idx, row in df.iterrows():
+        patients_to_labels[row['patient_id']].append(Label(time=row['prediction_time'], value=row['label_value']))
+    return LabeledPatients(patients_to_labels, labeler_type)
