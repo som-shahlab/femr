@@ -578,5 +578,5 @@ def load_labeled_patients_from_csv(path_to_csv: str, labeler_type: str) -> Label
     df = pd.read_csv(path_to_csv)
     patients_to_labels: Dict[int, List[Label]] = collections.defaultdict(list)
     for idx, row in df.iterrows():
-        patients_to_labels[row['patient_id']].append(Label(time=row['prediction_time'], value=row['label_value']))
+        patients_to_labels[row['patient_id']].append(Label(time=row['prediction_datetime'], value=row['label_value']))
     return LabeledPatients(patients_to_labels, labeler_type)
