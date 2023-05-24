@@ -3,10 +3,9 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
+import piton
 import piton.datasets
 import pytest
-
-import piton
 from piton.labelers.core import Label, LabeledPatients, TimeHorizon
 from piton.labelers.omop import (
     Harutyunyan_DecompensationLabeler,
