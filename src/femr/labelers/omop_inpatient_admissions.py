@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Any, Callable, List, Set
+from typing import Any, Callable, List, Optional, Set
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -35,15 +35,15 @@ class WithinInpatientVisitLabeler(WithinVisitLabeler):
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = identity,
-        visit_end_adjust_func: Callable = identity,
+        visit_start_adjust_func: Optional[Callable] = None,
+        visit_end_adjust_func: Optional[Callable] = None,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         super().__init__(
             ontology=ontology,
-            visit_start_adjust_func=visit_start_adjust_func,
-            visit_end_adjust_func=visit_end_adjust_func,
+            visit_start_adjust_func=visit_start_adjust_func if visit_start_adjust_func else identity,
+            visit_end_adjust_func=visit_end_adjust_func if visit_end_adjust_func else identity,
         )
 
     @abstractmethod
@@ -80,18 +80,18 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
 
     Prediction time: At discharge from an inpatient admission. Defaults to shifting prediction time
                      to the end of the day.
-    Time horizon: Interval of time after discharg of length `time_horizon`
+    Time horizon: Interval of time after discharge of length `time_horizon`
     Label: TRUE if patient has an inpatient admission within `time_horizon`
 
     Defaults to 30-day readmission labeler,
-        i.e. `time_horizon = TimeHorizon(1 second, 30 days)`
+        i.e. `time_horizon = TimeHorizon(1 minutes, 30 days)`
     """
 
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon = TimeHorizon(
-            start=datetime.timedelta(seconds=1), end=datetime.timedelta(days=30)
+            start=datetime.timedelta(minutes=1), end=datetime.timedelta(days=30)
         ),  # type: ignore
         prediction_time_adjustment_func: Callable = move_datetime_to_end_of_day,
     ):
@@ -109,17 +109,14 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return end of admission as prediction timm."""
         times: List[datetime.datetime] = []
-        prev_discharge_date: datetime.date = datetime.date(1900, 1, 1)
-
+        admission_times = set()
         for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(discharge_time)
-
             # Ignore patients who are readmitted the same day they were discharged b/c of data leakage
-            if admission_time.date() <= prev_discharge_date:
+            if prediction_time.replace(hour=0, minute=0, second=0, microsecond=0) in admission_times:
                 continue
-
             times.append(prediction_time)
-            prev_discharge_date = discharge_time.date()
+            admission_times.add(admission_time.replace(hour=0, minute=0, second=0, microsecond=0))
         times = sorted(list(set(times)))
         return times
 
@@ -144,11 +141,13 @@ class InpatientLongAdmissionLabeler(Labeler):
         self,
         ontology: extension_datasets.Ontology,
         long_time: datetime.timedelta = datetime.timedelta(days=7),
-        prediction_time_adjustment_func: Callable = move_datetime_to_end_of_day,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.long_time: datetime.timedelta = long_time
-        self.prediction_time_adjustment_func = prediction_time_adjustment_func
+        self.prediction_time_adjustment_func = (
+            prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+        )
 
     def label(self, patient: Patient) -> List[Label]:
         """
@@ -185,7 +184,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
     The inpatient labeler predicts whether or not a patient will die within the current INPATIENT admission.
 
     Prediction time: Defaults to 11:59:59pm on the day of the INPATIENT admission.
-    Time horizon: (1 second, end of admission) [note this time horizon varies by visit]
+    Time horizon: (1 minute, end of admission) [note this time horizon varies by visit]
     Label: TRUE if patient dies within visit
     """
 
