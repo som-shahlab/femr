@@ -5,7 +5,6 @@ import datetime
 import logging
 import math
 import os
-import pickle
 import queue
 import random
 import sys
@@ -237,46 +236,46 @@ def create_batches() -> None:
     data = femr.datasets.PatientDatabase(args.data_path)
 
     if args.labeled_patients_path is not None:
-        with open(args.labeled_patients_path, "rb") as f:
-            labeled_patients = pickle.load(f)
-            result_labels = []
-            offsets = []
-            total_events = 0
-            total = 0
-            for pid, labels in labeled_patients.items():
-                birth_date = datetime.datetime.combine(data.get_patient_birth_date(pid), datetime.time.min)
+        labeled_patients = femr.labelers.load_labeled_patients(args.labeled_patients_path)
 
-                for label in labels:
-                    age = (label.time - birth_date) / datetime.timedelta(minutes=1)
-                    if labeled_patients.labeler_type == "boolean":
-                        value = label.value
-                    elif labeled_patients.labeler_type == "survival":
-                        event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
+        result_labels = []
+        offsets = []
+        total_events = 0
+        total = 0
+        for pid, labels in labeled_patients.items():
+            birth_date = datetime.datetime.combine(data.get_patient_birth_date(pid), datetime.time.min)
 
-                        if event_offset == 0:
-                            continue
+            for label in labels:
+                age = (label.time - birth_date) / datetime.timedelta(minutes=1)
+                if labeled_patients.labeler_type == "boolean":
+                    value = label.value
+                elif labeled_patients.labeler_type == "survival":
+                    event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
-                        offsets.append(event_offset)
-                        total += 1
-                        total_events += not label.value.is_censored
+                    if event_offset == 0:
+                        continue
 
-                        value = {
-                            "event_time": event_offset + age,
-                            "is_censored": label.value.is_censored,
-                        }
-                    result_labels.append((int(pid), age, value))
+                    offsets.append(event_offset)
+                    total += 1
+                    total_events += not label.value.is_censored
 
-            task = {
-                "type": "labeled_patients",
-                "labeler_type": labeled_patients.labeler_type,
-                "labels": result_labels,
-            }
-            if labeled_patients.labeler_type == "survival":
-                mean_time = np.mean(offsets)
-                frac_events = total_events / total
-                task["lambda"] = frac_events / mean_time
+                    value = {
+                        "event_time": event_offset + age,
+                        "is_censored": label.value.is_censored,
+                    }
+                result_labels.append((int(pid), age, value))
 
-                print(frac_events, mean_time, task["lambda"])
+        task = {
+            "type": "labeled_patients",
+            "labeler_type": labeled_patients.labeler_type,
+            "labels": result_labels,
+        }
+        if labeled_patients.labeler_type == "survival":
+            mean_time = np.mean(offsets)
+            frac_events = total_events / total
+            task["lambda"] = frac_events / mean_time
+
+            print(frac_events, mean_time, task["lambda"])
 
     elif args.task == "survival_clmbr":
         with open(args.clmbr_survival_dictionary_path, "rb") as f:
