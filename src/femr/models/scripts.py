@@ -627,7 +627,7 @@ def compute_representations() -> None:
 
     patient_labels = collections.defaultdict(list)
 
-    for pid, age, label in batch_info['config']['task']['labels']:
+    for pid, age, label in batch_info["config"]["task"]["labels"]:
         patient_labels[pid].append((age, label))
 
     loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
@@ -680,7 +680,6 @@ def compute_representations() -> None:
 
     assert set(results.keys()) == set(patient_labels.keys())
 
-
     label_times = []
     data_matrix = []
     label_pids = []
@@ -707,7 +706,7 @@ def compute_representations() -> None:
                 next_repr_index = current_repr_index + 1
                 if next_repr_index >= len(representations):
                     break
-                
+
                 next_time = representations[next_repr_index][0]
                 if next_time > label_age:
                     break

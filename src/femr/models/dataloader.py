@@ -237,10 +237,20 @@ def create_batches() -> None:
     data = femr.datasets.PatientDatabase(args.data_path)
 
     if args.labeled_patients_path is not None:
-        assert args.labeled_patients_path.endswith(".pkl") or args.labeled_patients_path.endswith(".csv"), "Labeled patients path must be either .pkl or .csv"
+        assert args.labeled_patients_path.endswith(".pkl") or args.labeled_patients_path.endswith(
+            ".csv"
+        ), "Labeled patients path must be either .pkl or .csv"
         is_labeled_patients_pkl: bool = args.labeled_patients_path.endswith(".pkl")
         with open(args.labeled_patients_path, "rb" if is_labeled_patients_pkl else "r") as f:
+<<<<<<< HEAD
             labeled_patients: LabeledPatients = pickle.load(f) if is_labeled_patients_pkl else load_labeled_patients_from_csv(args.labeled_patients_path)
+=======
+            labeled_patients: LabeledPatients = (
+                pickle.load(f)
+                if is_labeled_patients_pkl
+                else load_labeled_patients_from_csv(args.labeled_patients_path, args.labeler_type)
+            )
+>>>>>>> fd971ad383f424b2d10131c89783af86ae8e508b
             result_labels = []
             offsets = []
             total_events = 0

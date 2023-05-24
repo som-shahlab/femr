@@ -13,8 +13,8 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Literal, Optional, Sequence, Tuple, Union, cast
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from nptyping import NDArray
 
 from femr import Patient
