@@ -110,7 +110,7 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     # Saving / Loading
     #   Save labeler results
-    path = os.path.join(tmp_path, "LabeledPatients.pkl")
+    path = os.path.join(tmp_path, "LabeledPatients.csv")
     labeled_patients.save(path)
 
     #   Check that file was created

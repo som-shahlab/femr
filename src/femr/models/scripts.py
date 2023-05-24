@@ -7,7 +7,7 @@ import logging
 import os
 import pickle
 import random
-from typing import TypeVar
+from typing import Any, List, Tuple, TypeVar
 
 import haiku as hk
 import jax
@@ -623,7 +623,7 @@ def compute_representations() -> None:
 
     patient_labels = collections.defaultdict(list)
 
-    for pid, age, label in batch_info['config']['task']['labels']:
+    for pid, age, label in batch_info["config"]["task"]["labels"]:
         patient_labels[pid].append((age, label))
 
     loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
@@ -676,7 +676,6 @@ def compute_representations() -> None:
 
     assert set(results.keys()) == set(patient_labels.keys())
 
-
     label_times = []
     data_matrix = []
     label_pids = []
@@ -690,28 +689,28 @@ def compute_representations() -> None:
 
         # The same representation can come with multiple offsets
         # We always want the first represention, which has the lowest offset
-        best_representations = []
+        best_representations: List[Tuple[float, Any]] = []
         for age, offset, r in representations:
             if len(best_representations) != 0 and age == best_representations[-1][0]:
                 continue
             best_representations.append((age, r))
 
-        representations = best_representations
+        best_representations
 
         current_repr_index = 0
         for label_idx, (label_age, label_value) in enumerate(labels):
             while True:
                 next_repr_index = current_repr_index + 1
-                if next_repr_index >= len(representations):
+                if next_repr_index >= len(best_representations):
                     break
-                
-                next_time = representations[next_repr_index][0]
+
+                next_time = best_representations[next_repr_index][0]
                 if next_time > label_age:
                     break
 
                 current_repr_index += 1
 
-            r = representations[current_repr_index][1]
+            r = best_representations[current_repr_index][1]
 
             birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
             label_time = birth_date + datetime.timedelta(minutes=int(label_age))

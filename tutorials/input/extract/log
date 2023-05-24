@@ -1,7 +1,7 @@
 2023-05-23 22:35:51,306 [MainThread  ] [INFO ]  Extracting from OMOP with arguments Namespace(simple_source='etl_input/simple_femr', target_location='/tmp/tmppc945j8a/extract', temp_location='/tmp/tmppc945j8a/logs', num_threads=2, athena_download=None)
 2023-05-23 22:35:51,306 [MainThread  ] [INFO ]  Converting to events
 2023-05-23 22:35:51,333 [MainThread  ] [CRITI]  [Errno 21] Is a directory: 'etl_input/simple_femr/.ipynb_checkpoints'
-multiprocessing.pool.RemoteTraceback: 
+multiprocessing.pool.RemoteTraceback:
 """
 Traceback (most recent call last):
   File "/home/ethanid/miniconda3/envs/piton_debug/lib/python3.10/multiprocessing/pool.py", line 125, in worker
