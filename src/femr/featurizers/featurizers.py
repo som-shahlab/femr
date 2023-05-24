@@ -12,8 +12,8 @@ import numpy as np
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from ..labelers import Label
-from .utils import OnlineStatistics
 from .core import ColumnValue, Featurizer
+from .utils import OnlineStatistics
 
 
 # TODO - replace this with a more flexible/less hacky way to allow the user to

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import math
 import copy
+import math
 from typing import List
+
 
 class OnlineStatistics:
     """
