@@ -81,12 +81,17 @@ class TransformerBlock(hk.Module):
 
         x = self.norm(x)
 
-        x_with_ages = jnp.concatenate((x, jnp.expand_dims(normed_ages, -1)), axis=-1)
+        x_with_ages = jnp.concatenate((x, jnp.expand_dims(normed_ages, -1), jnp.expand_dims(normed_ages ** 2, -1)), axis=-1)
         assert x_with_ages.shape[0] == x.shape[0]
-        assert x_with_ages.shape[1] == self.config["hidden_size"] + 1
+        assert x_with_ages.shape[1] == self.config["hidden_size"] + 2
         assert x_with_ages.dtype == x.dtype
 
-        middle = self.input_proj(x)
+        if False:
+            print("WITH_AGE")
+            middle = self.input_proj(x_with_ages)
+        else:
+            print("WITHOUT AGE")
+            middle = self.input_proj(x)
 
         head_size = self.config["hidden_size"] // self.config["n_heads"]
 

@@ -474,7 +474,9 @@ def train_model() -> None:
 
     logging.info("Applying decay mask %s", mask_fn(params))
 
-    lr_schedule = make_lr_schedule(warmup_percentage=0.01, total_steps=total_steps)
+    warmup_percentage = 10_000 / total_steps
+
+    lr_schedule = make_lr_schedule(warmup_percentage=warmup_percentage, total_steps=total_steps)
     weight_decay = args.weight_decay
     logging.info("Using weight decay %s", weight_decay)
     opt = optax.chain(
