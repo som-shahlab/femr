@@ -202,6 +202,7 @@ def create_batches() -> None:
         help="A file containing the only patient_ids to allow in batches",
     )
     parser.add_argument("--limit_before_date", default=None, type=str, help="Limit the batches to before a given date")
+    parser.add_argument("--num_clmbr_tasks", default=8 * 1024, type=int, help="The number of codes to train CLMBR with")
 
     args = parser.parse_args()
 
@@ -285,7 +286,7 @@ def create_batches() -> None:
             "survival_dict": surv_dict,
         }
     elif args.task == "clmbr":
-        task = {"type": "clmbr", "vocab_size": 1024 * 8}
+        task = {"type": "clmbr", "vocab_size": num_clmbr_tasks}
     else:
         rootLogger.error("Invalid task?")
         exit()
