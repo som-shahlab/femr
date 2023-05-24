@@ -486,6 +486,22 @@ cc_binary(
     srcs = ["simple_test.cc"],
 )
 
+cc_binary(
+    name = "dataloader",
+    srcs = ["dataloader.cc"],
+    deps = [
+        "@eigen",
+        ":database",
+        ":constdb",
+        "@json",
+        ":npy",
+        ":flatmap",
+        ":clmbr_dictionary",
+        ":malloc_trim",
+        ":survival"
+    ],
+)
+
 test_suite(
 	name = "non_flaky_test",
 	tags = ["-flaky"],

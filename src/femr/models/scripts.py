@@ -1,4 +1,5 @@
 import argparse
+import collections
 import datetime
 import functools
 import json
@@ -6,7 +7,7 @@ import logging
 import os
 import pickle
 import random
-from typing import TypeVar
+from typing import Any, List, Tuple, TypeVar
 
 import haiku as hk
 import jax
@@ -70,6 +71,13 @@ def train_model() -> None:
     parser.add_argument("--n_heads", type=int, default=12, help="Transformer # of heads")
     parser.add_argument("--n_layers", type=int, default=6, help="Transformer # of layers")
     parser.add_argument("--attention_width", type=int, default=512, help="Transformer attention width.")
+    parser.add_argument(
+        "--dev_batches_path",
+        type=str,
+        required=False,
+        help="Do early stopping with a different set of batches instead of the development set",
+    )
+    parser.add_argument("--linear_probe_head", type=str, default=None)
 
     parser.add_argument(
         "--early_stopping_window_steps",
@@ -104,17 +112,31 @@ def train_model() -> None:
 
     batch_config = batch_info["config"]
 
+    del batch_info
+
     batch_task = batch_config["task"]
     task = {}
     task["type"] = batch_task["type"]
-    if batch_task["type"] == "survival_clmbr":
+    if task["type"] == "survival_clmbr":
         task["num_time_bins"] = len(batch_task["survival_dict"]["time_bins"])
         task["num_codes"] = len(batch_task["survival_dict"]["codes"])
         task["dim"] = args.clmbr_survival_dim
-    elif batch_config["task"]["type"] == "clmbr":
+    elif task["type"] == "clmbr":
         task["vocab_size"] = batch_task["vocab_size"]
-    elif batch_config["task"]["type"] == "labeled_patients":
+    elif task["type"] == "labeled_patients":
         task["labeler_type"] = batch_task["labeler_type"]
+        if task["labeler_type"] == "survival":
+            # Currently need a lot of hacks to get this working right ...
+            with open(
+                "/local-scratch/nigam/projects/ethanid/piton/native/surv_clmbr_batches_new/batch_info.msgpack",
+                "rb",
+            ) as f:
+                old_batch_task = msgpack.load(f)["config"]["task"]
+
+                task["time_bins"] = old_batch_task["survival_dict"]["time_bins"]
+                print(task["time_bins"])
+
+                task["dim"] = 512
     else:
         rootLogger.error("Invalid task? " + batch_task["task"])
         exit()
@@ -141,6 +163,7 @@ def train_model() -> None:
         "weight_decay": float(args.weight_decay),
         "n_epochs": 100,
     }
+    del batch_config
 
     logging.info("Got config %s", config)
 
@@ -151,6 +174,10 @@ def train_model() -> None:
         msgpack.dump(config, out)
 
     config = hk.data_structures.to_immutable_dict(config)
+
+    if args.dev_batches_path:
+        dev_batch_info_path = os.path.join(args.dev_batches_path, "batch_info.msgpack")
+        dev_loader = femr.models.dataloader.BatchLoader(args.data_path, dev_batch_info_path)
 
     loader = femr.models.dataloader.BatchLoader(args.data_path, batch_info_path)
 
@@ -185,26 +212,45 @@ def train_model() -> None:
         old_val = params[module][weight]
         params[module][weight] = value.astype(old_val.dtype).reshape(old_val.shape)
 
-    if batch_task["type"] == "survival_clmbr":
+    if task["type"] == "survival_clmbr":
         replace(
             params,
             "EHRTransformer/~/SurvivalCLMBRTask",
             "code_weight_bias",
             jnp.log2(jnp.array(batch_task["survival_dict"]["lambdas"])),
         )
-    elif batch_task["type"] == "clmbr":
+    elif task["type"] == "clmbr":
         pass
-    elif batch_task["type"] == "labeled_patients":
-        if batch_task["labeler_type"] == "survival":
-            replace(
-                params,
-                "EHRTransformer/~/SurvivalTask",
-                "code_weight_bias",
-                jnp.log2(jnp.array(batch_task["lambda"])),
-            )
+    elif task["type"] == "labeled_patients":
+        if task["labeler_type"] == "survival":
+            if args.linear_probe_head:
+                with open(args.linear_probe_head, "rb") as f:
+                    linear_probe = pickle.load(f)
+
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight_bias",
+                    jnp.array([linear_probe[-1]]),
+                )
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight",
+                    jnp.array(linear_probe[:-1]),
+                )
+            else:
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight_bias",
+                    jnp.log2(jnp.array(batch_task["lambda"])),
+                )
     else:
         rootLogger.error("Invalid task for postprocess?")
         exit()
+
+    del batch_task
 
     non_fit_params = {}
     if args.start_from_checkpoint is not None:
@@ -212,8 +258,8 @@ def train_model() -> None:
             checkpointed_weights = pickle.load(f)
 
             if (
-                batch_task["type"] == "labeled_patients"
-                and batch_task["labeler_type"] == "survival"
+                task["type"] == "labeled_patients"
+                and task["labeler_type"] == "survival"
                 and ("EHRTransformer/~/SurvivalCLMBRTask/~/linear" in checkpointed_weights)
             ):
                 magic_layer = checkpointed_weights["EHRTransformer/~/SurvivalCLMBRTask/~/linear"]
@@ -286,7 +332,14 @@ def train_model() -> None:
             return loss, None
 
     def compute_total_loss(split, params, non_fit_params, rng, config):
-        num_to_get = min(50, loader.get_number_of_batches(split))
+        if split == "dev" and args.dev_batches_path:
+            split_to_eval = "train"
+            loader_to_eval = dev_loader
+        else:
+            split_to_eval = split
+            loader_to_eval = loader
+
+        num_to_get = min(50, loader_to_eval.get_number_of_batches(split_to_eval))
         total_loss = 0
         total_indices = 0
 
@@ -297,7 +350,7 @@ def train_model() -> None:
         labels = []
 
         for i in range(num_to_get):
-            batch = loader.get_batch(split, i)
+            batch = loader_to_eval.get_batch(split_to_eval, i)
             if batch["num_indices"] == 0:
                 print("Skipping ", i, " due to no indices")
                 continue
@@ -421,7 +474,9 @@ def train_model() -> None:
 
     logging.info("Applying decay mask %s", mask_fn(params))
 
-    lr_schedule = make_lr_schedule(warmup_percentage=0.01, total_steps=total_steps)
+    warmup_percentage = 10_000 / total_steps
+
+    lr_schedule = make_lr_schedule(warmup_percentage=warmup_percentage, total_steps=total_steps)
     weight_decay = args.weight_decay
     logging.info("Using weight decay %s", weight_decay)
     opt = optax.chain(
@@ -454,6 +509,7 @@ def train_model() -> None:
         num_batch_threads=args.num_batch_threads,
         token_dropout=args.token_dropout,
         num_epochs=config["n_epochs"],
+        num_batches=num_train_batches,
     )
 
     rng_sequence = hk.PRNGSequence(rng)
@@ -562,6 +618,14 @@ def compute_representations() -> None:
     config = hk.data_structures.to_immutable_dict(config)
     batch_info_path = os.path.join(args.batches_path, "batch_info.msgpack")
 
+    with open(batch_info_path, "rb") as f:
+        batch_info = msgpack.load(f, use_list=False)
+
+    patient_labels = collections.defaultdict(list)
+
+    for pid, age, label in batch_info["config"]["task"]["labels"]:
+        patient_labels[pid].append((age, label))
+
     loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
 
     def model_fn(config, batch):
@@ -583,7 +647,7 @@ def compute_representations() -> None:
 
     database = femr.datasets.PatientDatabase(args.data_path)
 
-    results = []
+    results = collections.defaultdict(list)
 
     for split in ("train", "dev", "test"):
         for dev_index in range(loader.get_number_of_batches(split)):
@@ -608,34 +672,53 @@ def compute_representations() -> None:
                 label_age = raw_batch["task"]["label_ages"][i]
 
                 offset = raw_batch["offsets"][p_index[i]]
-                results.append((label_pid, label_age, offset, r))
+                results[label_pid].append((label_age, offset, r))
 
-    results.sort(key=lambda a: a[:3])
+    assert set(results.keys()) == set(patient_labels.keys())
 
     label_times = []
-
     data_matrix = []
     label_pids = []
-    label_ages = []
+    label_values = []
 
-    last_label_idx = None
+    for pid in results:
+        representations = results[pid]
+        labels = patient_labels[pid]
+        representations.sort()
+        labels.sort()
 
-    for pid, age, offset, r in results:
-        # Ignore duplicate
-        if (pid, age) == last_label_idx:
-            continue
-        last_label_idx = (pid, age)
-        try:
+        # The same representation can come with multiple offsets
+        # We always want the first represention, which has the lowest offset
+        best_representations: List[Tuple[float, Any]] = []
+        for age, offset, r in representations:
+            if len(best_representations) != 0 and age == best_representations[-1][0]:
+                continue
+            best_representations.append((age, r))
+
+        best_representations
+
+        current_repr_index = 0
+        for label_idx, (label_age, label_value) in enumerate(labels):
+            while True:
+                next_repr_index = current_repr_index + 1
+                if next_repr_index >= len(best_representations):
+                    break
+
+                next_time = best_representations[next_repr_index][0]
+                if next_time > label_age:
+                    break
+
+                current_repr_index += 1
+
+            r = best_representations[current_repr_index][1]
+
             birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
-            label_time = birth_date + datetime.timedelta(minutes=int(age))
-        except Exception as e:
-            print(str(e))
-            print(f"PATIENT ID: {pid}, AGE: {age}, BIRTH DATE: {database.get_patient_birth_date(pid)}")
-            raise ValueError(f"Could not find a valid label time for {pid}")
-        label_times.append(label_time)
-        data_matrix.append(r)
-        label_pids.append(pid)
-        label_ages.append(age)
+            label_time = birth_date + datetime.timedelta(minutes=int(label_age))
+
+            label_times.append(label_time)
+            data_matrix.append(r)
+            label_pids.append(pid)
+            label_values.append(label_value)
 
     result = {
         "data_path": args.data_path,
@@ -643,6 +726,7 @@ def compute_representations() -> None:
         "data_matrix": np.stack(data_matrix),
         "patient_ids": np.array(label_pids),
         "labeling_time": np.array(label_times),
+        "label_values": np.array(label_values),
     }
 
     with open(args.destination, "wb") as wf:

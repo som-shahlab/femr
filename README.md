@@ -19,6 +19,12 @@ There are two variants of the **FEMR** package, a CPU only version and a CUDA en
 pip install femr
 ```
 
+If you have a particularly old CPU, we offer a variant of femr without CPU optimations.
+
+```bash
+pip install femr_oldcpu
+```
+
 ## How to install **FEMR** with CUDA support
 
 Note that CUDA-enabled **FEMR** requires jax in order to function.
@@ -27,6 +33,18 @@ Note that CUDA-enabled **FEMR** requires jax in order to function.
 pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 pip install "femr_cuda[models]"
 ```
+
+# Getting Started
+
+The first step of using **FEMR** is to convert your patient data into a femr.datasets.PatientDatabase, a file format that allows you to easily query patient timelines.
+
+There are three options for doing this (in order from most to least recommended):
+
+a) Convert your data to OMOP form and run the etl_generic_omop program to convert OMOP datasets to PatientDatabases. See our MIMIC OMOP ETL tutorial.
+
+b) Convert your data to FEMR's custom simple csv format and run the etl_simple_femr program to convert that format into a PatientDatabase. See our simple format ETL tutorial.
+
+c) Write a custom ETL script to handle special cases. See both the Stanford and Sickkid's ETL scripts.
 
 # Development
 

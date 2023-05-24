@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 import femr.datasets
-from femr.labelers import Label, LabeledPatients, TimeHorizon
+from femr.labelers import Label, LabeledPatients, TimeHorizon, load_labeled_patients
 from femr.labelers.omop import CodeLabeler
 
 # Needed to import `tools` for local testing
@@ -110,14 +110,14 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
     # Saving / Loading
     #   Save labeler results
-    path = os.path.join(tmp_path, "LabeledPatients.pkl")
-    save_to_pkl(labeled_patients, path)
+    path = os.path.join(tmp_path, "LabeledPatients.csv")
+    labeled_patients.save(path)
 
     #   Check that file was created
     assert os.path.exists(path)
 
     #   Read in the output files and check that they're accurate
-    labeled_patients_new = pickle.load(open(path, "rb"))
+    labeled_patients_new = load_labeled_patients(path)
 
     #   Check that we successfully saved / loaded file contents
     assert labeled_patients_new == labeled_patients
@@ -130,4 +130,4 @@ def test_labeled_patients(tmp_path: pathlib.Path) -> None:
 
 
 if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/", test_labeled_patients)
+    run_test_locally("../ignorer/test_labelers/", test_labeled_patients)

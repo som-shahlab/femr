@@ -38,6 +38,10 @@ class OntologyWrapper {
    public:
     OntologyWrapper(Ontology& _ontology) : ontology(_ontology) {}
 
+    Dictionary& get_dictionary() {
+	    return ontology.get_dictionary();
+    }
+
     py::str get_code_str(uint32_t code_index) {
         if (code_index >= main_dictionary.size()) {
             main_dictionary.resize((code_index + 1) * 2);
@@ -383,6 +387,7 @@ void register_datasets_extension(py::module& root) {
         py::make_tuple(abc_mapping) + database_binding.attr("__bases__");
 
     py::class_<OntologyWrapper>(m, "Ontology")
+        .def("get_codes", &OntologyWrapper::get_dictionary, py::return_value_policy::reference_internal)
         .def("get_parents", &OntologyWrapper::get_parents)
         .def("get_children", &OntologyWrapper::get_children)
         .def("get_all_parents", &OntologyWrapper::get_all_parents)

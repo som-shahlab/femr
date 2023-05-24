@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import collections
+import csv
 import datetime
 import hashlib
 import multiprocessing
@@ -93,6 +94,37 @@ def _apply_labeling_function(
     return patients_to_labels
 
 
+def load_labeled_patients(filename: str) -> LabeledPatients:
+    with open(filename, "r") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        assert len(rows) != 0, "Must have at least one label to load it"
+
+        labeler_type: LabelType = cast(LabelType, rows[0]["label_type"])
+        labels = collections.defaultdict(list)
+
+        for row in rows:
+            value: Union[bool, SurvivalValue, int, float]
+            if labeler_type == "survival":
+                value = SurvivalValue(
+                    time_to_event=datetime.timedelta(minutes=float(row["value"])),
+                    is_censored=row["is_censored"].lower() == "true",
+                )
+            elif labeler_type == "boolean":
+                value = row["value"].lower() == "true"
+            elif labeler_type == "categorical":
+                value = int(row["value"])
+            else:
+                value = float(row["value"])
+
+            time = datetime.datetime.fromisoformat(row["prediction_time"])
+            assert time.second == 0, "FEMR only supports minute level time resolution"
+
+            labels[int(row["patient_id"])].append(Label(time=time, value=value))
+
+        return LabeledPatients(labels, labeler_type)
+
+
 class LabeledPatients(MutableMapping[int, List[Label]]):
     """Maps patients to labels.
 
@@ -112,6 +144,29 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         """
         self.patients_to_labels: Dict[int, List[Label]] = patients_to_labels
         self.labeler_type: LabelType = labeler_type
+
+    def save(self, target_filename) -> None:
+        with open(target_filename, "w") as f:
+            writer = csv.writer(f)
+            header = ["patient_id", "prediction_time", "label_type", "value"]
+            if self.labeler_type == "survival":
+                header.append("is_censored")
+            writer.writerow(header)
+            for patient, labels in self.patients_to_labels.items():
+                for label in labels:
+                    if self.labeler_type == "survival":
+                        assert isinstance(label.value, SurvivalValue)
+                        writer.writerow(
+                            [
+                                patient,
+                                label.time.isoformat(),
+                                self.labeler_type,
+                                label.value.time_to_event / datetime.timedelta(minutes=1),
+                                label.value.is_censored,
+                            ]
+                        )
+                    else:
+                        writer.writerow([patient, label.time.isoformat(), self.labeler_type, label.value])
 
     def get_labels_from_patient_idx(self, idx: int) -> List[Label]:
         return self.patients_to_labels[idx]
@@ -369,11 +424,16 @@ class Labeler(ABC):
         # Multiprocessing
         tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts if len(pid_part) > 0]
 
-        ctx = multiprocessing.get_context("forkserver")
-        with ctx.Pool(num_threads) as pool:
+        if num_threads != 1:
+            ctx = multiprocessing.get_context("forkserver")
+            with ctx.Pool(num_threads) as pool:
+                results = []
+                for res in pool.imap_unordered(_apply_labeling_function, tasks):
+                    results.append(res)
+        else:
             results = []
-            for res in pool.imap_unordered(_apply_labeling_function, tasks):
-                results.append(res)
+            for task in tasks:
+                results.append(_apply_labeling_function(task))
 
         # Join results and return
         patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
