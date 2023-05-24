@@ -12,7 +12,7 @@ import numpy as np
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from ..labelers import Label
-from . import OnlineStatistics
+from .utils import OnlineStatistics
 from .core import ColumnValue, Featurizer
 
 

@@ -77,12 +77,6 @@ def train_model() -> None:
         required=False,
         help="Do early stopping with a different set of batches instead of the development set",
     )
-    parser.add_argument(
-        "--dev_batches_path",
-        type=str,
-        required=False,
-        help="Do early stopping with a different set of batches instead of the development set",
-    )
     parser.add_argument("--linear_probe_head", type=str, default=None)
 
     parser.add_argument(
@@ -684,6 +678,7 @@ def compute_representations() -> None:
     label_times = []
     data_matrix = []
     label_pids = []
+    label_values = []
 
     for pid in results:
         representations = results[pid]
@@ -722,6 +717,7 @@ def compute_representations() -> None:
             label_times.append(label_time)
             data_matrix.append(r)
             label_pids.append(pid)
+            label_values.append(label_value)
 
     result = {
         "data_path": args.data_path,
@@ -729,6 +725,7 @@ def compute_representations() -> None:
         "data_matrix": np.stack(data_matrix),
         "patient_ids": np.array(label_pids),
         "labeling_time": np.array(label_times),
+        "label_values": np.array(label_values),
     }
 
     with open(args.destination, "wb") as wf:

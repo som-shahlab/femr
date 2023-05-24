@@ -1,0 +1,61 @@
+2023-05-24 01:06:19,829 [MainThread  ] [INFO ]  Training model with Namespace(directory='trash/tutorial_5/clmbr_model', data_path='input/extract', batches_path='trash/tutorial_5/clmbr_batches', learning_rate=0.0001, rotary_type='per_head', clmbr_survival_dim=None, num_batch_threads=3, start_from_checkpoint=None, freeze_weights=False, token_dropout=0, internal_dropout=0, weight_decay=0, max_iter=10, hidden_size=256, intermediate_size=256, n_heads=4, n_layers=1, attention_width=512, dev_batches_path=None, linear_probe_head=None, early_stopping_window_steps=None)
+2023-05-24 01:06:19,840 [MainThread  ] [INFO ]  Got config {'data_path': 'input/extract', 'batch_info_path': 'trash/tutorial_5/clmbr_batches/batch_info.msgpack', 'seed': 97, 'task': {'type': 'clmbr', 'vocab_size': 8192}, 'transformer': {'vocab_size': 2048, 'hidden_size': 256, 'intermediate_size': 256, 'n_heads': 4, 'n_layers': 1, 'rotary': 'per_head', 'attention_width': 496, 'internal_dropout': 0, 'is_hierarchical': False, 'note_embedding_data': None}, 'learning_rate': 0.0001, 'max_grad_norm': 1.0, 'weight_decay': 0, 'n_epochs': 100}
+2023-05-24 01:06:19,872 [MainThread  ] [INFO ]  Loaded batches 1 1
+2023-05-24 01:06:20,139 [MainThread  ] [INFO ]  Unable to initialize backend 'rocm': NOT_FOUND: Could not find registered platform with name: "rocm". Available platform names are: Interpreter CUDA Host
+2023-05-24 01:06:20,140 [MainThread  ] [INFO ]  Unable to initialize backend 'tpu': module 'jaxlib.xla_extension' has no attribute 'get_tpu_client'
+2023-05-24 01:06:20,140 [MainThread  ] [INFO ]  Unable to initialize backend 'plugin': xla_extension has no attributes named get_plugin_device_client. Compile TensorFlow with //tensorflow/compiler/xla/python:enable_plugin_device set to true (defaults to false) to enable this.
+2023-05-24 01:06:21,606 [MainThread  ] [INFO ]  Got dummy batch {'num_indices': ((), dtype('int32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'num_patients': ((), dtype('int32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'offsets': ((512,), dtype('uint32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'patient_ids': ((512,), dtype('uint32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'task': {'labels': ((4096,), dtype('uint32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0))}, 'transformer': {'ages': ((16384,), dtype('float32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'label_indices': ((4096,), dtype('uint32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'length': ((), dtype('int32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'normalized_ages': ((16384,), dtype('float32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'tokens': ((16384,), dtype('uint32'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0)), 'valid_tokens': ((16384,), dtype('bool'), StreamExecutorGpuDevice(id=0, process_index=0, slice_index=0))}}
+2023-05-24 01:06:22,038 [MainThread  ] [INFO ]  Transformed the model function
+2023-05-24 01:06:23,262 [MainThread  ] [INFO ]  Done initing {'EHRTransformer/~/CLMBRTask/~/linear': {'b': ((8192,), dtype('float32')), 'w': ((256, 8192), dtype('float32'))}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed': {'embeddings': ((2048, 256), dtype('float32'))}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/loop_0/TransformerBlock/~/linear': {'b': ((1024,), dtype('float32')), 'w': ((256, 1024), dtype('float32'))}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/loop_0/TransformerBlock/~/linear_1': {'b': ((256,), dtype('float32')), 'w': ((512, 256), dtype('float32'))}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/loop_0/TransformerBlock/~/rms_norm': {'scale': ((256,), dtype('float32'))}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/rms_norm': {'scale': ((256,), dtype('float32'))}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/rms_norm_1': {'scale': ((256,), dtype('float32'))}}
+2023-05-24 01:06:23,263 [MainThread  ] [INFO ]  Total params 3024896
+2023-05-24 01:06:23,263 [MainThread  ] [INFO ]  total steps 100 num train batches 1
+2023-05-24 01:06:23,264 [MainThread  ] [INFO ]  Applying decay mask {'EHRTransformer/~/CLMBRTask/~/linear': {'b': False, 'w': True}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed': {'embeddings': False}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/loop_0/TransformerBlock/~/linear': {'b': False, 'w': True}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/loop_0/TransformerBlock/~/linear_1': {'b': False, 'w': True}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/loop_0/TransformerBlock/~/rms_norm': {'scale': False}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/rms_norm': {'scale': False}, 'EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/rms_norm_1': {'scale': False}}
+2023-05-24 01:06:23,264 [MainThread  ] [INFO ]  Using weight decay 0
+2023-05-24 01:06:23,935 [MainThread  ] [INFO ]  Starting loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=array(0, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:25,788 [MainThread  ] [INFO ]  Starting train loss {'loss': 9.358352661132812, 'c_statistic': -9.358352661132812}
+2023-05-24 01:06:26,405 [MainThread  ] [INFO ]  Starting dev loss {'loss': 9.386465072631836, 'c_statistic': -9.386465072631836}
+2023-05-24 01:06:26,552 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=array(0, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:26,568 [MainThread  ] [INFO ]  Train loss {'loss': 9.358352661132812, 'c_statistic': -9.358352661132812}
+2023-05-24 01:06:26,573 [MainThread  ] [INFO ]  Dev loss {'loss': 9.386465072631836, 'c_statistic': -9.386465072631836}
+2023-05-24 01:06:26,757 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:29,471 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(1, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:30,226 [MainThread  ] [INFO ]  Train loss {'loss': 9.358352661132812, 'c_statistic': -9.358352661132812}
+2023-05-24 01:06:30,656 [MainThread  ] [INFO ]  Dev loss {'loss': 9.386465072631836, 'c_statistic': -9.386465072631836}
+2023-05-24 01:06:30,692 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,092 [MainThread  ] [INFO ]  [Step 0]
+2023-05-24 01:06:32,096 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(3, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,108 [MainThread  ] [INFO ]  Train loss {'loss': 9.270914077758789, 'c_statistic': -9.270914077758789}
+2023-05-24 01:06:32,112 [MainThread  ] [INFO ]  Dev loss {'loss': 9.389348983764648, 'c_statistic': -9.389348983764648}
+2023-05-24 01:06:32,112 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,115 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(4, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,124 [MainThread  ] [INFO ]  Train loss {'loss': 9.227120399475098, 'c_statistic': -9.227120399475098}
+2023-05-24 01:06:32,127 [MainThread  ] [INFO ]  Dev loss {'loss': 9.390436172485352, 'c_statistic': -9.390436172485352}
+2023-05-24 01:06:32,128 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,130 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(5, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,140 [MainThread  ] [INFO ]  Train loss {'loss': 9.184638977050781, 'c_statistic': -9.184638977050781}
+2023-05-24 01:06:32,143 [MainThread  ] [INFO ]  Dev loss {'loss': 9.39208984375, 'c_statistic': -9.39208984375}
+2023-05-24 01:06:32,144 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,146 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(6, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,155 [MainThread  ] [INFO ]  Train loss {'loss': 9.142740249633789, 'c_statistic': -9.142740249633789}
+2023-05-24 01:06:32,159 [MainThread  ] [INFO ]  Dev loss {'loss': 9.393460273742676, 'c_statistic': -9.393460273742676}
+2023-05-24 01:06:32,159 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,162 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(7, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,172 [MainThread  ] [INFO ]  Train loss {'loss': 9.10057544708252, 'c_statistic': -9.10057544708252}
+2023-05-24 01:06:32,176 [MainThread  ] [INFO ]  Dev loss {'loss': 9.394940376281738, 'c_statistic': -9.394940376281738}
+2023-05-24 01:06:32,176 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,179 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(8, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,188 [MainThread  ] [INFO ]  Train loss {'loss': 9.059477806091309, 'c_statistic': -9.059477806091309}
+2023-05-24 01:06:32,192 [MainThread  ] [INFO ]  Dev loss {'loss': 9.396610260009766, 'c_statistic': -9.396610260009766}
+2023-05-24 01:06:32,192 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,194 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(9, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,204 [MainThread  ] [INFO ]  Train loss {'loss': 9.018436431884766, 'c_statistic': -9.018436431884766}
+2023-05-24 01:06:32,208 [MainThread  ] [INFO ]  Dev loss {'loss': 9.397492408752441, 'c_statistic': -9.397492408752441}
+2023-05-24 01:06:32,208 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,211 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(10, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,220 [MainThread  ] [INFO ]  Train loss {'loss': 8.978455543518066, 'c_statistic': -8.978455543518066}
+2023-05-24 01:06:32,223 [MainThread  ] [INFO ]  Dev loss {'loss': 9.398468971252441, 'c_statistic': -9.398468971252441}
+2023-05-24 01:06:32,223 [MainThread  ] [INFO ]  Continuing to train ...
+2023-05-24 01:06:32,226 [MainThread  ] [INFO ]  Loss scale DynamicLossScale(loss_scale=Array(32768., dtype=float32), counter=Array(11, dtype=int32), period=2000, factor=2, min_loss_scale=array(1., dtype=float32))
+2023-05-24 01:06:32,235 [MainThread  ] [INFO ]  Train loss {'loss': 8.938859939575195, 'c_statistic': -8.938859939575195}
+2023-05-24 01:06:32,238 [MainThread  ] [INFO ]  Dev loss {'loss': 9.399965286254883, 'c_statistic': -9.399965286254883}
+2023-05-24 01:06:32,239 [MainThread  ] [INFO ]  Stopping due to max iter

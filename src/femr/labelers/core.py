@@ -347,11 +347,16 @@ class Labeler(ABC):
         # Multiprocessing
         tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts if len(pid_part) > 0]
 
-        ctx = multiprocessing.get_context("forkserver")
-        with ctx.Pool(num_threads) as pool:
+        if num_threads != 1:
+            ctx = multiprocessing.get_context("forkserver")
+            with ctx.Pool(num_threads) as pool:
+                results = []
+                for res in pool.imap_unordered(_apply_labeling_function, tasks):
+                    results.append(res)
+        else:
             results = []
-            for res in pool.imap_unordered(_apply_labeling_function, tasks):
-                results.append(res)
+            for task in tasks:
+                results.append(_apply_labeling_function(task))
 
         # Join results and return
         patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
