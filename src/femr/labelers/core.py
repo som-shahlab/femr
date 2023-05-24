@@ -573,10 +573,11 @@ def compute_random_num(seed: int, num_1: int, num_2: int):
 
     return result
 
-def load_labeled_patients_from_csv(path_to_csv: str, labeler_type: str) -> LabeledPatients:
+def load_labeled_patients_from_csv(path_to_csv: str) -> LabeledPatients:
     """Load the CSV at `path_to_csv` into a LabeledPatient object and return it"""
     df = pd.read_csv(path_to_csv)
     patients_to_labels: Dict[int, List[Label]] = collections.defaultdict(list)
     for idx, row in df.iterrows():
+        labeler_type: str = row['label_type']
         patients_to_labels[row['patient_id']].append(Label(time=row['prediction_datetime'], value=row['label_value']))
     return LabeledPatients(patients_to_labels, labeler_type)

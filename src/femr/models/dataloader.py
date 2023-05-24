@@ -173,7 +173,6 @@ def create_batches() -> None:
         "--clmbr_survival_dictionary_path", type=str, help="The survival clmbr dictionary if running that task"
     )
     parser.add_argument("--labeled_patients_path", type=str, help="Path to file containing labeled patients. Can be either .csv or .pkl")
-    parser.add_argument("--labeler_type", type=str, help="LabelType of the labeler being loaded.")
     parser.add_argument(
         "--is_hierarchical", default=False, action="store_true", help="Whether to use hierarchical embeddings"
     )
@@ -241,7 +240,7 @@ def create_batches() -> None:
         assert args.labeled_patients_path.endswith(".pkl") or args.labeled_patients_path.endswith(".csv"), "Labeled patients path must be either .pkl or .csv"
         is_labeled_patients_pkl: bool = args.labeled_patients_path.endswith(".pkl")
         with open(args.labeled_patients_path, "rb" if is_labeled_patients_pkl else "r") as f:
-            labeled_patients: LabeledPatients = pickle.load(f) if is_labeled_patients_pkl else load_labeled_patients_from_csv(args.labeled_patients_path, args.labeler_type)
+            labeled_patients: LabeledPatients = pickle.load(f) if is_labeled_patients_pkl else load_labeled_patients_from_csv(args.labeled_patients_path)
             result_labels = []
             offsets = []
             total_events = 0
