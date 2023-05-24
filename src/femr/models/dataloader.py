@@ -286,7 +286,7 @@ def create_batches() -> None:
             "survival_dict": surv_dict,
         }
     elif args.task == "clmbr":
-        task = {"type": "clmbr", "vocab_size": num_clmbr_tasks}
+        task = {"type": "clmbr", "vocab_size": args.num_clmbr_tasks}
     else:
         rootLogger.error("Invalid task?")
         exit()
