@@ -17,6 +17,7 @@ import numpy as np
 
 import femr.datasets
 import femr.extension.dataloader
+import femr.labelers
 
 T = TypeVar("T")
 
@@ -235,6 +236,8 @@ def create_batches() -> None:
 
     data = femr.datasets.PatientDatabase(args.data_path)
 
+    task: Any
+
     if args.labeled_patients_path is not None:
         labeled_patients = femr.labelers.load_labeled_patients(args.labeled_patients_path)
 
@@ -247,9 +250,12 @@ def create_batches() -> None:
 
             for label in labels:
                 age = (label.time - birth_date) / datetime.timedelta(minutes=1)
+                value: Any
                 if labeled_patients.labeler_type == "boolean":
+                    assert isinstance(label.value, bool)
                     value = label.value
                 elif labeled_patients.labeler_type == "survival":
+                    assert isinstance(label.value, femr.labelers.SurvivalValue)
                     event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
                     if event_offset == 0:
@@ -276,7 +282,6 @@ def create_batches() -> None:
             task["lambda"] = frac_events / mean_time
 
             print(frac_events, mean_time, task["lambda"])
-
     elif args.task == "survival_clmbr":
         with open(args.clmbr_survival_dictionary_path, "rb") as f:
             surv_dict = msgpack.load(f, use_list=False)
