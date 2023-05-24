@@ -133,9 +133,7 @@ def get_femr_codes(
 
 
 def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return get_femr_codes(
-        ontology, get_visit_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
-    )
+    return get_femr_codes(ontology, get_visit_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True)
 
 
 def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[int]:
@@ -490,9 +488,7 @@ class MortalityCodeLabeler(CodeLabeler):
         prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a Mortality labeler."""
-        outcome_codes = list(
-            get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
+        outcome_codes = list(get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True))
 
         super().__init__(
             outcome_codes=outcome_codes,
