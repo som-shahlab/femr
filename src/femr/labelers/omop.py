@@ -107,59 +107,53 @@ def does_exist_event_within_time_range(
     return False
 
 
-def map_omop_concepts_to_femr_codes(
+# TODO - move this into the ontology class
+def get_femr_codes(
     ontology: extension_datasets.Ontology,
-    concepts: List[str],
-    is_get_children: bool = True,
+    omop_concept_codes: List[str],
+    is_ontology_expansion: bool = True,
     is_silent_not_found_error: bool = True,
-) -> Set[int]:
-    """Converts OMOP concept names (strings from OHDSI, e.g. SNOMED/19303) to FEMR event codes (integers internal to FEMR).
-
-    Args:
-        ontology (extension_datasets.Ontology): FEMR ontology
-        concepts (List[str]): List of OMOP concept names
-        is_get_children (bool, optional): If TRUE, then return all children of a concept, in addition to that concept. Defaults to True.
-        is_silent_not_found_error (bool, optional): If TRUE, then if a concept cannot be found in `ontology` an error is NOT raised. Defaults to True.
-
-    Returns:
-        Set[int]: Set of FEMR event codes
+) -> Set[str]:
+    """Maps OMOP codes (e.g. "LOINC/123") => FEMR codes (e.g. 123).
+    If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
+    If `is_silent_not_found_error` is True, then this function will NOT raise an error if a given OMOP concept ID is not found in the ontology.
     """
-    codes = set()
-    for x in concepts:
+    codes: Set[str] = set()
+    print(omop_concept_codes)
+    for omop_concept_code in omop_concept_codes:
         try:
-            # femr_code: int = ontology.get_dictionary().index(x)
-            codes.add(x)
-            if is_get_children:
-                for y in _get_all_children(ontology, x):
-                    codes.add(y)
-        except:
+            # femr_code: int = ontology.get_dictionary().index(omop_concept_code)
+            codes.update(
+                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
+            )
+        except ValueError:
             if not is_silent_not_found_error:
-                raise ValueError(f"Concept {x} not found in `ontology`.")
+                raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
     return codes
 
 
 def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return map_omop_concepts_to_femr_codes(
-        ontology, get_visit_concepts(), is_get_children=True, is_silent_not_found_error=True
+    return get_femr_codes(
+        ontology, get_visit_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
     )
 
 
 def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return map_omop_concepts_to_femr_codes(
-        ontology, get_icu_visit_detail_concepts(), is_get_children=True, is_silent_not_found_error=True
+    return get_femr_codes(
+        ontology, get_icu_visit_detail_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
     )
 
 
 def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[int]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return map_omop_concepts_to_femr_codes(
-        ontology, get_inpatient_admission_concepts(), is_get_children=False, is_silent_not_found_error=True
+    return get_femr_codes(
+        ontology, get_inpatient_admission_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
     )
 
 
 def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
-    return map_omop_concepts_to_femr_codes(
-        ontology, get_outpatient_visit_concepts(), is_get_children=False, is_silent_not_found_error=True
+    return get_femr_codes(
+        ontology, get_outpatient_visit_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
     )
 
 
@@ -238,52 +232,6 @@ def get_inpatient_admission_discharge_times(
             raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
         times.append((e.start, e.end))
     return times
-
-
-# TODO - move this into the ontology class
-def map_omop_concept_ids_to_femr_codes(
-    ontology: extension_datasets.Ontology,
-    omop_concept_ids: List[int],
-    is_ontology_expansion: bool = True,
-) -> Set[str]:
-    """Maps OMOP concept IDs (e.g. 3939430) => FEMR codes (e.g. 123).
-    If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
-    """
-    codes: Set[str] = set()
-    for omop_concept_id in omop_concept_ids:
-        # returns `None` if `omop_concept_id` is not found in the ontology
-        code: Optional[str] = ontology.get_code_from_concept_id(omop_concept_id)
-        # femr_code: Optional[int] = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
-        if code is None:
-            print(f"OMOP Concept ID {omop_concept_id} not found in ontology")
-        else:
-            codes.update(_get_all_children(ontology, code) if is_ontology_expansion else {code})
-    return codes
-
-
-# TODO - move this into the ontology class
-def map_omop_concept_codes_to_femr_codes(
-    ontology: extension_datasets.Ontology,
-    omop_concept_codes: List[str],
-    is_ontology_expansion: bool = True,
-    is_silent_not_found_error: bool = True,
-) -> Set[str]:
-    """Maps OMOP codes (e.g. "LOINC/123") => FEMR codes (e.g. 123).
-    If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
-    If `is_silent_not_found_error` is True, then this function will NOT raise an error if a given OMOP concept ID is not found in the ontology.
-    """
-    codes: Set[str] = set()
-    print(omop_concept_codes)
-    for omop_concept_code in omop_concept_codes:
-        try:
-            # femr_code: int = ontology.get_dictionary().index(omop_concept_code)
-            codes.update(
-                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
-            )
-        except ValueError:
-            if not is_silent_not_found_error:
-                raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
-    return codes
 
 
 # TODO - move this into the ontology class
@@ -506,7 +454,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         outcome_codes: List[int] = list(
-            map_omop_concept_codes_to_femr_codes(
+            get_femr_codes(
                 ontology,
                 self.original_omop_concept_codes,
                 is_ontology_expansion=True,
@@ -543,7 +491,7 @@ class MortalityCodeLabeler(CodeLabeler):
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
+            get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
         )
 
         super().__init__(
@@ -569,7 +517,7 @@ class LupusCodeLabeler(CodeLabeler):
         prediction_time_adjustment_func: Callable = identity,
     ):
         concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
-        outcome_codes = list(map_omop_concept_codes_to_femr_codes(ontology, concept_codes, is_ontology_expansion=True))
+        outcome_codes = list(get_femr_codes(ontology, concept_codes, is_ontology_expansion=True))
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
