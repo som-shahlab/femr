@@ -11,9 +11,9 @@ from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabele
 from .omop import (
     WithinVisitLabeler,
     get_death_concepts,
+    get_femr_codes,
     get_inpatient_admission_discharge_times,
     get_inpatient_admission_events,
-    get_femr_codes,
     move_datetime_to_end_of_day,
 )
 
