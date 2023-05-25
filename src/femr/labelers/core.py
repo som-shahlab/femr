@@ -118,7 +118,13 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
                 value = float(row["value"])
 
             time = datetime.datetime.fromisoformat(row["prediction_time"])
-            assert time.second == 0, "FEMR only supports minute level time resolution"
+            if time.second != 0:
+                # warnings.warn(
+                #     "FEMR only supports minute level time resolution. "
+                #     "Rounding down to nearest minute."
+                # )
+                time = time.replace(second=0)
+            # assert time.second == 0, "FEMR only supports minute level time resolution"
 
             labels[int(row["patient_id"])].append(Label(time=time, value=value))
 

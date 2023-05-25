@@ -107,22 +107,23 @@ def does_exist_event_within_time_range(
     return False
 
 
-# TODO - move this into the ontology class
 def get_femr_codes(
     ontology: extension_datasets.Ontology,
     omop_concept_codes: List[str],
     is_ontology_expansion: bool = True,
     is_silent_not_found_error: bool = True,
 ) -> Set[str]:
-    """Maps OMOP codes (e.g. "LOINC/123") => FEMR codes (e.g. 123).
-    If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
+    """Does ontology expansion on the given OMOP concept codes if `is_ontology_expansion` is True, 
+        otherwise just returns the codes as given.
+    
     If `is_silent_not_found_error` is True, then this function will NOT raise an error if a given OMOP concept ID is not found in the ontology.
     """
+    if not isinstance(omop_concept_codes, list):
+        # Make sure a list is passed in
+        omop_concept_codes = [omop_concept_codes]
     codes: Set[str] = set()
-    print(omop_concept_codes)
     for omop_concept_code in omop_concept_codes:
         try:
-            # femr_code: int = ontology.get_dictionary().index(omop_concept_code)
             codes.update(
                 _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
             )
@@ -239,10 +240,13 @@ def _get_all_children(ontology: extension_datasets.Ontology, code: str) -> Set[s
 
     while len(parent_deque) > 0:
         temp_parent_code: str = parent_deque.popleft()
-        for temp_child_code in ontology.get_children(temp_parent_code):
-            children_code_set.add(temp_child_code)
-            parent_deque.append(temp_child_code)
-
+        try:
+            for temp_child_code in ontology.get_children(temp_parent_code):
+                children_code_set.add(temp_child_code)
+                parent_deque.append(temp_child_code)
+        except:
+            # The `temp_parent_code` was not found in the ontology, so skip
+            pass
     return children_code_set
 
 
@@ -288,7 +292,7 @@ class WithinVisitLabeler(Labeler):
 
     def label(self, patient: Patient) -> List[Label]:
         """
-        Label all visits returned by `self.get_visit_events()`with whether the patient
+        Label all visits returned by `self.get_visit_events()` with whether the patient
         experiences an outcome in `self.outcome_codes` during each visit.
         """
         visits: List[Event] = self.get_visit_events(patient)

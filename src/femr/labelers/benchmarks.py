@@ -7,27 +7,26 @@ from typing import List, Optional, Tuple
 
 from femr import Event, Patient
 from femr.extension import datasets as extension_datasets
-from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon
+from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 from femr.labelers.omop import (
     CodeLabeler,
     WithinVisitLabeler,
     does_exist_event_within_time_range,
     get_death_concepts,
     get_icu_events,
-    map_omop_concept_codes_to_femr_codes,
+    get_inpatient_admission_events,
+    get_femr_codes,
     move_datetime_to_end_of_day,
 )
+from femr.labelers.omop_lab_values import InstantLabValueLabeler
 from femr.labelers.omop_inpatient_admissions import (
-    InpatientLongAdmissionLabeler,
-    InpatientReadmissionLabeler,
-    WithinInpatientVisitLabeler,
     get_inpatient_admission_discharge_times,
 )
 
 ##########################################################
 ##########################################################
 # CLMBR Benchmark Tasks
-# See: https://arxiv.org/pdf/2001.05295.pdf
+# See: https://www.medrxiv.org/content/10.1101/2022.04.15.22273900v1
 # details on how this was reproduced.
 #
 # Citation: Guo et al.
@@ -70,30 +69,56 @@ class Guo_LongLOSLabeler(Labeler):
         return "boolean"
 
 
-class Guo_30DayReadmissionLabeler(InpatientReadmissionLabeler):
+class Guo_30DayReadmissionLabeler(TimeHorizonEventLabeler):
     """30-day readmissions prediction task from Guo et al. 2023.
 
     Binary prediction task @ 11:59PM on the day of disharge whether the patient will be readmitted within 30 days.
+    
+    Excludes:
+        - Patients readmitted on same day as discharge
     """
 
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
     ):
-        time_horizon: TimeHorizon = TimeHorizon(
+        self.ontology: extension_datasets.Ontology = ontology
+        self.time_horizon: TimeHorizon = TimeHorizon(
             start=datetime.timedelta(minutes=1), end=datetime.timedelta(days=30)
-        )  # type: ignore
-        super().__init__(
-            ontology=ontology,
-            time_horizon=time_horizon,
-            prediction_time_adjustment_func=move_datetime_to_end_of_day,
         )
+        self.prediction_time_adjustment_func = move_datetime_to_end_of_day
 
+    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return the start times of inpatient admissions."""
+        times: List[datetime.datetime] = []
+        for admission_time, __ in get_inpatient_admission_discharge_times(patient, self.ontology):
+            times.append(admission_time)
+        return times
 
-class Guo_ICUAdmissionLabeler(WithinInpatientVisitLabeler):
+    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
+        """Return end of admission as prediction timm."""
+        times: List[datetime.datetime] = []
+        admission_times = set()
+        for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
+            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(discharge_time)
+            # Ignore patients who are readmitted the same day they were discharged b/c of data leakage
+            if prediction_time.replace(hour=0, minute=0, second=0, microsecond=0) in admission_times:
+                continue
+            times.append(prediction_time)
+            admission_times.add(admission_time.replace(hour=0, minute=0, second=0, microsecond=0))
+        times = sorted(list(set(times)))
+        return times
+
+    def get_time_horizon(self) -> TimeHorizon:
+        return self.time_horizon
+
+class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
     """ICU admission prediction task from Guo et al. 2023.
 
-    Binary prediction task @ 11:59PM on the day of admission whether the patient will be readmitted to the ICU.
+    Binary prediction task @ 11:59PM on the day of admission whether the patient will be admitted to the ICU during their admission.
+    
+    Excludes:
+        - Patients transfered on same day as admission
     """
 
     def __init__(
@@ -102,13 +127,26 @@ class Guo_ICUAdmissionLabeler(WithinInpatientVisitLabeler):
     ):
         super().__init__(
             ontology=ontology,
-            visit_start_adjust_func=None,
+            visit_start_adjust_func=move_datetime_to_end_of_day,
             visit_end_adjust_func=None,
         )
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+        # Return the start times of all ICU admissions -- this is our outcome
         return [e.start for e in get_icu_events(patient, self.ontology)]  # type: ignore
 
+    def get_visit_events(self, patient: Patient) -> List[Event]:
+        """Return all inpatient visits where ICU transfer does not occur on the same day as admission."""
+        # Get all inpatient visits -- each visit comprises a prediction (start, end) time horizon
+        all_visits: List[Event] = get_inpatient_admission_events(patient, self.ontology)
+        # Exclude visits where ICU admission occurs on the same day as admission
+        icu_transfer_dates: List[datetime.datetime] = [ x.replace(hour=0, minute=0, second=0, microsecond=0) for x in self.get_outcome_times(patient) ]
+        valid_visits: List[Event] = []
+        for visit in all_visits:
+            if visit.start.replace(hour=0, minute=0, second=0, microsecond=0) in icu_transfer_dates:
+                continue
+            valid_visits.append(visit)
+        return valid_visits
 
 ##########################################################
 ##########################################################
@@ -143,7 +181,7 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
         time_horizon = TimeHorizon(datetime.timedelta(hours=0), datetime.timedelta(hours=24))
         # Death events
         outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
+            get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
         )
         # Save ontology for `get_prediction_times()`
         self.ontology = ontology
@@ -218,7 +256,7 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a list of all times when the patient experiences an outcome"""
         outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
+            get_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
         )
         times: List[datetime.datetime] = []
         for e in patient.events:
@@ -248,7 +286,6 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
                 valid_events.append(e)
         return valid_events
 
-
 class Harutyunyan_LengthOfStayLabeler(Labeler):
     """LOS remaining regression task from Harutyunyan et al. 2019.
 
@@ -270,7 +307,7 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a list of all times when the patient experiences an outcome"""
         outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
+            get_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
         )
         times: List[datetime.datetime] = []
         for e in patient.events:
@@ -319,21 +356,193 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
         return labels
 
 
+
 ##########################################################
 ##########################################################
-# Few-Shot Benchmark Tasks
-# See: https://github.com/som-shahlab/few_shot_ehr/tree/main
+# Abnormal Lab Value Tasks
 #
-# Citation: van Uden, Cara et al.
-# Few shot EHRs
+# Citation: Few shot EHR benchmark (ours)
 ##########################################################
 ##########################################################
 
+class ThrombocytopeniaInstantLabValueLabeler(InstantLabValueLabeler):
+    """lab-based definition for thrombocytopenia based on platelet count (10^9/L).
+    Thresholds: mild (<150), moderate(<100), severe(<50), and reference range."""
+
+    original_omop_concept_codes = [
+        "LOINC/LP393218-5",
+        "LOINC/LG32892-8",
+        "LOINC/777-3",
+    ]
+
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+        if raw_value.lower() in ["normal", "adequate"]:
+            return "normal"
+        value = float(raw_value)
+        if value < 50:
+            return "severe"
+        elif value < 100:
+            return "moderate"
+        elif value < 150:
+            return "mild"
+        return "normal"
+
+
+class HyperkalemiaInstantLabValueLabeler(InstantLabValueLabeler):
+    """lab-based definition for hyperkalemia using blood potassium concentration (mmol/L).
+    Thresholds: mild(>5.5),moderate(>6),severe(>7), and abnormal range."""
+
+    original_omop_concept_codes = [
+        "LOINC/LG7931-1",
+        "LOINC/LP386618-5",
+        "LOINC/LG10990-6",
+        "LOINC/6298-4",
+        "LOINC/2823-3",
+    ]
+
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+        if raw_value.lower() in ["normal", "adequate"]:
+            return "normal"
+        value = float(raw_value)
+        if unit is not None:
+            unit = unit.lower()
+            if unit.startswith("mmol/l"):
+                # mmol/L
+                # Original OMOP concept ID: 8753
+                value = value
+            elif unit.startswith("meq/l"):
+                # mEq/L (1-to-1 -> mmol/L)
+                # Original OMOP concept ID: 9557
+                value = value
+            elif unit.startswith("mg/dl"):
+                # mg / dL (divide by 18 to get mmol/L)
+                # Original OMOP concept ID: 8840
+                value = value / 18.0
+            else:
+                raise ValueError(f"Unknown unit: {unit}")
+        else:
+            raise ValueError(f"Unknown unit: {unit}")
+        if value > 7:
+            return "severe"
+        elif value > 6.0:
+            return "moderate"
+        elif value > 5.5:
+            return "mild"
+        return "normal"
+
+
+class HypoglycemiaInstantLabValueLabeler(InstantLabValueLabeler):
+    """lab-based definition for hypoglycemia using blood glucose concentration (mmol/L).
+    Thresholds: mild(<3), moderate(<3.5), severe(<=3.9), and abnormal range."""
+
+    original_omop_concept_codes = [
+        "SNOMED/33747003",
+        "LOINC/LP416145-3",
+        "LOINC/14749-6",
+        # "LOINC/15074-8",
+    ]
+
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+        if raw_value.lower() in ["normal", "adequate"]:
+            return "normal"
+        value = float(raw_value)
+        if unit is not None:
+            unit = unit.lower()
+            if unit.startswith("mg/dl"):
+                # mg / dL
+                # Original OMOP concept ID: 8840, 9028
+                value = value / 18
+            elif unit.startswith("mmol/l"):
+                # mmol / L (x 18 to get mg/dl)
+                # Original OMOP concept ID: 8753
+                value = value
+            else:
+                raise ValueError(f"Unknown unit: {unit}")
+        else:
+            raise ValueError(f"Unknown unit: {unit}")
+        if value < 3:
+            return "severe"
+        elif value < 3.5:
+            return "moderate"
+        elif value <= 3.9:
+            return "mild"
+        return "normal"
+
+
+class HyponatremiaInstantLabValueLabeler(InstantLabValueLabeler):
+    """lab-based definition for hyponatremia based on blood sodium concentration (mmol/L).
+    Thresholds: mild (<=135),moderate(<130),severe(<125), and abnormal range."""
+
+    original_omop_concept_codes = ["LOINC/LG11363-5", "LOINC/2951-2", "LOINC/2947-0"]
+
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+        if raw_value.lower() in ["normal", "adequate"]:
+            return "normal"
+        value = float(raw_value)
+        if value < 125:
+            return "severe"
+        elif value < 130:
+            return "moderate"
+        elif value <= 135:
+            return "mild"
+        return "normal"
+
+
+class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
+    """lab-based definition for anemia based on hemoglobin levels (g/L).
+    Thresholds: mild(<120),moderate(<110),severe(<70), and reference range"""
+
+    original_omop_concept_codes = [
+        "LOINC/LP392452-1",
+    ]
+
+    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+        if raw_value.lower() in ["normal", "adequate"]:
+            return "normal"
+        value = float(raw_value)
+        if unit is not None:
+            unit = unit.lower()
+            if unit.startswith("g/dl"):
+                # g / dL
+                # Original OMOP concept ID: 8713
+                # NOTE: This weird *10 / 100 is how Lawrence did it
+                value = value * 10
+            elif unit.startswith("mg/dl"):
+                # mg / dL (divide by 1000 to get g/dL)
+                # Original OMOP concept ID: 8840
+                # NOTE: This weird *10 / 100 is how Lawrence did it
+                value = value / 100
+            elif unit.startswith("g/l"):
+                value = value
+            else:
+                raise ValueError(f"Unknown unit: {unit}")
+        else:
+            raise ValueError(f"Unknown unit: {unit}")
+        if value < 70:
+            return "severe"
+        elif value < 110:
+            return "moderate"
+        elif value < 120:
+            return "mild"
+        return "normal"
+    
+
+##########################################################
+##########################################################
+# First Diagnosis Tasks
+# See: https://github.com/som-shahlab/few_shot_ehr/tree/main
+#
+# Citation: Few shot EHR benchmark (ours)
+##########################################################
+##########################################################
 
 class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
     """Predict if patient will have their *first* diagnosis of `self.root_concept_code` in the next (1, 365) days.
-    Make prediction at end of day of discharge from inpatient admission.
-    If patient has already had this outcome, then ignore the rest of their timeline.
+    
+    Make prediction at 11:59pm on day of discharge from inpatient admission.
+    
+    Excludes:
+        - Patients who have already had this diagnosis
     """
 
     root_concept_code = None  # OMOP concept code for outcome, e.g. "SNOMED/57054005"
@@ -347,7 +556,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
         ), "Must specify `root_concept_code` for `FirstDiagnosisTimeHorizonCodeLabeler`"
         self.ontology = ontology
         self.outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, [self.root_concept_code], is_ontology_expansion=True)
+            get_femr_codes(ontology, [self.root_concept_code], is_ontology_expansion=True)
         )
         self.time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=1), datetime.timedelta(days=365))
 
