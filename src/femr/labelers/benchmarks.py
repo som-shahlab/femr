@@ -40,7 +40,7 @@ class Guo_LongLOSLabeler(Labeler):
     Binary prediction task @ 11:59PM on the day of admission whether the patient stays in hospital for >=7 days.
 
     Excludes:
-        - Admissions with LOS < 1 day
+        - Visits where discharge occurs on the same day as admission
     """
 
     def __init__(
@@ -118,6 +118,7 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
 
     Excludes:
         - Patients transfered on same day as admission
+        - Visits where discharge occurs on the same day as admission
     """
 
     def __init__(
@@ -144,6 +145,10 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
         ]
         valid_visits: List[Event] = []
         for visit in all_visits:
+            # If admission and discharge are on the same day, then ignore
+            if visit.start.date() == visit.end.date():
+                continue
+            # If ICU transfer occurs on the same day as admission, then ignore
             if visit.start.replace(hour=0, minute=0, second=0, microsecond=0) in icu_transfer_dates:
                 continue
             valid_visits.append(visit)
