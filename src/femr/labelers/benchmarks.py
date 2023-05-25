@@ -562,13 +562,24 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
         self.time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=1), datetime.timedelta(days=365))
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return discharge as prediction timm."""
+        """Return discharges that occur before first diagnosis of outcome as prediction times."""
         times: List[datetime.datetime] = []
         for __, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             prediction_time: datetime.datetime = move_datetime_to_end_of_day(discharge_time)
             times.append(prediction_time)
         times = sorted(list(set(times)))
-        return times
+        
+        # Drop all times that occur after first diagnosis
+        valid_times: List[datetime.datetime] = []
+        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        if len(outcome_times) == 0:
+            return times
+        else:
+            first_diagnosis_time: datetime.datetime = min(outcome_times)
+            for t in times:
+                if t <= first_diagnosis_time:
+                    valid_times.append(t)
+            return valid_times
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
@@ -591,6 +602,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
         return "boolean"
 
     def label(self, patient: Patient) -> List[Label]:
+        # NOTE: This is EXACTLY THE SAME as the `TimeHorizonLabeler`
         if len(patient.events) == 0:
             return []
 
@@ -628,12 +640,6 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
                     "You are making predictions at the same time as the target outcome."
                     "This frequently leads to label leakage."
                 )
-
-            if curr_outcome_idx > 0:
-                # We only want to track the first outcome that occurs to this patient, so if we've
-                # already seen an outcome (i.e. `curr_outcome_idx > 0`), then we stop labeling
-                # NOTE: This is the only difference from the `TimeHorizonLabeler`
-                break
 
             # TRUE if an event occurs within the time horizon
             is_outcome_occurs_in_time_horizon: bool = (
