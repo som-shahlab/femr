@@ -113,9 +113,9 @@ def get_femr_codes(
     is_ontology_expansion: bool = True,
     is_silent_not_found_error: bool = True,
 ) -> Set[str]:
-    """Does ontology expansion on the given OMOP concept codes if `is_ontology_expansion` is True, 
+    """Does ontology expansion on the given OMOP concept codes if `is_ontology_expansion` is True,
         otherwise just returns the codes as given.
-    
+
     If `is_silent_not_found_error` is True, then this function will NOT raise an error if a given OMOP concept ID is not found in the ontology.
     """
     if not isinstance(omop_concept_codes, list):
