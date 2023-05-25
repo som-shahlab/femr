@@ -568,7 +568,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
             prediction_time: datetime.datetime = move_datetime_to_end_of_day(discharge_time)
             times.append(prediction_time)
         times = sorted(list(set(times)))
-        
+
         # Drop all times that occur after first diagnosis
         valid_times: List[datetime.datetime] = []
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
