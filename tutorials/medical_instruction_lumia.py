@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[3]:
 
 
 import numpy as np
@@ -10,9 +10,10 @@ import random
 import os
 import pickle
 from tqdm import tqdm
+import multiprocessing
 
 
-# In[3]:
+# In[4]:
 
 
 def reservoir_sampling(iterable, n, seed=1234):
@@ -31,7 +32,7 @@ def reservoir_sampling(iterable, n, seed=1234):
     return pool
 
 
-# In[4]:
+# In[5]:
 
 
 class ReservoirSampler:
@@ -52,37 +53,43 @@ class ReservoirSampler:
         self.total += 1
 
 
-# In[5]:
+# In[6]:
 
-
-path = '/local-scratch/nigam/projects/jfries/crfm/datasets/pretraining/shc/markup_codes_notes_desc_dedup_x8_v1'
-exlude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
-
-all_gz_ls = os.listdir(path)
-all_train_ls = []
-for gz_file in all_gz_ls:
-    if 'train' in gz_file:
-        if gz_file not in exlude_shard:
-            all_train_ls.append(gz_file)
 
 k = 10000
 seed = 1234
 reservior_sampler = ReservoirSampler(k, seed)
 
-for train_file in all_train_ls:
-    print(train_file)
-    df = pd.read_json(os.path.join(path, train_file), lines=True, compression='gzip')
+def sample_from_lumia(path, train_file, path_to_save, i):
 
-    for text in tqdm(df['text']):
-        reservior_sampler.add(text)
+    exlude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
 
-results = reservior_sampler.values
-
-
-path_to_save = '/local-scratch/nigam/projects/zphuo/data/medical_instruction/'
-with open(path_to_save + 'lumia_pretraining_data.pkl', 'wb') as f:
-    pickle.dump(results, f)
+    if train_file not in exlude_shard:
     
+        df = pd.read_json(os.path.join(path, train_file), lines=True, compression='gzip')
+
+        for text in tqdm(df['text']):
+            reservior_sampler.add(text)
+
+        results = reservior_sampler.values
+        
+        with open(path_to_save + f'lumia_pretraining_data_{i}.pkl', 'wb') as f:
+            pickle.dump(results, f)
+
+
+# In[7]:
+
+
+path = '/local-scratch/nigam/projects/jfries/crfm/datasets/pretraining/shc/markup_codes_notes_desc_dedup_x8_v1'
+path_to_save = '/local-scratch/nigam/projects/zphuo/data/medical_instruction/'
+
+tasks = [(path, train_file, path_to_save, i) for i, train_file in enumerate(os.listdir(path)) if 'train' in train_file]
+
+ctx = multiprocessing.get_context("forkserver")
+
+num_threads = len([train_file for train_file in os.listdir(path) if 'train' in train_file])
+with ctx.Pool(num_threads) as pool:
+    parallel_result = list(pool.imap(sample_from_lumia, tasks))
 
 
 # In[ ]:
