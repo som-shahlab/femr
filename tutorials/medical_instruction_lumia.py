@@ -53,9 +53,10 @@ class ReservoirSampler:
         self.total += 1
 
 def sample_from_lumia(args):
-
-    path, train_file, path_to_save, i = args
+    path, train_file, path_to_save, i, k, seed, num_threads = args
     print(train_file)
+
+    reservior_sampler = ReservoirSampler(int(k/num_threads), seed)
 
     exclude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
 
@@ -75,15 +76,20 @@ def sample_from_lumia(args):
 if __name__ == '__main__':
     k = 10000
     seed = 1234
-    reservior_sampler = ReservoirSampler(k, seed)
+    
 
-    path = '/share/pi/nigam/projects/zphuo/data/lumia/download_frazier/'
-    path_to_save = '/share/pi/nigam/projects/zphuo/data/medical_instruction/'
+    path = '/local-scratch/nigam/projects/jfries/crfm/datasets/pretraining/shc/markup_codes_notes_desc_dedup_x8_v1/'
+    path_to_save = '/local-scratch/nigam/projects/zphuo/data/medical_instruction/'
+    train_file_ls = []
+    for i, train_file in enumerate(os.listdir(path)):
+        if 'train' in train_file:
+            train_file_ls.append(train_file)
+    num_threads = len(train_file_ls)
 
-    tasks = [(path, train_file, path_to_save, i) for i, train_file in enumerate(os.listdir(path)) if 'train' in train_file]
+    tasks = [(path, train_file, path_to_save, i, k, seed, num_threads) for i, train_file in enumerate(train_file_ls)]
 
     ctx = multiprocessing.get_context("forkserver")
 
-    num_threads = len([train_file for train_file in os.listdir(path) if 'train' in train_file])
+    
     with ctx.Pool(num_threads) as pool:
         parallel_result = list(pool.imap(sample_from_lumia, tasks))
