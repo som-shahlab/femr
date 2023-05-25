@@ -52,23 +52,19 @@ class ReservoirSampler:
 
         self.total += 1
 
+def sample_from_lumia(args):
 
-# In[6]:
+    path, train_file, path_to_save, i = args
+    print(train_file)
 
+    exclude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
 
-k = 10000
-seed = 1234
-reservior_sampler = ReservoirSampler(k, seed)
-
-def sample_from_lumia(path, train_file, path_to_save, i):
-
-    exlude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
-
-    if train_file not in exlude_shard:
-    
+    if train_file not in exclude_shard:
+        
         df = pd.read_json(os.path.join(path, train_file), lines=True, compression='gzip')
-
-        for text in tqdm(df['text']):
+        print(df.shape)
+        for i, text in enumerate(df['text']):
+            print(i, end=' ')
             reservior_sampler.add(text)
 
         results = reservior_sampler.values
@@ -76,24 +72,18 @@ def sample_from_lumia(path, train_file, path_to_save, i):
         with open(path_to_save + f'lumia_pretraining_data_{i}.pkl', 'wb') as f:
             pickle.dump(results, f)
 
+if __name__ == '__main__':
+    k = 10000
+    seed = 1234
+    reservior_sampler = ReservoirSampler(k, seed)
 
-# In[7]:
+    path = '/share/pi/nigam/projects/zphuo/data/lumia/download_frazier/'
+    path_to_save = '/share/pi/nigam/projects/zphuo/data/medical_instruction/'
 
+    tasks = [(path, train_file, path_to_save, i) for i, train_file in enumerate(os.listdir(path)) if 'train' in train_file]
 
-path = '/local-scratch/nigam/projects/jfries/crfm/datasets/pretraining/shc/markup_codes_notes_desc_dedup_x8_v1'
-path_to_save = '/local-scratch/nigam/projects/zphuo/data/medical_instruction/'
+    ctx = multiprocessing.get_context("forkserver")
 
-tasks = [(path, train_file, path_to_save, i) for i, train_file in enumerate(os.listdir(path)) if 'train' in train_file]
-
-ctx = multiprocessing.get_context("forkserver")
-
-num_threads = len([train_file for train_file in os.listdir(path) if 'train' in train_file])
-with ctx.Pool(num_threads) as pool:
-    parallel_result = list(pool.imap(sample_from_lumia, tasks))
-
-
-# In[ ]:
-
-
-
-
+    num_threads = len([train_file for train_file in os.listdir(path) if 'train' in train_file])
+    with ctx.Pool(num_threads) as pool:
+        parallel_result = list(pool.imap(sample_from_lumia, tasks))
