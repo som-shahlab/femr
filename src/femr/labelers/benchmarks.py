@@ -13,15 +13,13 @@ from femr.labelers.omop import (
     WithinVisitLabeler,
     does_exist_event_within_time_range,
     get_death_concepts,
+    get_femr_codes,
     get_icu_events,
     get_inpatient_admission_events,
-    get_femr_codes,
     move_datetime_to_end_of_day,
 )
+from femr.labelers.omop_inpatient_admissions import get_inpatient_admission_discharge_times
 from femr.labelers.omop_lab_values import InstantLabValueLabeler
-from femr.labelers.omop_inpatient_admissions import (
-    get_inpatient_admission_discharge_times,
-)
 
 ##########################################################
 ##########################################################
@@ -73,7 +71,7 @@ class Guo_30DayReadmissionLabeler(TimeHorizonEventLabeler):
     """30-day readmissions prediction task from Guo et al. 2023.
 
     Binary prediction task @ 11:59PM on the day of disharge whether the patient will be readmitted within 30 days.
-    
+
     Excludes:
         - Patients readmitted on same day as discharge
     """
@@ -112,11 +110,12 @@ class Guo_30DayReadmissionLabeler(TimeHorizonEventLabeler):
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
+
 class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
     """ICU admission prediction task from Guo et al. 2023.
 
     Binary prediction task @ 11:59PM on the day of admission whether the patient will be admitted to the ICU during their admission.
-    
+
     Excludes:
         - Patients transfered on same day as admission
     """
@@ -140,13 +139,16 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
         # Get all inpatient visits -- each visit comprises a prediction (start, end) time horizon
         all_visits: List[Event] = get_inpatient_admission_events(patient, self.ontology)
         # Exclude visits where ICU admission occurs on the same day as admission
-        icu_transfer_dates: List[datetime.datetime] = [ x.replace(hour=0, minute=0, second=0, microsecond=0) for x in self.get_outcome_times(patient) ]
+        icu_transfer_dates: List[datetime.datetime] = [
+            x.replace(hour=0, minute=0, second=0, microsecond=0) for x in self.get_outcome_times(patient)
+        ]
         valid_visits: List[Event] = []
         for visit in all_visits:
             if visit.start.replace(hour=0, minute=0, second=0, microsecond=0) in icu_transfer_dates:
                 continue
             valid_visits.append(visit)
         return valid_visits
+
 
 ##########################################################
 ##########################################################
@@ -180,9 +182,7 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
         # Next 24 hours
         time_horizon = TimeHorizon(datetime.timedelta(hours=0), datetime.timedelta(hours=24))
         # Death events
-        outcome_codes = list(
-            get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
+        outcome_codes = list(get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True))
         # Save ontology for `get_prediction_times()`
         self.ontology = ontology
 
@@ -255,9 +255,7 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a list of all times when the patient experiences an outcome"""
-        outcome_codes = list(
-            get_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
+        outcome_codes = list(get_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True))
         times: List[datetime.datetime] = []
         for e in patient.events:
             if e.code in outcome_codes:
@@ -286,6 +284,7 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
                 valid_events.append(e)
         return valid_events
 
+
 class Harutyunyan_LengthOfStayLabeler(Labeler):
     """LOS remaining regression task from Harutyunyan et al. 2019.
 
@@ -306,9 +305,7 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a list of all times when the patient experiences an outcome"""
-        outcome_codes = list(
-            get_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
+        outcome_codes = list(get_femr_codes(self.ontology, get_death_concepts(), is_ontology_expansion=True))
         times: List[datetime.datetime] = []
         for e in patient.events:
             if e.code in outcome_codes:
@@ -356,7 +353,6 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
         return labels
 
 
-
 ##########################################################
 ##########################################################
 # Abnormal Lab Value Tasks
@@ -364,6 +360,7 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
 # Citation: Few shot EHR benchmark (ours)
 ##########################################################
 ##########################################################
+
 
 class ThrombocytopeniaInstantLabValueLabeler(InstantLabValueLabeler):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L).
@@ -525,7 +522,7 @@ class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
         elif value < 120:
             return "mild"
         return "normal"
-    
+
 
 ##########################################################
 ##########################################################
@@ -536,11 +533,12 @@ class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
 ##########################################################
 ##########################################################
 
+
 class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
     """Predict if patient will have their *first* diagnosis of `self.root_concept_code` in the next (1, 365) days.
-    
+
     Make prediction at 11:59pm on day of discharge from inpatient admission.
-    
+
     Excludes:
         - Patients who have already had this diagnosis
     """
@@ -555,9 +553,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
             self.root_concept_code is not None
         ), "Must specify `root_concept_code` for `FirstDiagnosisTimeHorizonCodeLabeler`"
         self.ontology = ontology
-        self.outcome_codes = list(
-            get_femr_codes(ontology, [self.root_concept_code], is_ontology_expansion=True)
-        )
+        self.outcome_codes = list(get_femr_codes(ontology, [self.root_concept_code], is_ontology_expansion=True))
         self.time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=1), datetime.timedelta(days=365))
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
