@@ -463,7 +463,7 @@ class TimeHorizonEventLabeler(Labeler):
 
     No labels are generated if the patient record is "censored" before the end of the horizon and `is_apply_censoring = True`.
     Note that this defaults to `is_apply_censoring = True`.
-    
+
     You are required to implement three methods:
         get_outcome_times() for defining the datetimes of the event of interset
         get_prediction_times() for defining the datetimes at which we make our predictions
@@ -543,7 +543,7 @@ class TimeHorizonEventLabeler(Labeler):
         If FALSE, then a censored patient with no outcome -> FALSE.
         """
         return True
-    
+
     def label(self, patient: Patient) -> List[Label]:
         """Return a list of Labels for an individual patient.
 

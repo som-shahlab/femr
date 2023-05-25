@@ -6,13 +6,9 @@ from abc import abstractmethod
 from typing import Any, List, Optional, Set
 
 from femr import Patient
-from femr.labelers import Label, Labeler, LabelType
-from femr.labelers.omop import (
-    OMOPConceptCodeLabeler,
-    get_femr_codes,
-)
-
 from femr.extension import datasets as extension_datasets
+from femr.labelers import Label, Labeler, LabelType
+from femr.labelers.omop import OMOPConceptCodeLabeler, get_femr_codes
 
 ##########################################################
 ##########################################################
@@ -25,6 +21,7 @@ from femr.extension import datasets as extension_datasets
 # likely to be noisy.
 ##########################################################
 ##########################################################
+
 
 class InstantLabValueLabeler(Labeler):
     """Apply a multi-class label for the outcome of a lab test.
