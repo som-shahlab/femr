@@ -13,7 +13,7 @@ from .omop import (
     get_death_concepts,
     get_inpatient_admission_discharge_times,
     get_inpatient_admission_events,
-    map_omop_concept_codes_to_femr_codes,
+    get_femr_codes,
     move_datetime_to_end_of_day,
 )
 
@@ -160,7 +160,7 @@ class InpatientLongAdmissionLabeler(Labeler):
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(admission_time)
 
             # exclude if discharge or death occurred before prediction time
-            death_concepts: Set[str] = map_omop_concept_codes_to_femr_codes(self.ontology, get_death_concepts())
+            death_concepts: Set[str] = get_femr_codes(self.ontology, get_death_concepts())
             death_times: List[datetime.datetime] = []
             for e in patient.events:
                 if e.code in death_concepts:
@@ -194,7 +194,7 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
         visit_start_adjust_func: Callable = move_datetime_to_end_of_day,
         visit_end_adjust_func: Callable = identity,
     ):
-        femr_codes: Set[str] = map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts())
+        femr_codes: Set[str] = get_femr_codes(ontology, get_death_concepts())
         self.outcome_codes: Set[str] = femr_codes
         super().__init__(
             ontology=ontology,
