@@ -5,7 +5,6 @@ import datetime
 import logging
 import math
 import os
-import pickle
 import queue
 import random
 import sys
@@ -18,6 +17,7 @@ import numpy as np
 
 import femr.datasets
 import femr.extension.dataloader
+import femr.labelers
 
 T = TypeVar("T")
 
@@ -32,15 +32,13 @@ def _index_thread(
     split: str,
     data_path: str,
     batch_info_path: str,
+    num_batches: int,
 ) -> None:
     """Generate indices in random order and add them to the queue."""
-    thread_loader = BatchLoader(data_path, batch_info_path)
-    num_train_batches = thread_loader.get_number_of_batches(split)
-
     rng = random.Random(seed)
     step = 0
     for _ in range(num_epochs):
-        order: List[int] = list(range(num_train_batches))
+        order: List[int] = list(range(num_batches))
         rng.shuffle(order)
 
         for i in order:
@@ -88,6 +86,7 @@ class Batches:
         seed: int,
         num_epochs: int,
         num_batch_threads: int,
+        num_batches: int,
         split: str = "train",
     ):
         print("Working with seed", seed, file=sys.stderr)
@@ -113,6 +112,7 @@ class Batches:
                     "num_epochs",
                     "data_path",
                     "batch_info_path",
+                    "num_batches",
                     "split",
                 )
             },
@@ -202,6 +202,7 @@ def create_batches() -> None:
         help="A file containing the only patient_ids to allow in batches",
     )
     parser.add_argument("--limit_before_date", default=None, type=str, help="Limit the batches to before a given date")
+    parser.add_argument("--num_clmbr_tasks", default=8 * 1024, type=int, help="The number of codes to train CLMBR with")
 
     args = parser.parse_args()
 
@@ -235,49 +236,52 @@ def create_batches() -> None:
 
     data = femr.datasets.PatientDatabase(args.data_path)
 
+    task: Any
+
     if args.labeled_patients_path is not None:
-        with open(args.labeled_patients_path, "rb") as f:
-            labeled_patients = pickle.load(f)
-            result_labels = []
-            offsets = []
-            total_events = 0
-            total = 0
-            for pid, labels in labeled_patients.items():
-                birth_date = datetime.datetime.combine(data.get_patient_birth_date(pid), datetime.time.min)
+        labeled_patients = femr.labelers.load_labeled_patients(args.labeled_patients_path)
 
-                for label in labels:
-                    age = (label.time - birth_date) / datetime.timedelta(minutes=1)
-                    if labeled_patients.labeler_type == "boolean":
-                        value = label.value
-                    elif labeled_patients.labeler_type == "survival":
-                        event_age = (label.value.event_time - birth_date) / datetime.timedelta(minutes=1)
-                        event_offset = event_age - age
+        result_labels = []
+        offsets = []
+        total_events = 0
+        total = 0
+        for pid, labels in labeled_patients.items():
+            birth_date = datetime.datetime.combine(data.get_patient_birth_date(pid), datetime.time.min)
 
-                        if event_offset == 0:
-                            continue
+            for label in labels:
+                age = (label.time - birth_date) / datetime.timedelta(minutes=1)
+                value: Any
+                if labeled_patients.labeler_type == "boolean":
+                    assert isinstance(label.value, bool)
+                    value = label.value
+                elif labeled_patients.labeler_type == "survival":
+                    assert isinstance(label.value, femr.labelers.SurvivalValue)
+                    event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
-                        offsets.append(event_offset)
-                        total += 1
-                        total_events += not label.value.is_censored
+                    if event_offset == 0:
+                        continue
 
-                        value = {
-                            "event_time": event_age,
-                            "is_censored": label.value.is_censored,
-                        }
-                    result_labels.append((int(pid), age, value))
+                    offsets.append(event_offset)
+                    total += 1
+                    total_events += not label.value.is_censored
 
-            task = {
-                "type": "labeled_patients",
-                "labeler_type": labeled_patients.labeler_type,
-                "labels": result_labels,
-            }
-            if labeled_patients.labeler_type == "survival":
-                mean_time = np.mean(offsets)
-                frac_events = total_events / total
-                task["lambda"] = frac_events / mean_time
+                    value = {
+                        "event_time": event_offset + age,
+                        "is_censored": label.value.is_censored,
+                    }
+                result_labels.append((int(pid), age, value))
 
-                print(frac_events, mean_time, task["lambda"])
+        task = {
+            "type": "labeled_patients",
+            "labeler_type": labeled_patients.labeler_type,
+            "labels": result_labels,
+        }
+        if labeled_patients.labeler_type == "survival":
+            mean_time = np.mean(offsets)
+            frac_events = total_events / total
+            task["lambda"] = frac_events / mean_time
 
+            print(frac_events, mean_time, task["lambda"])
     elif args.task == "survival_clmbr":
         with open(args.clmbr_survival_dictionary_path, "rb") as f:
             surv_dict = msgpack.load(f, use_list=False)
@@ -286,7 +290,7 @@ def create_batches() -> None:
             "survival_dict": surv_dict,
         }
     elif args.task == "clmbr":
-        task = {"type": "clmbr", "vocab_size": 1024 * 8}
+        task = {"type": "clmbr", "vocab_size": args.num_clmbr_tasks}
     else:
         rootLogger.error("Invalid task?")
         exit()

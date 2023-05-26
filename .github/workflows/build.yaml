@@ -16,6 +16,8 @@ jobs:
         exclude:
           - os: macos-12
             version: cuda
+          - os: macos-12
+            version: old_cpu
 
     steps:
     - uses: actions/checkout@v3
