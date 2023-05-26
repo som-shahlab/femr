@@ -57,21 +57,26 @@ def sample_from_lumia(args):
     print(train_file)
 
     reservior_sampler = ReservoirSampler(int(k/num_threads), seed)
+    
 
-    exclude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
+    #exclude_shard = ['train.0.1684831482.jsonl.gz', 'train.1.1684831482.jsonl.gz']
+    exclude_shard = []
 
     if train_file not in exclude_shard:
         
         df = pd.read_json(os.path.join(path, train_file), lines=True, compression='gzip')
         print(df.shape)
-        for i, text in enumerate(df['text']):
-            print(i, end=' ')
-            reservior_sampler.add(text)
+        for _, row in df.iterrows():
+            reservior_sampler.add(row.tolist())
 
         results = reservior_sampler.values
+        results = np.array(results)
+        df_out = pd.DataFrame({'uid': results[:, 0],
+                                'person_id': results[:, 1],
+                                'split': results[:, 2],
+                                'text': results[:, 3]})
         
-        with open(path_to_save + f'lumia_pretraining_data_{i}.pkl', 'wb') as f:
-            pickle.dump(results, f)
+        df_out.to_json(path_to_save + f'lumia_trainsplit_sample_{i}.jsonl.gz', compression='gzip')
 
 if __name__ == '__main__':
     k = 10000
