@@ -138,11 +138,11 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         #df = pd.read_csv(self.index_time_csv_path)
         df = self.index_time_df
         time_column = self.index_time_column
-        #df[time_column] = pd.to_datetime(df[time_column])
+        # df[time_column] = pd.to_datetime(df[time_column])
         df_patient = df[df["person_id"] == patient.patient_id]
         for _, row in df_patient.iterrows():
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
-                datetime.datetime.strptime(row[time_column], '%Y-%m-%d %H:%M:%S')
+                datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
             )
             if last_time != prediction_time:
                 times.append(prediction_time)

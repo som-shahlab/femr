@@ -117,9 +117,9 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
             # ignore censored for classification
             elif labeler_type == "str":
                 if row["value"] == "True":
-                        value = 'True'
+                    value = "True"
                 elif row["value"] == "False":
-                        value = 'False'
+                    value = "False"
                 else:
                     continue
             else:
