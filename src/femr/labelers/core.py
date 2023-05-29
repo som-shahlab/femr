@@ -595,16 +595,16 @@ class TimeHorizonEventLabeler(Labeler):
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
-                print("True", end=' ')
-                results.append(Label(time=time, value='True'))
+                print("True", end=" ")
+                results.append(Label(time=time, value="True"))
             elif not is_censored:
-                print("False", end=' ')
+                print("False", end=" ")
                 # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value='False'))
+                results.append(Label(time=time, value="False"))
             elif is_censored:
                 # Censored => None
-                print("Censored", end=' ')
-                results.append(Label(time=time, value='Censored'))
+                print("Censored", end=" ")
+                results.append(Label(time=time, value="Censored"))
 
         return results
 
