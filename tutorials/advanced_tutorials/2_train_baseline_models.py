@@ -11,7 +11,6 @@ from sklearn import metrics
 from sklearn.linear_model import LogisticRegressionCV
 from sklearn.metrics import auc, precision_recall_curve
 from sklearn.preprocessing import MaxAbsScaler
-import pandas as pd
 
 import femr
 import femr.datasets
@@ -82,21 +81,21 @@ if __name__ == "__main__":
         "--cohort",
         type=str,
         help="what cohort to build models on",
-        default='all',
+        default="all",
     )
 
     parser.add_argument(
         "--cohort_csv",
         type=str,
         help="file path towards the cohort you can read from",
-        default='all',
+        default="all",
     )
 
     parser.add_argument(
         "--split_csv",
         type=str,
         help="file path towards an canonical train/test splits",
-        default='all',
+        default="all",
     )
 
     # Parse CLI args
@@ -122,13 +121,13 @@ if __name__ == "__main__":
     )
 
     # old 0to6m, 0to12m need remapping, 0to3m doesn't
-    #all_patient_ids = list(database.keys())
-    #patient_ids = np.array([all_patient_ids[index] for index in patient_ids])
+    # all_patient_ids = list(database.keys())
+    # patient_ids = np.array([all_patient_ids[index] for index in patient_ids])
 
     # downselect patient cohort to PE or not
-    if args.cohort == 'all':
+    if args.cohort == "all":
         pass
-    elif args.cohort == 'PE':
+    elif args.cohort == "PE":
         ALLPE_file = args.cohort_csv
         ALLPE_df = pd.read_csv(ALLPE_file)
         PE_ids = set(ALLPE_df.person_id)
@@ -142,19 +141,17 @@ if __name__ == "__main__":
         label_times = label_times[idx_kept]
         feature_matrix = feature_matrix[idx_kept, :]
 
-
     ### mortality has 'censored' but readmission is ok?
-    task = PATH_TO_FEATURIZED_PATIENTS.split('/')[-2]
-    if 'Allmortality_-1label' in task:
-
+    task = PATH_TO_FEATURIZED_PATIENTS.split("/")[-2]
+    if "Allmortality_-1label" in task:
         # Ignore all censored labels
-        used_idx = np.where(label_values!='censored')[0]
+        used_idx = np.where(label_values != "censored")[0]
         label_values = label_values[used_idx]
         patient_ids = patient_ids[used_idx]
         label_times = label_times[used_idx]
         feature_matrix = feature_matrix[used_idx, :]
 
-        label_values = np.array([1 if n=='True' else 0 for n in label_values])
+        label_values = np.array([1 if n == "True" else 0 for n in label_values])
         label_values = label_values.astype(np.float32)
 
     print_log("Featurized Patients", f"Loaded from: {PATH_TO_FEATURIZED_PATIENTS}")
@@ -171,18 +168,18 @@ if __name__ == "__main__":
         )
 
         split_df = pd.read_csv(args.split_csv)
-        split_df_grouped = split_df.groupby('split').agg(lambda x: set(x))
+        split_df_grouped = split_df.groupby("split").agg(lambda x: set(x))
 
         test_pids_idx = []
         train_pids_idx = []
         valid_pids_idx = []
 
         for i, n in enumerate(patient_ids):
-            if n in split_df_grouped.loc['test'].person_id:
-                test_pids_idx.append(i) 
-            elif n in split_df_grouped.loc['train'].person_id:
+            if n in split_df_grouped.loc["test"].person_id:
+                test_pids_idx.append(i)
+            elif n in split_df_grouped.loc["train"].person_id:
                 train_pids_idx.append(i)
-            elif n in split_df_grouped.loc['valid'].person_id:
+            elif n in split_df_grouped.loc["valid"].person_id:
                 valid_pids_idx.append(i)
 
     else:
@@ -193,8 +190,7 @@ if __name__ == "__main__":
         hashed_pids = np.array([database.compute_split(split_seed, pid) for pid in patient_ids])
         train_pids_idx = np.where(hashed_pids < (percent_train * 100))[0]
         test_pids_idx = np.where(hashed_pids >= (percent_train * 100))[0]
-    
-    
+
     X_train, y_train = (
         feature_matrix[train_pids_idx],
         label_values[train_pids_idx],
@@ -245,8 +241,8 @@ if __name__ == "__main__":
     y_test_proba = model.predict_proba(X_test_scaled)[::, 1]
     run_analysis("Logistic Regression", y_train, y_train_proba, y_test, y_test_proba)
     print_log("Logistic Regression", "Done")
-    filename = PATH_TO_FEATURIZED_PATIENTS.replace('featurized_patients.pkl', f'LR_mortality_{args.cohort}.pkl')
-    pickle.dump(model, open(filename, 'wb'))
+    filename = PATH_TO_FEATURIZED_PATIENTS.replace("featurized_patients.pkl", f"LR_mortality_{args.cohort}.pkl")
+    pickle.dump(model, open(filename, "wb"))
 
     # XGBoost
     print_log("XGBoost", "Training")
@@ -256,5 +252,5 @@ if __name__ == "__main__":
     y_test_proba = model.predict_proba(X_test)[::, 1]
     run_analysis("XGBoost", y_train, y_train_proba, y_test, y_test_proba)
     print_log("XGBoost", "Done")
-    filename = PATH_TO_FEATURIZED_PATIENTS.replace('featurized_patients.pkl', f'XGB_mortality_{args.cohort}.pkl')
-    pickle.dump(model, open(filename, 'wb'))
+    filename = PATH_TO_FEATURIZED_PATIENTS.replace("featurized_patients.pkl", f"XGB_mortality_{args.cohort}.pkl")
+    pickle.dump(model, open(filename, "wb"))

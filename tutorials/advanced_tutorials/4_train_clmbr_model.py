@@ -4,12 +4,11 @@
     In order to use this script, the assumption is that you already have a set of labels and an extract
 """
 
+import argparse
 import os
 import pickle
-import argparse
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Train CLMBR models")
     parser.add_argument(
         "path_to_patient_database",
@@ -31,14 +30,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    EXTRACT_LOCATION: str =  args.path_to_patient_database
+    EXTRACT_LOCATION: str = args.path_to_patient_database
     LABELS: str = args.path_to_labeled_patients
     MODEL_PATH: str = args.path_to_model
 
     TEMP_STORAGE = "trash/clmbr_data"
 
     os.makedirs(TEMP_STORAGE, exist_ok=True)
-
 
     """
     The first step of training CLMBR is creating a dictionary, that helps map codes to integers that can be used within a neural network.
@@ -64,8 +62,7 @@ if __name__ == "__main__":
     Given the batches, it is now possible to train CLMBR. By default it will train for 100 epochs, with early stopping.
     """
 
-    #MODEL_PATH = os.path.join(TEMP_STORAGE, "clmbr_model")
- 
+    # MODEL_PATH = os.path.join(TEMP_STORAGE, "clmbr_model")
 
     if not os.path.exists(MODEL_PATH):
         assert 0 == os.system(
