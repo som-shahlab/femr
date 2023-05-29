@@ -54,7 +54,7 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Union[bool, int, float, SurvivalValue]
+    value: Union[bool, int, float, str, SurvivalValue]
 
 
 def _apply_labeling_function(
@@ -595,13 +595,16 @@ class TimeHorizonEventLabeler(Labeler):
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(Label(time=time, value=True))
+                print("True", end=' ')
+                results.append(Label(time=time, value='True'))
             elif not is_censored:
+                print("False", end=' ')
                 # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value=False))
+                results.append(Label(time=time, value='False'))
             elif is_censored:
                 # Censored => None
-                results.append(Label(time=time, value=None))
+                print("Censored", end=' ')
+                results.append(Label(time=time, value='Censored'))
 
         return results
 
