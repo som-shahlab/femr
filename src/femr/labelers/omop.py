@@ -272,8 +272,14 @@ class CodeLabeler(TimeHorizonEventLabeler):
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
+<<<<<<< HEAD
+        index_time_csv_path: str = None, # read in index time from csv
+        index_time_column: str = None, # column name for index time
+        index_time_df: pd.DataFrame = None, # dataframe with index time
+=======
         index_time_csv_path: str = None,  # read in index time from csv
         index_time_column: str = None,  # column name for index time
+>>>>>>> 878da333811243df926d2abce76a1472f7f4cf7d
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -292,6 +298,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
         self.index_time_csv_path: str = index_time_csv_path
         self.index_time_column: str = index_time_column
+        self.index_time_df: pd.DataFrame = index_time_df
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
@@ -311,7 +318,8 @@ class CodeLabeler(TimeHorizonEventLabeler):
         """Return prediction times based on a given CSV."""
         times: List[datetime.datetime] = []
         last_time = None
-        df = pd.read_csv(self.index_time_csv_path)
+        #df = pd.read_csv(self.index_time_csv_path)
+        df = self.index_time_df
         time_column = self.index_time_column
         # df[time_column] = pd.to_datetime(df[time_column])
         df_patient = df[df["person_id"] == patient.patient_id]

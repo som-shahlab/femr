@@ -98,12 +98,14 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         prediction_time_adjustment_func: Callable = identity,  # move_datetime_to_end_of_day,
         index_time_csv_path: str = None,  # read in index time from csv
         index_time_column: str = None,  # column name for index time
+        index_time_df: pd.DataFrame = None,  # dataframe with index time
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_time_adjustment_func = prediction_time_adjustment_func  # prediction_time_adjustment_func
         self.index_time_csv_path = index_time_csv_path
         self.index_time_column = index_time_column
+        self.index_time_df = index_time_df
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""
@@ -133,7 +135,8 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         """Return prediction times based on a given CSV."""
         times: List[datetime.datetime] = []
         last_time = None
-        df = pd.read_csv(self.index_time_csv_path)
+        # df = pd.read_csv(self.index_time_csv_path)
+        df = self.index_time_df
         time_column = self.index_time_column
         # df[time_column] = pd.to_datetime(df[time_column])
         df_patient = df[df["person_id"] == patient.patient_id]
