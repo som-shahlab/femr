@@ -114,6 +114,14 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
                 value = row["value"].lower() == "true"
             elif labeler_type == "categorical":
                 value = int(row["value"])
+            # ignore censored for classification
+            elif labeler_type == "str":
+                if row["value"] == "True":
+                        value = 'True'
+                elif row["value"] == "False":
+                        value = 'False'
+                else:
+                    continue
             else:
                 value = float(row["value"])
 
@@ -498,9 +506,7 @@ class TimeHorizonEventLabeler(Labeler):
         pass
 
     @abstractmethod
-    def get_prediction_times_from_csv(
-        self, patient: Patient, csv_path: str, time_column: str
-    ) -> List[datetime.datetime]:
+    def get_prediction_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes at which we'll make a prediction.
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
@@ -537,9 +543,7 @@ class TimeHorizonEventLabeler(Labeler):
         __, end_time = self.get_patient_start_end_times(patient)
         # prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
 
-        csv_path = "/local-scratch/nigam/projects/zphuo/data/omop_extract_PHI/som-nero-phi-nigam-starr.frazier/radfusion3_cohort.csv"
-        time_column = "procedure_DATETIME"
-        prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient, csv_path, time_column)
+        prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
