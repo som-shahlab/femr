@@ -597,6 +597,9 @@ class TimeHorizonEventLabeler(Labeler):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
+            elif is_censored:
+                # Censored => None
+                results.append(Label(time=time, value=None))
 
         return results
 
