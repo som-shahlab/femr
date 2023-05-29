@@ -597,10 +597,11 @@ class TimeHorizonEventLabeler(Labeler):
                 results.append(Label(time=time, value='True'))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value='False'))
+                results.append(Label(time=time, value="False"))
             elif is_censored:
                 # Censored => None
                 results.append(Label(time=time, value='Censored'))
+
         return results
 
 
