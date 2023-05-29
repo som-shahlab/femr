@@ -96,9 +96,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
             start=datetime.timedelta(seconds=1), end=datetime.timedelta(days=30)
         ),  # type: ignore
         prediction_time_adjustment_func: Callable = identity,  # move_datetime_to_end_of_day,
-        index_time_csv_path: str = None, # read in index time from csv
-        index_time_column: str = None, # column name for index time
-        index_time_df: pd.DataFrame = None, # dataframe with index time
+        index_time_csv_path: str = None,  # read in index time from csv
+        index_time_column: str = None,  # column name for index time
+        index_time_df: pd.DataFrame = None,  # dataframe with index time
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
@@ -135,7 +135,7 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         """Return prediction times based on a given CSV."""
         times: List[datetime.datetime] = []
         last_time = None
-        #df = pd.read_csv(self.index_time_csv_path)
+        # df = pd.read_csv(self.index_time_csv_path)
         df = self.index_time_df
         time_column = self.index_time_column
         # df[time_column] = pd.to_datetime(df[time_column])
