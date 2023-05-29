@@ -96,8 +96,8 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
             start=datetime.timedelta(seconds=1), end=datetime.timedelta(days=30)
         ),  # type: ignore
         prediction_time_adjustment_func: Callable = identity,  # move_datetime_to_end_of_day,
-        index_time_csv_path: str = None, # read in index time from csv
-        index_time_column: str = None, # column name for index time
+        index_time_csv_path: str = None,  # read in index time from csv
+        index_time_column: str = None,  # column name for index time
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
@@ -135,11 +135,11 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         last_time = None
         df = pd.read_csv(self.index_time_csv_path)
         time_column = self.index_time_column
-        #df[time_column] = pd.to_datetime(df[time_column])
+        # df[time_column] = pd.to_datetime(df[time_column])
         df_patient = df[df["person_id"] == patient.patient_id]
         for _, row in df_patient.iterrows():
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
-                datetime.datetime.strptime(row[time_column], '%Y-%m-%d %H:%M:%S')
+                datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
             )
             if last_time != prediction_time:
                 times.append(prediction_time)

@@ -272,8 +272,8 @@ class CodeLabeler(TimeHorizonEventLabeler):
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
-        index_time_csv_path: str = None, # read in index time from csv
-        index_time_column: str = None, # column name for index time
+        index_time_csv_path: str = None,  # read in index time from csv
+        index_time_column: str = None,  # column name for index time
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -313,11 +313,11 @@ class CodeLabeler(TimeHorizonEventLabeler):
         last_time = None
         df = pd.read_csv(self.index_time_csv_path)
         time_column = self.index_time_column
-        #df[time_column] = pd.to_datetime(df[time_column])
+        # df[time_column] = pd.to_datetime(df[time_column])
         df_patient = df[df["person_id"] == patient.patient_id]
         for _, row in df_patient.iterrows():
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
-                datetime.datetime.strptime(row[time_column], '%Y-%m-%d %H:%M:%S')
+                datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
             )
             if last_time != prediction_time:
                 times.append(prediction_time)
@@ -402,8 +402,8 @@ class MortalityCodeLabeler(CodeLabeler):
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
             prediction_time_adjustment_func=prediction_time_adjustment_func,
-            index_time_csv_path=index_time_csv_path, # read in index time from csv
-            index_time_column=index_time_column, # column name for index time
+            index_time_csv_path=index_time_csv_path,  # read in index time from csv
+            index_time_column=index_time_column,  # column name for index time
         )
 
 
