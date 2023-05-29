@@ -254,6 +254,14 @@ def create_batches() -> None:
                 if labeled_patients.labeler_type == "boolean":
                     assert isinstance(label.value, bool)
                     value = label.value
+                elif labeled_patients.labeler_type == "str":
+                    assert isinstance(label.value, str)
+                    if label.value == "True":
+                        value = True
+                    elif label.value == "False":
+                        value = False
+                    else:
+                        continue
                 elif labeled_patients.labeler_type == "survival":
                     assert isinstance(label.value, femr.labelers.SurvivalValue)
                     event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
