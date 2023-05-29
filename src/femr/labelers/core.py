@@ -497,6 +497,14 @@ class TimeHorizonEventLabeler(Labeler):
         """
         pass
 
+    @abstractmethod
+    def get_prediction_times_from_csv(self, patient: Patient, csv_path: str, time_column: str) -> List[datetime.datetime]:
+        """Return a sorted list containing the datetimes at which we'll make a prediction.
+
+        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
+        """
+        pass
+
     def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Return the datetimes that we consider the (start, end) of this patient."""
         return (patient.events[0].start, patient.events[-1].start)
@@ -525,7 +533,11 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+        #prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+
+        csv_path='/local-scratch/nigam/projects/zphuo/data/omop_extract_PHI/som-nero-phi-nigam-starr.frazier/radfusion3_cohort.csv'
+        time_column='procedure_DATETIME'
+        prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient, csv_path, time_column)
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
@@ -543,7 +555,6 @@ class TimeHorizonEventLabeler(Labeler):
                 assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
 
             last_time = time
-
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)

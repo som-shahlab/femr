@@ -6,6 +6,7 @@ import warnings
 from abc import abstractmethod
 from collections import deque
 from typing import Any, Callable, List, Optional, Set, Tuple
+import pandas as pd
 
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
@@ -299,6 +300,21 @@ class CodeLabeler(TimeHorizonEventLabeler):
             ):
                 times.append(prediction_time)
                 last_time = prediction_time
+        return times
+
+    def get_prediction_times_from_csv(self, patient: Patient, csv_path: str, time_column: str) -> List[datetime.datetime]:
+        """Return prediction times based on a given CSV."""
+        times: List[datetime.datetime] = []
+        last_time = None
+        df = pd.read_csv(csv_path)
+        df[time_column] = pd.to_datetime(df[time_column])
+        df_patient = df[df["person_id"] == patient.patient_id]
+        for _, row in df_patient.iterrows():
+            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(row[time_column].to_pydatetime().replace(tzinfo=None))
+            if last_time != prediction_time:
+                times.append(prediction_time)
+                last_time = prediction_time
+        times = sorted(list(set(times)))
         return times
 
     def get_time_horizon(self) -> TimeHorizon:
