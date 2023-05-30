@@ -550,8 +550,6 @@ def train_model() -> None:
                 with open(os.path.join(args.directory, "best"), "wb") as out:
                     total_params = params | original_non_fit_params
                     pickle.dump(total_params, out)
-                with open(os.path.join(args.directory, "best_opt_state"), "wb") as out:
-                    pickle.dump(opt_state, out)
                 with open(os.path.join(args.directory, "best_info"), "w") as out_t:
                     out_t.write(f"Step {step}, Loss {dev_loss}")
                 with open(os.path.join(args.directory, "best_test_loss"), "w") as out_t:
