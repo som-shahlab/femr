@@ -313,7 +313,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         """Return prediction times based on a given CSV."""
         times: List[datetime.datetime] = []
         last_time = None
-        #df = pd.read_csv(self.index_time_csv_path)
+        # df = pd.read_csv(self.index_time_csv_path)
         df = self.index_time_df
         time_column = self.index_time_column
         # df[time_column] = pd.to_datetime(df[time_column])
@@ -394,6 +394,7 @@ class MortalityCodeLabeler(CodeLabeler):
         prediction_time_adjustment_func: Callable = identity,
         index_time_csv_path: str = None,
         index_time_column: str = None,
+        index_time_df: pd.DataFrame = None,
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -407,6 +408,7 @@ class MortalityCodeLabeler(CodeLabeler):
             prediction_time_adjustment_func=prediction_time_adjustment_func,
             index_time_csv_path=index_time_csv_path,  # read in index time from csv
             index_time_column=index_time_column,  # column name for index time
+            index_time_df=index_time_df,  # dataframe containing index time
         )
 
 
