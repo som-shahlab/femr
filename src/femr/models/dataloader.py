@@ -346,6 +346,8 @@ def create_batches() -> None:
         config_path,
     )
 
+    os.remove(config_path)
+
     rootLogger.info("Loaded")
 
     loader = femr.extension.dataloader.BatchLoader(args.data_path, target_path)
