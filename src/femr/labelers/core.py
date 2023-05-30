@@ -556,7 +556,7 @@ class TimeHorizonEventLabeler(Labeler):
         results: List[Label] = []
         curr_outcome_idx: int = 0
         last_time = None
-        print("prediction_times", prediction_times)
+
         for time in prediction_times:
             if last_time is not None:
                 assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
@@ -598,7 +598,7 @@ class TimeHorizonEventLabeler(Labeler):
             # so we don't know if the outcome happened after the patient timeline ends)
             # If infinite time horizon labeler, then assume no censoring
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
-            print('is_censored', is_censored)
+
             if is_outcome_occurs_in_time_horizon:
                 results.append(Label(time=time, value="True"))
             elif not is_censored:
@@ -607,7 +607,7 @@ class TimeHorizonEventLabeler(Labeler):
             elif is_censored:
                 # Censored => None
                 results.append(Label(time=time, value="Censored"))
-        print(results)
+
         return results
 
 

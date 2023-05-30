@@ -394,6 +394,7 @@ class MortalityCodeLabeler(CodeLabeler):
         prediction_time_adjustment_func: Callable = identity,
         index_time_csv_path: str = None,
         index_time_column: str = None,
+        index_time_df: pd.DataFrame = None,
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -407,6 +408,7 @@ class MortalityCodeLabeler(CodeLabeler):
             prediction_time_adjustment_func=prediction_time_adjustment_func,
             index_time_csv_path=index_time_csv_path,  # read in index time from csv
             index_time_column=index_time_column,  # column name for index time
+            index_time_df=index_time_df,  # dataframe containing index time
         )
 
 
