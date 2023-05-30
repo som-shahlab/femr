@@ -598,7 +598,7 @@ class TimeHorizonEventLabeler(Labeler):
             # so we don't know if the outcome happened after the patient timeline ends)
             # If infinite time horizon labeler, then assume no censoring
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
-            print('is_censored', is_censored)
+            print("is_censored", is_censored)
             if is_outcome_occurs_in_time_horizon:
                 results.append(Label(time=time, value="True"))
             elif not is_censored:
