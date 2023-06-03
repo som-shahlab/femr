@@ -5,6 +5,8 @@ import datetime
 from abc import abstractmethod
 from typing import Any, Callable, List, Set
 
+import pandas as pd
+
 from .. import Event, Patient
 from ..extension import datasets as extension_datasets
 from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
@@ -93,11 +95,17 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         time_horizon: TimeHorizon = TimeHorizon(
             start=datetime.timedelta(seconds=1), end=datetime.timedelta(days=30)
         ),  # type: ignore
-        prediction_time_adjustment_func: Callable = move_datetime_to_end_of_day,
+        prediction_time_adjustment_func: Callable = identity,  # move_datetime_to_end_of_day,
+        index_time_csv_path: str = None,  # read in index time from csv
+        index_time_column: str = None,  # column name for index time
+        index_time_df: pd.DataFrame = None,  # dataframe with index time
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
-        self.prediction_time_adjustment_func = prediction_time_adjustment_func
+        self.prediction_time_adjustment_func = prediction_time_adjustment_func  # prediction_time_adjustment_func
+        self.index_time_csv_path = index_time_csv_path
+        self.index_time_column = index_time_column
+        self.index_time_df = index_time_df
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""
@@ -120,6 +128,25 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
 
             times.append(prediction_time)
             prev_discharge_date = discharge_time.date()
+        times = sorted(list(set(times)))
+        return times
+
+    def get_prediction_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
+        """Return prediction times based on a given CSV."""
+        times: List[datetime.datetime] = []
+        last_time = None
+        # df = pd.read_csv(self.index_time_csv_path)
+        df = self.index_time_df
+        time_column = self.index_time_column
+        # df[time_column] = pd.to_datetime(df[time_column])
+        df_patient = df[df["person_id"] == patient.patient_id]
+        for _, row in df_patient.iterrows():
+            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
+                datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
+            )
+            if last_time != prediction_time:
+                times.append(prediction_time)
+                last_time = prediction_time
         times = sorted(list(set(times)))
         return times
 

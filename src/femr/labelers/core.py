@@ -54,7 +54,7 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Union[bool, int, float, SurvivalValue]
+    value: Union[bool, int, float, str, SurvivalValue]
 
 
 def _apply_labeling_function(
@@ -114,6 +114,14 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
                 value = row["value"].lower() == "true"
             elif labeler_type == "categorical":
                 value = int(row["value"])
+            # ignore censored for classification
+            elif labeler_type == "str":
+                if row["value"] == "True":
+                    value = "True"
+                elif row["value"] == "False":
+                    value = "False"
+                else:
+                    continue
             else:
                 value = float(row["value"])
 
@@ -440,10 +448,30 @@ class TimeHorizonEventLabeler(Labeler):
         get_prediction_times() for defining the datetimes at which we make our predictions
         get_time_horizon() for defining the length of time (i.e. `TimeHorizon`) to use for the time horizon
     """
+    def __init__(
+            self,
+            index_time_df: str = None,
+            outcome_time_df: str = None,       
+    ):
+        index_time_df=index_time_df
+        outcome_time_df=outcome_time_df
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes that the event of interest "occurs".
+
+        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
+
+        Args:
+            patient (Patient): A patient object
+
+        Returns:
+            List[datetime.datetime]: A list of datetimes, one corresponding to an occurrence of the outcome
+        """
+        pass
+
+    def get_outcome_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a sorted list containing the datetimes that form predefined csv outcome times.
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
 
@@ -497,6 +525,14 @@ class TimeHorizonEventLabeler(Labeler):
         """
         pass
 
+    @abstractmethod
+    def get_prediction_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a sorted list containing the datetimes at which we'll make a prediction.
+
+        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
+        """
+        pass
+
     def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Return the datetimes that we consider the (start, end) of this patient."""
         return (patient.events[0].start, patient.events[-1].start)
@@ -525,8 +561,14 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
-        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        if self.index_time_df is not None:
+            prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
+        else:
+            prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+        if self.outcome_time_df is not None:
+            outcome_times: List[datetime.datetime] = self.get_outcome_times_from_csv(patient)
+        else:
+            outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
@@ -538,12 +580,12 @@ class TimeHorizonEventLabeler(Labeler):
         results: List[Label] = []
         curr_outcome_idx: int = 0
         last_time = None
+
         for time in prediction_times:
             if last_time is not None:
                 assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
 
             last_time = time
-
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
@@ -582,10 +624,13 @@ class TimeHorizonEventLabeler(Labeler):
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(Label(time=time, value=True))
+                results.append(Label(time=time, value="True"))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value=False))
+                results.append(Label(time=time, value="False"))
+            elif is_censored:
+                # Censored => None
+                results.append(Label(time=time, value="Censored"))
 
         return results
 
@@ -601,6 +646,8 @@ class NLabelsPerPatientLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:
         labels: List[Label] = self.labeler.label(patient)
         if len(labels) <= self.num_labels:
+            return labels
+        elif self.num_labels == -1:
             return labels
         hash_to_label_list: List[Tuple[int, int, Label]] = [
             (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))

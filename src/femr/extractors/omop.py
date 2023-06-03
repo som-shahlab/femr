@@ -211,7 +211,8 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
         ),
         _ConceptTableConverter(
             prefix="visit_detail",
-            concept_id_field="piton_visit_detail_concept_id",
+            # concept_id_field="piton_visit_detail_concept_id",
+            concept_id_field="femr_visit_detail_concept_id",
         ),
     ]
 

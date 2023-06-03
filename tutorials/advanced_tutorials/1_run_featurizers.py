@@ -10,7 +10,7 @@ import femr.datasets
 from femr.featurizers import FeaturizerList
 from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from femr.labelers import NLabelsPerPatientLabeler, TimeHorizon
-from femr.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler
+from femr.labelers.omop import HighHbA1cCodeLabeler, LupusCodeLabeler, MortalityCodeLabeler
 from femr.labelers.omop_inpatient_admissions import (
     DummyAdmissionDischargeLabeler,
     InpatientLongAdmissionLabeler,
@@ -103,6 +103,7 @@ LABELING_FUNCTIONS: List[str] = [
     # All admission/discharge times
     "admission_discharge",
     # CLMBR code-based tasks
+    "Allmortality",
     "mortality",
     "long_los",
     "readmission",
@@ -170,6 +171,21 @@ if __name__ == "__main__":
         default=None,
     )
 
+    # just for debug purpose
+    parser.add_argument(
+        "--time_horizon",
+        type=str,
+        help=(),
+    )
+
+    # just for debug purpose
+    parser.add_argument(
+        "--badcodefile",
+        type=str,
+        default=None,
+        help=(),
+    )
+
     # Parse CLI args
     args = parser.parse_args()
     PATH_TO_PATIENT_DATABASE: str = args.path_to_patient_database
@@ -177,6 +193,8 @@ if __name__ == "__main__":
     NUM_THREADS: int = args.num_threads
     NUM_PATIENTS: Optional[int] = args.num_patients
     MAX_LABELS_PER_PATIENT: int = args.max_labels_per_patient
+    TIME_HORIZON: str = args.time_horizon
+    BAD_CODES: str = args.badcodefile
 
     # create directories to save files
     PATH_TO_SAVE_LABELED_PATIENTS: str = os.path.join(PATH_TO_OUTPUT_DIR, "labeled_patients.pkl")
@@ -189,12 +207,35 @@ if __name__ == "__main__":
     ontology = database.get_ontology()
     print_log("PatientDatabase", "Loaded from: " + PATH_TO_PATIENT_DATABASE)
 
+    # time horizon
+    if TIME_HORIZON == "3to6m":
+        year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=90), datetime.timedelta(days=180))
+    elif TIME_HORIZON == "3to12m":
+        year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=90), datetime.timedelta(days=365))
+    elif TIME_HORIZON == "0to12m":
+        year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
+    elif TIME_HORIZON == "0to6m":
+        year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    elif TIME_HORIZON == "0to3m":
+        year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=90))
+
+    bad_pitoncodes = []
+    if BAD_CODES:
+        with open(BAD_CODES, "r") as f:
+            for line in f:
+                line = line.replace("\n", "")
+                bad_pitoncodes.append(int(line))
+        print("bad_pitoncodes", bad_pitoncodes)
+
     # Define the labeling function.
-    year_time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=365))
     if args.labeling_function == "admission_discharge":
         labeler = DummyAdmissionDischargeLabeler(ontology)
     elif args.labeling_function == "mortality":
         labeler = InpatientMortalityLabeler(ontology)
+    elif args.labeling_function == "Allmortality":
+        labeler = MortalityCodeLabeler(
+            ontology, year_time_horizon, prediction_codes=femr.labelers.omop.get_inpatient_admission_codes(ontology)
+        )
     elif args.labeling_function == "long_los":
         labeler = InpatientLongAdmissionLabeler(ontology)
     elif args.labeling_function == "readmission":
