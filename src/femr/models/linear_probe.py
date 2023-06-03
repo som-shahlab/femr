@@ -381,7 +381,7 @@ def train_linear_probe() -> None:
     def get_split(pid):
         index = database.compute_split(97, pid)
 
-        if index < 70:
+        if index < 80:
             return 0
         elif index < 85:
             return 1
