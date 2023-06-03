@@ -448,10 +448,30 @@ class TimeHorizonEventLabeler(Labeler):
         get_prediction_times() for defining the datetimes at which we make our predictions
         get_time_horizon() for defining the length of time (i.e. `TimeHorizon`) to use for the time horizon
     """
+    def __init__(
+            self,
+            index_time_df: str = None,
+            outcome_time_df: str = None,       
+    ):
+        index_time_df=index_time_df
+        outcome_time_df=outcome_time_df
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes that the event of interest "occurs".
+
+        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
+
+        Args:
+            patient (Patient): A patient object
+
+        Returns:
+            List[datetime.datetime]: A list of datetimes, one corresponding to an occurrence of the outcome
+        """
+        pass
+
+    def get_outcome_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
+        """Return a sorted list containing the datetimes that form predefined csv outcome times.
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
 
@@ -541,10 +561,14 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        # prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
-
-        prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
-        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        if self.index_time_df is not None:
+            prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
+        else:
+            prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+        if self.outcome_time_df is not None:
+            outcome_times: List[datetime.datetime] = self.get_outcome_times_from_csv(patient)
+        else:
+            outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)

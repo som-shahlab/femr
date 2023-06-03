@@ -142,7 +142,7 @@ def _get_all_children(ontology: extension_datasets.Ontology, code: str) -> Set[s
 
 
 class WithinVisitLabeler(Labeler):
-    """
+    """TimeHorizonEventLabeler
     The `WithinVisitLabeler` predicts whether or not a patient experiences a specific event
     (as returned by `self.get_outcome_times()`) within each visit.
 
@@ -272,9 +272,10 @@ class CodeLabeler(TimeHorizonEventLabeler):
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
-        index_time_csv_path: str = None,  # read in index time from csv
         index_time_column: str = None,  # column name for index time
         index_time_df: pd.DataFrame = None,  # dataframe with index time
+        outcome_time_column: str = None,  # column name for outcome time
+        outcome_time_df: pd.DataFrame = None,  # dataframe with outcome time
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -291,9 +292,10 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
-        self.index_time_csv_path: str = index_time_csv_path
         self.index_time_column: str = index_time_column
         self.index_time_df: pd.DataFrame = index_time_df
+        self.outcome_time_column: str = outcome_time_column
+        self.outcome_time_df: pd.DataFrame = outcome_time_df
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
@@ -313,18 +315,40 @@ class CodeLabeler(TimeHorizonEventLabeler):
         """Return prediction times based on a given CSV."""
         times: List[datetime.datetime] = []
         last_time = None
-        # df = pd.read_csv(self.index_time_csv_path)
         df = self.index_time_df
         time_column = self.index_time_column
-        # df[time_column] = pd.to_datetime(df[time_column])
         df_patient = df[df["person_id"] == patient.patient_id]
         for _, row in df_patient.iterrows():
-            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
-                datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
-            )
+            if type(row[time_column]) == str:
+                prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
+                    datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
+                )
+            elif type(row[time_column]) == datetime.datetime:
+                prediction_time = self.prediction_time_adjustment_func(row[time_column])
             if last_time != prediction_time:
                 times.append(prediction_time)
                 last_time = prediction_time
+        times = sorted(list(set(times)))
+        return times
+    
+
+    def get_outcome_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
+        """Return prediction times based on a given CSV."""
+        times: List[datetime.datetime] = []
+        last_time = None
+        df = self.outcome_time_df
+        time_column = self.outcome_time_column
+        df_patient = df[df["person_id"] == patient.patient_id]
+        for _, row in df_patient.iterrows():
+            if type(row[time_column]) == str:
+                outcome_time: datetime.datetime = self.prediction_time_adjustment_func(
+                    datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
+                )
+            elif type(row[time_column]) == datetime.datetime:
+                outcome_time = self.prediction_time_adjustment_func(row[time_column])
+            if last_time != outcome_time:
+                times.append(outcome_time)
+                last_time = outcome_time
         times = sorted(list(set(times)))
         return times
 
@@ -342,6 +366,34 @@ class CodeLabeler(TimeHorizonEventLabeler):
     def allow_same_time_labels(self) -> bool:
         # We cannot allow labels at the same time as the codes since they will generally be available as features ...
         return False
+    
+class PredefinedEventTimeCSVLabeler(CodeLabeler):
+    """Apply a label for predefined times in a given CSV within the `time_horizon`.
+    Make prediction at admission time.
+    """
+
+    def __init__(
+        self,
+        ontology: extension_datasets.Ontology,
+        time_horizon: TimeHorizon,
+        prediction_codes: Optional[List[str]] = None,
+        prediction_time_adjustment_func: Callable = identity,
+        index_time_column: str = None,
+        index_time_df: pd.DataFrame = None,
+    ):
+        """Create a Mortality labeler."""
+        outcome_codes = list(
+            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
+        )
+
+        super().__init__(
+            outcome_codes=outcome_codes,
+            time_horizon=time_horizon,
+            prediction_codes=prediction_codes,
+            prediction_time_adjustment_func=prediction_time_adjustment_func,
+            index_time_column=index_time_column,  # column name for index time
+            index_time_df=index_time_df,  # dataframe containing index time
+        )
 
 
 class OMOPConceptCodeLabeler(CodeLabeler):
@@ -406,7 +458,6 @@ class MortalityCodeLabeler(CodeLabeler):
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
             prediction_time_adjustment_func=prediction_time_adjustment_func,
-            index_time_csv_path=index_time_csv_path,  # read in index time from csv
             index_time_column=index_time_column,  # column name for index time
             index_time_df=index_time_df,  # dataframe containing index time
         )
