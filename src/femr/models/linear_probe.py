@@ -198,7 +198,7 @@ def train_linear_probe() -> None:
     if labeler_type == "survival":
         time_bins = jnp.array(config['task']['time_bins'] + [float('inf')])
 
-    if False:
+    if True:
         loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
 
         logging.info(
@@ -332,7 +332,7 @@ def train_linear_probe() -> None:
         repr_offsets = jnp.concatenate(repr_offsets, axis=0)
 
         print("Computed reprs")
-        if True:
+        if False:
             with open("what.pkl", "wb") as f:
                 pickle.dump(
                     [
