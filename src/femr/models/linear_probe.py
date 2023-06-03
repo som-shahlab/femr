@@ -425,10 +425,6 @@ def train_linear_probe() -> None:
     for pid in label_pids:
         counts[database.compute_split(97, pid)] += 1
 
-    print("Train", sum(counts[i] for i in range(0, 70)))
-    print("Val", sum(counts[i] for i in range(70, 85)))
-    print("Test", sum(counts[i] for i in range(85, 100)))
-    print("Total", sum(counts[i] for i in range(100)))
     
     train_mask = split_indices == 0
     print("Percent train", np.mean(train_mask))
@@ -440,6 +436,11 @@ def train_linear_probe() -> None:
             return val[mask, :]
         elif len(val.shape) == 1:
             return val[mask]
+
+    print("Train", sum(split_indices == 0))
+    print("Valid", sum(split_indices == 1))
+    print("Test", sum(split_indices == 2))
+    print("Total", len(split_indices))
 
 
     data = {'reprs': reprs}
