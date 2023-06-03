@@ -269,7 +269,7 @@ def create_batches() -> None:
                         "event_time": event_offset + age,
                         "is_censored": label.value.is_censored,
                     }
-                result_labels.append((int(pid), age, value))
+                result_labels.append((int(pid), int(age), value))
 
         task = {
             "type": "labeled_patients",

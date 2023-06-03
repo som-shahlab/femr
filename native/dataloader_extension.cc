@@ -756,6 +756,7 @@ class BatchCreator {
         valid_tokens = Eigen::Tensor<bool, 1>(1 << max_size);
         ages = Eigen::Tensor<float, 1>(1 << max_size);
         normalized_ages = Eigen::Tensor<float, 1>(1 << max_size);
+        integer_ages = Eigen::Tensor<uint32_t, 1>(1 << max_size);
         is_note_embedding = Eigen::Tensor<bool, 1>(1 << max_size);
 
         std::string note_path =
@@ -973,6 +974,7 @@ class BatchCreator {
                 valid_tokens(batch_index * max_length + index) = true;
                 ages(batch_index * max_length + index) =
                     event.start_age_in_minutes / (60.0 * 24.0);
+                integer_ages(batch_index * max_length + index) = event.start_age_in_minutes;
                 normalized_ages(batch_index * max_length + index) =
                     (event.start_age_in_minutes / (60.0 * 24.0) - age_mean) /
                     (age_std);
@@ -1085,6 +1087,7 @@ class BatchCreator {
             transformer["note_embedding_bytes"] = note_embedding_bytes;
         }
         transformer["valid_tokens"] = valid_tokens;
+        transformer["integer_ages"] = integer_ages;
         transformer["ages"] = ages;
         transformer["normalized_ages"] = normalized_ages;
         transformer["label_indices"] = label_indices_tensor;
@@ -1122,6 +1125,7 @@ class BatchCreator {
 
     Eigen::Tensor<uint32_t, 2> sparse_token_indices;
 
+    Eigen::Tensor<uint32_t, 1> integer_ages;
     Eigen::Tensor<float, 1> ages;
     Eigen::Tensor<float, 1> normalized_ages;
 
