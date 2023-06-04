@@ -11,7 +11,7 @@ if __name__ == '__main__':
 
 
 
-    with open(args.path_to_labeled_patients_csv, 'rb') as f:
+    with open(args.path_to_labeled_patients_pkl, 'rb') as f:
         labels = pickle.load(f)
 
     fixed_labels = {}

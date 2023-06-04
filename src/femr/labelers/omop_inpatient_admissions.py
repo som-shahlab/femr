@@ -99,6 +99,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         index_time_csv_path: str = None,  # read in index time from csv
         index_time_column: str = None,  # column name for index time
         index_time_df: pd.DataFrame = None,  # dataframe with index time
+        outcome_time_csv_path: str = None,  # read in outcome time from csv
+        outcome_time_column: str = None,  # column name for outcome time
+        outcome_time_df: pd.DataFrame = None,  # dataframe with outcome time
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
@@ -106,6 +109,9 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
         self.index_time_csv_path = index_time_csv_path
         self.index_time_column = index_time_column
         self.index_time_df = index_time_df
+        self.outcome_time_csv_path = outcome_time_csv_path
+        self.outcome_time_column = outcome_time_column
+        self.outcome_time_df = outcome_time_df
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""
