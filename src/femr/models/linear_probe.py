@@ -562,8 +562,6 @@ def train_linear_probe() -> None:
     with open(os.path.join(args.output_dir, 'predictions.pkl'), 'wb') as f:
         pickle.dump([best_hazards, label_pids, label_values, prediction_dates], f)
 
-
-
     train_pids = apply_mask(label_pids, train_mask)
     val_pids = apply_mask(label_pids, val_mask)
     test_pids = apply_mask(label_pids, test_mask)
@@ -597,6 +595,18 @@ def train_linear_probe() -> None:
         pickle.dump(proba_val, f)
     with open(os.path.join(args.output_dir, 'proba_test.pkl'), 'wb') as f:
         pickle.dump(proba_test, f)
+
+    label_values = np.array(label_values)
+    label_train = apply_mask(label_values, train_mask)
+    label_val = apply_mask(label_values, val_mask)
+    label_test = apply_mask(label_values, test_mask)
+
+    with open(os.path.join(args.output_dir, 'label_train.pkl'), 'wb') as f:
+        pickle.dump(label_train, f)
+    with open(os.path.join(args.output_dir, 'label_val.pkl'), 'wb') as f:
+        pickle.dump(label_val, f)
+    with open(os.path.join(args.output_dir, 'label_test.pkl'), 'wb') as f:
+        pickle.dump(label_test, f)
 
 
 

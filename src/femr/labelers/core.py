@@ -561,14 +561,14 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        if self.index_time_df is not None:
-            prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
-        else:
-            prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         if self.outcome_time_df is not None:
             outcome_times: List[datetime.datetime] = self.get_outcome_times_from_csv(patient)
         else:
             outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        if self.index_time_df is not None:
+            prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
+        else:
+            prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)

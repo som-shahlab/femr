@@ -325,6 +325,11 @@ class CodeLabeler(TimeHorizonEventLabeler):
                 )
             elif type(row[time_column]) == datetime.datetime:
                 prediction_time = self.prediction_time_adjustment_func(row[time_column])
+            
+            # PE specific
+            if self.index_time_column == self.outcome_time_column:
+                prediction_time = prediction_time - datetime.timedelta(days=1)
+
             if last_time != prediction_time:
                 times.append(prediction_time)
                 last_time = prediction_time
@@ -340,12 +345,20 @@ class CodeLabeler(TimeHorizonEventLabeler):
         time_column = self.outcome_time_column
         df_patient = df[df["person_id"] == patient.patient_id]
         for _, row in df_patient.iterrows():
+
+            # PH specific
+            if self.index_time_column != self.outcome_time_column and row[time_column] == 'No next PH':
+                continue
             if type(row[time_column]) == str:
                 outcome_time: datetime.datetime = self.prediction_time_adjustment_func(
                     datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
                 )
             elif type(row[time_column]) == datetime.datetime:
                 outcome_time = self.prediction_time_adjustment_func(row[time_column])
+            
+            # PE specific
+            if self.index_time_column == self.outcome_time_column and str(row['pe_positive_nlp'])!='True':
+                continue
             if last_time != outcome_time:
                 times.append(outcome_time)
                 last_time = outcome_time
@@ -447,6 +460,8 @@ class MortalityCodeLabeler(CodeLabeler):
         index_time_csv_path: str = None,
         index_time_column: str = None,
         index_time_df: pd.DataFrame = None,
+        outcome_time_column: str = None,  # column name for outcome time
+        outcome_time_df: pd.DataFrame = None,  # dataframe with outcome time
     ):
         """Create a Mortality labeler."""
         outcome_codes = list(
@@ -460,6 +475,8 @@ class MortalityCodeLabeler(CodeLabeler):
             prediction_time_adjustment_func=prediction_time_adjustment_func,
             index_time_column=index_time_column,  # column name for index time
             index_time_df=index_time_df,  # dataframe containing index time
+            outcome_time_column=outcome_time_column,  # column name for outcome time
+            outcome_time_df=outcome_time_df,  # dataframe with outcome time
         )
 
 
