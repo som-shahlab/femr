@@ -7,7 +7,7 @@ name = "femr"
 description = "Framework for Electronic Medical Records. A python package for building models using EHR data."
 readme = "README.md"
 dependencies = [
-    "pandas == 1.5.1"
+    "pandas == 1.5.1",
     "numpy >= 1.22",
     "scipy >= 1.6",
     "scikit-learn >= 0.24",
