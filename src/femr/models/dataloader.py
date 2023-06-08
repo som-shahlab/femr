@@ -251,10 +251,7 @@ def create_batches() -> None:
             for label in labels:
                 age = (label.time - birth_date) / datetime.timedelta(minutes=1)
                 value: Any
-                if labeled_patients.labeler_type == "boolean":
-                    assert isinstance(label.value, bool)
-                    value = label.value
-                elif labeled_patients.labeler_type == "survival":
+                if labeled_patients.labeler_type == "survival":
                     assert isinstance(label.value, femr.labelers.SurvivalValue)
                     event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
@@ -269,8 +266,9 @@ def create_batches() -> None:
                         "event_time": event_offset + age,
                         "is_censored": label.value.is_censored,
                     }
+                else:
+                    value = label.value
                 result_labels.append((int(pid), age, value))
-
         task = {
             "type": "labeled_patients",
             "labeler_type": labeled_patients.labeler_type,
