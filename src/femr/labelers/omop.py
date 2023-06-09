@@ -272,10 +272,6 @@ class CodeLabeler(TimeHorizonEventLabeler):
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Callable = identity,
-        index_time_column: str = None,  # column name for index time
-        index_time_df: pd.DataFrame = None,  # dataframe with index time
-        outcome_time_column: str = None,  # column name for outcome time
-        outcome_time_df: pd.DataFrame = None,  # dataframe with outcome time
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -292,10 +288,6 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
-        self.index_time_column: str = index_time_column
-        self.index_time_df: pd.DataFrame = index_time_df
-        self.outcome_time_column: str = outcome_time_column
-        self.outcome_time_df: pd.DataFrame = outcome_time_df
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
@@ -309,60 +301,6 @@ class CodeLabeler(TimeHorizonEventLabeler):
             ):
                 times.append(prediction_time)
                 last_time = prediction_time
-        return times
-
-    def get_prediction_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
-        """Return prediction times based on a given CSV."""
-        times: List[datetime.datetime] = []
-        last_time = None
-        df = self.index_time_df
-        time_column = self.index_time_column
-        df_patient = df[df["person_id"] == patient.patient_id]
-        for _, row in df_patient.iterrows():
-            if type(row[time_column]) == str:
-                prediction_time: datetime.datetime = self.prediction_time_adjustment_func(
-                    datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
-                )
-            elif type(row[time_column]) == datetime.datetime:
-                prediction_time = self.prediction_time_adjustment_func(row[time_column])
-            
-            # PE specific
-            if self.index_time_column == self.outcome_time_column:
-                prediction_time = prediction_time - datetime.timedelta(days=1)
-
-            if last_time != prediction_time:
-                times.append(prediction_time)
-                last_time = prediction_time
-        times = sorted(list(set(times)))
-        return times
-    
-
-    def get_outcome_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
-        """Return prediction times based on a given CSV."""
-        times: List[datetime.datetime] = []
-        last_time = None
-        df = self.outcome_time_df
-        time_column = self.outcome_time_column
-        df_patient = df[df["person_id"] == patient.patient_id]
-        for _, row in df_patient.iterrows():
-
-            # PH specific
-            if self.index_time_column != self.outcome_time_column and row[time_column] == 'No next PH':
-                continue
-            if type(row[time_column]) == str:
-                outcome_time: datetime.datetime = self.prediction_time_adjustment_func(
-                    datetime.datetime.strptime(row[time_column], "%Y-%m-%d %H:%M:%S")
-                )
-            elif type(row[time_column]) == datetime.datetime:
-                outcome_time = self.prediction_time_adjustment_func(row[time_column])
-            
-            # PE specific
-            if self.index_time_column == self.outcome_time_column and str(row['pe_positive_nlp'])!='True':
-                continue
-            if last_time != outcome_time:
-                times.append(outcome_time)
-                last_time = outcome_time
-        times = sorted(list(set(times)))
         return times
 
     def get_time_horizon(self) -> TimeHorizon:

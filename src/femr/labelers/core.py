@@ -58,12 +58,12 @@ class Label:
 
 
 def _apply_labeling_function(
-    args: Tuple[Labeler, Optional[Sequence[Patient]], Optional[str], List[int]]
+    args: Tuple[Labeler, Optional[Mapping[int, Patient]], Optional[str], List[int]]
 ) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
     labeling_function: Labeler = args[0]
-    patients: Optional[Sequence[Patient]] = args[1]
+    patients: Optional[Mapping[int, Patient]] = args[1]
     path_to_patient_database: Optional[str] = args[2]
     patient_ids: List[int] = args[3]
 
@@ -358,6 +358,7 @@ class Labeler(ABC):
         patients: Optional[Sequence[Patient]] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
+        patient_ids: Optional[Set[int]] = None
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -390,7 +391,10 @@ class Labeler(ABC):
             # Use `patients` if specified
             assert patients is not None
             num_patients = len(patients) if not num_patients else num_patients
-            pids = [p.patient_id for p in patients[:num_patients]]
+            patients = {p.patient_id: p for p in patients[:num_patients]}
+            pids = list(patients)
+
+        pids = [pid for pid in pids if pid in patient_ids]
 
         # Split patient IDs across parallelized processes
         pid_parts = np.array_split(pids, num_threads * 10)
@@ -448,13 +452,8 @@ class TimeHorizonEventLabeler(Labeler):
         get_prediction_times() for defining the datetimes at which we make our predictions
         get_time_horizon() for defining the length of time (i.e. `TimeHorizon`) to use for the time horizon
     """
-    def __init__(
-            self,
-            index_time_df: str = None,
-            outcome_time_df: str = None,       
-    ):
-        index_time_df=index_time_df
-        outcome_time_df=outcome_time_df
+    def __init__(self):
+        pass
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -525,14 +524,6 @@ class TimeHorizonEventLabeler(Labeler):
         """
         pass
 
-    @abstractmethod
-    def get_prediction_times_from_csv(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a sorted list containing the datetimes at which we'll make a prediction.
-
-        IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
-        """
-        pass
-
     def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Return the datetimes that we consider the (start, end) of this patient."""
         return (patient.events[0].start, patient.events[-1].start)
@@ -561,14 +552,8 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        if self.outcome_time_df is not None:
-            outcome_times: List[datetime.datetime] = self.get_outcome_times_from_csv(patient)
-        else:
-            outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
-        if self.index_time_df is not None:
-            prediction_times: List[datetime.datetime] = self.get_prediction_times_from_csv(patient)
-        else:
-            prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
@@ -624,13 +609,13 @@ class TimeHorizonEventLabeler(Labeler):
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(Label(time=time, value="True"))
+                results.append(Label(time=time, value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value="False"))
+                results.append(Label(time=time, value=False))
             elif is_censored:
                 # Censored => None
-                results.append(Label(time=time, value="Censored"))
+                pass
 
         return results
 

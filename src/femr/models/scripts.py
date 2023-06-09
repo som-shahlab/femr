@@ -71,6 +71,7 @@ def train_model() -> None:
     parser.add_argument("--n_layers", type=int, default=6, help="Transformer # of layers")
     parser.add_argument("--attention_width", type=int, default=512, help="Transformer attention width.")
     parser.add_argument("--dev_batches_path", type=str, required=False, help="Do early stopping with a different set of batches instead of the development set")
+    parser.add_argument("--linear_probe", type=str, required=False)
 
     parser.add_argument(
         "--early_stopping_window_steps",
@@ -216,13 +217,38 @@ def train_model() -> None:
     elif task["type"] == "clmbr":
         pass
     elif task["type"] == "labeled_patients":
-        if task["labeler_type"] == "survival":
-            replace(
-                params,
-                "EHRTransformer/~/SurvivalTask",
-                "code_weight_bias",
-                jnp.log2(jnp.array(batch_task["lambda"])),
-            )
+        if args.linear_probe is not None:
+            with open(args.linear_probe, 'rb') as f:
+                linear_probe = pickle.load(f)
+
+            if task["labeler_type"] == "survival":
+                assert False
+            elif task["labeler_type"] == "boolean":
+                print(linear_probe.shape)
+                # print(params["EHRTransformer/~/BooleanClassifier/~/linear"])
+                replace(
+                    params,
+                    "EHRTransformer/~/BooleanClassifier/~/linear",
+                    "b",
+                    linear_probe[-1:]
+                )
+                replace(
+                    params,
+                    "EHRTransformer/~/BooleanClassifier/~/linear",
+                    "w",
+                    linear_probe[:-1]
+                )
+            else:
+                assert False, task['labeler_type']
+        else:
+            if task["labeler_type"] == "survival":
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight_bias",
+                    jnp.log2(jnp.array(batch_task["lambda"])),
+                )
+
     else:
         rootLogger.error("Invalid task for postprocess?")
         exit()

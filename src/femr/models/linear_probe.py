@@ -276,7 +276,12 @@ def train_linear_probe() -> None:
                 return total_reps, (batch["task"]["event_times"], batch["task"]["is_censor"], log_time_in_bin, is_event)
 
             elif labeler_type == "boolean":
-                return repr, (batch["task"]["labels"],)
+                offsets = jnp.ones(
+                    (repr.shape[0], 1),
+                    dtype=repr.dtype,
+                )
+                total_repr = jnp.concatenate((repr, offsets), axis=-1)
+                return total_repr, (batch["task"]["labels"],)
 
         reprs = []
         repr_ages = []
@@ -310,17 +315,10 @@ def train_linear_probe() -> None:
                 p_index = slice(p_index)
 
                 reprs.append(slice(repr))
+                assert repr.dtype == jnp.float16
                 repr_ages.append(raw_batch["transformer"]["integer_ages"][slice(batch["transformer"]["label_indices"])])
                 repr_pids.append(raw_batch["patient_ids"][p_index])
                 repr_offsets.append(raw_batch["offsets"][p_index])
-
-                # split_indices.append(np.ones(batch["num_indices"]) * i)
-
-                # if label_datas is None:
-                    # label_datas = [[] for _ in range(len(label_data))]
-
-                # for target, val in zip(label_datas, label_data):
-                    # target.append(slice(val))
 
             print("Actually done", datetime.datetime.now())
 
@@ -391,6 +389,8 @@ def train_linear_probe() -> None:
         else:
             return 2
 
+    deltas = []
+
     for label_pid, label_age, label_value in zip(label_pids, label_ages, label_values):
         while True:
             if j + 1 == len(repr_pids):
@@ -412,11 +412,17 @@ def train_linear_probe() -> None:
         
         assert repr_pids[j] == label_pid
         assert repr_ages[j] <= label_age
+        delta = label_age - repr_ages[j]
+        deltas.append(delta)
+
         if j > 0 and repr_pids[j-1] == repr_pids[j] and repr_ages[j-1] == repr_ages[j]:
             assert repr_offsets[j] < repr_offsets[j - 1]
         
         split_indices.append(get_split(label_pid))
         matching_indices.append(j)
+
+    with open(os.path.join(args.output_dir, 'deltas.pkl'), 'wb') as f:
+        pickle.dump(deltas, f)
 
     reprs = reprs[sort_indices[matching_indices], :]
 
@@ -427,9 +433,9 @@ def train_linear_probe() -> None:
 
     for pid in label_pids:
         counts[database.compute_split(97, pid)] += 1
-
     
     train_mask = split_indices == 0
+    train_val_mask = split_indices <= 1
     print("Percent train", np.mean(train_mask))
     
     def apply_mask(val, mask):
@@ -460,7 +466,7 @@ def train_linear_probe() -> None:
         print("Prevalence", np.mean(labels))
         compute_grad = compute_logistic_grad
         compute_hessian = compute_logistic_hessian
-
+    
     with open(os.path.join(args.output_dir, 'reps_train.pkl'), 'wb') as f:
         train_mask = split_indices == 0
         reps_train = {k: apply_mask(v, train_mask) for k, v in data.items()}
@@ -492,7 +498,7 @@ def train_linear_probe() -> None:
 
     rng = jax.random.PRNGKey(42)
 
-    beta = jnp.zeros(reprs.shape[-1], dtype=jnp.float32)
+    beta = jnp.zeros(reprs.shape[-1], dtype=jnp.float16)
 
     if labeler_type == 'survival':
         beta = beta.at[-1].set(jnp.log2(jnp.array(batch_info["config"]["task"]["lambda"])))
@@ -501,6 +507,28 @@ def train_linear_probe() -> None:
     best_hazards = None
     best_beta = None
     best_l = None
+
+    def get_c(hazards, split_index):
+        mask = split_indices == split_index
+
+        if labeler_type == 'survival':
+            e_t = apply_mask(event_times, mask)
+            is_c = apply_mask(is_censor, mask)
+
+            limit_time = jnp.quantile(e_t[~is_c], 0.9)
+            is_c = is_c.at[e_t > limit_time].set(True)
+            e_t = e_t.at[e_t > limit_time].set(limit_time)
+
+            return femr.extension.metrics.compute_c_statistic(
+                e_t,
+                is_c,
+                time_bins[:-1],
+                apply_mask(hazards, mask),
+            )[0]
+        elif labeler_type == 'boolean':
+            ls = apply_mask(labels, mask)
+
+            return sklearn.metrics.roc_auc_score(ls, apply_mask(hazards, mask))
 
     start_l, end_l = -5, 1
     for l_exp in np.linspace(end_l, start_l, num=20):
@@ -520,29 +548,8 @@ def train_linear_probe() -> None:
 
         hazards = jnp.dot(reprs, beta)
 
-        def get_c(split_index):
-            mask = split_indices == split_index
-
-            if labeler_type == 'survival':
-                e_t = apply_mask(event_times, mask)
-                is_c = apply_mask(is_censor, mask)
-
-                limit_time = jnp.quantile(e_t[~is_c], 0.9)
-                is_c = is_c.at[e_t > limit_time].set(True)
-                e_t = e_t.at[e_t > limit_time].set(limit_time)
-
-                return femr.extension.metrics.compute_c_statistic(
-                    e_t,
-                    is_c,
-                    time_bins[:-1],
-                    apply_mask(hazards, mask),
-                )[0]
-            elif labeler_type == 'boolean':
-                ls = apply_mask(labels, mask)
-
-                return sklearn.metrics.roc_auc_score(ls, apply_mask(hazards, mask))
-
-        scores = [get_c(i) for i in range(3)]
+        scores = [get_c(hazards, i) for i in range(3)]
+        print(l, scores)
         if best_scores is None or scores[1] > best_scores[1]:
             best_scores, best_hazards, best_beta, best_l = scores, hazards, np.array(beta), l
 
@@ -550,7 +557,7 @@ def train_linear_probe() -> None:
     logging.info(f"Valid AUROC {best_scores[1]}")
     logging.info(f"Test AUROC {best_scores[2]}")
     logging.info(f"L2 Strength {best_l}")
-
+    
     with open(os.path.join(args.output_dir, 'probe.pkl'), 'wb') as f:
         pickle.dump(best_beta, f)
         
