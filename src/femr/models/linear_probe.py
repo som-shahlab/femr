@@ -9,6 +9,8 @@ import copy
 import functools
 import logging
 import pickle
+import collections
+import csv
 import queue
 import random
 import sklearn.metrics
@@ -157,12 +159,18 @@ def train_linear_probe() -> None:
 
     parser = argparse.ArgumentParser(prog="Train a head model")
     parser.add_argument("output_dir", type=str)
+    parser.add_argument("--path_to_cohort", type=str, required=True)
     parser.add_argument("--data_path", type=str, required=True)
     parser.add_argument("--batches_path", type=str, required=True)
     parser.add_argument("--model_dir", type=str, required=True)
         
 
     args = parser.parse_args()
+
+    pid_split_assignment = collections.defaultdict(set)
+    with open(args.path_to_cohort) as f:
+        for row in csv.DictReader(f):
+            pid_split_assignment[row['split']].add(int(row['patient_id']))
 
     os.mkdir(args.output_dir)
 
@@ -354,6 +362,7 @@ def train_linear_probe() -> None:
                 repr_pids,
                 repr_offsets,
             ) = pickle.load(f)
+
     label_pids = np.array([val[0] for val in batch_info['config']['task']['labels']], dtype=np.uint64)
     label_ages = np.array([val[1] for val in batch_info['config']['task']['labels']], dtype=np.uint32)
     label_values = np.array([val[2] for val in batch_info['config']['task']['labels']])
@@ -373,20 +382,18 @@ def train_linear_probe() -> None:
     repr_ages = repr_ages[sort_indices]
     repr_pids = repr_pids[sort_indices]
 
-
     split_indices = []
     matching_indices = []
     
     j = 0
 
     def get_split(pid):
-        index = database.compute_split(97, pid)
-
-        if index < 80:
+        if pid in pid_split_assignment['train']:
             return 0
-        elif index < 85:
+        elif pid in pid_split_assignment['valid']:
             return 1
         else:
+            assert pid in pid_split_assignment['test']
             return 2
 
     deltas = []
@@ -421,14 +428,10 @@ def train_linear_probe() -> None:
         split_indices.append(get_split(label_pid))
         matching_indices.append(j)
 
-    with open(os.path.join(args.output_dir, 'deltas.pkl'), 'wb') as f:
-        pickle.dump(deltas, f)
-
     reprs = reprs[sort_indices[matching_indices], :]
 
     split_indices = np.array(split_indices)
 
-    import collections
     counts = collections.defaultdict(int)
 
     for pid in label_pids:
@@ -466,33 +469,6 @@ def train_linear_probe() -> None:
         print("Prevalence", np.mean(labels))
         compute_grad = compute_logistic_grad
         compute_hessian = compute_logistic_hessian
-    
-    with open(os.path.join(args.output_dir, 'reps_train.pkl'), 'wb') as f:
-        train_mask = split_indices == 0
-        reps_train = {k: apply_mask(v, train_mask) for k, v in data.items()}
-        pickle.dump(reps_train['reprs'], f)
-    with open(os.path.join(args.output_dir, 'labels_train.pkl'), 'wb') as f:
-        train_mask = split_indices == 0
-        labels_train = {k: apply_mask(v, train_mask) for k, v in data.items()}
-        pickle.dump(labels_train['labels'], f)
-
-    with open(os.path.join(args.output_dir, 'reps_val.pkl'), 'wb') as f:
-        val_mask = split_indices == 1
-        reps_val = {k: apply_mask(v, val_mask) for k, v in data.items()}
-        pickle.dump(reps_val['reprs'], f)
-    with open(os.path.join(args.output_dir, 'labels_val.pkl'), 'wb') as f:
-        val_mask = split_indices == 1
-        labels_val = {k: apply_mask(v, val_mask) for k, v in data.items()}
-        pickle.dump(labels_val['labels'], f)
-
-    with open(os.path.join(args.output_dir, 'reps_test.pkl'), 'wb') as f:
-        test_mask = split_indices == 2
-        reps_test = {k: apply_mask(v, test_mask) for k, v in data.items()}
-        pickle.dump(reps_test['reprs'], f) 
-    with open(os.path.join(args.output_dir, 'labels_test.pkl'), 'wb') as f:
-        test_mask = split_indices == 2
-        labels_test = {k: apply_mask(v, test_mask) for k, v in data.items()}
-        pickle.dump(labels_test['labels'], f)
     
     data = {k: apply_mask(v, train_mask) for k, v in data.items()}
 
@@ -567,53 +543,4 @@ def train_linear_probe() -> None:
         prediction_dates.append(birth_date + datetime.timedelta(minutes=int(age)))
 
     with open(os.path.join(args.output_dir, 'predictions.pkl'), 'wb') as f:
-        pickle.dump([best_hazards, label_pids, label_values, prediction_dates], f)
-
-    train_pids = apply_mask(label_pids, train_mask)
-    val_pids = apply_mask(label_pids, val_mask)
-    test_pids = apply_mask(label_pids, test_mask)
-    with open(os.path.join(args.output_dir, 'pid_train.pkl'), 'wb') as f:
-        pickle.dump(train_pids, f)
-    with open(os.path.join(args.output_dir, 'pid_val.pkl'), 'wb') as f:
-        pickle.dump(val_pids, f)
-    with open(os.path.join(args.output_dir, 'pid_test.pkl'), 'wb') as f:
-        pickle.dump(test_pids, f)
-
-    prediction_dates = np.array(prediction_dates)
-    train_dates = apply_mask(prediction_dates, train_mask)
-    val_dates = apply_mask(prediction_dates, val_mask)
-    test_dates = apply_mask(prediction_dates, test_mask)
-    with open(os.path.join(args.output_dir, 'predictionDate_train.pkl'), 'wb') as f:
-        pickle.dump(train_dates, f)
-    with open(os.path.join(args.output_dir, 'predictionDate_val.pkl'), 'wb') as f:
-        pickle.dump(val_dates, f)
-    with open(os.path.join(args.output_dir, 'predictionDate_test.pkl'), 'wb') as f:
-        pickle.dump(test_dates, f)
-
-
-    hazards = sigmoid(best_hazards)
-    proba_train = apply_mask(hazards, train_mask)
-    proba_val = apply_mask(hazards, val_mask)
-    proba_test = apply_mask(hazards, test_mask)
-
-    with open(os.path.join(args.output_dir, 'proba_train.pkl'), 'wb') as f:
-        pickle.dump(proba_train, f)
-    with open(os.path.join(args.output_dir, 'proba_val.pkl'), 'wb') as f:
-        pickle.dump(proba_val, f)
-    with open(os.path.join(args.output_dir, 'proba_test.pkl'), 'wb') as f:
-        pickle.dump(proba_test, f)
-
-    label_values = np.array(label_values)
-    label_train = apply_mask(label_values, train_mask)
-    label_val = apply_mask(label_values, val_mask)
-    label_test = apply_mask(label_values, test_mask)
-
-    with open(os.path.join(args.output_dir, 'label_train.pkl'), 'wb') as f:
-        pickle.dump(label_train, f)
-    with open(os.path.join(args.output_dir, 'label_val.pkl'), 'wb') as f:
-        pickle.dump(label_val, f)
-    with open(os.path.join(args.output_dir, 'label_test.pkl'), 'wb') as f:
-        pickle.dump(label_test, f)
-
-
-
+        pickle.dump([sigmoid(best_hazards.astype(np.float32)), label_pids, label_values, prediction_dates], f)
