@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-import random as pyrandom
-
 import pytest
 
 try:
     import jax
     import jax.numpy as jnp
-    import numpy as np
-    from jax import device_put, devices, grad, jit, random, value_and_grad
 
-    from femr.models.linear_probe import *
+    from femr.models.linear_probe import (
+        compute_logistic_grad,
+        compute_logistic_hessian,
+        compute_logistic_loss,
+        conjugate_gradient,
+    )
 
 except ImportError:
     pytest.skip("jax package not available?", allow_module_level=True)
+
 
 def test_logistic_model():
     rng = jax.random.PRNGKey(42)
@@ -28,25 +30,23 @@ def test_logistic_model():
     probs = jax.nn.sigmoid(hazards)
 
     labels = jax.random.bernoulli(keys[3], probs).astype(jnp.float16)
-    
+
     u = jax.random.uniform(keys[4], shape=beta.shape)
 
-    data = {'reprs': reprs, 'labels': labels}
+    data = {"reprs": reprs, "labels": labels}
 
+    for l2 in [0, 3]:
+        print(l2)
 
-    for l in [0, 3]:
-        print(l)
-
-        my_grad = compute_logistic_grad(beta, data, l=l)
-        auto_grad = jax.grad(compute_logistic_loss)(beta, data, l=l)
+        my_grad = compute_logistic_grad(beta, data, l2=l2)
+        auto_grad = jax.grad(compute_logistic_loss)(beta, data, l2=l2)
         assert jnp.allclose(my_grad, auto_grad)
 
-
-        auto_hessian = jax.hessian(compute_logistic_loss)(beta, data, l=l)
+        auto_hessian = jax.hessian(compute_logistic_loss)(beta, data, l2=l2)
         auto_val = u @ (auto_hessian @ u.T)
-        my_val = compute_logistic_hessian(beta, u, data, l=l)
+        my_val = compute_logistic_hessian(beta, u, data, l2=l2)
         assert jnp.allclose(my_val, auto_val)
-    
+
     random_loss = compute_logistic_loss(beta, data)
     truth_loss = compute_logistic_loss(truth_beta, data)
 
@@ -55,7 +55,9 @@ def test_logistic_model():
     g = None
     u = None
     while True:
-        beta, g, u = conjugate_gradient(beta, g, u, data, 0, compute_hessian=compute_logistic_hessian, compute_grad=compute_logistic_grad)
+        beta, g, u = conjugate_gradient(
+            beta, g, u, data, 0, compute_hessian=compute_logistic_hessian, compute_grad=compute_logistic_grad
+        )
         grad_norm = jnp.linalg.norm(g, ord=2)
 
         if grad_norm < 0.0001:

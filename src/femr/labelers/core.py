@@ -12,7 +12,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, DefaultDict, Dict, List, Literal, Optional, Sequence, Tuple, Union, cast
+from typing import Any, DefaultDict, Dict, List, Literal, Mapping, Optional, Sequence, Set, Tuple, Union, cast
 
 import numpy as np
 from nptyping import NDArray
@@ -68,7 +68,7 @@ def _apply_labeling_function(
     patient_ids: List[int] = args[3]
 
     if path_to_patient_database is not None:
-        patients = PatientDatabase(path_to_patient_database)
+        patients = cast(Mapping[int, Patient], PatientDatabase(path_to_patient_database))
 
     # Hacky workaround for Ontology not being picklable
     if (
@@ -350,7 +350,7 @@ class Labeler(ABC):
         patients: Optional[Sequence[Patient]] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
-        patient_ids: Optional[Set[int]] = None
+        patient_ids: Optional[Set[int]] = None,
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -383,7 +383,7 @@ class Labeler(ABC):
             # Use `patients` if specified
             assert patients is not None
             num_patients = len(patients) if not num_patients else num_patients
-            patients = {p.patient_id: p for p in patients[:num_patients]}
+            patient_map = {p.patient_id: p for p in patients[:num_patients]}
             pids = list(patients)
 
         if patient_ids is not None:
@@ -405,7 +405,7 @@ class Labeler(ABC):
             self.labeler.ontology: extension_datasets.Ontology = None  # type: ignore
 
         # Multiprocessing
-        tasks = [(self, patients, path_to_patient_database, pid_part) for pid_part in pid_parts if len(pid_part) > 0]
+        tasks = [(self, patient_map, path_to_patient_database, pid_part) for pid_part in pid_parts if len(pid_part) > 0]
 
         if num_threads != 1:
             ctx = multiprocessing.get_context("forkserver")
@@ -445,6 +445,7 @@ class TimeHorizonEventLabeler(Labeler):
         get_prediction_times() for defining the datetimes at which we make our predictions
         get_time_horizon() for defining the length of time (i.e. `TimeHorizon`) to use for the time horizon
     """
+
     def __init__(self):
         pass
 
