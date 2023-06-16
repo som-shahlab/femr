@@ -2,13 +2,15 @@
 #include <boost/regex.hpp>
 #include <fstream>
 
+#include <boost/algorithm/string/trim.hpp>
+
 #include "absl/container/flat_hash_map.h"
 #include "database.hh"
 #include "parse_utils.hh"
 
 boost::filesystem::path extract =
     "/local-scratch/nigam/projects/ethanid/"
-    "som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract_v3";
+    "som-rit-phi-starr-prod.starr_omop_cdm5_deid_2023_02_08_extract_v8";
 
 int main() {
     PatientDatabase database(extract, true, false);
@@ -23,11 +25,10 @@ int main() {
     auto iter = database.iterator();
 
     std::ofstream output(
-        "/local-scratch/nigam/projects/ethanid/femr/native/out_text");
-    std::ofstream output_raw(
-        "/local-scratch/nigam/projects/ethanid/femr/native/out_text_raw");
+		    "/local-scratch/nigam/projects/ethanid/text_checks/tokenization/text_out");
 
     boost::regex date_regex("\\d{2}/\\d{2}/\\d{4}");
+    boost::regex whitespace_regex("\\s+");
     boost::regex longdash_regex("--+");
     boost::regex longunder_regex("__+");
     boost::regex longem_regex("——+");
@@ -67,14 +68,6 @@ int main() {
                 std::string text = std::string(
                     (*database.get_unique_text_dictionary())[event.text_value]);
 
-                if (text.size() < 200) {
-                    if (false) {
-                        std::cout << "Lost "
-                                  << database.get_code_dictionary()[event.code]
-                                  << " " << text << std::endl;
-                    }
-                    continue;
-                }
 
                 std::string_view banned_prefix = "STANFORD_OBS";
 
@@ -86,8 +79,7 @@ int main() {
                               << std::endl;
                 }
 
-                boost::replace_all(text, "\n", "<newline>");
-                std::string fixed_text = text;
+		std::string fixed_text = text;
 
                 // Hack to deal with bad unicode support ...
                 boost::replace_all(fixed_text, "—", "-");
@@ -112,15 +104,18 @@ int main() {
                     });
 
                 fixed_text =
-                    boost::regex_replace(fixed_text, longdash_regex, "__");
+                    boost::regex_replace(fixed_text, longdash_regex, "--");
 
                 fixed_text =
-                    boost::regex_replace(fixed_text, longunder_regex, "--");
+                    boost::regex_replace(fixed_text, longunder_regex, "__");
+		
+		fixed_text = boost::regex_replace(fixed_text, 
+			whitespace_regex, " ");
 
-                if (fixed_text.size() < 100) {
-                    std::cout << "WAT? " << text << std::endl;
-                    std::cout << "WAT? " << fixed_text << std::endl;
+		if (fixed_text.size() < 200) {
+                    continue;
                 }
+                
 
                 if (false) {
                     bool valid = false;
@@ -145,8 +140,8 @@ int main() {
                     std::cout << "Replaced with " << fixed_text << std::endl;
                     // exit(-1);
                 }
+		boost::algorithm::trim(fixed_text);
                 output << fixed_text << std::endl;
-                output_raw << text << std::endl;
             }
         }
     }

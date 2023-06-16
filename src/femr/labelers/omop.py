@@ -316,7 +316,6 @@ class CodeLabeler(TimeHorizonEventLabeler):
         # We cannot allow labels at the same time as the codes since they will generally be available as features ...
         return False
 
-
 class OMOPConceptCodeLabeler(CodeLabeler):
     """Same as CodeLabeler, but add the extra step of mapping OMOP concept IDs
     (stored in `omop_concept_ids`) to femr codes (stored in `codes`)."""

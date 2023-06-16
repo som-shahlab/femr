@@ -97,7 +97,7 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.time_horizon: TimeHorizon = time_horizon
-        self.prediction_time_adjustment_func = prediction_time_adjustment_func
+        self.prediction_time_adjustment_func = prediction_time_adjustment_func  # prediction_time_adjustment_func
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return the start times of inpatient admissions."""

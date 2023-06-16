@@ -17,7 +17,7 @@ dependencies = [
     "msgpack >= 1.0.5",
 ]
 requires-python=">3.9"
-version = "0.1.8"
+version = "0.1.9"
 
 [project.scripts]
 
@@ -30,6 +30,7 @@ clmbr_create_dictionary = "femr.models.scripts:create_dictionary"
 clmbr_create_survival_dictionary = "femr.models.scripts:create_survival_dictionary"
 clmbr_train_model = "femr.models.scripts:train_model"
 clmbr_compute_representations = "femr.models.scripts:compute_representations"
+clmbr_train_linear_probe= "femr.models.linear_probe:train_linear_probe"
 
 [project.optional-dependencies]
 build = [

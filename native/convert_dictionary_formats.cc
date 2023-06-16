@@ -1,7 +1,7 @@
-const char* extract_location = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2022_09_05_extract2";
+const char* extract_location = "/local-scratch/nigam/projects/ethanid/som-rit-phi-starr-prod.starr_omop_cdm5_deid_2023_02_08_extract_v8";
 
-const char* source_dict_location = "/local-scratch/nigam/projects/ethanid/gpu_experiments/dictionary";
-const char* destination_dict_location = "/local-scratch/nigam/projects/ethanid/motor_model_release/dictionary";
+const char* source_dict_location = "/local-scratch/nigam/projects/ethanid/text_checks/clmbr_dictionary_fixed";
+const char* destination_dict_location = "/local-scratch/nigam/projects/ethanid/text_checks/clmbr_dictionary_fixed_with_ontology";
 
 #include <nlohmann/json.hpp>
 
@@ -41,11 +41,25 @@ int main() {
     json input = read_file(source_dict_location);
 
     json j;
-    j["regular"] = convert_entries(database, input["regular"]);
-    j["ontology_rollup"] = convert_entries(database, input["ontology_rollup"]);
+    j["regular"] = input["regular"];
+    j["ontology_rollup"] = input["ontology_rollup"];
     j["age_stats"] = input["age_stats"];
     j["hierarchical_counts"] = input["hierarchical_counts"];
 
+    std::map<std::string, std::vector<std::string>> all_parents_map;
+
+    for (uint32_t i = 0; i < database.get_ontology().get_dictionary().size(); i++) {
+        std::string entry = std::string(database.get_ontology().get_dictionary()[i]);
+
+        std::vector<std::string> parents;
+        for (uint32_t parent : database.get_ontology().get_all_parents(i)) {
+            parents.push_back(std::string(database.get_ontology().get_dictionary()[parent]));
+        }
+        all_parents_map[entry] = parents;
+    }
+    
+    j["all_parents"] = all_parents_map;
+    
     std::vector<std::uint8_t> v = json::to_msgpack(j);
 
     std::ofstream o(destination_dict_location, std::ios_base::binary);

@@ -383,9 +383,6 @@ class SurvivalCLMBRTask : public Task {
     Eigen::Tensor<uint32_t, 1> batch_event_codes;
     Eigen::Tensor<float, 1> batch_event_log_times;
 
-    Eigen::Tensor<float, 3> dense_log_times;
-    Eigen::Tensor<bool, 3> dense_is_event;
-
     void prepare_batch_data(uint32_t num_representations) override {
         uint32_t num_batch_events = round_to_nearest_bin(total_events, 2);
 
@@ -394,14 +391,6 @@ class SurvivalCLMBRTask : public Task {
             batch_event_indices(i, 0) = num_representations * time_bins.size();
             batch_event_indices(i, 1) = vocab_size;
         }
-
-        dense_log_times = Eigen::Tensor<float, 3>(num_representations,
-                                                  time_bins.size(), vocab_size);
-        dense_log_times.setConstant(-std::numeric_limits<float>::infinity());
-
-        dense_is_event = Eigen::Tensor<bool, 3>(num_representations,
-                                                time_bins.size(), vocab_size);
-        dense_is_event.setConstant(false);
 
         batch_event_offsets = Eigen::Tensor<uint32_t, 1>(
             num_representations * time_bins.size() + 1);
@@ -459,10 +448,6 @@ class SurvivalCLMBRTask : public Task {
 
                     float log_time_in_bin = std::log2(time_in_bin);
 
-                    for (uint32_t i = 0; i < vocab_size; i++) {
-                        dense_log_times(rep, time_bin, i) = log_time_in_bin;
-                    }
-
                     batch_censor_log_times(rep * time_bins.size() + time_bin) =
                         log_time_in_bin;
 
@@ -485,10 +470,7 @@ class SurvivalCLMBRTask : public Task {
                             event_index++;
 
                             log_time = std::log2(event.first - start);
-                            dense_is_event(rep, time_bin, event.second) = true;
                         }
-
-                        dense_log_times(rep, time_bin, event.second) = log_time;
 
                         batch_event_codes(offset_index) = event.second;
                         batch_event_log_times(offset_index) = log_time;
@@ -523,8 +505,6 @@ class SurvivalCLMBRTask : public Task {
         result["num_valid"] = total_events;
         result["event_indices"] = batch_event_indices;
         result["sparse_time"] = sparse_time;
-        result["dense_is_event"] = dense_is_event;
-        result["dense_log_times"] = dense_log_times;
 
         return result;
     }
@@ -558,6 +538,31 @@ std::unique_ptr<Task> create_task(json config, PatientDatabase& data,
     throw std::runtime_error("Invalid task type " + type);
 }
 
+std::vector<std::string> get_all_parents_recovery(uint32_t code, Ontology& ontology, absl::flat_hash_map<uint32_t, std::vector<std::string>>& temp_map, const json& base_parent_map) {
+    auto iter = temp_map.find(code);
+    if (iter != std::end(temp_map)) {
+        return iter->second;
+    } else {
+        std::string code_string = std::string(ontology.get_dictionary()[code]);
+        std::vector<std::string> result;
+
+        auto base_parents = base_parent_map.find(code_string);
+        if (base_parents != std::end(base_parent_map)) {
+            result = base_parents.value();
+        } else {
+            for (uint32_t parent : ontology.get_parents(code)) {
+                std::vector<std::string> temp_result = get_all_parents_recovery(parent, ontology, temp_map, base_parent_map);
+                result.insert(std::end(result), std::begin(temp_result), std::end(temp_result));
+            }
+            std::sort(std::begin(result), std::end(result));
+            result.erase(std::unique(std::begin(result), std::end(result)), std::end(result));
+        }
+
+        temp_map[code] = result;
+        return result;
+    }
+}
+
 class FeatureLookup {
    public:
     FeatureLookup(const json& data, uint32_t vocab_size, bool is_hierarchical,
@@ -573,7 +578,7 @@ class FeatureLookup {
             actual_data = data["regular"].get_ptr<const json::array_t*>();
         };
 
-        absl::flat_hash_map<uint32_t, uint32_t> code_features_temp;
+        absl::flat_hash_map<std::string, uint32_t> code_features_temp;
 
         uint32_t missing = 0;
         uint32_t searched = 0;
@@ -585,36 +590,48 @@ class FeatureLookup {
             }
 
             searched++;
+            
             auto possible_code =
                 ontology.get_dictionary().find(entry.code_string);
-            if (!possible_code.has_value()) {
-                missing++;
-                continue;
-            }
-
-            uint32_t code = *possible_code;
 
             switch (entry.type) {
-                case DictEntryType::CODE:
-                    code_features_temp[code] = i;
-                    break;
-
-                case DictEntryType::TEXT: {
-                    auto possible_text =
-                        database.get_shared_text_dictionary().find(
-                            entry.text_string);
-                    if (!possible_text) {
-                        missing++;
-                    } else {
-                        text_features[std::make_pair(code, *possible_text)] = i;
-                    }
+                case DictEntryType::CODE: {
+                    code_features_temp[entry.code_string] = i;
                     break;
                 }
 
-                case DictEntryType::NUMERIC:
-                    numeric_features[code].push_back(
-                        std::make_tuple(entry.val_start, entry.val_end, i));
+                case DictEntryType::TEXT: {
+                    if (!possible_code.has_value()) {
+                        missing++;
+                    } else {
+                        uint32_t code = *possible_code;
+
+                        auto possible_text =
+                            database.get_shared_text_dictionary().find(
+                                entry.text_string);
+                        if (!possible_text) {
+                            missing++;
+                        } else {
+                            text_features[std::make_pair(code, *possible_text)] = i;
+                        }
+                    }
+                    
                     break;
+                }
+
+                case DictEntryType::NUMERIC: {
+                    if (!possible_code.has_value()) {
+                        missing++;
+                    } else {
+                        uint32_t code = *possible_code;
+
+                        numeric_features[code].push_back(
+                            std::make_tuple(entry.val_start, entry.val_end, i));
+
+                    }
+                    
+                    break;
+                }
 
                 case DictEntryType::UNUSED:
                     break;
@@ -624,23 +641,35 @@ class FeatureLookup {
         std::cout << "When mapping codes, dropped " << missing << " out of "
                   << searched << std::endl;
 
+        absl::flat_hash_map<uint32_t, std::vector<std::string>> recovery_helper;
+
         for (uint32_t code = 0; code < ontology.get_dictionary().size();
              code++) {
+            
+            std::string_view code_string = ontology.get_dictionary()[code];
+
             if (is_hierarchical) {
                 std::vector<uint32_t> features;
-                for (uint32_t parent : ontology.get_all_parents(code)) {
+                std::vector<std::string> all_parents = get_all_parents_recovery(code, ontology, recovery_helper, data["all_parents"]);
+                
+                std::string debug_string = std::string(code_string) + ": ";
+
+                for (const std::string& parent : all_parents) {
+                    debug_string += parent + " ";
+                    
                     auto iter = code_features_temp.find(parent);
                     if (iter != std::end(code_features_temp)) {
                         features.push_back(iter->second);
                     }
                 }
+                debug_string += "\n";
 
                 if (features.size() > 0) {
                     std::sort(std::begin(features), std::end(features));
                     code_features[code] = features;
                 }
             } else {
-                auto iter = code_features_temp.find(code);
+                auto iter = code_features_temp.find(code_string);
                 if (iter != std::end(code_features_temp)) {
                     code_features[code] = {iter->second};
                 }
@@ -756,6 +785,7 @@ class BatchCreator {
         valid_tokens = Eigen::Tensor<bool, 1>(1 << max_size);
         ages = Eigen::Tensor<float, 1>(1 << max_size);
         normalized_ages = Eigen::Tensor<float, 1>(1 << max_size);
+        integer_ages = Eigen::Tensor<uint32_t, 1>(1 << max_size);
         is_note_embedding = Eigen::Tensor<bool, 1>(1 << max_size);
 
         std::string note_path =
@@ -973,6 +1003,7 @@ class BatchCreator {
                 valid_tokens(batch_index * max_length + index) = true;
                 ages(batch_index * max_length + index) =
                     event.start_age_in_minutes / (60.0 * 24.0);
+                integer_ages(batch_index * max_length + index) = event.start_age_in_minutes;
                 normalized_ages(batch_index * max_length + index) =
                     (event.start_age_in_minutes / (60.0 * 24.0) - age_mean) /
                     (age_std);
@@ -1085,6 +1116,7 @@ class BatchCreator {
             transformer["note_embedding_bytes"] = note_embedding_bytes;
         }
         transformer["valid_tokens"] = valid_tokens;
+        transformer["integer_ages"] = integer_ages;
         transformer["ages"] = ages;
         transformer["normalized_ages"] = normalized_ages;
         transformer["label_indices"] = label_indices_tensor;
@@ -1122,6 +1154,7 @@ class BatchCreator {
 
     Eigen::Tensor<uint32_t, 2> sparse_token_indices;
 
+    Eigen::Tensor<uint32_t, 1> integer_ages;
     Eigen::Tensor<float, 1> ages;
     Eigen::Tensor<float, 1> normalized_ages;
 
@@ -1252,6 +1285,7 @@ void create_batches(const std::string& target_path,
                     const std::string& batch_config_path) {
     PatientDatabase data(path_to_data, true);
     data.get_ontology().get_all_parents(0);
+    data.get_ontology().get_parents(0);
     data.get_ontology().get_dictionary().size();
     data.compute_split(0, 0);
     data.get_patient(0);

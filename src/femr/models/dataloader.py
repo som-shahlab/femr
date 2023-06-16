@@ -178,7 +178,7 @@ def create_batches() -> None:
     parser.add_argument("--seed", default=97, type=int, help="The random seed used for data splitting")
     parser.add_argument(
         "--val_start",
-        default=70,
+        default=80,
         type=int,
         help="The start of the validation split (and thus end of the train split)",
     )
@@ -250,6 +250,7 @@ def create_batches() -> None:
 
             for label in labels:
                 age = (label.time - birth_date) / datetime.timedelta(minutes=1)
+                assert int(age) == age, f"Age must be in minutes {age}"
                 value: Any
                 if labeled_patients.labeler_type == "boolean":
                     assert isinstance(label.value, bool)
@@ -269,7 +270,7 @@ def create_batches() -> None:
                         "event_time": event_offset + age,
                         "is_censored": label.value.is_censored,
                     }
-                result_labels.append((int(pid), age, value))
+                result_labels.append((int(pid), int(age), value))
 
         task = {
             "type": "labeled_patients",
