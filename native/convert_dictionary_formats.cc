@@ -57,9 +57,9 @@ int main() {
         }
         all_parents_map[entry] = parents;
     }
-    
+
     j["all_parents"] = all_parents_map;
-    
+
     std::vector<std::uint8_t> v = json::to_msgpack(j);
 
     std::ofstream o(destination_dict_location, std::ios_base::binary);

@@ -108,14 +108,14 @@ int main() {
 
                 fixed_text =
                     boost::regex_replace(fixed_text, longunder_regex, "__");
-		
-		fixed_text = boost::regex_replace(fixed_text, 
+
+		fixed_text = boost::regex_replace(fixed_text,
 			whitespace_regex, " ");
 
 		if (fixed_text.size() < 200) {
                     continue;
                 }
-                
+
 
                 if (false) {
                     bool valid = false;

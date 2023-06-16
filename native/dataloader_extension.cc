@@ -590,7 +590,7 @@ class FeatureLookup {
             }
 
             searched++;
-            
+
             auto possible_code =
                 ontology.get_dictionary().find(entry.code_string);
 
@@ -615,7 +615,7 @@ class FeatureLookup {
                             text_features[std::make_pair(code, *possible_text)] = i;
                         }
                     }
-                    
+
                     break;
                 }
 
@@ -629,7 +629,7 @@ class FeatureLookup {
                             std::make_tuple(entry.val_start, entry.val_end, i));
 
                     }
-                    
+
                     break;
                 }
 
@@ -645,18 +645,18 @@ class FeatureLookup {
 
         for (uint32_t code = 0; code < ontology.get_dictionary().size();
              code++) {
-            
+
             std::string_view code_string = ontology.get_dictionary()[code];
 
             if (is_hierarchical) {
                 std::vector<uint32_t> features;
                 std::vector<std::string> all_parents = get_all_parents_recovery(code, ontology, recovery_helper, data["all_parents"]);
-                
+
                 std::string debug_string = std::string(code_string) + ": ";
 
                 for (const std::string& parent : all_parents) {
                     debug_string += parent + " ";
-                    
+
                     auto iter = code_features_temp.find(parent);
                     if (iter != std::end(code_features_temp)) {
                         features.push_back(iter->second);
