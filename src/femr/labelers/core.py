@@ -54,16 +54,16 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Union[bool, int, float, SurvivalValue]
+    value: Union[bool, int, float, SurvivalValue, str]
 
 
 def _apply_labeling_function(
-    args: Tuple[Labeler, Optional[Sequence[Patient]], Optional[str], List[int]]
+    args: Tuple[Labeler, Optional[Mapping[int, Patient]], Optional[str], List[int]]
 ) -> Dict[int, List[Label]]:
     """Apply a labeling function to the set of patients included in `patient_ids`.
     Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
     labeling_function: Labeler = args[0]
-    patients: Optional[Sequence[Patient]] = args[1]
+    patients: Optional[Mapping[int, Patient]] = args[1]
     path_to_patient_database: Optional[str] = args[2]
     patient_ids: List[int] = args[3]
 
@@ -350,6 +350,7 @@ class Labeler(ABC):
         patients: Optional[Sequence[Patient]] = None,
         num_threads: int = 1,
         num_patients: Optional[int] = None,
+        patient_ids: Optional[Set[int]] = None
     ) -> LabeledPatients:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -382,7 +383,11 @@ class Labeler(ABC):
             # Use `patients` if specified
             assert patients is not None
             num_patients = len(patients) if not num_patients else num_patients
-            pids = [p.patient_id for p in patients[:num_patients]]
+            patients = {p.patient_id: p for p in patients[:num_patients]}
+            pids = list(patients)
+
+        if patient_ids is not None:
+            pids = [pid for pid in pids if pid in patient_ids]
 
         # Split patient IDs across parallelized processes
         pid_parts = np.array_split(pids, num_threads * 10)
@@ -440,6 +445,8 @@ class TimeHorizonEventLabeler(Labeler):
         get_prediction_times() for defining the datetimes at which we make our predictions
         get_time_horizon() for defining the length of time (i.e. `TimeHorizon`) to use for the time horizon
     """
+    def __init__(self):
+        pass
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -525,8 +532,8 @@ class TimeHorizonEventLabeler(Labeler):
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
@@ -538,12 +545,12 @@ class TimeHorizonEventLabeler(Labeler):
         results: List[Label] = []
         curr_outcome_idx: int = 0
         last_time = None
+
         for time in prediction_times:
             if last_time is not None:
                 assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
 
             last_time = time
-
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
                 # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
                 # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
@@ -586,6 +593,9 @@ class TimeHorizonEventLabeler(Labeler):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
+            elif is_censored:
+                # Censored => None
+                pass
 
         return results
 
@@ -601,6 +611,8 @@ class NLabelsPerPatientLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:
         labels: List[Label] = self.labeler.label(patient)
         if len(labels) <= self.num_labels:
+            return labels
+        elif self.num_labels == -1:
             return labels
         hash_to_label_list: List[Tuple[int, int, Label]] = [
             (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))

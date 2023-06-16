@@ -88,11 +88,9 @@ class TransformerBlock(hk.Module):
         assert x_with_ages.shape[1] == self.config["hidden_size"] + 2
         assert x_with_ages.dtype == x.dtype
 
-        if False:
-            print("WITH_AGE")
+        if self.config.get("with_age_beta"):
             middle = self.input_proj(x_with_ages)
         else:
-            print("WITHOUT AGE")
             middle = self.input_proj(x)
 
         head_size = self.config["hidden_size"] // self.config["n_heads"]
