@@ -84,6 +84,7 @@ def train_model() -> None:
         default=None,
         help="If we don't see a decrease in dev loss in this many steps, stop training. A reasonable value is 15000.",
     )
+    parser.add_argument("--with_age_beta", default=False, action="store_true")
 
     args = parser.parse_args()
 
@@ -157,6 +158,7 @@ def train_model() -> None:
             "internal_dropout": args.internal_dropout,
             "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
             "note_embedding_data": batch_config["transformer"].get("note_embedding_data"),
+            "with_age_beta": args.with_age_beta,
         },
         "learning_rate": args.learning_rate,
         "max_grad_norm": 1.0,
@@ -337,9 +339,11 @@ def train_model() -> None:
             split_to_eval = split
             loader_to_eval = loader
 
-        num_to_get = min(50, loader_to_eval.get_number_of_batches(split_to_eval))
+        num_to_get = min(500, loader_to_eval.get_number_of_batches(split_to_eval))
         total_loss = 0
         total_indices = 0
+        total_loss2 = 0
+        total_indices2 = 0
 
         logits = []
 
@@ -362,6 +366,8 @@ def train_model() -> None:
             )
             total_loss += loss * batch["num_indices"]
             total_indices += batch["num_indices"]
+            total_loss2 += loss
+            total_indices2 += 1
             if config["task"]["type"] == "labeled_patients":
                 if config["task"]["labeler_type"] == "survival":
                     logits.append(logit[: batch["num_indices"], :])
@@ -372,6 +378,7 @@ def train_model() -> None:
                     labels.append(batch["task"]["labels"][: batch["num_indices"]])
 
         loss = float(total_loss / total_indices)
+        loss2 = float(total_loss2 / total_indices2)
 
         if config["task"]["type"] == "labeled_patients":
             if config["task"]["labeler_type"] == "survival":
@@ -399,7 +406,7 @@ def train_model() -> None:
             c_statistic = -loss
             other_statistics = {}
 
-        result = {"loss": loss, "c_statistic": c_statistic, **other_statistics}
+        result = {"loss": loss, "loss2": loss2, "c_statistic": c_statistic, **other_statistics}
 
         return result
 
@@ -472,7 +479,9 @@ def train_model() -> None:
 
     logging.info("Applying decay mask %s", mask_fn(params))
 
-    lr_schedule = make_lr_schedule(warmup_percentage=0.01, total_steps=total_steps)
+    warmup = 1_000 / total_steps
+
+    lr_schedule = make_lr_schedule(warmup_percentage=warmup, total_steps=total_steps)
     weight_decay = args.weight_decay
     logging.info("Using weight decay %s", weight_decay)
     opt = optax.chain(
