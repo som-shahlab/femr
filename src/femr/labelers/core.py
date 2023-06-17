@@ -379,15 +379,18 @@ class Labeler(ABC):
             patient_database = PatientDatabase(path_to_patient_database)
             num_patients = len(patient_database) if not num_patients else num_patients
             pids = list(patient_database)
+            patient_map = None
         else:
             # Use `patients` if specified
             assert patients is not None
             num_patients = len(patients) if not num_patients else num_patients
-            patient_map = {p.patient_id: p for p in patients[:num_patients]}
+            patient_map = {p.patient_id: p for p in patients}
             pids = list(patients)
 
         if patient_ids is not None:
             pids = [pid for pid in pids if pid in patient_ids]
+
+        pids = pids[:num_patients]
 
         # Split patient IDs across parallelized processes
         pid_parts = np.array_split(pids, num_threads * 10)
@@ -628,7 +631,7 @@ class NLabelsPerPatientLabeler(Labeler):
         return self.labeler.get_labeler_type()
 
 
-def compute_random_num(seed: int, num_1: int, num_2: int):
+def compute_random_num(seed: int, num_1: int, num_2: int, modulus: int =100):
     network_num_1 = struct.pack("!q", num_1)
     network_num_2 = struct.pack("!q", num_2)
     network_seed = struct.pack("!q", seed)
@@ -641,6 +644,24 @@ def compute_random_num(seed: int, num_1: int, num_2: int):
 
     result = 0
     for i in range(len(hash_value)):
-        result = (result * 256 + hash_value[i]) % 100
+        result = (result * 256 + hash_value[i]) % modulus
 
     return result
+
+def subsample_to_prevalence(labeled_patients: LabeledPatients, target_prevalence: float, seed=97) -> LabeledPatients:
+    assert labeled_patients.labeler_type == "boolean"
+
+    patient_ids, labels, prediction_times = labeled_patients.as_numpy_arrays() 
+    numeric_prediction_times = prediction_times.astype(np.datetime64).astype(np.int64)
+
+    num_negative_samples = np.sum(labels) * (1 - target_prevalence) / target_prevalence
+
+    mod = 2**31 - 1
+
+    desired_fraction = (num_negative_samples / np.sum(~labels)) * mod
+
+    random_numbers = np.array([compute_random_num(seed, pid, time, modulus=mod) for pid, time in zip(patient_ids, numeric_prediction_times)])
+
+    mask = np.logical_or(random_numbers < desired_fraction, labels)
+    
+    return LabeledPatients.load_from_numpy(patient_ids[mask], labels[mask], prediction_times[mask], labeled_patients.labeler_type)
