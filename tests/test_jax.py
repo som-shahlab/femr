@@ -285,11 +285,12 @@ def test_layout_strategy():
             assert len(seen) == n * m
 
 
-def local_attention_helper(dtype, device):
+def local_attention_helper(dtype, device, causal):
     B = 4
     N = 512
     K = 64
-    W = 512
+
+    W = 128
 
     k = random.PRNGKey(123534)
     k1, k2, k3, k4 = random.split(k, 4)
@@ -303,11 +304,13 @@ def local_attention_helper(dtype, device):
     N_arg = ~jnp.array(N - 1).astype(jnp.uint32)
     print(N_arg)
 
-    _, res_true = local_attention_fallback(queries, keys, values, N_arg, W)
+    _, res_true = local_attention_fallback(queries, keys, values, N_arg, W, causal=causal)
 
-    res_est_f = local_attention(queries, keys, values, N_arg, W)
+    res_est_f = local_attention(queries, keys, values, N_arg, W, causal=causal)
 
-    res_est = jit(local_attention, static_argnames={"attention_width"})(queries, keys, values, N_arg, W)
+    res_est = jit(local_attention, static_argnames={"attention_width", "causal"})(
+        queries, keys, values, N_arg, W, causal
+    )
 
     print(res_true.shape)
     print(res_est_f.shape)
@@ -319,8 +322,8 @@ def local_attention_helper(dtype, device):
     valid = random.normal(k4, shape=(2, B * N, K))
 
     def helper(func):
-        def h(queries, keys, values, length, attention_width):
-            return (func(queries, keys, values, length, attention_width) * valid).sum()
+        def h(queries, keys, values, length, attention_width, causal):
+            return (func(queries, keys, values, length, attention_width, causal) * valid).sum()
 
         return grad(
             h,
@@ -332,15 +335,15 @@ def local_attention_helper(dtype, device):
         )
 
     dq1, dk1, dv1 = helper(lambda *args, **kwargs: local_attention_fallback(*args, **kwargs)[1])(
-        queries, keys, values, N_arg, attention_width=W
+        queries, keys, values, N_arg, attention_width=W, causal=causal
     )
 
-    dq2_f, dk2_f, dv2_f = helper(local_attention)(queries, keys, values, N_arg, attention_width=W)
+    dq2_f, dk2_f, dv2_f = helper(local_attention)(queries, keys, values, N_arg, attention_width=W, causal=causal)
 
     dq2, dk2, dv2 = jit(
         helper(local_attention),
-        static_argnames={"attention_width"},
-    )(queries, keys, values, N_arg, attention_width=W)
+        static_argnames={"attention_width", "causal"},
+    )(queries, keys, values, N_arg, attention_width=W, causal=causal)
 
     print("True dv", dv1)
     print("Est b dv", dv2_f)
@@ -357,11 +360,21 @@ def local_attention_helper(dtype, device):
     assert jnp.allclose(dk1, dk2, atol=1e-2, rtol=1e-3)
 
 
-def test_local_attention_simple_cpu():
+def test_local_attention_simple_cpu_causal():
     cpu_device = devices("cpu")[0]
-    local_attention_helper(dtype=np.float32, device=cpu_device)
+    local_attention_helper(dtype=np.float32, device=cpu_device, causal=True)
 
 
-def test_local_attention_simple_gpu():
+def test_local_attention_simple_cpu_non_causal():
+    cpu_device = devices("cpu")[0]
+    local_attention_helper(dtype=np.float32, device=cpu_device, causal=False)
+
+
+def test_local_attention_simple_gpu_causal():
     gpu_device = devices("gpu")[0]
-    local_attention_helper(dtype=np.float16, device=gpu_device)
+    local_attention_helper(dtype=jnp.float16, device=gpu_device, causal=True)
+
+
+def test_local_attention_simple_gpu_non_causal():
+    gpu_device = devices("gpu")[0]
+    local_attention_helper(dtype=jnp.float16, device=gpu_device, causal=False)
