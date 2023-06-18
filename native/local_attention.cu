@@ -98,6 +98,7 @@ struct alignas(8) local_attention_info {
     uint32_t n;
     uint32_t k;
     uint32_t w;
+    bool causal;
 
     bool requires_any_atomic;
 };
@@ -273,12 +274,13 @@ std::vector<typename std::result_of<F(uint32_t, T *)>::type> join_on_first(
 }
 
 const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
-                                                  uint32_t k, uint32_t w) {
+                                                  uint32_t k, uint32_t w, bool causal) {
     local_attention_info *result = new local_attention_info;
     result->b = b;
     result->n = n;
     result->k = k;
     result->w = w;
+    result->causal = causal;
     std::vector<row_info> rows;
     std::vector<std::pair<uint32_t, uint32_t>> current_launch;
 
@@ -343,7 +345,12 @@ const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
 
     for (uint32_t i = 0; i < n; i += DIM_SIZE) {
         uint32_t start_j = max(0, (int)i - (int)w);
-        uint32_t end_j = i + DIM_SIZE;
+	uint32_t end_j;
+	if (causal) {
+            end_j = i + DIM_SIZE;
+	} else {
+            end_j = min(i + w, n) + DIM_SIZE;
+	}
         uint32_t needed = end_j - start_j;
 
         assert(needed % DIM_SIZE == 0);
@@ -370,8 +377,8 @@ const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
 }
 
 std::vector<uint32_t> get_attention_shape(uint32_t b, uint32_t n, uint32_t k,
-                                          uint32_t w) {
-    const local_attention_info *info = create_attention_info(b, n, k, w);
+                                          uint32_t w, bool causal) {
+    const local_attention_info *info = create_attention_info(b, n, k, w, causal);
     std::vector<uint32_t> result = {b, info->num_rows, LAUNCH_SIZE * DIM_SIZE,
                                     DIM_SIZE};
     free_attention_info(info);
@@ -771,12 +778,18 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
             uint32_t precise_j = j + (threadIdx.x % 8) * 2;
 
             uint32_t precise_start = max(0, (int)precise_i - (int)w);
+	    uint32_t precise_end;
+	    if (info->causal) {
+                precise_end = precise_i;
+            } else {
+		precise_end = precise_i + w;
+	    }
 
-            if (precise_j > precise_i || precise_j < precise_start) {
+            if (precise_j > precise_end || precise_j < precise_start) {
                 current_val.x = -INFINITY;
             }
 
-            if ((precise_j + 1) > precise_i ||
+            if ((precise_j + 1) > precise_end ||
                 (precise_j + 1) < precise_start) {
                 current_val.y = -INFINITY;
             }

@@ -626,19 +626,19 @@ def get_shifts_and_mult(n):
 
 # The following is "technically" a memory leak
 # We just have to hope that femr users don't keep their program open forever ...
-_local_attention_data_cache: Dict[Tuple[int, int, int, int], Any] = {}
+_local_attention_data_cache: Dict[Tuple[int, int, int, int, bool], Any] = {}
 
 
-def _get_cached_local_attention_data(b: int, n: int, k: int, w: int) -> bytes:
+def _get_cached_local_attention_data(b: int, n: int, k: int, w: int, causal: bool) -> bytes:
     """The local attention data is the C++ data necessary to run the kernel.
 
     This data only depends on the sizes passed in, so can be precomputed and shared across invocations of the kernel.
 
     Note that we have to return a byte string of the pointer to the data.
     """
-    key = (b, n, k, w)
+    key = (b, n, k, w, causal)
     if key not in _local_attention_data_cache:
-        _local_attention_data_cache[key] = femr.extension.jax.get_local_attention_data(b, n, k, w)
+        _local_attention_data_cache[key] = femr.extension.jax.get_local_attention_data(b, n, k, w, causal)
 
     # We need to pull out the actual pointer and pass that directly.
 
@@ -662,13 +662,20 @@ def add_batch_if_necessary(data: Array) -> Array:
         return data
 
 
-@partial(jax.custom_vjp, nondiff_argnums=(4,))
+@partial(
+    jax.custom_vjp,
+    nondiff_argnums=(
+        4,
+        5,
+    ),
+)
 def local_attention(
     queries: Array,
     keys: Array,
     values: Array,
     length_mask: Array,
     attention_width: int,
+    causal: bool = True,
 ) -> Array:
     """
     local_attention is an operation that implements multi-headed attention with a causal local attention pattern.
@@ -683,22 +690,24 @@ def local_attention(
     This allows you to pass multiple sequences in one call to local_attention and know they won't have cross
     attention.
     """
-    return local_attention_fwd(queries, keys, values, length_mask, attention_width)[0]
+    return local_attention_fwd(queries, keys, values, length_mask, attention_width, causal)[0]
 
 
-@partial(vmap, in_axes=(0, 0, 0, None, None))
+@partial(vmap, in_axes=(0, 0, 0, None, None, None))
 def local_attention_fallback_single(
     queries: Array,
     keys: Array,
     values: Array,
     length_mask: Array,
     attention_width: int,
+    causal: bool,
 ) -> Array:
     """A local attention fallback for a single sequence."""
     logits = queries @ keys.T
 
     causal_mask = jnp.tri(N=queries.shape[0], k=0, dtype=jnp.bool_)
-    local_mask = jnp.tri(N=queries.shape[0], k=-(attention_width + 1), dtype=jnp.bool_)
+    local_mask = ~jnp.tri(N=queries.shape[0], k=-(attention_width + 1), dtype=jnp.bool_)
+    local_mask = local_mask & local_mask.T
 
     indices = jnp.arange(queries.shape[0])
     row_indices = jnp.zeros_like(local_mask) + indices.reshape((1, queries.shape[0]))
@@ -712,7 +721,12 @@ def local_attention_fallback_single(
 
     length_mask = row_indices == col_indices
 
-    full_mask = causal_mask & (~local_mask) & length_mask
+    if causal:
+        full_mask = causal_mask & local_mask & length_mask
+    else:
+        full_mask = local_mask & length_mask
+
+    print(full_mask.astype(int))
 
     logits = jnp.where(full_mask, logits, float("-inf"))
 
@@ -729,15 +743,17 @@ def local_attention_fallback(
     values: Array,
     length: Array,
     attention_width: int,
+    causal: bool,
 ) -> Tuple[Array, Array]:
     """The full fallback, that supports batching and the dummy attention values"""
-    result = local_attention_fallback_single(queries, keys, values, length, attention_width)
+    result = local_attention_fallback_single(queries, keys, values, length, attention_width, causal)
     attention_shape = tuple(
         femr.extension.jax.get_local_attention_shape(
             queries.shape[0],
             queries.shape[1],
             queries.shape[2],
             attention_width,
+            causal,
         )
     )
 
@@ -755,9 +771,10 @@ def local_attention_backward_fallback(
     _attention: Array,
     g: Array,
     attention_width: int,
+    causal: bool,
 ) -> Array:
     """Fallback for the gradient. Note that we nede to discard the attention."""
-    result = local_attention_fallback_single(queries, keys, values, length, attention_width)
+    result = local_attention_fallback_single(queries, keys, values, length, attention_width, causal)
     return (result * g).sum()
 
 
@@ -767,19 +784,23 @@ def local_attention_fwd(
     values: Array,
     length: Array,
     attention_width: int,
+    causal: bool,
 ) -> Tuple[Array, Tuple[Array, Array, Array, Array, Array]]:
     """The forward pass for local_attention."""
     queries = add_batch_if_necessary(queries)
     keys = add_batch_if_necessary(keys)
     values = add_batch_if_necessary(values)
 
-    attention, result = local_attention_forward_p.bind(queries, keys, values, length, attention_width=attention_width)
+    attention, result = local_attention_forward_p.bind(
+        queries, keys, values, length, attention_width=attention_width, causal=causal
+    )
     res = (queries, keys, values, length, attention)
     return result, res
 
 
 def local_attention_bwd(
     attention_width: int,
+    causal: bool,
     res: Tuple[Array, Array, Array, Array, Array],
     g: Array,
 ) -> Tuple[Array, Array, Array, None]:
@@ -794,6 +815,7 @@ def local_attention_bwd(
         attention,
         g,
         attention_width=attention_width,
+        causal=causal,
     )
     return (dq, dk, dv, None)
 
@@ -810,6 +832,7 @@ def local_attention_forward_abstract_eval(
     length: jax.core.ShapedArray,
     *,
     attention_width: int,
+    causal: bool,
 ) -> Tuple[jax.core.ShapedArray, jax.core.ShapedArray]:
     """Forward shapes for local_attention."""
     assert len(queries.shape) == 3
@@ -830,6 +853,7 @@ def local_attention_forward_abstract_eval(
             queries.shape[1],
             queries.shape[2],
             attention_width,
+            causal,
         )
     )
 
@@ -849,6 +873,7 @@ def local_attention_forward_xla_translation(
     length: xla.XlaOp,
     *,
     attention_width: int,
+    causal: bool,
 ) -> Sequence[xla.XlaOp]:
     """Forward op for local_attention."""
     assert all(isinstance(a, jax.core.ShapedArray) for a in avals_in)
@@ -862,8 +887,11 @@ def local_attention_forward_xla_translation(
     if ctx.platform == "cpu" or (ctx.platform == "cuda" and queries_shape.dtype != jnp.float16):
         computation = xla_computation(
             local_attention_fallback,
-            static_argnums=(4,),
-        )(*avals_in, attention_width)
+            static_argnums=(
+                4,
+                5,
+            ),
+        )(*avals_in, attention_width, causal)
 
         res = xla_client.ops.Call(ctx.builder, computation, [queries, keys, values, length])
 
@@ -882,6 +910,7 @@ def local_attention_forward_xla_translation(
             queries_shape.shape[1],
             queries_shape.shape[2],
             attention_width,
+            causal,
         )
 
         res = xla_client.ops.CustomCallWithLayout(
@@ -914,6 +943,7 @@ def local_attention_backward_abstract_eval(
     attention: jax.core.ShapedArray,
     g: jax.core.ShapedArray,
     attention_width: int,
+    causal: bool,
 ) -> Tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
     """Abstract shapes for local_attention."""
     assert length.shape == tuple()
@@ -935,6 +965,7 @@ def local_attention_backward_abstract_eval(
             queries.shape[1],
             queries.shape[2],
             attention_width,
+            causal,
         )
     )
     assert attention_shape == attention.shape
@@ -954,6 +985,7 @@ def local_attention_backward_xla_translation(
     g: xla.XlaOp,
     *,
     attention_width: int,
+    causal: bool,
 ) -> Sequence[xla.XlaOp]:
     """Backward op for local_attention."""
     assert all(isinstance(a, jax.core.ShapedArray) for a in avals_in)
@@ -973,9 +1005,13 @@ def local_attention_backward_xla_translation(
     dq, dk, dv = avals_out
 
     if ctx.platform == "cpu":
-        computation = xla_computation(local_attention_backward_fallback, static_argnums=(6,))(
-            *avals_in, attention_width
-        )
+        computation = xla_computation(
+            local_attention_backward_fallback,
+            static_argnums=(
+                6,
+                7,
+            ),
+        )(*avals_in, attention_width, causal)
 
         res = xla_client.ops.Call(
             ctx.builder,
@@ -994,6 +1030,7 @@ def local_attention_backward_xla_translation(
             queries_shape.shape[1],
             queries_shape.shape[2],
             attention_width,
+            causal,
         )
 
         res = xla_client.ops.CustomCallWithLayout(
