@@ -32,7 +32,7 @@ def get_death_concepts() -> List[str]:
 
 
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
-    return date.replace(hour=23, minute=59, second=59)
+    return date.replace(hour=23, minute=59, second=0)
 
 
 def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
