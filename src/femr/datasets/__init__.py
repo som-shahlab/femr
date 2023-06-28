@@ -100,9 +100,9 @@ class EventCollection:
             target_path,
             np.dtype(
                 [
-                    ("patient_id", np.uint64),
+                    ("patient_id", np.int64),
                     ("start", np.datetime64),
-                    ("concept_id", np.uint64),
+                    ("concept_id", np.int64),
                 ]
             ),
             ",",

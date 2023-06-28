@@ -13,7 +13,7 @@
 #include "readerwritercircularbuffer.h"
 #include "thread_utils.hh"
 
-using CodeCounter = absl::flat_hash_map<uint64_t, size_t>;
+using CodeCounter = absl::flat_hash_map<int64_t, size_t>;
 
 template <typename T>
 void sort_by_count(T& result) {
@@ -49,7 +49,7 @@ void clean_thread(const boost::filesystem::path& in_path,
     CSVWriter<ZstdWriter> writer(out_path, {"value"}, ',');
 
     while (reader.next_row()) {
-        uint64_t code;
+        int64_t code;
         attempt_parse_or_die(reader.get_row()[1], code);
         code_counts[code] += 1;
 
@@ -102,7 +102,7 @@ void process_thread(
     out_queue.wait_enqueue(boost::none);
 }
 
-std::pair<std::vector<std::pair<uint64_t, size_t>>,
+std::pair<std::vector<std::pair<int64_t, size_t>>,
           std::vector<std::pair<std::string, size_t>>>
 count_codes_and_values(const boost::filesystem::path& path,
                        const boost::filesystem::path& temp_path,
@@ -111,7 +111,7 @@ count_codes_and_values(const boost::filesystem::path& path,
 
     boost::filesystem::create_directory(only_values);
 
-    std::vector<std::pair<uint64_t, size_t>> code_result;
+    std::vector<std::pair<int64_t, size_t>> code_result;
 
     {
         std::vector<boost::filesystem::path> source_files;

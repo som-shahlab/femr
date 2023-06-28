@@ -95,7 +95,7 @@ class OntologyWrapper {
         return ontology.get_text_description(*possible_entry);
     }
 
-    py::str get_code_from_concept_id(uint64_t concept_id) {
+    py::str get_code_from_concept_id(int64_t concept_id) {
         auto possible_entry = ontology.get_code_from_concept_id(concept_id);
         if (!possible_entry) {
             throw py::index_error();
@@ -103,7 +103,7 @@ class OntologyWrapper {
         return get_code_str(*possible_entry);
     }
 
-    uint64_t get_concept_id_from_code(std::string_view code_str) {
+    int64_t get_concept_id_from_code(std::string_view code_str) {
         auto possible_entry = ontology.get_dictionary().find(code_str);
         if (!possible_entry) {
             throw py::index_error();
@@ -299,6 +299,11 @@ void register_datasets_extension(py::module& root) {
                     case 'u':
                         our_type = ColumnValueType::UINT64_T;
                         break;
+
+                    case 'i':
+                        our_type = ColumnValueType::INT64_T;
+                        break;
+
                     default:
                         throw std::runtime_error(absl::StrCat(
                             "Invalid kind ", std::to_string(type.kind())));
@@ -327,7 +332,7 @@ void register_datasets_extension(py::module& root) {
         .def(
             "__getitem__",
             [python_patient, python_event, pickle](PatientDatabaseWrapper& self,
-                                                   uint64_t patient_id) {
+                                                   int64_t patient_id) {
                 using namespace pybind11::literals;
 
                 boost::optional<uint32_t> patient_offset =
@@ -360,7 +365,7 @@ void register_datasets_extension(py::module& root) {
             },
             py::return_value_policy::reference_internal)
         .def("get_patient_birth_date",
-             [](PatientDatabaseWrapper& self, uint64_t patient_id) {
+             [](PatientDatabaseWrapper& self, int64_t patient_id) {
                  Patient p =
                      self.get_patient(*self.get_patient_offset(patient_id));
                  return p.birth_date;
@@ -369,7 +374,7 @@ void register_datasets_extension(py::module& root) {
              py::return_value_policy::reference_internal)
         .def("compute_split",
              [](PatientDatabaseWrapper& self, uint32_t seed,
-                uint64_t patient_id) {
+                int64_t patient_id) {
 	         auto potential_offset = self.get_patient_offset(patient_id);
 		 if (!potential_offset) {
                     throw py::index_error();

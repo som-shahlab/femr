@@ -57,7 +57,7 @@ T read_element(const Dictionary& dict, uint32_t index) {
 
 struct Entry {
     uint32_t patient_offset;
-    uint64_t patient_id;
+    int64_t patient_id;
 
     uint32_t num_unique;
     uint32_t num_metadata;
@@ -71,7 +71,7 @@ struct Entry {
     }
 };
 
-void write_patient_to_buffer(uint32_t start_unique, uint64_t patient_id,
+void write_patient_to_buffer(uint32_t start_unique, int64_t patient_id,
                              const Patient& current_patient,
                              std::vector<uint32_t>& buffer) {
     if (current_patient.birth_date < epoch) {
@@ -110,7 +110,7 @@ void write_patient_to_buffer(uint32_t start_unique, uint64_t patient_id,
             buffer.push_back((uint32_t)delta);
         }
 
-        if ((((uint64_t)event.code) << 2) >
+        if ((((int64_t)event.code) << 2) >
             std::numeric_limits<uint32_t>::max()) {
             throw std::runtime_error("Numeric limits error");
         }
@@ -409,13 +409,13 @@ void reader_thread(
     moodycamel::BlockingReaderWriterCircularBuffer<boost::optional<Entry>>&
         queue,
     std::atomic<uint64_t>& offset_and_unique_counter,
-    const absl::flat_hash_map<uint64_t, uint32_t>& code_to_index,
+    const absl::flat_hash_map<int64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
     CSVReader<ZstdReader> reader(
         patient_file, {"patient_id", "concept_id", "start", "value", "metadata"},
         ',');
 
-    uint64_t patient_id = 0;
+    int64_t patient_id = 0;
     Patient current_patient;
     std::vector<std::string> current_unique;
     std::vector<std::string> current_metadata;
@@ -481,21 +481,21 @@ void reader_thread(
     };
 
     while (reader.next_row()) {
-        uint64_t patient_offset;
-        attempt_parse_or_die(reader.get_row()[0], patient_offset);
-        uint64_t code;
+        int64_t next_patient_id;
+        attempt_parse_or_die(reader.get_row()[0], next_patient_id);
+        int64_t code;
         attempt_parse_or_die(reader.get_row()[1], code);
         absl::CivilSecond start;
         attempt_parse_time_or_die(reader.get_row()[2], start);
 
-        if (patient_offset != patient_id) {
+        if (next_patient_id != patient_id) {
             output_patient();
 
             current_patient.birth_date = absl::CivilDay(start);
             birth_date = absl::CivilSecond(current_patient.birth_date);
             current_patient.events.clear();
 
-            patient_id = patient_offset;
+            patient_id = next_patient_id;
             current_unique.clear();
             current_metadata.clear();
         }
@@ -548,9 +548,9 @@ void convert_patient_collection_to_patient_database(
     auto codes_and_values =
         count_codes_and_values(patient_root, temp_path, num_threads);
 
-    std::vector<uint64_t> codes;
+    std::vector<int64_t> codes;
     codes.reserve(codes_and_values.first.size());
-    absl::flat_hash_map<uint64_t, uint32_t> code_to_index;
+    absl::flat_hash_map<int64_t, uint32_t> code_to_index;
     code_to_index.reserve(codes_and_values.first.size());
     for (size_t i = 0; i < codes_and_values.first.size(); i++) {
         const auto& entry = codes_and_values.first[i];
@@ -572,7 +572,7 @@ void convert_patient_collection_to_patient_database(
         }
     }
 
-    std::vector<uint64_t> patient_ids;
+    std::vector<int64_t> patient_ids;
     {
         DictionaryWriter patients(target / "patients");
         DictionaryWriter event_metadata(target / "event_metadata");
@@ -776,21 +776,21 @@ Patient PatientDatabase::get_patient(uint32_t patient_offset) {
     return std::move(iter.get_patient(patient_offset));
 }
 
-uint64_t PatientDatabase::get_patient_id(uint32_t patient_offset) {
-    return read_span<uint64_t>(meta_dictionary, 0)[patient_offset];
+int64_t PatientDatabase::get_patient_id(uint32_t patient_offset) {
+    return read_span<int64_t>(meta_dictionary, 0)[patient_offset];
 }
 
-absl::Span<const uint64_t> PatientDatabase::get_patient_ids() {
-    return read_span<uint64_t>(meta_dictionary, 0);
+absl::Span<const int64_t> PatientDatabase::get_patient_ids() {
+    return read_span<int64_t>(meta_dictionary, 0);
 }
 
 boost::optional<uint32_t> PatientDatabase::get_patient_offset(
-    uint64_t patient_id) {
+    int64_t patient_id) {
     absl::Span<const uint32_t> sorted_span =
         read_span<uint32_t>(meta_dictionary, 1);
     const auto* iter =
         std::lower_bound(std::begin(sorted_span), std::end(sorted_span),
-                         patient_id, [&](uint32_t index, uint64_t original) {
+                         patient_id, [&](uint32_t index, int64_t original) {
                              return get_patient_id(index) < original;
                          });
     if (iter == std::end(sorted_span) || get_patient_id(*iter) != patient_id) {
@@ -946,16 +946,16 @@ std::vector<std::result_of_t<F(CSVReader<TextReader>&)>> process_nested(
     }
 }
 
-absl::flat_hash_set<uint64_t> get_standard_codes(
+absl::flat_hash_set<int64_t> get_standard_codes(
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
     auto valid = process_nested(
         concept, "concept", num_threads, true,
         {"concept_id", "standard_concept"}, delimiter, [&](auto& reader) {
-            std::vector<uint64_t> result;
+            std::vector<int64_t> result;
 
             while (reader.next_row()) {
-                uint64_t concept_id;
+                int64_t concept_id;
                 attempt_parse_or_die(reader.get_row()[0], concept_id);
 
                 if (reader.get_row()[1] != "") {
@@ -966,7 +966,7 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
             return result;
         });
 
-    absl::flat_hash_set<uint64_t> result;
+    absl::flat_hash_set<int64_t> result;
     for (const auto& entry : valid) {
         for (const auto& val : entry) {
             result.insert(val);
@@ -976,17 +976,17 @@ absl::flat_hash_set<uint64_t> get_standard_codes(
     return result;
 }
 
-std::pair<absl::flat_hash_map<uint64_t, uint32_t>,
+std::pair<absl::flat_hash_map<int64_t, uint32_t>,
           std::vector<std::vector<uint32_t>>>
-get_parents(std::vector<uint64_t>& raw_codes,
+get_parents(std::vector<int64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
     auto standard_code_map =
         get_standard_codes(concept, delimiter, num_threads);
 
     using ParentMap =
-        absl::flat_hash_map<uint64_t,
-                            std::vector<std::tuple<bool, size_t, uint64_t>>>;
+        absl::flat_hash_map<int64_t,
+                            std::vector<std::tuple<bool, size_t, int64_t>>>;
 
     std::vector<std::string> valid_rels = {"Has precise ingredient",
                                            "RxNorm has ing",
@@ -1004,9 +1004,9 @@ get_parents(std::vector<uint64_t>& raw_codes,
 
             while (reader.next_row()) {
                 const auto& rel_id = reader.get_row()[2];
-                uint64_t concept_id_1;
+                int64_t concept_id_1;
                 attempt_parse_or_die(reader.get_row()[0], concept_id_1);
-                uint64_t concept_id_2;
+                int64_t concept_id_2;
                 attempt_parse_or_die(reader.get_row()[1], concept_id_2);
 
                 bool is_non_standard =
@@ -1058,18 +1058,18 @@ get_parents(std::vector<uint64_t>& raw_codes,
         entry.second.erase(invalid, std::end(entry.second));
     }
 
-    absl::flat_hash_map<uint64_t, uint32_t> index_map;
+    absl::flat_hash_map<int64_t, uint32_t> index_map;
 
-    std::deque<uint64_t> to_process;
+    std::deque<int64_t> to_process;
 
     uint32_t next_index = 0;
 
-    for (uint64_t code : raw_codes) {
+    for (int64_t code : raw_codes) {
         index_map[code] = next_index++;
         to_process.push_back(code);
     }
 
-    auto get_index = [&](uint64_t target_index) {
+    auto get_index = [&](int64_t target_index) {
         auto iter = index_map.find(target_index);
         if (iter == std::end(index_map)) {
             if (to_process.size() > std::numeric_limits<uint32_t>::max()) {
@@ -1107,8 +1107,8 @@ get_parents(std::vector<uint64_t>& raw_codes,
 }
 
 std::vector<std::pair<std::string, std::string>> get_concept_text(
-    const std::vector<uint64_t>& originals,
-    const absl::flat_hash_map<uint64_t, uint32_t>& index_map,
+    const std::vector<int64_t>& originals,
+    const absl::flat_hash_map<int64_t, uint32_t>& index_map,
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
     auto texts = process_nested(
@@ -1120,7 +1120,7 @@ std::vector<std::pair<std::string, std::string>> get_concept_text(
                 result;
 
             while (reader.next_row()) {
-                uint64_t concept_id;
+                int64_t concept_id;
                 attempt_parse_or_die(reader.get_row()[0], concept_id);
 
                 auto iter = index_map.find(concept_id);
@@ -1178,7 +1178,7 @@ const std::vector<uint32_t>& all_parents_helper(
     return *value;
 }
 
-Ontology create_ontology(std::vector<uint64_t> raw_codes,
+Ontology create_ontology(std::vector<int64_t> raw_codes,
                          const boost::filesystem::path& concept,
                          const boost::filesystem::path& target, char delimiter,
                          size_t num_threads) {
@@ -1235,7 +1235,7 @@ Ontology create_ontology(std::vector<uint64_t> raw_codes,
         DictionaryWriter concept_ids(target / "concept_id");
         for (size_t i = 0; i < raw_codes.size(); i++) {
             concept_ids.add_value(container_to_view(
-                absl::Span<const uint64_t>(raw_codes.data() + i, 1)));
+                absl::Span<const int64_t>(raw_codes.data() + i, 1)));
         }
     }
     return Ontology(target);
@@ -1269,12 +1269,12 @@ std::string_view Ontology::get_text_description(uint32_t code) {
 }
 
 boost::optional<uint32_t> Ontology::get_code_from_concept_id(
-    uint64_t concept_id) {
+    int64_t concept_id) {
     std::string_view target =
-        container_to_view(absl::Span<uint64_t>(&concept_id, 1));
+        container_to_view(absl::Span<int64_t>(&concept_id, 1));
     return concept_ids->find(target);
 }
 
-uint64_t Ontology::get_concept_id_from_code(uint32_t code) {
-    return read_span<uint64_t>(*concept_ids, code)[0];
+int64_t Ontology::get_concept_id_from_code(uint32_t code) {
+    return read_span<int64_t>(*concept_ids, code)[0];
 }

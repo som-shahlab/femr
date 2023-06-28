@@ -22,7 +22,7 @@ void create_ontology_helper(bool compressed) {
     boost::filesystem::path destination =
         root / boost::filesystem::unique_path();
 
-    std::vector<uint64_t> concepts_to_map = {32, 326};
+    std::vector<int64_t> concepts_to_map = {32, 326};
 
     create_ontology(concepts_to_map, concept_root, destination, ',', 3);
 

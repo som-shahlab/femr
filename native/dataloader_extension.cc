@@ -34,9 +34,9 @@ const bool SPARSE_FALLBACK = false;
 class Task {
    public:
     Task(json config, PatientDatabase& data) {
-        std::vector<uint64_t> patient_ids =
-            config.value("patient_ids", std::vector<uint64_t>());
-        for (uint64_t patient_id : patient_ids) {
+        std::vector<int64_t> patient_ids =
+            config.value("patient_ids", std::vector<int64_t>());
+        for (int64_t patient_id : patient_ids) {
             patient_offsets_from_file.push_back(
                 *data.get_patient_offset(patient_id));
         }
@@ -112,7 +112,7 @@ class LabeledPatientsTask : public Task {
 
         labeler_type = config["labeler_type"];
         for (json label : config["labels"]) {
-            uint64_t patient_id = label[0];
+            int64_t patient_id = label[0];
             boost::optional<uint32_t> possible_offset = data.get_patient_offset(patient_id);
             if (!possible_offset) {
                 throw std::runtime_error(absl::StrCat("Labeled patient ", patient_id, " could not be found in extract"));
@@ -772,7 +772,7 @@ class BatchCreator {
         age_std = config["transformer"]["dictionary"]["age_stats"]["std"];
 
         (void)data.get_patient_id(0);
-        patient_ids = Eigen::Tensor<uint64_t, 1>(1 << (max_size - min_size));
+        patient_ids = Eigen::Tensor<int64_t, 1>(1 << (max_size - min_size));
         offsets = Eigen::Tensor<uint32_t, 1>(1 << (max_size - min_size));
         if (lookup.is_hierarchical) {
             if (SPARSE_FALLBACK) {
@@ -1143,7 +1143,7 @@ class BatchCreator {
     SplitMix64 rng;
     double token_dropout;
 
-    Eigen::Tensor<uint64_t, 1> patient_ids;
+    Eigen::Tensor<int64_t, 1> patient_ids;
     Eigen::Tensor<uint32_t, 1> offsets;
 
     Eigen::Tensor<uint32_t, 1> tokens;

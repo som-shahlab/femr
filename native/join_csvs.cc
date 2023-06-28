@@ -18,6 +18,7 @@ constexpr int QUEUE_SIZE = 1000;
 union ColumnValue {
     std::string_view string;
     uint64_t integer;
+    int64_t signed_integer;
     absl::CivilSecond time;
 
     ColumnValue() {}
@@ -53,6 +54,14 @@ bool compare_rows_using_indices(
                 }
                 break;
 
+            case ColumnValueType::INT64_T:
+                if (val_a.signed_integer < val_b.signed_integer) {
+                    return true;
+                } else if (val_a.signed_integer > val_b.signed_integer) {
+                    return false;
+                }
+                break;
+
             case ColumnValueType::DATETIME:
                 if (val_a.time < val_b.time) {
                     return true;
@@ -81,6 +90,12 @@ void convert_to_column_values(
             case ColumnValueType::UINT64_T:
                 attempt_parse_or_die(val, column_val.integer);
                 break;
+
+
+            case ColumnValueType::INT64_T:
+                attempt_parse_or_die(val, column_val.signed_integer);
+                break;
+
 
             case ColumnValueType::DATETIME:
                 attempt_parse_time_or_die(val, column_val.time);

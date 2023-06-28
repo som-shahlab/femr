@@ -55,8 +55,8 @@ class Ontology {
 
     std::string_view get_text_description(uint32_t code);
 
-    boost::optional<uint32_t> get_code_from_concept_id(uint64_t concept_id);
-    uint64_t get_concept_id_from_code(uint32_t code);
+    boost::optional<uint32_t> get_code_from_concept_id(int64_t concept_id);
+    int64_t get_concept_id_from_code(uint32_t code);
 
    private:
     LazyDictionary main_dictionary;
@@ -145,9 +145,9 @@ class PatientDatabase {
         absl::Span<const uint32_t> text_values);
 
     // Map back to original patient ids
-    boost::optional<uint32_t> get_patient_offset(uint64_t patient_id);
-    uint64_t get_patient_id(uint32_t patient_offset);
-    absl::Span<const uint64_t> get_patient_ids();
+    boost::optional<uint32_t> get_patient_offset(int64_t patient_id);
+    int64_t get_patient_id(uint32_t patient_offset);
+    absl::Span<const int64_t> get_patient_ids();
 
     // Count information
     uint32_t get_code_count(uint32_t code);
@@ -213,7 +213,7 @@ void convert_patient_collection_to_patient_database(
     const boost::filesystem::path& concept,
     const boost::filesystem::path& target, char delimiter, size_t num_threads);
 
-Ontology create_ontology(std::vector<uint64_t> raw_codes,
+Ontology create_ontology(std::vector<int64_t> raw_codes,
                          const boost::filesystem::path& concept,
                          const boost::filesystem::path& target, char delimiter,
                          size_t num_threads);
