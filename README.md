@@ -1,14 +1,19 @@
 # FEMR
 ### Framework for Electronic Medical Records
 
-**FEMR** is a python package for building models using EHR data.
+**FEMR** is a Python package for manipulating and performing machine learning with EHR data, with a focus on supporting foundation models.
 
-**FEMR** offers the following four main types of functionality. In order, they are the ability to:
-1. Convert EHR and claims data into a common schema, where each patient is associated with a timeline of events extracted from the EHR
-2. Apply labeling functions on that schema in order to derive labels for each patient
-3. Apply featurization schemes to obtain feature matrices for each patient
-4. Perform other common tasks necessary for research with EHR data
+The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001.05295.pdf), [MOTOR](https://arxiv.org/abs/2301.03150) and LUMIA.
 
+**FEMR** helps users:
+1. [Manipulate patient data with a native Python interface](https://github.com/som-shahlab/femr/blob/main/tutorials/1_Overview.ipynb)
+2. [Algorithmically label patients](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Labeling.ipynb)
+3. [Generate tabular features for patients](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Count%20Featurization%20And%20Modeling.ipynb)
+4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models to solve binary tasks.
+5. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) MOTOR-derived models to solve time-to-event tasks.
+6. ??? for LUMIA
+
+We recommend users start with our [tutorial folder](https://github.com/som-shahlab/femr/tree/main/tutorials)
 # Installation
 
 There are two variants of the **FEMR** package, a CPU only version and a CUDA enabled version.
