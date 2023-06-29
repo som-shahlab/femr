@@ -1,17 +1,17 @@
 # FEMR
 ### Framework for Electronic Medical Records
 
-**FEMR** is a Python package for manipulating and performing machine learning with EHR data, with a focus on supporting foundation models.
+**FEMR** is a Python package for manipulating longitudinal EHR data for machine learning, with a focus on supporting the creation of foundation models and verifying their [presumed benefits](https://hai.stanford.edu/news/how-foundation-models-can-advance-ai-healthcare) in healthcare.
 
 The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001.05295.pdf), [MOTOR](https://arxiv.org/abs/2301.03150) and LUMIA.
 
 **FEMR** helps users:
-1. [Generically manipulate patient data with a native Python interface](https://github.com/som-shahlab/femr/blob/main/tutorials/1_Overview.ipynb)
-2. [Algorithmically label patients using both structured and unstructured data](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Labeling.ipynb)
-3. [Generate tabular features for patients for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Count%20Featurization%20And%20Modeling.ipynb)
-4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models to solve binary tasks.
-5. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) MOTOR-derived models to solve time-to-event tasks.
-6. ??? for LUMIA
+1. [Manipulate events in the EHR data comprising a patient's timeline](https://github.com/som-shahlab/femr/blob/main/tutorials/1_Overview.ipynb)
+2. [Algorithmically label patient records based on both structured and unstructured data](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Labeling.ipynb)
+3. [Generate tabular features from patient timelines for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Count%20Featurization%20And%20Modeling.ipynb)
+4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models for binary classification and prediction tasks.
+5. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) MOTOR-derived models making time-to-event predictions.
+6. Train LUMIA models, which will be released soon.
 
 We recommend users start with our [tutorial folder](https://github.com/som-shahlab/femr/tree/main/tutorials)
 # Installation
