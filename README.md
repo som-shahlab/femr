@@ -1,7 +1,7 @@
 # FEMR
 ### Framework for Electronic Medical Records
 
-**FEMR** is a Python package for manipulating longitudinal EHR data for machine learning, with a focus on supporting the creation of foundation models and verifying their [presumed benefits](https://hai.stanford.edu/news/how-foundation-models-can-advance-ai-healthcare) in healthcare.
+**FEMR** is a Python package for manipulating longitudinal EHR data for machine learning, with a focus on supporting the creation of foundation models and verifying their [presumed benefits](https://hai.stanford.edu/news/how-foundation-models-can-advance-ai-healthcare) in healthcare. We believe such a framework is needed give the [current state of large language models in healthcare](https://hai.stanford.edu/news/shaky-foundations-foundation-models-healthcare) and the need for better evaluation frameworks.
 
 The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001.05295.pdf), [MOTOR](https://arxiv.org/abs/2301.03150) and LUMIA.
 
