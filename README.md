@@ -1,13 +1,18 @@
 # FEMR
 ### Framework for Electronic Medical Records
 
-**FEMR** is a python package for building models using EHR data.
+**FEMR** is a Python package for manipulating longitudinal EHR data for machine learning, with a focus on supporting the creation of foundation models and verifying their [presumed benefits](https://hai.stanford.edu/news/how-foundation-models-can-advance-ai-healthcare) in healthcare. Such a framework is needed given the [current state of large language models in healthcare](https://hai.stanford.edu/news/shaky-foundations-foundation-models-healthcare) and the need for better evaluation frameworks.
 
-**FEMR** offers the following four main types of functionality. In order, they are the ability to:
-1. Convert EHR and claims data into a common schema, where each patient is associated with a timeline of events extracted from the EHR
-2. Apply labeling functions on that schema in order to derive labels for each patient
-3. Apply featurization schemes to obtain feature matrices for each patient
-4. Perform other common tasks necessary for research with EHR data
+The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001.05295.pdf) and [MOTOR](https://arxiv.org/abs/2301.03150).
+
+**FEMR** helps users:
+1. [Manipulate events in the EHR data comprising a patient's timeline](https://github.com/som-shahlab/femr/blob/main/tutorials/1_Overview.ipynb)
+2. [Algorithmically label patient records based on both structured and unstructured data](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Labeling.ipynb)
+3. [Generate tabular features from patient timelines for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Count%20Featurization%20And%20Modeling.ipynb)
+4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models for binary classification and prediction tasks.
+5. Train and finetune MOTOR-derived models for making time-to-event predictions.
+
+We recommend users start with our [tutorial folder](https://github.com/som-shahlab/femr/tree/main/tutorials)
 
 # Installation
 
