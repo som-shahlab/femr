@@ -2,6 +2,8 @@
 A handy tool for adding a visit_detail_concept_id to the visit_detail table.
 
 This makes visit_detail a "standard concept" table, which means it can be processed like many other OMOP tables.
+
+TODO: Deprecate this transformation because it violates OMOP assumptions in confusing ways.
 """
 
 import argparse
@@ -41,9 +43,9 @@ def get_care_site_concepts(root: str, child: str) -> Mapping[str, Tuple[str, Opt
 def convert_row(row: Mapping[str, str], care_site_concepts: Mapping[str, str]) -> Mapping[str, str]:
     result = dict(**row)
     if row["care_site_id"] == "":
-        result["femr_visit_detail_concept_id"] = "0"
+        result["visit_detail_concept_id"] = "0"
     else:
-        result["femr_visit_detail_concept_id"] = care_site_concepts[row["care_site_id"]]
+        result["visit_detail_concept_id"] = care_site_concepts[row["care_site_id"]]
     return result
 
 
@@ -55,7 +57,7 @@ def correct_rows(root: str, target: str, care_site_concepts: Mapping[str, str], 
         with io.TextIOWrapper(zstandard.ZstdCompressor(1).stream_writer(open(out_path, "wb"))) as o:
             reader = csv.DictReader(f)
             assert reader.fieldnames is not None
-            writer = csv.DictWriter(o, list(reader.fieldnames) + ["femr_visit_detail_concept_id"])
+            writer = csv.DictWriter(o, list(reader.fieldnames))
             writer.writeheader()
             for row in reader:
                 new_row = convert_row(row, care_site_concepts)
