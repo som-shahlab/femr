@@ -127,12 +127,12 @@ def train_model() -> None:
     elif task["type"] == "labeled_patients":
         task["labeler_type"] = batch_task["labeler_type"]
         if task["labeler_type"] == "survival":
-            assert args.start_from_checkpoint is not None	
-            with open(os.path.join(args.start_from_checkpoint, "config.msgpack"), "rb") as f:	
-                config = msgpack.load(f)	
-                assert config["task"] == "survival_clmbr"	
-                task["time_bins"] = config["task"]["time_bins"]	
-                task["dim"] = config["task"]["dim"]	
+            assert args.start_from_checkpoint is not None
+            with open(os.path.join(args.start_from_checkpoint, "config.msgpack"), "rb") as f:
+                config = msgpack.load(f)
+                assert config["task"] == "survival_clmbr"
+                task["time_bins"] = config["task"]["time_bins"]
+                task["dim"] = config["task"]["dim"]
                 del config
     else:
         rootLogger.error("Invalid task? " + batch_task["task"])
@@ -219,24 +219,24 @@ def train_model() -> None:
     elif task["type"] == "clmbr":
         pass
     elif task["type"] == "labeled_patients":
-        if args.linear_probe is not None:	
-            with open(args.linear_probe, "rb") as f:	
-                linear_probe = pickle.load(f)	
-            if task["labeler_type"] == "survival":	
-                assert False	
-            elif task["labeler_type"] == "boolean":	
-                print(linear_probe.shape)	
-                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "b", linear_probe[-1:])	
-                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "w", linear_probe[:-1])	
-            else:	
-                assert False, task["labeler_type"]	
-        else:	
-            if task["labeler_type"] == "survival":	
-                replace(	
-                    params,	
-                    "EHRTransformer/~/SurvivalTask",	
-                    "code_weight_bias",	
-                    jnp.log2(jnp.array(batch_task["lambda"])),	
+        if args.linear_probe is not None:
+            with open(args.linear_probe, "rb") as f:
+                linear_probe = pickle.load(f)
+            if task["labeler_type"] == "survival":
+                assert False
+            elif task["labeler_type"] == "boolean":
+                print(linear_probe.shape)
+                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "b", linear_probe[-1:])
+                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "w", linear_probe[:-1])
+            else:
+                assert False, task["labeler_type"]
+        else:
+            if task["labeler_type"] == "survival":
+                replace(
+                    params,
+                    "EHRTransformer/~/SurvivalTask",
+                    "code_weight_bias",
+                    jnp.log2(jnp.array(batch_task["lambda"])),
                 )
     else:
         rootLogger.error("Invalid task for postprocess?")
@@ -334,7 +334,7 @@ def train_model() -> None:
         num_to_get = min(500, loader_to_eval.get_number_of_batches(split_to_eval))
         total_loss = 0
         total_indices = 0
-        total_loss2 = 0	
+        total_loss2 = 0
         total_indices2 = 0
 
         logits = []
@@ -358,7 +358,7 @@ def train_model() -> None:
             )
             total_loss += loss * batch["num_indices"]
             total_indices += batch["num_indices"]
-            total_loss2 += loss	
+            total_loss2 += loss
             total_indices2 += 1
             if config["task"]["type"] == "labeled_patients":
                 if config["task"]["labeler_type"] == "survival":
@@ -471,7 +471,7 @@ def train_model() -> None:
 
     logging.info("Applying decay mask %s", mask_fn(params))
 
-    warmup = 1_000 / total_steps	
+    warmup = 1_000 / total_steps
     lr_schedule = make_lr_schedule(warmup_percentage=warmup, total_steps=total_steps)
 
     weight_decay = args.weight_decay
@@ -669,28 +669,28 @@ def compute_representations() -> None:
                 label_age = raw_batch["task"]["label_ages"][i]
 
                 offset = raw_batch["offsets"][p_index[i]]
-                results.append((label_pid, label_age, offset, r))	
-    
-    results.sort(key=lambda a: a[:3])	
-    
-    label_times = []	
-    data_matrix = []	
-    label_pids = []	
+                results.append((label_pid, label_age, offset, r))
+
+    results.sort(key=lambda a: a[:3])
+
+    label_times = []
+    data_matrix = []
+    label_pids = []
     label_ages = []
 
-    last_label_idx = None	
-    for pid, age, offset, r in results:	
-        # Ignore duplicate	
-        if (pid, age) == last_label_idx:	
-            continue	
+    last_label_idx = None
+    for pid, age, offset, r in results:
+        # Ignore duplicate
+        if (pid, age) == last_label_idx:
+            continue
         last_label_idx = (pid, age)
 
-    birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)	
+    birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
     label_time = birth_date + datetime.timedelta(minutes=int(age))
-    
-    label_times.append(label_time)	
-    data_matrix.append(r)	
-    label_pids.append(pid)	
+
+    label_times.append(label_time)
+    data_matrix.append(r)
+    label_pids.append(pid)
     label_ages.append(age)
 
     result = {
