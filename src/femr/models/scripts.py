@@ -1,4 +1,5 @@
 import argparse
+import collections
 import datetime
 import functools
 import json
@@ -6,7 +7,7 @@ import logging
 import os
 import pickle
 import random
-from typing import TypeVar
+from typing import Any, List, Tuple, TypeVar
 
 import haiku as hk
 import jax
@@ -49,7 +50,7 @@ def create_survival_dictionary() -> None:
 
 def train_model() -> None:
     os.environ["JAX_NUMPY_RANK_PROMOTION"] = "raise"
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.98"
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.9"
 
     parser = argparse.ArgumentParser(prog="Train")
     parser.add_argument("directory", type=str)
@@ -77,7 +78,6 @@ def train_model() -> None:
         help="Do early stopping with a different set of batches instead of the development set",
     )
     parser.add_argument("--linear_probe", type=str, required=False)
-
     parser.add_argument(
         "--early_stopping_window_steps",
         type=int,
@@ -122,21 +122,17 @@ def train_model() -> None:
         task["num_codes"] = len(batch_task["survival_dict"]["codes"])
         task["dim"] = args.clmbr_survival_dim
         task["time_bins"] = batch_task["survival_dict"]["time_bins"]
-
     elif task["type"] == "clmbr":
         task["vocab_size"] = batch_task["vocab_size"]
     elif task["type"] == "labeled_patients":
         task["labeler_type"] = batch_task["labeler_type"]
         if task["labeler_type"] == "survival":
-            assert args.start_from_checkpoint is not None
-
-            with open(os.path.join(args.start_from_checkpoint, "config.msgpack"), "rb") as f:
-                config = msgpack.load(f)
-                assert config["task"] == "survival_clmbr"
-
-                task["time_bins"] = config["task"]["time_bins"]
-                task["dim"] = config["task"]["dim"]
-
+            assert args.start_from_checkpoint is not None	
+            with open(os.path.join(args.start_from_checkpoint, "config.msgpack"), "rb") as f:	
+                config = msgpack.load(f)	
+                assert config["task"] == "survival_clmbr"	
+                task["time_bins"] = config["task"]["time_bins"]	
+                task["dim"] = config["task"]["dim"]	
                 del config
     else:
         rootLogger.error("Invalid task? " + batch_task["task"])
@@ -148,21 +144,20 @@ def train_model() -> None:
         "seed": batch_config["seed"],
         "task": task,
         "transformer": {
-            "vocab_size": batch_config["transformer"]["vocab_size"],
-            "hidden_size": args.hidden_size,
-            "intermediate_size": args.intermediate_size,
-            "n_heads": args.n_heads,
-            "n_layers": args.n_layers,
+            "vocab_size": int(batch_config["transformer"]["vocab_size"]),
+            "hidden_size": int(args.hidden_size),
+            "intermediate_size": int(args.intermediate_size),
+            "n_heads": int(args.n_heads),
+            "n_layers": int(args.n_layers),
             "rotary": args.rotary_type,
-            "attention_width": args.attention_width - 16,  # 16 is the width of the tiling
-            "internal_dropout": args.internal_dropout,
+            "attention_width": int(args.attention_width) - 16,  # 16 is the width of the tiling
+            "internal_dropout": int(args.internal_dropout),
             "is_hierarchical": batch_config["transformer"]["is_hierarchical"],
             "note_embedding_data": batch_config["transformer"].get("note_embedding_data"),
-            "with_age_beta": args.with_age_beta,
         },
-        "learning_rate": args.learning_rate,
+        "learning_rate": float(args.learning_rate),
         "max_grad_norm": 1.0,
-        "weight_decay": args.weight_decay,
+        "weight_decay": float(args.weight_decay),
         "n_epochs": 100,
     }
     del batch_config
@@ -224,28 +219,25 @@ def train_model() -> None:
     elif task["type"] == "clmbr":
         pass
     elif task["type"] == "labeled_patients":
-        if args.linear_probe is not None:
-            with open(args.linear_probe, "rb") as f:
-                linear_probe = pickle.load(f)
-
-            if task["labeler_type"] == "survival":
-                assert False
-            elif task["labeler_type"] == "boolean":
-                print(linear_probe.shape)
-                # print(params["EHRTransformer/~/BooleanClassifier/~/linear"])
-                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "b", linear_probe[-1:])
-                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "w", linear_probe[:-1])
-            else:
-                assert False, task["labeler_type"]
-        else:
-            if task["labeler_type"] == "survival":
-                replace(
-                    params,
-                    "EHRTransformer/~/SurvivalTask",
-                    "code_weight_bias",
-                    jnp.log2(jnp.array(batch_task["lambda"])),
+        if args.linear_probe is not None:	
+            with open(args.linear_probe, "rb") as f:	
+                linear_probe = pickle.load(f)	
+            if task["labeler_type"] == "survival":	
+                assert False	
+            elif task["labeler_type"] == "boolean":	
+                print(linear_probe.shape)	
+                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "b", linear_probe[-1:])	
+                replace(params, "EHRTransformer/~/BooleanClassifier/~/linear", "w", linear_probe[:-1])	
+            else:	
+                assert False, task["labeler_type"]	
+        else:	
+            if task["labeler_type"] == "survival":	
+                replace(	
+                    params,	
+                    "EHRTransformer/~/SurvivalTask",	
+                    "code_weight_bias",	
+                    jnp.log2(jnp.array(batch_task["lambda"])),	
                 )
-
     else:
         rootLogger.error("Invalid task for postprocess?")
         exit()
@@ -342,7 +334,7 @@ def train_model() -> None:
         num_to_get = min(500, loader_to_eval.get_number_of_batches(split_to_eval))
         total_loss = 0
         total_indices = 0
-        total_loss2 = 0
+        total_loss2 = 0	
         total_indices2 = 0
 
         logits = []
@@ -366,7 +358,7 @@ def train_model() -> None:
             )
             total_loss += loss * batch["num_indices"]
             total_indices += batch["num_indices"]
-            total_loss2 += loss
+            total_loss2 += loss	
             total_indices2 += 1
             if config["task"]["type"] == "labeled_patients":
                 if config["task"]["labeler_type"] == "survival":
@@ -479,9 +471,9 @@ def train_model() -> None:
 
     logging.info("Applying decay mask %s", mask_fn(params))
 
-    warmup = 1_000 / total_steps
-
+    warmup = 1_000 / total_steps	
     lr_schedule = make_lr_schedule(warmup_percentage=warmup, total_steps=total_steps)
+
     weight_decay = args.weight_decay
     logging.info("Using weight decay %s", weight_decay)
     opt = optax.chain(
@@ -623,6 +615,14 @@ def compute_representations() -> None:
     config = hk.data_structures.to_immutable_dict(config)
     batch_info_path = os.path.join(args.batches_path, "batch_info.msgpack")
 
+    with open(batch_info_path, "rb") as f:
+        batch_info = msgpack.load(f, use_list=False)
+
+    patient_labels = collections.defaultdict(list)
+
+    for pid, age, label in batch_info["config"]["task"]["labels"]:
+        patient_labels[pid].append((age, label))
+
     loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
 
     def model_fn(config, batch):
@@ -669,30 +669,29 @@ def compute_representations() -> None:
                 label_age = raw_batch["task"]["label_ages"][i]
 
                 offset = raw_batch["offsets"][p_index[i]]
-                results.append((label_pid, label_age, offset, r))
-
-    results.sort(key=lambda a: a[:3])
-
-    label_times = []
-
-    data_matrix = []
-    label_pids = []
+                results.append((label_pid, label_age, offset, r))	
+    
+    results.sort(key=lambda a: a[:3])	
+    
+    label_times = []	
+    data_matrix = []	
+    label_pids = []	
     label_ages = []
 
-    last_label_idx = None
-
-    for pid, age, offset, r in results:
-        # Ignore duplicate
-        if (pid, age) == last_label_idx:
-            continue
+    last_label_idx = None	
+    for pid, age, offset, r in results:	
+        # Ignore duplicate	
+        if (pid, age) == last_label_idx:	
+            continue	
         last_label_idx = (pid, age)
 
-        birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
-        label_time = birth_date + datetime.timedelta(minutes=int(age))
-        label_times.append(label_time)
-        data_matrix.append(r)
-        label_pids.append(pid)
-        label_ages.append(age)
+    birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)	
+    label_time = birth_date + datetime.timedelta(minutes=int(age))
+    
+    label_times.append(label_time)	
+    data_matrix.append(r)	
+    label_pids.append(pid)	
+    label_ages.append(age)
 
     result = {
         "data_path": args.data_path,

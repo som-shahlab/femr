@@ -178,7 +178,7 @@ def create_batches() -> None:
     parser.add_argument("--seed", default=97, type=int, help="The random seed used for data splitting")
     parser.add_argument(
         "--val_start",
-        default=80,
+        default=70,
         type=int,
         help="The start of the validation split (and thus end of the train split)",
     )
@@ -250,12 +250,8 @@ def create_batches() -> None:
 
             for label in labels:
                 age = (label.time - birth_date) / datetime.timedelta(minutes=1)
-                assert int(age) == age, f"Age must be in minutes {age}"
                 value: Any
-                if labeled_patients.labeler_type == "boolean":
-                    assert isinstance(label.value, bool)
-                    value = label.value
-                elif labeled_patients.labeler_type == "survival":
+                if labeled_patients.labeler_type == "survival":
                     assert isinstance(label.value, femr.labelers.SurvivalValue)
                     event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
@@ -270,8 +266,9 @@ def create_batches() -> None:
                         "event_time": event_offset + age,
                         "is_censored": label.value.is_censored,
                     }
-                result_labels.append((int(pid), int(age), value))
-
+                else:
+                    value = label.value
+                result_labels.append((int(pid), age, value))
         task = {
             "type": "labeled_patients",
             "labeler_type": labeled_patients.labeler_type,
@@ -346,8 +343,6 @@ def create_batches() -> None:
         args.data_path,
         config_path,
     )
-
-    os.remove(config_path)
 
     rootLogger.info("Loaded")
 
