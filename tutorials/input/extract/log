@@ -1,4 +1,4 @@
-2023-05-30 15:07:09,260 [MainThread  ] [INFO ]  Extracting from OMOP with arguments Namespace(simple_source='input/simple_femr', target_location='/local-scratch/nigam/projects/ethanid/femr_develop2/tutorials/trash/tutorial_2b/extract', temp_location='/local-scratch/nigam/projects/ethanid/femr_develop2/tutorials/trash/tutorial_2b/logs', num_threads=2, athena_download=None)
-2023-05-30 15:07:09,261 [MainThread  ] [INFO ]  Converting to events
-2023-05-30 15:07:09,407 [MainThread  ] [INFO ]  Converting to patients
-2023-05-30 15:07:09,576 [MainThread  ] [INFO ]  Converting to extract
+2023-07-08 12:32:19,506 [MainThread  ] [INFO ]  Extracting from OMOP with arguments Namespace(simple_source='input/simple_femr', target_location='/home/ethan/femr/tutorials/trash/tutorial_2b/extract', temp_location='/home/ethan/femr/tutorials/trash/tutorial_2b/logs', num_threads=2, athena_download=None)
+2023-07-08 12:32:19,506 [MainThread  ] [INFO ]  Converting to events
+2023-07-08 12:32:19,597 [MainThread  ] [INFO ]  Converting to patients
+2023-07-08 12:32:19,624 [MainThread  ] [INFO ]  Converting to extract
