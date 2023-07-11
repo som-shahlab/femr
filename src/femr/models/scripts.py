@@ -667,31 +667,35 @@ def compute_representations() -> None:
 
                 label_pid = raw_batch["patient_ids"][p_index[i]]
                 label_age = raw_batch["task"]["label_ages"][i]
+                label_value = raw_batch["task"]["labels"][i]
 
                 offset = raw_batch["offsets"][p_index[i]]
-                results.append((label_pid, label_age, offset, r))	
-    
-    results.sort(key=lambda a: a[:3])	
-    
-    label_times = []	
-    data_matrix = []	
-    label_pids = []	
-    label_ages = []
+                results.append((label_pid, label_age, offset, r, label_value))
 
-    last_label_idx = None	
-    for pid, age, offset, r in results:	
-        # Ignore duplicate	
-        if (pid, age) == last_label_idx:	
-            continue	
+    results.sort(key=lambda a: a[:3])
+
+    label_times = []
+
+    data_matrix = []
+    label_pids = []
+    label_ages = []
+    label_values = []
+
+    last_label_idx = None
+
+    for pid, age, offset, r, label_value in results:
+        # Ignore duplicate
+        if (pid, age) == last_label_idx:
+            continue
         last_label_idx = (pid, age)
 
-    birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)	
-    label_time = birth_date + datetime.timedelta(minutes=int(age))
-    
-    label_times.append(label_time)	
-    data_matrix.append(r)	
-    label_pids.append(pid)	
-    label_ages.append(age)
+        birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
+        label_time = birth_date + datetime.timedelta(minutes=int(age))
+        label_times.append(label_time)
+        data_matrix.append(r)
+        label_pids.append(pid)
+        label_ages.append(age)
+        label_values.append(label_value)
 
     result = {
         "data_path": args.data_path,
@@ -699,6 +703,7 @@ def compute_representations() -> None:
         "data_matrix": np.stack(data_matrix),
         "patient_ids": np.array(label_pids),
         "labeling_time": np.array(label_times),
+        "label_values": np.array(label_values),
     }
 
     with open(args.destination, "wb") as wf:
