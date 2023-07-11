@@ -7,6 +7,13 @@ import sys
 from typing import List
 
 from femr.labelers import TimeHorizon
+from femr.labelers.omop import (
+    CodeLabeler,
+    LupusCodeLabeler,
+    MortalityCodeLabeler,
+    OMOPConceptCodeLabeler,
+    get_death_concepts,
+)
 from femr.labelers.omop_lab_values import (
     AKICodeLabeler,
     AnemiaCodeLabeler,
@@ -15,13 +22,6 @@ from femr.labelers.omop_lab_values import (
     HyponatremiaCodeLabeler,
     NeutropeniaCodeLabeler,
     ThrombocytopeniaCodeLabeler,
-)
-from femr.labelers.omop import (
-    CodeLabeler,
-    LupusCodeLabeler,
-    MortalityCodeLabeler,
-    OMOPConceptCodeLabeler,
-    get_death_concepts,
 )
 
 # Needed to import `tools` for local testing
