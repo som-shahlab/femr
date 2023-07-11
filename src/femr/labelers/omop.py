@@ -4,7 +4,6 @@ from __future__ import annotations
 import collections
 import datetime
 import multiprocessing
-import warnings
 from abc import abstractmethod
 from collections import deque
 from datetime import timedelta
@@ -13,10 +12,10 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from .. import Event, Patient
-from ..datasets import PatientDatabase
-from ..extension import datasets as extension_datasets
-from .core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
+from femr import Event, Patient
+from femr.datasets import PatientDatabase
+from femr.extension import datasets as extension_datasets
+from femr.labelers.core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
 CHEXPERT_LABELS = [
     "No Finding",
@@ -116,7 +115,8 @@ def get_femr_codes(
     """Does ontology expansion on the given OMOP concept codes if `is_ontology_expansion` is True,
         otherwise just returns the codes as given.
 
-    If `is_silent_not_found_error` is True, then this function will NOT raise an error if a given OMOP concept ID is not found in the ontology.
+    If `is_silent_not_found_error` is True, then this function will NOT raise an error
+        if a given OMOP concept ID is not found in the ontology.
     """
     if not isinstance(omop_concept_codes, list):
         # Make sure a list is passed in
@@ -133,24 +133,24 @@ def get_femr_codes(
     return codes
 
 
-def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
+def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
     return get_femr_codes(ontology, get_visit_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True)
 
 
-def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[int]:
+def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[str]:
     return get_femr_codes(
         ontology, get_icu_visit_detail_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
     )
 
 
-def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[int]:
+def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[str]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
     return get_femr_codes(
         ontology, get_inpatient_admission_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
     )
 
 
-def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
+def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
     return get_femr_codes(
         ontology, get_outpatient_visit_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
     )
@@ -160,12 +160,14 @@ def get_icu_events(
     patient: Patient, ontology: extension_datasets.Ontology, is_return_idx: bool = False
 ) -> Union[List[Event], List[Tuple[int, Event]]]:
     """Return all ICU events for this patient.
-    If `is_return_idx` is True, then return a list of tuples (event, idx) where `idx` is the index of the event in `patient.events`.
+    If `is_return_idx` is True, then return a list of tuples (event, idx) where `idx`
+        is the index of the event in `patient.events`.
     """
-    icu_visit_detail_codes: Set[int] = get_icu_visit_detail_codes(ontology)
-    events: Union[List[Event], List[Tuple[int, Event]]] = []
+    icu_visit_detail_codes: Set[str] = get_icu_visit_detail_codes(ontology)
+    events: Union[List[Event], List[Tuple[int, Event]]] = []  # type: ignore
     for idx, e in enumerate(patient.events):
-        # `visit_detail` is more accurate + comprehensive than `visit_occurrence` for ICU events for STARR OMOP for some reason
+        # `visit_detail` is more accurate + comprehensive than `visit_occurrence` for
+        #   ICU events for STARR OMOP for some reason
         if e.code in icu_visit_detail_codes and e.omop_table == "visit_detail":
             # Error checking
             if e.start is None or e.end is None:
@@ -180,12 +182,12 @@ def get_icu_events(
             if is_return_idx:
                 events.append((idx, e))  # type: ignore
             else:
-                events.append(e)
+                events.append(e)  # type: ignore
     return events
 
 
 def get_outpatient_visit_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
-    admission_codes: Set[int] = get_outpatient_visit_codes(ontology)
+    admission_codes: Set[str] = get_outpatient_visit_codes(ontology)
     events: List[Event] = []
     for e in patient.events:
         if e.code in admission_codes and e.omop_table == "visit_occurrence":
@@ -244,7 +246,7 @@ def _get_all_children(ontology: extension_datasets.Ontology, code: str) -> Set[s
             for temp_child_code in ontology.get_children(temp_parent_code):
                 children_code_set.add(temp_child_code)
                 parent_deque.append(temp_child_code)
-        except:
+        except:  # noqa
             # The `temp_parent_code` was not found in the ontology, so skip
             pass
     return children_code_set
@@ -277,8 +279,12 @@ class WithinVisitLabeler(Labeler):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         self.ontology: extension_datasets.Ontology = ontology
-        self.visit_start_adjust_func: Callable = visit_start_adjust_func if visit_start_adjust_func else identity
-        self.visit_end_adjust_func: Callable = visit_end_adjust_func if visit_end_adjust_func else identity
+        self.visit_start_adjust_func: Callable = (
+            visit_start_adjust_func if visit_start_adjust_func is not None else identity  # type: ignore
+        )
+        self.visit_end_adjust_func: Callable = (
+            visit_end_adjust_func if visit_end_adjust_func is not None else identity  # type: ignore
+        )
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -407,7 +413,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = (
-            prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+            prediction_time_adjustment_func if prediction_time_adjustment_func is not None else identity  # type: ignore
         )
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -455,7 +461,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         prediction_codes: Optional[List[str]] = None,
         prediction_time_adjustment_func: Optional[Callable] = None,
     ):
-        outcome_codes: List[int] = list(
+        outcome_codes: List[str] = list(
             get_femr_codes(
                 ontology,
                 self.original_omop_concept_codes,
@@ -672,7 +678,7 @@ class ChexpertLabeler(Labeler):
     def get_labeler_type(self) -> LabelType:
         return "categorical"
 
-    def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:
+    def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:  # type: ignore
         labels: List[Label] = []
 
         patient_df = patient_df.sort_values(by=["start"], ascending=True)
@@ -693,7 +699,7 @@ class ChexpertLabeler(Labeler):
 
         return labels
 
-    def apply(
+    def apply(  # type: ignore
         self,
         path_to_patient_database: str,
         num_threads: int = 1,

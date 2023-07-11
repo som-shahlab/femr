@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 import warnings
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from femr import Event, Patient
 from femr.extension import datasets as extension_datasets
@@ -20,6 +20,11 @@ from femr.labelers.omop import (
 )
 from femr.labelers.omop_inpatient_admissions import get_inpatient_admission_discharge_times
 from femr.labelers.omop_lab_values import InstantLabValueLabeler
+
+
+def identity(x: Any) -> Any:
+    return x
+
 
 ##########################################################
 ##########################################################
@@ -114,7 +119,8 @@ class Guo_30DayReadmissionLabeler(TimeHorizonEventLabeler):
 class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
     """ICU admission prediction task from Guo et al. 2023.
 
-    Binary prediction task @ 11:59PM on the day of admission whether the patient will be admitted to the ICU during their admission.
+    Binary prediction task @ 11:59PM on the day of admission
+    whether the patient will be admitted to the ICU during their admission.
 
     Excludes:
         - Patients transfered on same day as admission
@@ -201,10 +207,14 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
         return False
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of every hour after every ICU visit, up until death occurs or end of visit.
-        Note that this requires creating an artificial event for each hour since there will only be one true
-        event per ICU admission, but we'll need to create many subevents (at each hour) within this event.
-        Also note that these events may not align with :00 minutes if the ICU visit does not start exactly "on the hour".
+        """Return a list of every hour after every ICU visit,
+            up until death occurs or end of visit.
+        Note that this requires creating an artificial event for
+            each hour since there will only be one true
+            event per ICU admission, but we'll need to create many
+            subevents (at each hour) within this event.
+        Also note that these events may not align with :00 minutes
+            if the ICU visit does not start exactly "on the hour".
 
         Excludes:
             - ICU admissions with no length-of-stay (i.e. `event.end is None` )
@@ -248,10 +258,10 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
         self,
         ontology: extension_datasets.Ontology,
     ):
-        visit_start_adjust_func = lambda x: x + datetime.timedelta(
+        visit_start_adjust_func = lambda x: x + datetime.timedelta(  # noqa
             hours=48
         )  # Make prediction 48 hours into ICU admission
-        visit_end_adjust_func = lambda x: x
+        visit_end_adjust_func = identity
         super().__init__(ontology, visit_start_adjust_func, visit_end_adjust_func)
 
     def is_apply_censoring(self) -> bool:
@@ -318,14 +328,18 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
         return times
 
     def get_labeler_type(self) -> LabelType:
-        return "numerical"
+        return "numeric"
 
     def label(self, patient: Patient) -> List[Label]:
-        """Return a list of Labels at every hour after every ICU visit, where each Label is the # of hours
-        until the visit ends (or a death event occurs).
-        Note that this requires creating an artificial event for each hour since there will only be one true
-        event per ICU admission, but we'll need to create many subevents (at each hour) within this event.
-        Also note that these events may not align with :00 minutes if the ICU visit does not start exactly "on the hour".
+        """Return a list of Labels at every hour after every ICU visit,
+            where each Label is the # of hours
+            until the visit ends (or a death event occurs).
+        Note that this requires creating an artificial event for each
+            hour since there will only be one true
+        event per ICU admission, but we'll need to create many subevents
+            (at each hour) within this event.
+        Also note that these events may not align with :00 minutes if
+            the ICU visit does not start exactly "on the hour".
 
         Excludes:
             - ICU admissions with no length-of-stay (i.e. `event.end is None` )
@@ -343,18 +357,23 @@ class Harutyunyan_LengthOfStayLabeler(Labeler):
                 and e.end - e.start >= datetime.timedelta(hours=4)
                 and does_exist_event_within_time_range(patient, e.start, e.end, exclude_event_idxs=icu_event_idxs)
             ):
-                # Record every hour after admission (i.e. every hour between `e.start` and `e.end`),
-                # but only after 4 hours have passed (i.e. start at `e.start + 4 hours`)
-                # and only until the visit ends (`e.end`) or a death event occurs (`earliest_death_time`)
+                # Record every hour after admission (i.e. every hour between
+                #   `e.start` and `e.end`),
+                # but only after 4 hours have passed (i.e. start at
+                #   `e.start + 4 hours`)
+                # and only until the visit ends (`e.end`) or a death event
+                #   occurs (`earliest_death_time`)
                 end_of_stay: datetime.datetime = min(e.end, earliest_death_time)
                 event_time = e.start + datetime.timedelta(hours=4)
                 while event_time < end_of_stay:
                     los: float = (end_of_stay - event_time).total_seconds() / 3600
                     labels.append(Label(event_time, los))
                     event_time += datetime.timedelta(hours=1)
-                    assert (
-                        los >= 0
-                    ), f"LOS should never be negative, but end_of_stay={end_of_stay} - event_time={event_time} = {end_of_stay - event_time} for patient {patient.patient_id}"
+                    assert los >= 0, (
+                        f"LOS should never be negative, but end_of_stay={end_of_stay}"
+                        f" - event_time={event_time} = {end_of_stay - event_time} for"
+                        f" patient {patient.patient_id}"
+                    )
         return labels
 
 
@@ -548,7 +567,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
         - Patients who have already had this diagnosis
     """
 
-    root_concept_code = None  # OMOP concept code for outcome, e.g. "SNOMED/57054005"
+    root_concept_code: Optional[str] = None  # OMOP concept code for outcome, e.g. "SNOMED/57054005"
 
     def __init__(
         self,
@@ -622,9 +641,12 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
         last_time = None
         for time_idx, time in enumerate(prediction_times):
             if last_time is not None:
-                assert (
-                    time > last_time
-                ), f"Must be ascending prediction times, instead got last_prediction_time={last_time} <= prediction_time={time} for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx} | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
+                assert time > last_time, (
+                    f"Must be ascending prediction times, instead got"
+                    f" last_prediction_time={last_time} <= prediction_time={time}"
+                    f" for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx}"
+                    f" | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
+                )
 
             last_time = time
 

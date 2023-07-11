@@ -129,6 +129,7 @@ Before committing, please run the following commands to ensure that your code is
 ```bash
 conda install pre-commit pytest -y
 pre-commit install
+pre-commit run --all-files
 ```
 
 ### Running

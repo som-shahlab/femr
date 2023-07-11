@@ -581,9 +581,12 @@ class TimeHorizonEventLabeler(Labeler):
 
         for time_idx, time in enumerate(prediction_times):
             if last_time is not None:
-                assert (
-                    time > last_time
-                ), f"Must be ascending prediction times, instead got last_prediction_time={last_time} <= prediction_time={time} for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx} | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
+                assert time > last_time, (
+                    f"Must be ascending prediction times, instead got"
+                    f" last_prediction_time={last_time} <= prediction_time={time}"
+                    f" for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx}"
+                    f" | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
+                )
 
             last_time = time
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:

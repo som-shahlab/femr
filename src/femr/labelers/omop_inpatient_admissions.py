@@ -145,8 +145,8 @@ class InpatientLongAdmissionLabeler(Labeler):
     ):
         self.ontology: extension_datasets.Ontology = ontology
         self.long_time: datetime.timedelta = long_time
-        self.prediction_time_adjustment_func = (
-            prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+        self.prediction_time_adjustment_func: Callable = (
+            prediction_time_adjustment_func if prediction_time_adjustment_func is not None else identity  # type: ignore
         )
 
     def label(self, patient: Patient) -> List[Label]:

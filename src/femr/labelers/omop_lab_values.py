@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 from abc import abstractmethod
-from typing import Any, List, Optional, Set
+from typing import List, Optional, Set
 
 from femr import Patient
 from femr.extension import datasets as extension_datasets

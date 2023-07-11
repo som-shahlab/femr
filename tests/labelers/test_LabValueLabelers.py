@@ -10,27 +10,18 @@ import pytest
 
 import femr.datasets
 from femr.labelers import TimeHorizon
-from femr.labelers.omop import move_datetime_to_end_of_day
-from femr.labelers.omop_lab_values import (
-    AnemiaLabValueLabeler,
-    HyperkalemiaLabValueLabeler,
-    HypoglycemiaLabValueLabeler,
-    HyponatremiaLabValueLabeler,
-    InpatientLabValueLabeler,
-    ThrombocytopeniaLabValueLabeler,
+from femr.labelers.benchmarks import (
+    AnemiaInstantLabValueLabeler,
+    HyperkalemiaInstantLabValueLabeler,
+    HypoglycemiaInstantLabValueLabeler,
+    HyponatremiaInstantLabValueLabeler,
+    ThrombocytopeniaInstantLabValueLabeler,
 )
+from femr.labelers.omop import move_datetime_to_end_of_day
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
-
-#############################################
-#############################################
-#
-# Generic InpatientLabValueLabeler
-#
-# #############################################
-#############################################
 
 
 class DummyOntology_Generic:
@@ -43,46 +34,6 @@ class DummyOntology_Generic:
             return ["OMOP_CONCEPT_A_CHILD_CHILD"]
         else:
             return []
-
-
-class DummyLabeler1(InpatientLabValueLabeler):
-    original_omop_concept_codes = [
-        "OMOP_CONCEPT_A",
-        "OMOP_CONCEPT_B",
-    ]
-
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        value = float(raw_value)
-        if unit == "mmol/L":
-            # mmol/L
-            # Original OMOP concept ID: 8753
-            value = value
-        elif unit == "mEq/L":
-            # mEq/L (1-to-1 -> mmol/L)
-            # Original OMOP concept ID: 9557
-            value = value
-        elif unit == "mg/dL":
-            # mg / dL (divide by 18 to get mmol/L)
-            # Original OMOP concept ID: 8840
-            value = value / 18
-        else:
-            raise ValueError(f"Unknown unit: {unit}")
-        if value < 50:
-            return "severe"
-        elif value < 100:
-            return "moderate"
-        elif value < 150:
-            return "mild"
-        return "normal"
-
-
-class DummyLabeler2(InpatientLabValueLabeler):
-    original_omop_concept_codes = [
-        "OMOP_CONCEPT_B",
-    ]
-
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        return "normal"
 
 
 def test_constructor():
@@ -205,17 +156,8 @@ def test_labeling(tmp_path: pathlib.Path):
         labeler.label(patient)
 
 
-#############################################
-#############################################
-#
-# Specific instances of InpatientLabValueLabeler
-#
-#############################################
-#############################################
-
-
 def _assert_value_to_label_correct(
-    labeler: InpatientLabValueLabeler,
+    labeler,
     severe: float,
     moderate: float,
     mild: float,
@@ -241,7 +183,7 @@ def _create_specific_labvalue_labeler(
 
 
 def _run_specific_labvalue_test(
-    labeler: InpatientLabValueLabeler,
+    labeler,
     outcome_codes: set,
     severe_values: List[Tuple[float, str]],
     moderate_values: List[Tuple[float, str]],
@@ -323,7 +265,7 @@ class DummyOntology_Specific:
 def test_thrombocytopenia(tmp_path: pathlib.Path):
     outcome_codes = {"child_1", "child_1_1", "LOINC/LP393218-5", "LOINC/LG32892-8", "child_2", "LOINC/777-3"}
     labeler = _create_specific_labvalue_labeler(
-        ThrombocytopeniaLabValueLabeler,
+        ThrombocytopeniaInstantLabValueLabeler,
         "severe",
         outcome_codes,
     )
@@ -355,7 +297,7 @@ def test_hyperkalemia(tmp_path: pathlib.Path):
         "LOINC/2823-3",
     }
     labeler = _create_specific_labvalue_labeler(
-        HyperkalemiaLabValueLabeler,
+        HyperkalemiaInstantLabValueLabeler,
         "severe",
         outcome_codes,
     )
@@ -386,7 +328,7 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
         "LOINC/15074-8",
     }
     labeler = _create_specific_labvalue_labeler(
-        HypoglycemiaLabValueLabeler,
+        HypoglycemiaInstantLabValueLabeler,
         "severe",
         outcome_codes,
     )
@@ -409,7 +351,7 @@ def test_hypoglycemia(tmp_path: pathlib.Path):
 def test_hyponatremia(tmp_path: pathlib.Path):
     outcome_codes = {"child_1", "child_1_1", "child_2", "LOINC/LG11363-5", "LOINC/2951-2", "LOINC/2947-0"}
     labeler = _create_specific_labvalue_labeler(
-        HyponatremiaLabValueLabeler,
+        HyponatremiaInstantLabValueLabeler,
         "severe",
         outcome_codes,
     )
@@ -432,7 +374,7 @@ def test_hyponatremia(tmp_path: pathlib.Path):
 def test_anemia(tmp_path: pathlib.Path):
     outcome_codes: set = {"LOINC/LP392452-1", "child_1_1", "child_1"}
     labeler = _create_specific_labvalue_labeler(
-        AnemiaLabValueLabeler,
+        AnemiaInstantLabValueLabeler,
         "severe",
         outcome_codes,
     )

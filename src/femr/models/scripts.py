@@ -7,7 +7,7 @@ import logging
 import os
 import pickle
 import random
-from typing import Any, List, Tuple, TypeVar
+from typing import TypeVar
 
 import haiku as hk
 import jax
