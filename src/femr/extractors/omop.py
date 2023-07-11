@@ -195,7 +195,10 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             prefix="condition",
             file_suffix="occurrence",
         ),
-        _ConceptTableConverter(prefix="death", force_concept_id=OMOP_DEATH,),
+        _ConceptTableConverter(
+            prefix="death",
+            force_concept_id=OMOP_DEATH,
+        ),
         _ConceptTableConverter(
             prefix="procedure",
             file_suffix="occurrence",

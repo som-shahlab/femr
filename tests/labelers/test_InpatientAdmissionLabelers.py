@@ -325,7 +325,12 @@ def test_mortality(tmp_path: pathlib.Path):
             # admission
             # fmt: on
         ]
-        assert labeler.outcome_codes == {"Condition Type/OMOP4822053", "Death Type/OMOP generated", "DEATH_CHILD", "SNOMED/419620001"}
+        assert labeler.outcome_codes == {
+            "Condition Type/OMOP4822053",
+            "Death Type/OMOP generated",
+            "DEATH_CHILD",
+            "SNOMED/419620001",
+        }
         true_prediction_times: List[datetime.datetime] = [
             move_datetime_to_end_of_day(x[0].start)
             for x in events_with_labels
