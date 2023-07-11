@@ -5,7 +5,7 @@
 
 The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001.05295.pdf) and [MOTOR](https://arxiv.org/abs/2301.03150).
 
-**FEMR** by default supports the [OMOP Common Data Model](https://www.ohdsi.org/data-standardization/) developed by the OHDSI community, but can also be used with other forms of EHR / claims data with minimal processing.  **FEMR** has been used to process data from a variety of sources, including MIMIC-IV, Optum, Truven, STARR-OMOP, and SickKids-OMOP. 
+**FEMR** by default supports the [OMOP Common Data Model](https://www.ohdsi.org/data-standardization/) developed by the OHDSI community, but can also be used with other forms of EHR / claims data with minimal processing.  **FEMR** has been used to process data from a variety of sources, including MIMIC-IV, Optum, Truven, STARR-OMOP, and SickKids-OMOP.
 
 **FEMR** helps users:
 1. [Manipulate events in the EHR data comprising a patient's timeline](https://github.com/som-shahlab/femr/blob/main/tutorials/1_Overview.ipynb)
