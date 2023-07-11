@@ -1,4 +1,4 @@
-exclude: '^tutorial/input'
+exclude: '^tutorials/input'
 
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
@@ -15,12 +15,12 @@ repos:
     rev: 6.0.0
     hooks:
     -   id: flake8
-        exclude: ^tutorial|^native
+        exclude: ^tutorials|^native
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.4.1
     hooks:
     -   id: mypy
-        exclude: ^src/femr/extension/|^tutorial|^native
+        exclude: ^src/femr/extension/|^tutorials|^native
 -   repo: https://github.com/PyCQA/isort
     rev: 5.12.0
     hooks:
