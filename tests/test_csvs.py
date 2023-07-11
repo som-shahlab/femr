@@ -8,7 +8,7 @@ from typing import Dict, Mapping, Sequence
 import zstandard as zst
 
 import femr
-import femr.datasets
+from femr.datasets import RawEvent
 from femr.extractors.csv import run_csv_extractors
 
 
@@ -19,8 +19,8 @@ class DummyConverter(femr.extractors.csv.CSVExtractor):
     def get_file_prefix(self) -> str:
         return "temp"
 
-    def get_events(self, row: Mapping[str, str]) -> Sequence[femr.datasets.RawEvent]:
-        e = femr.datasets.RawEvent(
+    def get_events(self, row: Mapping[str, str]) -> Sequence[RawEvent]:
+        e = RawEvent(
             start=datetime.datetime(int(row["event_start"]), 1, 1),
             concept_id=int(row["event_code"]),
             value=row["event_value"],
