@@ -7,18 +7,20 @@ import sys
 from typing import List
 
 from femr.labelers import TimeHorizon
-from femr.labelers.omop import (
+from femr.labelers.omop_lab_values import (
     AKICodeLabeler,
     AnemiaCodeLabeler,
-    CodeLabeler,
     HyperkalemiaCodeLabeler,
     HypoglycemiaCodeLabeler,
     HyponatremiaCodeLabeler,
+    NeutropeniaCodeLabeler,
+    ThrombocytopeniaCodeLabeler,
+)
+from femr.labelers.omop import (
+    CodeLabeler,
     LupusCodeLabeler,
     MortalityCodeLabeler,
-    NeutropeniaCodeLabeler,
     OMOPConceptCodeLabeler,
-    ThrombocytopeniaCodeLabeler,
     get_death_concepts,
 )
 
