@@ -6,9 +6,8 @@ import pathlib
 import sys
 from typing import List, Optional, Tuple
 
-from femr.labelers import LabeledPatients
 from femr import Patient
-
+from femr.labelers import LabeledPatients
 from femr.labelers.benchmarks import (
     AnemiaInstantLabValueLabeler,
     HyperkalemiaInstantLabValueLabeler,
@@ -19,7 +18,15 @@ from femr.labelers.benchmarks import (
 
 # Needed to import `tools` for local testing
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import EventsWithLabels, assert_labels_are_accurate, create_patients_list, event, run_test_for_labeler, run_test_locally
+from tools import (
+    EventsWithLabels,
+    assert_labels_are_accurate,
+    create_patients_list,
+    event,
+    run_test_for_labeler,
+    run_test_locally,
+)
+
 
 def _assert_value_to_label_correct(
     labeler,
@@ -90,12 +97,15 @@ def _run_specific_labvalue_test(
         #
         (event((2006, 1, 1), "Visit/IP", end=datetime.datetime(2006, 1, 3), omop_table='visit_occurrence'), 'skip'),  # admission
         (event((2006, 1, 2), next(outcome_codes_cyclic_iter),
-               normal_values[1][0], unit=normal_values[1][1]), 'normal'), # lab test - normal
+               normal_values[1][0], unit=normal_values[1][1]), 'normal'),
+        # lab test - normal
         #
         # fmt: on
     ]
     true_labels: List[Tuple[datetime.datetime, str]] = [
-        (x[0].start - datetime.timedelta(minutes=1), labeler.label_to_int(x[1])) for x in events_with_labels if x[1] != 'skip'
+        (x[0].start - datetime.timedelta(minutes=1), labeler.label_to_int(x[1]))
+        for x in events_with_labels
+        if x[1] != "skip"
     ]
     patients: List[Patient] = create_patients_list(10, [x[0] for x in events_with_labels])
     labeled_patients: LabeledPatients = labeler.apply(patients=patients)
@@ -107,7 +117,6 @@ def _run_specific_labvalue_test(
             patient.patient_id,
             true_labels,
         )
-    
 
 
 class DummyOntology_Specific:
