@@ -10,6 +10,7 @@ from femr.datasets import RawEvent
 from femr.extractors.csv import CSVExtractor
 
 OMOP_BIRTH = 4216316
+OMOP_DEATH = 4306655
 
 
 class _DemographicsConverter(CSVExtractor):
@@ -46,7 +47,7 @@ class _DemographicsConverter(CSVExtractor):
             # 4216316 is the OMOP birth code
             RawEvent(
                 start=birth,
-                concept_id=4216316,
+                concept_id=OMOP_BIRTH,
                 omop_table="person",
                 clarity_table=row.get("load_table_id"),
             )
@@ -95,6 +96,7 @@ class _ConceptTableConverter(CSVExtractor):
     concept_id_field: Optional[str] = None
     string_value_field: Optional[str] = None
     numeric_value_field: Optional[str] = None
+    force_concept_id: Optional[int] = None
 
     def get_patient_id_field(self) -> str:
         return "person_id"
@@ -116,8 +118,12 @@ class _ConceptTableConverter(CSVExtractor):
         value = normalize_to_float_if_possible(self.string_value_field, None)
         value = normalize_to_float_if_possible(self.numeric_value_field, value)
 
-        concept_id_field = self.concept_id_field or (self.prefix + "_concept_id")
-        concept_id = int(row[concept_id_field])
+        if self.force_concept_id is not None:
+            concept_id = self.force_concept_id
+        else:
+            concept_id_field = self.concept_id_field or (self.prefix + "_concept_id")
+            concept_id = int(row[concept_id_field])
+
         if concept_id == 0:
             # The following are worth recovering even without the code ...
             if self.prefix == "note":
@@ -164,10 +170,11 @@ class _ConceptTableConverter(CSVExtractor):
         if unit is not None:
             metadata["unit"] = unit
 
-        source_code_column = concept_id_field.replace("_concept_id", "_source_value")
-        source_code = row.get(source_code_column)
-        if source_code is not None:
-            metadata["source_code"] = source_code
+        if self.force_concept_id is None:
+            source_code_column = concept_id_field.replace("_concept_id", "_source_value")
+            source_code = row.get(source_code_column)
+            if source_code is not None:
+                metadata["source_code"] = source_code
 
         return [RawEvent(start=start, concept_id=concept_id, value=value, **metadata)]
 
@@ -188,7 +195,10 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             prefix="condition",
             file_suffix="occurrence",
         ),
-        _ConceptTableConverter(prefix="death", concept_id_field="death_type_concept_id"),
+        _ConceptTableConverter(
+            prefix="death",
+            force_concept_id=OMOP_DEATH,
+        ),
         _ConceptTableConverter(
             prefix="procedure",
             file_suffix="occurrence",

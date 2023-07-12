@@ -26,6 +26,8 @@ def get_inpatient_admission_concepts() -> List[str]:
 
 def get_death_concepts() -> List[str]:
     return [
+        "SNOMED/419620001",
+        # The folowing 2 are deprecated and will be removed once v8 is no longer in service
         "Death Type/OMOP generated",
         "Condition Type/OMOP4822053",
     ]
