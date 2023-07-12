@@ -81,11 +81,12 @@ void register_jax_extension(pybind11::module &root) {
     py::module m = root.def_submodule("jax");
     m.def("get_kernels", get_kernels);
     m.def("get_local_attention_shape", get_attention_shape);
-    m.def("get_local_attention_data", [](int32_t b, int32_t n, int32_t k,
-                                         int32_t w, bool causal) {
-        const local_attention_info *data = create_attention_info(b, n, k, w, causal);
-        py::capsule capsule((void *)data,
-                            (void (*)(void *))free_attention_info);
-        return capsule;
-    });
+    m.def("get_local_attention_data",
+          [](int32_t b, int32_t n, int32_t k, int32_t w, bool causal) {
+              const local_attention_info *data =
+                  create_attention_info(b, n, k, w, causal);
+              py::capsule capsule((void *)data,
+                                  (void (*)(void *))free_attention_info);
+              return capsule;
+          });
 }

@@ -4,9 +4,7 @@
 
 #include <malloc.h>
 
-inline void malloc_trim_wrapper() {
-   malloc_trim(0);
-}
+inline void malloc_trim_wrapper() { malloc_trim(0); }
 
 #else
 

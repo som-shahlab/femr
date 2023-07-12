@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <vector>
 
 #include "database.hh"
-#include <iostream>
 #include "flatmap.hh"
 
 struct SurvivalEvent {

@@ -274,7 +274,8 @@ std::vector<typename std::result_of<F(uint32_t, T *)>::type> join_on_first(
 }
 
 const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
-                                                  uint32_t k, uint32_t w, bool causal) {
+                                                  uint32_t k, uint32_t w,
+                                                  bool causal) {
     local_attention_info *result = new local_attention_info;
     result->b = b;
     result->n = n;
@@ -345,12 +346,12 @@ const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
 
     for (uint32_t i = 0; i < n; i += DIM_SIZE) {
         uint32_t start_j = max(0, (int)i - (int)w);
-	uint32_t end_j;
-	if (causal) {
+        uint32_t end_j;
+        if (causal) {
             end_j = i + DIM_SIZE;
-	} else {
+        } else {
             end_j = min(i + w, n) + DIM_SIZE;
-	}
+        }
         uint32_t needed = end_j - start_j;
 
         assert(needed % DIM_SIZE == 0);
@@ -378,7 +379,8 @@ const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
 
 std::vector<uint32_t> get_attention_shape(uint32_t b, uint32_t n, uint32_t k,
                                           uint32_t w, bool causal) {
-    const local_attention_info *info = create_attention_info(b, n, k, w, causal);
+    const local_attention_info *info =
+        create_attention_info(b, n, k, w, causal);
     std::vector<uint32_t> result = {b, info->num_rows, LAUNCH_SIZE * DIM_SIZE,
                                     DIM_SIZE};
     free_attention_info(info);
@@ -437,6 +439,9 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
     float *constant = shared_constant + threadIdx.y * DIM_SIZE * DIM_SIZE;
 
     const row_info &row = info->row_data[blockIdx.y];
+
+    // We start by computing the derivative with respect to the attention
+    // (stored in shared_temp) and to the values (stored in dv)
 
     for (uint32_t j_index = threadIdx.y; j_index < row.num_j;
          j_index += WARPS_PER_BLOCK) {
@@ -512,6 +517,12 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
 
     __syncthreads();
 
+    // Given the derivative with respect to the attention (shared_temp), we can
+    // now compute the derivative with respect to the attention's input using
+    // the standard softmax matrix derivative
+    // https://github.com/google/jax/blob/0860c2476781a2a62d27d7be8a969f27391ab987/jax/_src/nn/functions.py#L372
+    // is the exact math involved here
+
     uint32_t i_in = threadIdx.y;
 
     for (uint32_t i_index = 0; i_index < row.num_i; i_index++) {
@@ -519,6 +530,8 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
         uint32_t i = i_inf.i;
         uint32_t i_doc = i & *length_mask;
 
+        // We start by computing the (y * x_dot).sum() term in the above
+        // equation Need to use a float here to perform sums in high precision
         float current_sum = 0;
 
         for (uint32_t index = i_inf.start_index + threadIdx.x / 8;
@@ -543,12 +556,17 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
             current_sum += __high2float(current_val);
         }
 
+        // Butterfly reduction so that every thread in the warp has the correct
+        // sum
 #pragma unroll
         for (int offset = 16; offset > 0; offset /= 2) {
             current_sum += __shfl_xor_sync(0xffffffff, current_sum, offset);
         }
 
         __half2 half_sum = __float2half2_rn(-current_sum);
+
+        // Now that we have that sum, we can compute y * (x_dot - (y *
+        // x_dot).sum())
 
         for (uint32_t index = i_inf.start_index + threadIdx.x / 8;
              index < i_inf.end_index; index += 4) {
@@ -572,6 +590,9 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
     }
 
     __syncthreads();
+
+    // We now have the softmax derivatives, so we can now compute the derivates
+    // with respect to the query and result
 
     for (uint32_t i_index = threadIdx.y; i_index < row.num_i; i_index += 4) {
         const i_info &i_inf = row.i_data[i_index];
@@ -778,12 +799,12 @@ __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
             uint32_t precise_j = j + (threadIdx.x % 8) * 2;
 
             uint32_t precise_start = max(0, (int)precise_i - (int)w);
-	    uint32_t precise_end;
-	    if (info->causal) {
+            uint32_t precise_end;
+            if (info->causal) {
                 precise_end = precise_i;
             } else {
-		precise_end = precise_i + w;
-	    }
+                precise_end = precise_i + w;
+            }
 
             if (precise_j > precise_end || precise_j < precise_start) {
                 current_val.x = -INFINITY;

@@ -1,8 +1,7 @@
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/regex.hpp>
 #include <fstream>
-
-#include <boost/algorithm/string/trim.hpp>
 
 #include "absl/container/flat_hash_map.h"
 #include "database.hh"
@@ -25,7 +24,8 @@ int main() {
     auto iter = database.iterator();
 
     std::ofstream output(
-		    "/local-scratch/nigam/projects/ethanid/text_checks/tokenization/text_out");
+        "/local-scratch/nigam/projects/ethanid/text_checks/tokenization/"
+        "text_out");
 
     boost::regex date_regex("\\d{2}/\\d{2}/\\d{4}");
     boost::regex whitespace_regex("\\s+");
@@ -68,7 +68,6 @@ int main() {
                 std::string text = std::string(
                     (*database.get_unique_text_dictionary())[event.text_value]);
 
-
                 std::string_view banned_prefix = "STANFORD_OBS";
 
                 std::string_view text_str =
@@ -79,7 +78,7 @@ int main() {
                               << std::endl;
                 }
 
-		std::string fixed_text = text;
+                std::string fixed_text = text;
 
                 // Hack to deal with bad unicode support ...
                 boost::replace_all(fixed_text, "—", "-");
@@ -109,13 +108,12 @@ int main() {
                 fixed_text =
                     boost::regex_replace(fixed_text, longunder_regex, "__");
 
-		fixed_text = boost::regex_replace(fixed_text,
-			whitespace_regex, " ");
+                fixed_text =
+                    boost::regex_replace(fixed_text, whitespace_regex, " ");
 
-		if (fixed_text.size() < 200) {
+                if (fixed_text.size() < 200) {
                     continue;
                 }
-
 
                 if (false) {
                     bool valid = false;
@@ -140,7 +138,7 @@ int main() {
                     std::cout << "Replaced with " << fixed_text << std::endl;
                     // exit(-1);
                 }
-		boost::algorithm::trim(fixed_text);
+                boost::algorithm::trim(fixed_text);
                 output << fixed_text << std::endl;
             }
         }
