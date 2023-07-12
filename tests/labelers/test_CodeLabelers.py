@@ -265,7 +265,6 @@ class DummyOntology_Mortality:
 
 def test_death_concepts() -> None:
     expected_death_concepts: set = {
-        "Death Type/OMOP generated",
         "Condition Type/OMOP4822053",
     }
     assert set(get_death_concepts()) == expected_death_concepts
@@ -285,7 +284,7 @@ def test_MortalityCodeLabeler() -> None:
         (event((2015, 2, 5, 0), 2, None), False),
         (event((2015, 7, 5, 0), 0, None), True),
         (event((2015, 11, 5, 10, 10), 2, None), True),
-        (event((2015, 11, 15, 11), "Death Type/OMOP generated", None), "skip"),
+        (event((2015, 11, 15, 11), "Condition Type/OMOP4822053", None), "skip"),
         (event((2020, 1, 1), 2, None), "out of range"),
         (event((2020, 3, 1, 10, 10, 10), 2, None), "out of range"),
     ]
@@ -296,7 +295,7 @@ def test_MortalityCodeLabeler() -> None:
     labeler = MortalityCodeLabeler(ontology, time_horizon)  # type: ignore
 
     # Check that we selected the right codes
-    assert set(labeler.outcome_codes) == {"Death Type/OMOP generated", "Condition Type/OMOP4822053"}
+    assert set(labeler.outcome_codes) == {"Condition Type/OMOP4822053", "Condition Type/OMOP4822053"}
 
     run_test_for_labeler(labeler, events_with_labels, help_text="MortalityLabeler")
 

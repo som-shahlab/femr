@@ -460,7 +460,6 @@ class HypoglycemiaInstantLabValueLabeler(InstantLabValueLabeler):
         "SNOMED/33747003",
         "LOINC/LP416145-3",
         "LOINC/14749-6",
-        # "LOINC/15074-8",
     ]
 
     def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
