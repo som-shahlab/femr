@@ -14,6 +14,4 @@ def move_early_end_date_to_start_date(patient: RawPatient) -> RawPatient:
         if event.end is not None and event.omop_table == "visit_occurrence" and event.end < event.start:
             event.end = event.start
 
-    patient.resort()
-
     return patient
