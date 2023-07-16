@@ -109,7 +109,7 @@ def does_exist_event_within_time_range(
 
 def get_femr_codes(
     ontology: extension_datasets.Ontology,
-    omop_concept_codes: List[str],
+    omop_concept_codes: Union[str, List[str]],
     is_ontology_expansion: bool = True,
     is_silent_not_found_error: bool = True,
 ) -> Set[str]:
@@ -662,8 +662,7 @@ class ChexpertLabeler(Labeler):
 
         outcome_times = []
         for idx, row in patient_df.iterrows():
-            label_time = row["start"]
-            label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
+            label_time = datetime.datetime.fromisoformat(row["start"])
             prediction_time = label_time - timedelta(hours=24)
 
             if prediction_time <= start_time:
