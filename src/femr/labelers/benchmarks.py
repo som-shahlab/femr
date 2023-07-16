@@ -557,7 +557,7 @@ class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
 ##########################################################
 
 
-class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
+class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
     """Predict if patient will have their *first* diagnosis of `self.root_concept_code` in the next (1, 365) days.
 
     Make prediction at 11:59pm on day of discharge from inpatient admission.
@@ -615,91 +615,6 @@ class FirstDiagnosisTimeHorizonCodeLabeler(Labeler):
 
     def allow_same_time_labels(self) -> bool:
         return False
-
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
-
-    def label(self, patient: Patient) -> List[Label]:
-        # NOTE: This is EXACTLY THE SAME as the `TimeHorizonLabeler`
-        if len(patient.events) == 0:
-            return []
-
-        __, end_time = self.get_patient_start_end_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
-        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
-        time_horizon: TimeHorizon = self.get_time_horizon()
-
-        # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
-        time_horizon_start: datetime.timedelta = time_horizon.start
-        time_horizon_end: Optional[datetime.timedelta] = time_horizon.end  # `None` if infinite time horizon
-
-        # For each prediction time, check if there is an outcome which occurs within the (start, end)
-        # of the time horizon
-        results: List[Label] = []
-        curr_outcome_idx: int = 0
-        last_time = None
-        for time_idx, time in enumerate(prediction_times):
-            if last_time is not None:
-                assert time > last_time, (
-                    f"Must be ascending prediction times, instead got"
-                    f" last_prediction_time={last_time} <= prediction_time={time}"
-                    f" for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx}"
-                    f" | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
-                )
-
-            last_time = time
-
-            while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
-                # `curr_outcome_idx` is the idx in `outcome_times` that corresponds to the first
-                # outcome EQUAL or AFTER the time horizon for this prediction time starts (if one exists)
-                curr_outcome_idx += 1
-
-            if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] == time:
-                if not self.allow_same_time_labels():
-                    continue
-                warnings.warn(
-                    "You are making predictions at the same time as the target outcome."
-                    "This frequently leads to label leakage."
-                )
-
-            # TRUE if an event occurs within the time horizon
-            is_outcome_occurs_in_time_horizon: bool = (
-                (
-                    # ensure there is an outcome
-                    # (needed in case there are 0 outcomes)
-                    curr_outcome_idx
-                    < len(outcome_times)
-                )
-                and (
-                    # outcome occurs after time horizon starts
-                    time + time_horizon_start
-                    <= outcome_times[curr_outcome_idx]
-                )
-                and (
-                    # outcome occurs before time horizon ends (if there is an end)
-                    (time_horizon_end is None)
-                    or outcome_times[curr_outcome_idx] <= time + time_horizon_end
-                )
-            )
-            # TRUE if patient is censored (i.e. timeline ends BEFORE this time horizon ends,
-            # so we don't know if the outcome happened after the patient timeline ends)
-            # If infinite time horizon labeler, then assume no censoring
-            is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
-
-            if is_outcome_occurs_in_time_horizon:
-                results.append(Label(time=time, value=True))
-            elif not is_censored:
-                # Not censored + no outcome => FALSE
-                results.append(Label(time=time, value=False))
-            else:
-                if self.is_apply_censoring():
-                    # Censored + no outcome => CENSORED
-                    pass
-                else:
-                    # Censored + no outcome => FALSE
-                    results.append(Label(time=time, value=False))
-
-        return results
 
 
 class PancreaticCancerCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
