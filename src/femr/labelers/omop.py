@@ -89,7 +89,8 @@ def get_icu_visit_detail_concepts() -> List[str]:
 
 
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
-    return date.replace(hour=23, minute=59, second=59)
+    # Note that FEMR only has minute-level granularity, so we can't go to the second
+    return date.replace(hour=23, minute=59, second=0)
 
 
 def does_exist_event_within_time_range(
