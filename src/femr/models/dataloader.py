@@ -250,6 +250,7 @@ def create_batches() -> None:
 
             for label in labels:
                 age = (label.time - birth_date) / datetime.timedelta(minutes=1)
+                assert int(age) == age, f"Age must be in minutes, instead got: {age}"
                 value: Any
                 if labeled_patients.labeler_type == "survival":
                     assert isinstance(label.value, femr.labelers.SurvivalValue)
