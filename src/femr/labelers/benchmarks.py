@@ -264,7 +264,7 @@ class Harutyunyan_DecompensationLabeler(CodeLabeler):
             time_horizon=time_horizon,
         )
 
-    def is_apply_censoring(self) -> bool:
+    def is_discard_censored_labels(self) -> bool:
         """Consider censored patients to be alive."""
         return False
 
@@ -326,7 +326,7 @@ class Harutyunyan_MortalityLabeler(WithinVisitLabeler):
         visit_end_adjust_func = identity
         super().__init__(ontology, visit_start_adjust_func, visit_end_adjust_func)
 
-    def is_apply_censoring(self) -> bool:
+    def is_discard_censored_labels(self) -> bool:
         """Consider censored patients to be alive."""
         return False
 
@@ -672,7 +672,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
-    def is_apply_censoring(self) -> bool:
+    def is_discard_censored_labels(self) -> bool:
         return False
 
     def allow_same_time_labels(self) -> bool:
