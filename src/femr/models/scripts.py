@@ -615,14 +615,6 @@ def compute_representations() -> None:
     config = hk.data_structures.to_immutable_dict(config)
     batch_info_path = os.path.join(args.batches_path, "batch_info.msgpack")
 
-    with open(batch_info_path, "rb") as f:
-        batch_info = msgpack.load(f, use_list=False)
-
-    patient_labels = collections.defaultdict(list)
-
-    for pid, age, label in batch_info["config"]["task"]["labels"]:
-        patient_labels[pid].append((age, label))
-
     loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
 
     def model_fn(config, batch):
