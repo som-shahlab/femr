@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import datetime
-import warnings
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Set, Tuple, Union
 
 from femr import Event, Patient
 from femr.extension import datasets as extension_datasets
@@ -14,7 +13,6 @@ from femr.labelers.omop import (
     does_exist_event_within_time_range,
     get_death_concepts,
     get_femr_codes,
-    get_icu_events,
     get_inpatient_admission_events,
     move_datetime_to_end_of_day,
 )
@@ -24,6 +22,70 @@ from femr.labelers.omop_lab_values import InstantLabValueLabeler
 
 def identity(x: Any) -> Any:
     return x
+
+def get_icu_visit_detail_concepts() -> List[str]:
+    return [
+        # All care sites with "ICU" (case insensitive) in the name
+        "CARE_SITE/7928450",
+        "CARE_SITE/7930385",
+        "CARE_SITE/7930600",
+        "CARE_SITE/7928852",
+        "CARE_SITE/7928619",
+        "CARE_SITE/7929727",
+        "CARE_SITE/7928675",
+        "CARE_SITE/7930225",
+        "CARE_SITE/7928759",
+        "CARE_SITE/7928227",
+        "CARE_SITE/7928810",
+        "CARE_SITE/7929179",
+        "CARE_SITE/7928650",
+        "CARE_SITE/7929351",
+        "CARE_SITE/7928457",
+        "CARE_SITE/7928195",
+        "CARE_SITE/7930681",
+        "CARE_SITE/7930670",
+        "CARE_SITE/7930176",
+        "CARE_SITE/7931420",
+        "CARE_SITE/7929149",
+        "CARE_SITE/7930857",
+        "CARE_SITE/7931186",
+        "CARE_SITE/7930934",
+        "CARE_SITE/7930924",
+    ]
+
+def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[str]:
+    return get_femr_codes(
+        ontology, get_icu_visit_detail_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
+    )
+
+def get_icu_events(
+    patient: Patient, ontology: extension_datasets.Ontology, is_return_idx: bool = False
+) -> Union[List[Event], List[Tuple[int, Event]]]:
+    """Return all ICU events for this patient.
+    If `is_return_idx` is True, then return a list of tuples (event, idx) where `idx`
+        is the index of the event in `patient.events`.
+    """
+    icu_visit_detail_codes: Set[str] = get_icu_visit_detail_codes(ontology)
+    events: Union[List[Event], List[Tuple[int, Event]]] = []  # type: ignore
+    for idx, e in enumerate(patient.events):
+        # `visit_detail` is more accurate + comprehensive than `visit_occurrence` for
+        #   ICU events for STARR OMOP for some reason
+        if e.code in icu_visit_detail_codes and e.omop_table == "visit_detail":
+            # Error checking
+            if e.start is None or e.end is None:
+                raise RuntimeError(
+                    f"Event {e} for patient {patient.patient_id} cannot have `None` as its `start` or `end` attribute."
+                )
+            elif e.start > e.end:
+                raise RuntimeError(f"Event {e} for patient {patient.patient_id} cannot have `start` after `end`.")
+            # Drop single point in time events
+            if e.start == e.end:
+                continue
+            if is_return_idx:
+                events.append((idx, e))  # type: ignore
+            else:
+                events.append(e)  # type: ignore
+    return events
 
 
 ##########################################################
