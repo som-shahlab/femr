@@ -685,8 +685,7 @@ class ChexpertLabeler(Labeler):
         start_time, _ = self.get_patient_start_end_times(patient)
 
         for idx, row in patient_df.iterrows():
-            label_time = row["start"]
-            label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
+            label_time = datetime.datetime.fromisoformat(row["start"])
             prediction_time = label_time - timedelta(days=1)
 
             if prediction_time <= start_time:

@@ -109,14 +109,14 @@ class InpatientReadmissionLabeler(TimeHorizonEventLabeler):
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return end of admission as prediction timm."""
         times: List[datetime.datetime] = []
-        admission_times = set()
-        for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
+        admission_times: List[datetime.datetime] = self.get_outcome_times(patient)
+        for __, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(discharge_time)
-            # Ignore patients who are readmitted the same day they were discharged b/c of data leakage
-            if prediction_time.replace(hour=0, minute=0, second=0, microsecond=0) in admission_times:
-                continue
+            # Ignore patients who are readmitted the same day after they were discharged b/c of data leakage
+            for at in admission_times:
+                if at.date() == prediction_time.date() and at >= prediction_time:
+                    continue
             times.append(prediction_time)
-            admission_times.add(admission_time.replace(hour=0, minute=0, second=0, microsecond=0))
         times = sorted(list(set(times)))
         return times
 
