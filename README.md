@@ -12,7 +12,7 @@ The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001
 2. [Algorithmically label patient records based on structured data](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Labeling.ipynb)
 3. [Generate tabular features from patient timelines for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Count%20Featurization%20And%20Modeling.ipynb)
 4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models for binary classification and prediction tasks.
-5. Train and finetune MOTOR-derived models for making time-to-event predictions.
+5. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/7%20Train%20MOTOR.ipynb) and finetune MOTOR-derived models for making time-to-event predictions.
 
 We recommend users start with our [tutorial folder](https://github.com/som-shahlab/femr/tree/main/tutorials)
 
