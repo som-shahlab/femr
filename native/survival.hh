@@ -17,11 +17,6 @@ inline bool should_make_prediction(uint32_t last_prediction_age,
                                    uint32_t current_age,
                                    boost::optional<uint32_t> next_age,
                                    int current_year) {
-    if (current_year < 2010) {
-        // Only make predictions when we have OK data
-        return false;
-    }
-
     if (!next_age) {
         return false;
     }
