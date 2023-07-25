@@ -322,7 +322,7 @@ def train_linear_probe() -> None:
         print("About to concat 3", datetime.datetime.now())
         assert repr_ages.dtype == jnp.uint32
         repr_pids = np.concatenate(l_repr_pids, axis=0)
-        assert repr_pids.dtype == np.uint64
+        assert repr_pids.dtype == np.int64
         repr_offsets = jnp.concatenate(l_repr_offsets, axis=0)
         repr_split = jnp.concatenate(l_repr_split, axis=0)
 
