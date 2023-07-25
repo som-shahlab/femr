@@ -71,7 +71,7 @@ class TransformerBlock(hk.Module):
         self.output_proj = hk.Linear(
             self.config["hidden_size"],
             w_init=hk.initializers.TruncatedNormal(
-                stddev=2 / (self.config["n_layers"] * jnp.sqrt(self.config["hidden_size"]))
+                stddev=2 / (int(self.config["n_layers"]) * jnp.sqrt(self.config["hidden_size"]))
             ),
         )
 
@@ -172,7 +172,7 @@ class Transformer(hk.Module):
 
         self.layer_transform = hk.transform(lambda *args: TransformerBlock(config)(*args))
         self.lifted_params = [
-            hk.lift(self.layer_transform.init, name=f"loop_{i}") for i in range(self.config["n_layers"])
+            hk.lift(self.layer_transform.init, name=f"loop_{i}") for i in range(int(self.config["n_layers"]))
         ]
 
     def __call__(self, batch, is_training):

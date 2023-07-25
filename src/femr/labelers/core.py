@@ -43,9 +43,10 @@ LabelType = Union[
     Literal["numeric"],
     Literal["survival"],
     Literal["categorical"],
+    Literal["empty"],
 ]
 
-VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
+VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical", "empty"]
 
 
 @dataclass
@@ -54,7 +55,7 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Union[bool, int, float, SurvivalValue, str]
+    value: Union[bool, int, float, SurvivalValue, str, None]
 
 
 def _apply_labeling_function(
@@ -104,8 +105,10 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
         labels = collections.defaultdict(list)
 
         for row in rows:
-            value: Union[bool, SurvivalValue, int, float]
-            if labeler_type == "survival":
+            value: Union[bool, SurvivalValue, int, float, None]
+            if labeler_type == "empty":
+                value = None
+            elif labeler_type == "survival":
                 value = SurvivalValue(
                     time_to_event=datetime.timedelta(minutes=float(row["value"])),
                     is_censored=row["is_censored"].lower() == "true",
@@ -114,8 +117,10 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
                 value = row["value"].lower() == "true"
             elif labeler_type == "categorical":
                 value = int(row["value"])
-            else:
+            elif labeler_type == "numeric":
                 value = float(row["value"])
+            else:
+                assert False, f"Invalid labeler type {labeler_type}"
 
             time = datetime.datetime.fromisoformat(row["prediction_time"])
             assert time.second == 0, "FEMR only supports minute level time resolution"
@@ -225,9 +230,18 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
             np.array(label_times),
         )
 
-    def get_num_patients(self) -> int:
-        """Return the total number of patients."""
-        return len(self)
+    def get_patients_with_label_values(self, values: List[Any]) -> List[int]:
+        """Return the IDs of patients with at least one label whose value is in `values`."""
+        patient_ids: set = set()
+        for patient, labels in self.items():
+            for label in labels:
+                # NOTE: you can't use `label.value in values` because `in` does an implicit type conversion,
+                # thus `1.0 in [True]` will return True incorrectly
+                for v in values:
+                    if label.value == v and isinstance(label.value, type(v)):
+                        patient_ids.add(patient)
+                        break
+        return list(patient_ids)
 
     def get_num_labels(self) -> int:
         """Return the total number of labels across all patients."""
@@ -441,7 +455,8 @@ class TimeHorizonEventLabeler(Labeler):
     time horizon (i.e. `TimeHorizon`). It is a boolean event that is TRUE if the event of interest
     occurs within that time horizon, and FALSE if it doesn't occur by the end of the time horizon.
 
-    No labels are generated if the patient record is "censored" before the end of the horizon.
+    No censored labels are generated if the patient record is "censored" before the end of the horizon
+    and `is_discard_censored_labels = True`. Note that this defaults to `is_discard_censored_labels = True`.
 
     You are required to implement three methods:
         get_outcome_times() for defining the datetimes of the event of interset
@@ -516,6 +531,12 @@ class TimeHorizonEventLabeler(Labeler):
         """Return boolean labels (TRUE if event occurs in TimeHorizon, FALSE otherwise)."""
         return "boolean"
 
+    def is_discard_censored_labels(self) -> bool:
+        """If TRUE, then a censored label with no outcome -> IGNORED.
+        If FALSE, then a censored label with no outcome -> FALSE.
+        """
+        return True
+
     def allow_same_time_labels(self) -> bool:
         """Whether or not to allow labels with events at the same time as prediction"""
         return True
@@ -550,9 +571,14 @@ class TimeHorizonEventLabeler(Labeler):
         curr_outcome_idx: int = 0
         last_time = None
 
-        for time in prediction_times:
+        for time_idx, time in enumerate(prediction_times):
             if last_time is not None:
-                assert time > last_time, f"Must be ascending prediction times, instead got {last_time} <= {time}"
+                assert time > last_time, (
+                    f"Must be ascending prediction times, instead got"
+                    f" last_prediction_time={last_time} <= prediction_time={time}"
+                    f" for patient {patient.patient_id} at curr_outcome_idx={curr_outcome_idx}"
+                    f" | prediction_time_idx={time_idx} | start_prediction_time={prediction_times[0]}"
+                )
 
             last_time = time
             while curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] < time + time_horizon_start:
@@ -597,9 +623,13 @@ class TimeHorizonEventLabeler(Labeler):
             elif not is_censored:
                 # Not censored + no outcome => FALSE
                 results.append(Label(time=time, value=False))
-            elif is_censored:
-                # Censored => None
-                pass
+            else:
+                if self.is_discard_censored_labels():
+                    # Censored + no outcome => IGNORED
+                    pass
+                else:
+                    # Censored + no outcome => FALSE
+                    results.append(Label(time=time, value=False))
 
         return results
 

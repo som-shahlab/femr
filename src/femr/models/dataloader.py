@@ -270,6 +270,9 @@ def create_batches() -> None:
                         "event_time": event_offset + age,
                         "is_censored": label.value.is_censored,
                     }
+                elif labeled_patients.labeler_type == "empty":
+                    value = None
+
                 result_labels.append((int(pid), int(age), value))
 
         task = {

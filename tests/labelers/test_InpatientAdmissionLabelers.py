@@ -304,15 +304,15 @@ def test_readmission(tmp_path: pathlib.Path):
 
 class DummyMortalityOntology:
     def get_children(self, code: str) -> List[str]:
-        if code == "SNOMED/419620001":
-            return ["DEATH_CHILD"]
+        if code == "Death Type/OMOP generated":
+            return ["Condition Type/OMOP4822053"]
         return []
 
 
 def test_mortality(tmp_path: pathlib.Path):
     ontology = DummyMortalityOntology()
     labeler = InpatientMortalityLabeler(ontology)  # type: ignore
-    for outcome_code in ["SNOMED/419620001", "DEATH_CHILD"]:
+    for outcome_code in ["Condition Type/OMOP4822053"]:
         events_with_labels: EventsWithLabels = [
             # fmt: off
             #
@@ -327,9 +327,6 @@ def test_mortality(tmp_path: pathlib.Path):
         ]
         assert labeler.outcome_codes == {
             "Condition Type/OMOP4822053",
-            "Death Type/OMOP generated",
-            "DEATH_CHILD",
-            "SNOMED/419620001",
         }
         true_prediction_times: List[datetime.datetime] = [
             move_datetime_to_end_of_day(x[0].start)
@@ -375,7 +372,7 @@ def test_long_admission(tmp_path: pathlib.Path):
     ]
     assert labeler.long_time == long_time
     true_prediction_times: List[datetime.datetime] = [
-        move_datetime_to_end_of_day(x[0].start) for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
+        x[0].start for x in events_with_labels if isinstance(x[1], bool) or x[1] is None
     ]
     run_test_for_labeler(
         labeler,

@@ -1,15 +1,38 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
 
+import collections
 import datetime
-import warnings
+import multiprocessing
 from abc import abstractmethod
 from collections import deque
-from typing import Any, Callable, List, Optional, Set, Tuple
+from datetime import timedelta
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from .. import Event, Patient
-from ..extension import datasets as extension_datasets
-from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
+import numpy as np
+import pandas as pd
+
+from femr import Event, Patient
+from femr.datasets import PatientDatabase
+from femr.extension import datasets as extension_datasets
+from femr.labelers.core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
+
+CHEXPERT_LABELS = [
+    "No Finding",
+    "Enlarged Cardiomediastinum",
+    "Cardiomegaly",
+    "Lung Lesion",
+    "Lung Opacity",
+    "Edema",
+    "Consolidation",
+    "Pneumonia",
+    "Atelectasis",
+    "Pneumothorax",
+    "Pleural Effusion",
+    "Pleural Other",
+    "Fracture",
+    "Support Devices",
+]
 
 
 def identity(x: Any) -> Any:
@@ -17,35 +40,101 @@ def identity(x: Any) -> Any:
 
 
 def get_visit_concepts() -> List[str]:
-    return ["Visit/IP"]
+    return ["Visit/IP", "Visit/OP"]
 
 
 def get_inpatient_admission_concepts() -> List[str]:
     return ["Visit/IP"]
 
 
+def get_outpatient_visit_concepts() -> List[str]:
+    return ["Visit/OP"]
+
+
 def get_death_concepts() -> List[str]:
     return [
-        "SNOMED/419620001",
-        # The folowing 2 are deprecated and will be removed once v8 is no longer in service
-        "Death Type/OMOP generated",
         "Condition Type/OMOP4822053",
     ]
 
 
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
+    # Note that FEMR only has minute-level granularity, so we can't go to the second
     return date.replace(hour=23, minute=59, second=0)
 
 
-def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
-    return {y for x in get_visit_concepts() for y in _get_all_children(ontology, x)}
+def does_exist_event_within_time_range(
+    patient: Patient, start: datetime.datetime, end: datetime.datetime, exclude_event_idxs: List[int] = []
+) -> bool:
+    """Return True if there is at least one event within the given time range for this patient.
+    If `exclude_event_idxs` is provided, exclude events with those indexes in `patient.events` from the search."""
+    excluded = set(exclude_event_idxs)
+    for idx, e in enumerate(patient.events):
+        if idx in excluded:
+            continue
+        if start <= e.start <= end:
+            return True
+    return False
 
 
-def get_inpatient_admission_codes(
+def get_femr_codes(
     ontology: extension_datasets.Ontology,
+    omop_concept_codes: Union[str, List[str]],
+    is_ontology_expansion: bool = True,
+    is_silent_not_found_error: bool = True,
 ) -> Set[str]:
+    """Does ontology expansion on the given OMOP concept codes if `is_ontology_expansion` is True,
+        otherwise just returns the codes as given.
+
+    If `is_silent_not_found_error` is True, then this function will NOT raise an error
+        if a given OMOP concept ID is not found in the ontology.
+    """
+    if not isinstance(omop_concept_codes, list):
+        # Make sure a list is passed in
+        omop_concept_codes = [omop_concept_codes]
+    codes: Set[str] = set()
+    for omop_concept_code in omop_concept_codes:
+        try:
+            codes.update(
+                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
+            )
+        except ValueError:
+            if not is_silent_not_found_error:
+                raise ValueError(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
+    return codes
+
+
+def get_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
+    return get_femr_codes(ontology, get_visit_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True)
+
+
+def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[str]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return set(get_inpatient_admission_concepts())
+    return get_femr_codes(
+        ontology, get_inpatient_admission_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
+    )
+
+
+def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[str]:
+    return get_femr_codes(
+        ontology, get_outpatient_visit_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
+    )
+
+
+def get_outpatient_visit_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
+    admission_codes: Set[str] = get_outpatient_visit_codes(ontology)
+    events: List[Event] = []
+    for e in patient.events:
+        if e.code in admission_codes and e.omop_table == "visit_occurrence":
+            # Error checking
+            if e.start is None or e.end is None:
+                raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
+            elif e.start > e.end:
+                raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
+            # Drop single point in time events
+            if e.start == e.end:
+                continue
+            events.append(e)
+    return events
 
 
 def get_inpatient_admission_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
@@ -81,56 +170,19 @@ def get_inpatient_admission_discharge_times(
 
 
 # TODO - move this into the ontology class
-def map_omop_concept_ids_to_femr_codes(
-    ontology: extension_datasets.Ontology,
-    omop_concept_ids: List[int],
-    is_ontology_expansion: bool = True,
-) -> Set[str]:
-    """Maps OMOP concept IDs (e.g. 3939430) => femr codes (e.g. 123).
-    If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
-    """
-    codes: Set[str] = set()
-    for omop_concept_id in omop_concept_ids:
-        # returns `None` if `omop_concept_id` is not found in the ontology
-        try:
-            femr_code: str = ontology.get_code_from_concept_id(omop_concept_id)  # type: ignore
-            codes.update(_get_all_children(ontology, femr_code) if is_ontology_expansion else {femr_code})
-        except IndexError:
-            print(f"OMOP Concept ID {omop_concept_id} not found in ontology")
-    return codes
-
-
-# TODO - move this into the ontology class
-def map_omop_concept_codes_to_femr_codes(
-    ontology: extension_datasets.Ontology,
-    omop_concept_codes: List[str],
-    is_ontology_expansion: bool = True,
-) -> Set[str]:
-    """Maps OMOP codes (e.g. "LOINC/123") => femr codes (e.g. 123).
-    If `is_ontology_expansion` is True, then this function will also return all children of the given codes.
-    """
-    codes: Set[str] = set()
-    for omop_concept_code in omop_concept_codes:
-        try:
-            codes.update(
-                _get_all_children(ontology, omop_concept_code) if is_ontology_expansion else {omop_concept_code}
-            )
-        except IndexError:
-            warnings.warn(f"OMOP Concept Code {omop_concept_code} not found in ontology.")
-    return codes
-
-
-# TODO - move this into the ontology class
 def _get_all_children(ontology: extension_datasets.Ontology, code: str) -> Set[str]:
     children_code_set = set([code])
     parent_deque = deque([code])
 
     while len(parent_deque) > 0:
         temp_parent_code: str = parent_deque.popleft()
-        for temp_child_code in ontology.get_children(temp_parent_code):
-            children_code_set.add(temp_child_code)
-            parent_deque.append(temp_child_code)
-
+        try:
+            for temp_child_code in ontology.get_children(temp_parent_code):
+                children_code_set.add(temp_child_code)
+                parent_deque.append(temp_child_code)
+        except:  # noqa
+            # The `temp_parent_code` was not found in the ontology, so skip
+            pass
     return children_code_set
 
 
@@ -150,21 +202,23 @@ class WithinVisitLabeler(Labeler):
 
     Prediction Time: Start of each visit (adjusted by `self.prediction_adjustment_timedelta` if provided)
     Time horizon: By end of visit
-
-    IMPORTANT: This labeler assumes that every event has a `event.visit_id` property.
     """
 
     def __init__(
         self,
         ontology: extension_datasets.Ontology,
-        visit_start_adjust_func: Callable = identity,
-        visit_end_adjust_func: Callable = identity,
+        visit_start_adjust_func: Optional[Callable] = None,
+        visit_end_adjust_func: Optional[Callable] = None,
     ):
         """The argument `visit_start_adjust_func` is a function that takes in a `datetime.datetime`
         and returns a different `datetime.datetime`."""
         self.ontology: extension_datasets.Ontology = ontology
-        self.visit_start_adjust_func: Callable = visit_start_adjust_func
-        self.visit_end_adjust_func: Callable = visit_end_adjust_func
+        self.visit_start_adjust_func: Callable = (
+            visit_start_adjust_func if visit_start_adjust_func is not None else identity  # type: ignore
+        )
+        self.visit_end_adjust_func: Callable = (
+            visit_end_adjust_func if visit_end_adjust_func is not None else identity  # type: ignore
+        )
 
     @abstractmethod
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
@@ -178,7 +232,7 @@ class WithinVisitLabeler(Labeler):
 
     def label(self, patient: Patient) -> List[Label]:
         """
-        Label all visits returned by `self.get_visit_events()`with whether the patient
+        Label all visits returned by `self.get_visit_events()` with whether the patient
         experiences an outcome in `self.outcome_codes` during each visit.
         """
         visits: List[Event] = self.get_visit_events(patient)
@@ -191,7 +245,9 @@ class WithinVisitLabeler(Labeler):
         # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
         results: List[Label] = []
         curr_outcome_idx: int = 0
-        for prediction_start, prediction_end in zip(prediction_start_times, prediction_end_times):
+        for prediction_idx, (prediction_start, prediction_end) in enumerate(
+            zip(prediction_start_times, prediction_end_times)
+        ):
             # Error checking
             if curr_outcome_idx < len(outcome_times) and outcome_times[curr_outcome_idx] is None:
                 raise RuntimeError(
@@ -211,9 +267,12 @@ class WithinVisitLabeler(Labeler):
             if prediction_start > prediction_end:
                 raise RuntimeError(
                     "Prediction start time must be before prediction end time, but `prediction_start_time`"
-                    f" is {prediction_start} and `prediction_end_time` is {prediction_end}."
+                    f" is `{prediction_start}` and `prediction_end_time` is `{prediction_end}`."
                     " Maybe you `visit_start_adjust_func()` or `visit_end_adjust_func()` in such a way that"
                     " the `start` time got pushed after the `end` time?"
+                    " For reference, the original state time of this visit is"
+                    f" `{visits[prediction_idx].start}` and the original end time is `{visits[prediction_idx].end}`."
+                    f" This is for patient with patient_id `{patient.patient_id}`."
                 )
             # Find the first outcome that occurs after this visit starts
             # (this works b/c we assume visits are sorted by `start`)
@@ -271,7 +330,7 @@ class CodeLabeler(TimeHorizonEventLabeler):
         outcome_codes: List[str],
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a CodeLabeler, which labels events whose index in your Ontology is in `self.outcome_codes`
 
@@ -287,7 +346,9 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.outcome_codes: List[str] = outcome_codes
         self.time_horizon: TimeHorizon = time_horizon
         self.prediction_codes: Optional[List[str]] = prediction_codes
-        self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
+        self.prediction_time_adjustment_func: Callable = (
+            prediction_time_adjustment_func if prediction_time_adjustment_func is not None else identity  # type: ignore
+        )
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
@@ -332,10 +393,10 @@ class OMOPConceptCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         outcome_codes: List[str] = list(
-            map_omop_concept_codes_to_femr_codes(
+            get_femr_codes(
                 ontology,
                 self.original_omop_concept_codes,
                 is_ontology_expansion=True,
@@ -345,7 +406,9 @@ class OMOPConceptCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func,
+            prediction_time_adjustment_func=prediction_time_adjustment_func
+            if prediction_time_adjustment_func
+            else identity,
         )
 
 
@@ -366,18 +429,18 @@ class MortalityCodeLabeler(CodeLabeler):
         ontology: extension_datasets.Ontology,
         time_horizon: TimeHorizon,
         prediction_codes: Optional[List[str]] = None,
-        prediction_time_adjustment_func: Callable = identity,
+        prediction_time_adjustment_func: Optional[Callable] = None,
     ):
         """Create a Mortality labeler."""
-        outcome_codes = list(
-            map_omop_concept_codes_to_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True)
-        )
+        outcome_codes = list(get_femr_codes(ontology, get_death_concepts(), is_ontology_expansion=True))
 
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func,
+            prediction_time_adjustment_func=prediction_time_adjustment_func
+            if prediction_time_adjustment_func
+            else identity,
         )
 
 
@@ -394,7 +457,7 @@ class LupusCodeLabeler(CodeLabeler):
         prediction_time_adjustment_func: Callable = identity,
     ):
         concept_codes: List[str] = ["SNOMED/55464009", "SNOMED/201436003"]
-        outcome_codes = list(map_omop_concept_codes_to_femr_codes(ontology, concept_codes, is_ontology_expansion=True))
+        outcome_codes = list(get_femr_codes(ontology, concept_codes, is_ontology_expansion=True))
         super().__init__(
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
@@ -465,178 +528,149 @@ class HighHbA1cCodeLabeler(Labeler):
 
 ##########################################################
 ##########################################################
-# Labeling functions derived from OMOPConceptCodeLabeler
+# CheXpert
 ##########################################################
 ##########################################################
 
 
-class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Hypoglycemia in `time_horizon`."""
+def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
+    """Apply a labeling function to the set of patients included in `patient_ids`.
+    Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
+    labeling_function: Any = args[0]
+    path_to_chexpert_csv: str = args[1]
+    path_to_patient_database: str = args[2]
+    patient_ids: List[int] = args[3]
+    num_labels: Optional[int] = args[4]
 
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/267384006', 'SNOMED/421725003', 'SNOMED/719216001',
-        'SNOMED/302866003', 'SNOMED/237633009', 'SNOMED/120731000119103',
-        'SNOMED/190448007', 'SNOMED/230796005', 'SNOMED/421437000',
-        'SNOMED/52767006', 'SNOMED/237637005', 'SNOMED/84371000119108'
-    ]
-    # fmt: on
+    chexpert_df = pd.read_csv(path_to_chexpert_csv, sep="\t")
+    patients = PatientDatabase(path_to_patient_database)
 
+    chexpert_df[CHEXPERT_LABELS] = (chexpert_df[CHEXPERT_LABELS] == 1) * 1
 
-class AKICodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of AKI in `time_horizon`."""
+    patients_to_labels: Dict[int, List[Label]] = {}
+    for patient_id in patient_ids:
+        patient: Patient = patients[patient_id]  # type: ignore
+        patient_df = chexpert_df[chexpert_df["patient_id"] == patient_id]
 
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/14669001', 'SNOMED/298015003', 'SNOMED/35455006',
-    ]
-    # fmt: on
+        if num_labels is not None and num_labels < len(patient_df):
+            patient_df = patient_df.sample(n=num_labels, random_state=0)
+        labels: List[Label] = labeling_function.label(patient, patient_df)
+        patients_to_labels[patient_id] = labels
 
-
-class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Anemia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/271737000', 'SNOMED/713496008', 'SNOMED/713349004', 'SNOMED/767657005',
-        'SNOMED/111570005', 'SNOMED/691401000119104', 'SNOMED/691411000119101',
-    ]
-    # fmt: on
+    return patients_to_labels
 
 
-class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Hyperkalemia in `time_horizon`."""
+class ChexpertLabeler(Labeler):
+    """CheXpert labeler.
 
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/14140009',
-    ]
-    # fmt: on
+    Multi-label classification task of patient's radiology reports.
+    Make prediction 24 hours before radiology note is recorded.
 
-
-class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Hyponatremia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/267447008', 'SNOMED/89627008'
-    ]
-    # fmt: on
-
-
-class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/267447008', 'SNOMED/89627008',
-    ]
-    # fmt: on
-
-
-class NeutropeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
-    coded occurrence(s) of Neutkropenia in `time_horizon`."""
-
-    # fmt: off
-    original_omop_concept_codes = [
-        'SNOMED/165517008',
-    ]
-    # fmt: on
-
-
-##########################################################
-##########################################################
-# Other labeling functions
-##########################################################
-##########################################################
-
-
-class OpioidOverdoseLabeler(TimeHorizonEventLabeler):
-    """
-    TODO - check
-    The opioid overdose labeler predicts whether or not an opioid overdose will occur in the time horizon
-    after being prescribed opioids.
-    It is conditioned on the patient being prescribed opioids.
+    Excludes:
+        - Radiology reports that are written <=24 hours of a patient's first event (i.e. `patient.events[0].start`)
     """
 
-    def __init__(self, ontology: extension_datasets.Ontology, time_horizon: TimeHorizon):
-        self.time_horizon: TimeHorizon = time_horizon
+    def __init__(
+        self,
+        path_to_chexpert_csv: str,
+    ):
+        self.path_to_chexpert_csv = path_to_chexpert_csv
 
-        icd9_codes: List[str] = [
-            "E850.0",
-            "E850.1",
-            "E850.2",
-            "965.00",
-            "965.01",
-            "965.02",
-            "965.09",
-        ]
-        icd10_codes: List[str] = ["T40.0", "T40.1", "T40.2", "T40.3", "T40.4"]
+    def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
+        """Return the (start, end) of the patient timeline.
 
-        self.overdose_codes: Set[str] = set()
-        for code in icd9_codes:
-            self.overdose_codes |= _get_all_children(ontology, "ICD9CM/" + code)
-        for code in icd10_codes:
-            self.overdose_codes |= _get_all_children(ontology, "ICD10CM/" + code)
-
-        self.opioid_codes = _get_all_children(ontology, "ATC/N02A")
+        Returns:
+            Tuple[datetime.datetime, datetime.datetime]: (start, end)
+        """
+        return (patient.events[0].start, patient.events[-1].start)
 
     def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.overdose_codes`."""
-        times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.overdose_codes:
-                times.append(event.start)
-        return times
+        """Return a list of all times when the patient has a radiology report"""
+
+        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
+
+        patient_df = chexpert_df.sort_values(by=["start"], ascending=True)
+
+        start_time, _ = self.get_patient_start_end_times(patient)
+
+        outcome_times = []
+        for idx, row in patient_df.iterrows():
+            label_time = datetime.datetime.fromisoformat(row["start"])
+            prediction_time = label_time - timedelta(hours=24)
+
+            if prediction_time <= start_time:
+                continue
+            outcome_times.append(label_time)
+
+        return outcome_times
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a sorted list containing the datetimes at which we'll make a prediction."""
-        times: List[datetime.datetime] = []
-        for event in patient.events:
-            if event.code in self.opioid_codes:
-                times.append(event.start)
-        return times
-
-    def get_time_horizon(self) -> TimeHorizon:
-        return self.time_horizon
+        outcome_times = self.get_outcome_times(patient)
+        return [outcome_time - timedelta(hours=24) for outcome_time in outcome_times]
 
     def get_labeler_type(self) -> LabelType:
-        return "boolean"
+        return "categorical"
 
-
-class IsMaleLabeler(Labeler):
-    """Apply a label for whether or not a patient is male or not.
-
-    The prediction time is on admission.
-
-    This is primarily intended as a "debugging" labeler that should be "trivial" and get 1.0 AUROC.
-
-    """
-
-    def __init__(self, ontology: extension_datasets.Ontology):
-        self.male_code: str = "Gender/M"
-
-    def label(self, patient: Patient) -> List[Label]:
-        """Label this patient as Male (TRUE) or not (FALSE)."""
-        # Determine if patient is male
-        is_male: bool = self.male_code in [e.code for e in patient.events]
-
-        # Apply `is_male` label to every admission
+    def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:  # type: ignore
         labels: List[Label] = []
-        for event in patient.events:
-            if event.code in get_inpatient_admission_concepts():
-                labels.append(Label(time=event.start, value=is_male))
+
+        patient_df = patient_df.sort_values(by=["start"], ascending=True)
+        start_time, _ = self.get_patient_start_end_times(patient)
+
+        for idx, row in patient_df.iterrows():
+            label_time = datetime.datetime.fromisoformat(row["start"])
+            prediction_time = label_time - timedelta(days=1)
+
+            if prediction_time <= start_time:
+                continue
+
+            bool_labels = row[CHEXPERT_LABELS].astype(int).to_list()
+            label_string = "".join([str(x) for x in bool_labels])
+            label_num = int(label_string, 2)
+            labels.append(Label(time=prediction_time, value=label_num))
+
         return labels
 
-    def get_labeler_type(self) -> LabelType:
-        return "boolean"
+    def apply(  # type: ignore
+        self,
+        path_to_patient_database: str,
+        num_threads: int = 1,
+        num_patients: Optional[int] = None,
+        num_labels: Optional[int] = None,
+    ) -> LabeledPatients:
+        """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
+
+        Args:
+            path_to_patient_database (str, optional): Path to `PatientDatabase` on disk.
+                Must be specified if `patients = None`
+            num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
+            num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
+                If specified, will take the first `num_patients` in the provided `PatientDatabase` / `patients` list.
+                If None, use all patients.
+
+        Returns:
+            LabeledPatients: Maps patients to labels
+        """
+        # Split patient IDs across parallelized processes
+        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
+        pids = list(chexpert_df["patient_id"].unique())
+
+        if num_patients is not None:
+            pids = pids[:num_patients]
+
+        pid_parts = np.array_split(pids, num_threads)
+
+        # Multiprocessing
+        tasks = [
+            (self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts
+        ]
+
+        with multiprocessing.Pool(num_threads) as pool:
+            results: List[Dict[int, List[Label]]] = list(pool.imap(chexpert_apply_labeling_function, tasks))
+
+        # Join results and return
+        patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
+        return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
 if __name__ == "__main__":

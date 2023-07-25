@@ -7,7 +7,7 @@ import pathlib
 import pickle
 import shutil
 from inspect import signature
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import zstandard
 
@@ -182,7 +182,7 @@ def get_femr_code(ontology, target_code, dummy_concepts: List[str] = []):
 def assert_labels_are_accurate(
     labeled_patients: LabeledPatients,
     patient_id: int,
-    true_labels: List[Tuple[datetime.datetime, Optional[bool]]],
+    true_labels: List[Tuple[datetime.datetime, Any]],
     help_text: str = "",
 ):
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""

@@ -28,6 +28,8 @@ namespace py = pybind11;
 #include "parse_utils.hh"
 #include "pybind11/eigen/tensor.h"
 #include "survival.hh"
+#include <unsupported/Eigen/CXX11/Tensor>
+#include <pybind11/eigen/tensor.h>
 
 const bool SPARSE_FALLBACK = false;
 
@@ -1456,6 +1458,90 @@ class BatchLoader {
         batches;
 };
 
+Eigen::Tensor<uint32_t, 1> compute_repr_label_alignment(Eigen::Tensor<int64_t, 1> label_pids, Eigen::Tensor<uint32_t, 1> label_ages,
+    Eigen::Tensor<int64_t, 1> repr_pids, Eigen::Tensor<uint32_t, 1> repr_ages, Eigen::Tensor<uint32_t, 1> repr_offsets) {
+
+    Eigen::Tensor<uint32_t, 1> result(label_pids.size());
+
+    ssize_t j = 0;
+    for (ssize_t i = 0; i < label_pids.size(); i++) {
+        while (true) {
+            if (j + 1 >= repr_pids.size()) {
+                break;
+            } else if (repr_pids(j) < label_pids(i)) {
+                // Need to go ahead
+            } else {
+                int64_t next_pid = repr_pids(j + 1);
+                uint32_t next_age = repr_ages(j + 1);
+
+                if (next_pid != label_pids(i)) {
+                    break;
+                }
+
+                if (next_age > label_ages(i)) {
+                    break;
+                }
+            }
+            j += 1;
+        }
+
+        if (repr_pids(j) != label_pids(i)) {
+            abort();
+        }
+
+        if (repr_ages(j) > label_ages(i)) {
+            abort();
+        }
+
+        if (j > 0 && repr_pids(j - 1) == repr_pids(j) && repr_ages(j - 1) == repr_ages(j)) {
+            if (repr_offsets(j) >= repr_offsets(j - 1)) {
+                abort();
+            }
+        }
+
+        result(i) = j;
+    }
+
+    return result;
+}
+
+Eigen::Tensor<uint32_t, 1> compute_feature_label_alignment(Eigen::Tensor<int64_t, 1> label_pids, Eigen::Tensor<int64_t, 1> label_dates,
+    Eigen::Tensor<int64_t, 1> feature_pids, Eigen::Tensor<int64_t, 1> feature_dates) {
+
+    Eigen::Tensor<uint32_t, 1> result(label_pids.size());
+
+    ssize_t j = 0;
+    for (ssize_t i = 0; i < label_pids.size(); i++) {
+        while (true) {
+            if (j + 1 >= feature_pids.size()) {
+                break;
+            } else if (feature_pids(j) < label_pids(i)) {
+                // Need to go ahead
+            } else {
+                int64_t next_pid = feature_pids(j + 1);
+                int64_t next_date = feature_dates(j + 1);
+
+                if (next_pid != label_pids(i)) {
+                    break;
+                }
+
+                if (next_date > label_dates(i)) {
+                    break;
+                }
+            }
+            j += 1;
+        }
+
+        if (feature_pids(j) != label_pids(i) || feature_dates(j) != label_dates(i)) {
+            throw std::runtime_error(absl::StrCat("Could not find match for ", label_pids(i), " ", label_dates(i), ", closest is ", feature_pids(j), " ", feature_dates(j)));
+        }
+
+        result(i) = j;
+    }
+
+    return result;
+}
+
 void register_dataloader_extension(pybind11::module& root) {
     py::module m = root.def_submodule("dataloader");
 
@@ -1469,4 +1555,6 @@ void register_dataloader_extension(pybind11::module& root) {
     m.def("create_batches", create_batches);
     m.def("create_dictionary", create_dictionary);
     m.def("create_survival_dictionary", create_survival_dictionary);
+    m.def("compute_repr_label_alignment", compute_repr_label_alignment);
+    m.def("compute_feature_label_alignment", compute_feature_label_alignment);
 }
