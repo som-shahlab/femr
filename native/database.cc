@@ -412,8 +412,8 @@ void reader_thread(
     const absl::flat_hash_map<int64_t, uint32_t>& code_to_index,
     const absl::flat_hash_map<std::string, uint32_t>& text_value_to_index) {
     CSVReader<ZstdReader> reader(
-        patient_file, {"patient_id", "concept_id", "start", "value", "metadata"},
-        ',');
+        patient_file,
+        {"patient_id", "concept_id", "start", "value", "metadata"}, ',');
 
     int64_t patient_id = 0;
     Patient current_patient;

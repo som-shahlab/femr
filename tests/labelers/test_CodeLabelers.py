@@ -277,7 +277,7 @@ def test_MortalityCodeLabeler() -> None:
         (event((1995, 1, 3), 0, 34.5), False),
         (event((2000, 1, 1), 1, "test_value"), True),
         (event((2000, 1, 5), 2, 1), True),
-        (event((2000, 6, 5), "Condition Type/OMOP4822053", True), "skip"),
+        (event((2000, 6, 5), "SNOMED/419620001", True), "skip"),
         (event((2005, 2, 5), 2, None), False),
         (event((2005, 7, 5), 2, None), False),
         (event((2010, 10, 5), 1, None), False),

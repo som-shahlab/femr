@@ -192,11 +192,12 @@ void create_dictionary(const std::string& input, const std::string& output) {
         entry.type = DictEntryType::CODE;
         entry.code_string = database.get_code_dictionary()[code];
         // Make sure to use the hierarchical Shanon entropy formula
-	if (weight == 1 || weight == 0) {
+        if (weight == 1 || weight == 0) {
             entry.weight = 0;
         } else {
-	    entry.weight = baseline * (weight * log(weight) + (1 - weight) * log(1 - weight));
-	}
+            entry.weight = baseline * (weight * log(weight) +
+                                       (1 - weight) * log(1 - weight));
+        }
 
         h_entries.push_back(entry);
     }
@@ -280,11 +281,27 @@ void create_dictionary(const std::string& input, const std::string& output) {
             *result.hierarchical_code_counts.find(index);
     }
 
+    std::map<std::string, std::vector<std::string>> all_parents_map;
+
+    for (uint32_t i = 0; i < database.get_ontology().get_dictionary().size();
+         i++) {
+        std::string entry =
+            std::string(database.get_ontology().get_dictionary()[i]);
+
+        std::vector<std::string> parents;
+        for (uint32_t parent : database.get_ontology().get_all_parents(i)) {
+            parents.push_back(
+                std::string(database.get_ontology().get_dictionary()[parent]));
+        }
+        all_parents_map[entry] = parents;
+    }
+
     json j;
     j["regular"] = r_entries;
     j["ontology_rollup"] = h_entries;
     j["age_stats"] = age_stats;
     j["hierarchical_counts"] = hierarchical_counts;
+    j["all_parents"] = all_parents_map;
 
     std::vector<std::uint8_t> v = json::to_msgpack(j);
 

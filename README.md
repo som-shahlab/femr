@@ -12,7 +12,7 @@ The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001
 2. [Algorithmically label patient records based on structured data](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Labeling.ipynb)
 3. [Generate tabular features from patient timelines for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Count%20Featurization%20And%20Modeling.ipynb)
 4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/5_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/6_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models for binary classification and prediction tasks.
-5. Train and finetune MOTOR-derived models for making time-to-event predictions.
+5. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/7%20Train%20MOTOR.ipynb) and finetune MOTOR-derived models for making time-to-event predictions.
 
 We recommend users start with our [tutorial folder](https://github.com/som-shahlab/femr/tree/main/tutorials)
 
@@ -43,15 +43,23 @@ pip install "femr_cuda[models]"
 
 # Getting Started
 
-The first step of using **FEMR** is to convert your patient data into a femr.datasets.PatientDatabase, a file format that allows you to easily query patient timelines.
+The first step of using **FEMR** is to convert your patient data into a femr.datasets.PatientDatabase, the standard file format used by the **FEMR** codebase to hold and query patient timelines.
 
-There are three options for doing this (in order from most to least recommended):
+There are two recommended paths for doing this, each with a corresponding tutorial:
 
-a) Convert your data to OMOP form and run the etl_generic_omop program to convert OMOP datasets to PatientDatabases. See our MIMIC OMOP ETL tutorial.
+1. [Convert your data to OMOP format, and then run the OMOP converter](https://github.com/som-shahlab/femr/blob/main/tutorials/2a_OMOP_ETL.ipynb)
+2. [Convert your data to FEMR's simple csv format, and then run the simple FEMR converter](https://github.com/som-shahlab/femr/blob/main/tutorials/2b_Simple_ETL.ipynb)
 
-b) Convert your data to FEMR's custom simple csv format and run the etl_simple_femr program to convert that format into a PatientDatabase. See our simple format ETL tutorial.
+The simple csv route has an advantage of being an easier ETL, but does come with some downsides. See the below table for what features we support with what ETLs.
 
-c) Write a custom ETL script to handle special cases. See both the Stanford and Sickkid's ETL scripts.
+Capability | OMOP -> FEMR | Simple CSV -> FEMR
+:------------ | :-------------| :-------------
+Core Labeling Tools | :white_check_mark: | :white_check_mark:
+OMOP Specific Labeling | :white_check_mark: | :x:
+Tabular Feature Generation | :white_check_mark: | :white_check_mark:
+Foundation Model Training | :white_check_mark: | :white_check_mark:
+Shared Vocabulary Enabling Cross-Site Foundation Model Transfer  | :white_check_mark: | :x:
+
 
 # Development
 

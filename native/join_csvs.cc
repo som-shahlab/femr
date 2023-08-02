@@ -91,11 +91,9 @@ void convert_to_column_values(
                 attempt_parse_or_die(val, column_val.integer);
                 break;
 
-
             case ColumnValueType::INT64_T:
                 attempt_parse_or_die(val, column_val.signed_integer);
                 break;
-
 
             case ColumnValueType::DATETIME:
                 attempt_parse_time_or_die(val, column_val.time);

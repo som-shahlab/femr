@@ -53,6 +53,8 @@ def get_outpatient_visit_concepts() -> List[str]:
 
 def get_death_concepts() -> List[str]:
     return [
+        "SNOMED/419620001",
+        # The following code is how deaths are coded in STARR OMOP's death table
         "Condition Type/OMOP4822053",
     ]
 
