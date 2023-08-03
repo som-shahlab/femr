@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime
 from abc import abstractmethod
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 from femr import Event, Patient
 from femr.extension import datasets as extension_datasets

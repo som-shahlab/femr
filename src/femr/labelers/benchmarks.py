@@ -1,18 +1,14 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
 
-import collections
 import datetime
-import multiprocessing
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, List, Optional, Set, Tuple, Union
 
-import numpy as np
 import pandas as pd
 
 from femr import Event, Patient
-from femr.datasets import PatientDatabase
 from femr.extension import datasets as extension_datasets
-from femr.labelers.core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
+from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 from femr.labelers.omop import (
     CodeLabeler,
     WithinVisitLabeler,

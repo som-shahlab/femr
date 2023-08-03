@@ -1,5 +1,4 @@
 import argparse
-import collections
 import datetime
 import functools
 import json
