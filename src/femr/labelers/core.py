@@ -198,7 +198,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         patient_ids: List[int] = []
         label_values: List[Any] = []
         label_times: List[datetime.datetime] = []
-        if self.labeler_type in ["boolean", "numerical", "categorical"]:
+        if self.labeler_type in ["boolean", "numeric", "categorical"]:
             for patient_id, labels in self.patients_to_labels.items():
                 for label in labels:
                     patient_ids.append(patient_id)
@@ -287,7 +287,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
         patients_to_labels: DefaultDict[int, List[Label]] = collections.defaultdict(list)
         # TODO - does replacing zip with dstack improve speed?
         for patient_id, l_value, l_time in zip(patient_ids, label_values, label_times):
-            if labeler_type in ["boolean", "numerical", "categorical"]:
+            if labeler_type in ["boolean", "numeric", "categorical"]:
                 patients_to_labels[patient_id].append(Label(time=l_time, value=l_value))
             elif labeler_type in ["survival"]:
                 patients_to_labels[patient_id].append(
