@@ -2,6 +2,8 @@ import datetime
 import os
 import sys
 
+NEW_LABELS = False
+
 os.environ["JAX_NUMPY_RANK_PROMOTION"] = "raise"
 print("Start", datetime.datetime.now())
 
@@ -13,6 +15,7 @@ parser.add_argument("--data_path", type=str, required=True)
 parser.add_argument("--batch_info_path", type=str, required=True)
 parser.add_argument("--model_dir", type=str, required=True)
 parser.add_argument("--labeled_patients_path", type=str, required=True)
+parser.add_argument("--probe", type=str, required=True)
 parser.add_argument("--subsample_frac", type=int, default=None)
 
 args = parser.parse_args()
@@ -64,7 +67,7 @@ actual_patients_to_evaluate = {}
 with open(args.labeled_patients_path, "rb") as f:
     labeled_patients = pickle.load(f)
     for pid, values in labeled_patients.items():
-        if False:
+        if not NEW_LABELS:
             actual_values = [v for v in values if v.time != v.value.event_time]
         else:
             actual_values = [v for v in values if v.value.time_to_event != datetime.timedelta(minutes=0)]
@@ -84,6 +87,8 @@ if "code_weight" not in params["EHRTransformer/~/SurvivalCLMBRTask"]:
     params["EHRTransformer/~/SurvivalCLMBRTask"]["code_weight_bias"] = params["EHRTransformer/~/SurvivalCLMBRTask"][
         "code_weights"
     ][:, 511:]
+
+params = piton.models.transformer.convert_params(params, dtype=jnp.float16)
 
 with open(args.batch_info_path, "rb") as f:
     batch_info = msgpack.load(f, use_list=False)
@@ -188,33 +193,37 @@ if True:
     split_indices = []
 
     for i, split in enumerate(("train", "dev", "test")):
-        """
-        batches = piton.models.dataloader.Batches(
-            data_path=args.data_path,
+        print("Starting batches", split, datetime.datetime.now())
+        if False:
+            batches = piton.models.dataloader.Batches(
+                data_path=args.data_path,
             batch_info_path=args.batch_info_path,
             seed=config["seed"],
-            num_batch_threads=3,
+            num_batch_threads=4,
             token_dropout=0,
             num_epochs=1,
             split=split,
-        )
+            num_batches=loader.get_number_of_batches(split),
+            )
+        print("Starting to process", split, datetime.datetime.now())
 
-        while True:
-            next_one = batches.get_next()
-            if not next_one:
-                break
+        #while True:
+        #    next_one = batches.get_next()
+        #    if not next_one:
+        #        print("Done processing")
+        #        break
 
-            raw_batch, _ = next_one
-            if not raw_batch:
-                continue
-        """
+        #    raw_batch, step = next_one
+        #    if not raw_batch:
+        #        print("Skipping none")
+        #        continue
+        for j in range(loader.get_number_of_batches(split)):
+            raw_batch = loader.get_batch(split, j)
 
-        for dev_index in range(loader.get_number_of_batches(split)):
-            raw_batch = loader.get_batch(split, dev_index)
-            batch = jax.tree_map(lambda a: jnp.array(a), raw_batch)
+            batch = jax.tree_map(lambda a: jax.device_put(a, device=jax.devices("gpu")[0]), raw_batch)
 
             repr, log_time, is_event = compute_repr(
-                piton.models.transformer.convert_params(params, dtype=jnp.float16),
+                params,
                 rng,
                 config,
                 batch,
@@ -233,33 +242,46 @@ if True:
             event_times.append(raw_batch["task"]["event_times"][: batch["num_indices"]])
             is_censors.append(raw_batch["task"]["is_censor"][: batch["num_indices"]])
 
+        print("Actually done", datetime.datetime.now())
+
+    print("About to concat 1", datetime.datetime.now())
     reprs = jnp.concatenate(reprs, axis=0)
+    print("About to concat 2", datetime.datetime.now())
     label_ages = jnp.concatenate(label_ages, axis=0)
+    print("About to concat 3", datetime.datetime.now())
     assert label_ages.dtype == jnp.uint32
     label_pids = jnp.concatenate(label_pids, axis=0)
+    print("About to concat 4", datetime.datetime.now())
     log_times = jnp.concatenate(log_times, axis=0)
+    print("About to concat 5", datetime.datetime.now())
     is_events = jnp.concatenate(is_events, axis=0)
+    print("About to concat 6", datetime.datetime.now())
     split_indices = jnp.concatenate(split_indices, axis=0)
+    print("About to concat 7", datetime.datetime.now())
 
     event_times = jnp.concatenate(event_times, axis=0)
+    print("About to concat 8", datetime.datetime.now())
     is_censors = jnp.concatenate(is_censors, axis=0)
+    print("About to concat 9", datetime.datetime.now())
 
-    with open("what.pkl", "wb") as f:
-        pickle.dump(
-            [
-                reprs,
-                label_ages,
-                label_pids,
-                log_times,
-                is_events,
-                split_indices,
-                event_times,
-                is_censors,
-            ],
-            f,
-        )
-        del model
-        del loader
+    print("Computed reprs")
+    if False:
+        with open("what.pkl", "wb") as f:
+            pickle.dump(
+                [
+                    reprs,
+                    label_ages,
+                    label_pids,
+                    log_times,
+                    is_events,
+                    split_indices,
+                    event_times,
+                    is_censors,
+                ],
+                f,
+            )
+    del model
+    del loader
 else:
     with open("what.pkl", "rb") as f:
         (
@@ -357,7 +379,8 @@ for frac in [1]:
 
     if args.subsample_frac is not None:
         original = train_mask.sum()
-        train_mask = train_mask * (np.random.rand(train_mask.shape[0]) * 100 < args.subsample_frac)
+        better = 50_000 / original
+        train_mask = train_mask * (np.random.rand(train_mask.shape[0]) < better)
         print("Sampled from ", train_mask.sum(), "from", original)
 
     train_reprs = reprs[train_mask, :, :]
@@ -402,6 +425,7 @@ for frac in [1]:
 
     best_score = None
     best_hazards = None
+    best_beta = None
     best_test = None
 
     start_l, end_l = -5, 1
@@ -454,7 +478,7 @@ for frac in [1]:
             # print(name, score)
             if name == "dev":
                 if best_score is None or score > best_score:
-                    best_score, best_hazards = score, hazards
+                    best_score, best_hazards, best_beta = score, hazards, np.array(beta)
                     best_test = get_c(2)
 
     print("Got best:", best_test)
@@ -468,6 +492,9 @@ for frac in [1]:
     label_ages = np.array(label_ages)
     event_times = np.array(event_times)
     is_censors = np.array(is_censors)
+
+    with open(args.probe, 'wb') as f:
+        pickle.dump(best_beta, f)
 
     for i in range(hazards.shape[0]):
         hazard = hazards[i, :]
@@ -494,7 +521,7 @@ for frac in [1]:
         assert len(target_labels) == 1
         target_label = target_labels[0]
         assert is_censor == target_label.value.is_censored
-        if False:
+        if not NEW_LABELS:
             assert event_time == (target_label.value.event_time - target_label.time) / datetime.timedelta(minutes=1)
         else:
             assert event_time == (target_label.value.time_to_event) / datetime.timedelta(minutes=1)

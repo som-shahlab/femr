@@ -92,7 +92,7 @@ class Batches:
         index_queue: queue.Queue[Optional[int]] = queue.Queue(maxsize=300)
         _ = index_queue
 
-        self.batch_queue: queue.Queue[Optional[Any]] = queue.Queue(maxsize=30)
+        self.batch_queue: queue.Queue[Optional[Any]] = queue.Queue(maxsize=5)
 
         batch_queue = self.batch_queue
         _ = batch_queue

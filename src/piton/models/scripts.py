@@ -286,7 +286,7 @@ def train_model() -> None:
             return loss, None
 
     def compute_total_loss(split, params, non_fit_params, rng, config):
-        num_to_get = min(500, loader.get_number_of_batches(split))
+        num_to_get = min(100, loader.get_number_of_batches(split))
         total_loss = 0
         total_indices = 0
 

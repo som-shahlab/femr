@@ -321,8 +321,8 @@ class SurvivalCLMBRTask : public Task {
     Eigen::Tensor<uint32_t, 1> batch_event_codes;
     Eigen::Tensor<float, 1> batch_event_log_times;
 
-    Eigen::Tensor<float, 3> dense_log_times;
-    Eigen::Tensor<bool, 3> dense_is_event;
+//    Eigen::Tensor<float, 3> dense_log_times;
+//    Eigen::Tensor<bool, 3> dense_is_event;
 
     void prepare_batch_data(uint32_t num_representations) override {
         uint32_t num_batch_events = round_to_nearest_bin(total_events, 2);
@@ -333,13 +333,13 @@ class SurvivalCLMBRTask : public Task {
             batch_event_indices(i, 1) = vocab_size;
         }
 
-        dense_log_times = Eigen::Tensor<float, 3>(num_representations,
-                                                  time_bins.size(), vocab_size);
-        dense_log_times.setConstant(-std::numeric_limits<float>::infinity());
+        //dense_log_times = Eigen::Tensor<float, 3>(num_representations,
+             //                                     time_bins.size(), vocab_size);
+        //dense_log_times.setConstant(-std::numeric_limits<float>::infinity());
 
-        dense_is_event = Eigen::Tensor<bool, 3>(num_representations,
-                                                time_bins.size(), vocab_size);
-        dense_is_event.setConstant(false);
+        // dense_is_event = Eigen::Tensor<bool, 3>(num_representations,
+           //                                     time_bins.size(), vocab_size);
+        // dense_is_event.setConstant(false);
 
         batch_event_offsets = Eigen::Tensor<uint32_t, 1>(
             num_representations * time_bins.size() + 1);
@@ -398,7 +398,7 @@ class SurvivalCLMBRTask : public Task {
                     float log_time_in_bin = std::log2(time_in_bin);
 
                     for (uint32_t i = 0; i < vocab_size; i++) {
-                        dense_log_times(rep, time_bin, i) = log_time_in_bin;
+                        // dense_log_times(rep, time_bin, i) = log_time_in_bin;
                     }
 
                     batch_censor_log_times(rep * time_bins.size() + time_bin) =
@@ -423,10 +423,10 @@ class SurvivalCLMBRTask : public Task {
                             event_index++;
 
                             log_time = std::log2(event.first - start);
-                            dense_is_event(rep, time_bin, event.second) = true;
+                            // dense_is_event(rep, time_bin, event.second) = true;
                         }
 
-                        dense_log_times(rep, time_bin, event.second) = log_time;
+                        // dense_log_times(rep, time_bin, event.second) = log_time;
 
                         batch_event_codes(offset_index) = event.second;
                         batch_event_log_times(offset_index) = log_time;
@@ -461,8 +461,8 @@ class SurvivalCLMBRTask : public Task {
         result["num_valid"] = total_events;
         result["event_indices"] = batch_event_indices;
         result["sparse_time"] = sparse_time;
-        result["dense_is_event"] = dense_is_event;
-        result["dense_log_times"] = dense_log_times;
+//        result["dense_is_event"] = dense_is_event;
+//        result["dense_log_times"] = dense_log_times;
 
         return result;
     }
