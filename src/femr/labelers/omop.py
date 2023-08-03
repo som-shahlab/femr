@@ -10,6 +10,7 @@ from femr import Event, Patient
 from femr.extension import datasets as extension_datasets
 from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
+
 def identity(x: Any) -> Any:
     return x
 
@@ -95,7 +96,6 @@ def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[str
     return get_femr_codes(
         ontology, get_outpatient_visit_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
     )
-
 
 
 def get_outpatient_visit_events(patient: Patient, ontology: extension_datasets.Ontology) -> List[Event]:
@@ -502,6 +502,7 @@ class HighHbA1cCodeLabeler(Labeler):
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
+
 
 if __name__ == "__main__":
     pass

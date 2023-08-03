@@ -1,7 +1,7 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
-import collections
 
+import collections
 import datetime
 import multiprocessing
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -12,7 +12,7 @@ import pandas as pd
 from femr import Event, Patient
 from femr.datasets import PatientDatabase
 from femr.extension import datasets as extension_datasets
-from femr.labelers.core import Label, Labeler, LabeledPatients, LabelType, TimeHorizon, TimeHorizonEventLabeler
+from femr.labelers.core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 from femr.labelers.omop import (
     CodeLabeler,
     WithinVisitLabeler,
@@ -28,6 +28,7 @@ from femr.labelers.omop_lab_values import InstantLabValueLabeler
 
 def identity(x: Any) -> Any:
     return x
+
 
 def get_icu_visit_detail_concepts() -> List[str]:
     return [
@@ -59,10 +60,12 @@ def get_icu_visit_detail_concepts() -> List[str]:
         "CARE_SITE/7930924",
     ]
 
+
 def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[str]:
     return get_femr_codes(
         ontology, get_icu_visit_detail_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
     )
+
 
 def get_icu_events(
     patient: Patient, ontology: extension_datasets.Ontology, is_return_idx: bool = False
@@ -720,7 +723,6 @@ class HyperlipidemiaCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     root_concept_code = "SNOMED/55822004"
 
 
-
 ##########################################################
 ##########################################################
 # CheXpert
@@ -743,6 +745,7 @@ CHEXPERT_LABELS = [
     "Fracture",
     "Support Devices",
 ]
+
 
 class ChexpertLabeler(Labeler):
     """CheXpert labeler.
@@ -768,10 +771,12 @@ class ChexpertLabeler(Labeler):
     def label(self, patient: Patient) -> List[Label]:  # type: ignore
         labels: List[Label] = []
         patient_start_time, _ = self.get_patient_start_end_times(patient)
-        df_patient = self.df_chexpert[self.df_chexpert["patient_id"] == patient.patient_id].sort_values(by=["start"], ascending=True)
-        
+        df_patient = self.df_chexpert[self.df_chexpert["patient_id"] == patient.patient_id].sort_values(
+            by=["start"], ascending=True
+        )
+
         for idx, row in df_patient.iterrows():
-            label_time: datetime.datetime  = datetime.datetime.fromisoformat(row["start"])
+            label_time: datetime.datetime = datetime.datetime.fromisoformat(row["start"])
             prediction_time: datetime.datetime = label_time + self.prediction_offset
             if prediction_time <= patient_start_time:
                 # Exclude radiology reports where our prediction time would be before patient's first timeline event
@@ -783,6 +788,7 @@ class ChexpertLabeler(Labeler):
             labels.append(Label(time=prediction_time, value=label_num))
 
         return labels
+
 
 if __name__ == "__main__":
     pass
