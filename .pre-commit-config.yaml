@@ -12,12 +12,12 @@ repos:
     hooks:
     -   id: black
 -   repo: https://github.com/PyCQA/flake8
-    rev: 6.0.0
+    rev: 6.1.0
     hooks:
     -   id: flake8
         exclude: ^tutorials|^native
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.4.1
+    rev: v1.5.0
     hooks:
     -   id: mypy
         exclude: ^src/femr/extension/|^tutorials|^native
