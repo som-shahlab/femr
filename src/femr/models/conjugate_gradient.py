@@ -167,8 +167,6 @@ def train_logistic_regression(train_reprs, train_labels, val_reprs, val_labels):
         train_loss = sklearn.metrics.roc_auc_score(train_labels, train_hazards)
         val_loss = sklearn.metrics.roc_auc_score(val_labels, val_hazards)
 
-        print(l2, train_loss, val_loss)
-
         if best_val_loss is None or val_loss > best_val_loss:
             best_train_loss, best_val_loss, best_beta, best_l = train_loss, val_loss, np.array(beta), l2
 
