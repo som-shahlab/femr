@@ -660,7 +660,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
         else:
             first_diagnosis_time: datetime.datetime = min(outcome_times)
             for t in times:
-                if t <= first_diagnosis_time:
+                if t < first_diagnosis_time:
                     valid_times.append(t)
             return valid_times
 
