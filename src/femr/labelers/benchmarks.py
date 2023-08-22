@@ -642,7 +642,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
         ), "Must specify `root_concept_code` for `FirstDiagnosisTimeHorizonCodeLabeler`"
         self.ontology = ontology
         self.outcome_codes = list(get_femr_codes(ontology, [self.root_concept_code], is_ontology_expansion=True))
-        self.time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(days=1), datetime.timedelta(days=365))
+        self.time_horizon: TimeHorizon = TimeHorizon(datetime.timedelta(minutes=1), datetime.timedelta(days=365))
 
     def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
         """Return discharges that occur before first diagnosis of outcome as prediction times."""
