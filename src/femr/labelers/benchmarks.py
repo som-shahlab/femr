@@ -676,7 +676,7 @@ class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
         return self.time_horizon
 
     def is_discard_censored_labels(self) -> bool:
-        return False
+        return True
 
     def allow_same_time_labels(self) -> bool:
         return False
