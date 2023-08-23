@@ -282,7 +282,7 @@ def create_batches() -> None:
             frac_events = total_events / total
             task["lambda"] = frac_events / mean_time
 
-            print(frac_events, mean_time, task["lambda"])
+            print(total_events, total, frac_events, mean_time, task["lambda"])
     elif args.task == "survival_clmbr":
         with open(args.clmbr_survival_dictionary_path, "rb") as f:
             surv_dict = msgpack.load(f, use_list=False)

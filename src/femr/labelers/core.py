@@ -212,7 +212,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                     patient_ids.append(patient_id)
                     label_values.append(
                         [
-                            survival_value.time_to_event,
+                            survival_value.time_to_event / datetime.timedelta(minutes=1),
                             survival_value.is_censored,
                         ]
                     )
@@ -271,7 +271,7 @@ class LabeledPatients(MutableMapping[int, List[Label]]):
                 patients_to_labels[patient_id].append(
                     Label(
                         time=l_time,
-                        value=SurvivalValue(time_to_event=l_value[0], is_censored=l_value[1]),
+                        value=SurvivalValue(time_to_event=datetime.timedelta(minutes=l_value[0]), is_censored=l_value[1] == 1),
                     )
                 )
             else:

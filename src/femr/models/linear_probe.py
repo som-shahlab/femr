@@ -188,9 +188,12 @@ def train_linear_probe() -> None:
     labeler_type = batch_info["config"]["task"]["labeler_type"]
 
     if labeler_type == "survival":
-        time_bins = jnp.array(config["task"]["time_bins"] + [float("inf")])
+        with open('../survival_dictionary', 'rb') as f:
+            survival_dict = msgpack.load(f)
+            time_bins = jnp.array(survival_dict["time_bins"] + [float("inf")])
+            print(time_bins)
 
-    if True:
+    if False:
         loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
 
         logging.info(
@@ -224,42 +227,10 @@ def train_linear_probe() -> None:
         @functools.partial(jax.jit, static_argnames=("config"))
         def compute_repr(params, rng, config, batch):
             repr, mask = model.apply(params, rng, config, batch)
+            return repr
 
             if labeler_type == "survival":
-                final_layer = params["EHRTransformer/~/SurvivalCLMBRTask/~/linear"]
 
-                binned_reprs = jnp.dot(repr, final_layer["w"].astype(jnp.float16))
-                binned_reprs += jnp.broadcast_to(final_layer["b"].astype(jnp.float16), binned_reprs.shape)
-                num_time_bins = len(time_bins) - 1
-
-                binned_reprs = binned_reprs.reshape(repr.shape[0], num_time_bins, -1)
-
-                offsets = jnp.ones(
-                    (repr.shape[0], num_time_bins, 1),
-                    dtype=binned_reprs.dtype,
-                )
-
-                total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
-
-                tiled_bins = jnp.expand_dims(time_bins, 0)
-
-                tiled_times = jnp.expand_dims(batch["task"]["event_times"], -1)
-
-                time_in_bin = jnp.clip(
-                    tiled_times - tiled_bins[:, :-1],
-                    0,
-                    tiled_bins[:, 1:] - tiled_bins[:, :-1],
-                )
-
-                log_time_in_bin = jnp.log2(time_in_bin)
-
-                # Marker of whether it is in the bin
-                within_bin = jnp.logical_and(
-                    tiled_bins[:, :-1] <= tiled_times,
-                    tiled_times < tiled_bins[:, 1:],
-                )
-
-                is_event = jnp.expand_dims(~batch["task"]["is_censor"], 1) * within_bin
 
                 return total_reps, (batch["task"]["event_times"], batch["task"]["is_censor"], log_time_in_bin, is_event)
 
@@ -282,11 +253,14 @@ def train_linear_probe() -> None:
             print("Starting to process", split, datetime.datetime.now())
 
             for j in range(loader.get_number_of_batches(split)):
+                if j % 100 == 0:
+                    print(split, j, loader.get_number_of_batches(split))
+
                 raw_batch = loader.get_batch(split, j)
 
                 batch = jax.tree_map(lambda a: jax.device_put(a, device=jax.devices("gpu")[0]), raw_batch)
 
-                repr, label_data = compute_repr(
+                repr = compute_repr(
                     params,
                     rng,
                     config,
@@ -327,7 +301,7 @@ def train_linear_probe() -> None:
         repr_split = jnp.concatenate(l_repr_split, axis=0)
 
         print("Computed reprs")
-        if False:
+        if True:
             with open("what.pkl", "wb") as f:
                 pickle.dump(
                     [
@@ -407,6 +381,31 @@ def train_linear_probe() -> None:
 
     reprs = reprs[sort_indices[matching_indices], :]
 
+
+    if labeler_type == "survival":
+        final_layer = params["EHRTransformer/~/SurvivalCLMBRTask/~/linear"]
+
+        binned_reprs = jnp.dot(reprs, final_layer["w"].astype(jnp.float16))
+        binned_reprs += jnp.broadcast_to(final_layer["b"].astype(jnp.float16), binned_reprs.shape)
+        num_time_bins = len(time_bins) - 1
+
+        binned_reprs = binned_reprs.reshape(reprs.shape[0], num_time_bins, -1)
+
+        offsets = jnp.ones(
+            (reprs.shape[0], num_time_bins, 1),
+            dtype=binned_reprs.dtype,
+        )
+
+        reprs = jnp.concatenate((binned_reprs, offsets), axis=-1)
+
+
+    else:
+        offsets = jnp.ones(
+            (reprs.shape[0], 1),
+            dtype=reprs.dtype,
+        )
+        reprs = jnp.concatenate((reprs, offsets), axis=-1)
+
     split_indices = np.array(split_indices)
 
     train_mask = split_indices == 0
@@ -428,9 +427,37 @@ def train_linear_probe() -> None:
     data = {"reprs": reprs}
 
     if labeler_type == "survival":
-        event_time, is_censor, log_times, is_events = label_values
+
+        event_times = []
+        is_censor = []
+        for label_value, label_age in zip(label_values, label_ages):
+            event_times.append(label_value["event_time"] - label_age)
+            is_censor.append(label_value["is_censored"])
+
+        event_times = jnp.array(event_times)
+        is_censor = jnp.array(is_censor)
+
+        tiled_bins = jnp.expand_dims(time_bins, 0)
+        tiled_times = jnp.expand_dims(event_times, -1)
+
+        time_in_bin = jnp.clip(
+            tiled_times - tiled_bins[:, :-1],
+            0,
+            tiled_bins[:, 1:] - tiled_bins[:, :-1],
+        )
+
+        log_times = jnp.log2(time_in_bin)
+
+        # Marker of whether it is in the bin
+        within_bin = jnp.logical_and(
+            tiled_bins[:, :-1] <= tiled_times,
+            tiled_times < tiled_bins[:, 1:],
+        )
+
+        is_events = jnp.expand_dims(~is_censor, 1) * within_bin
         data["log_times"] = log_times
         data["is_events"] = is_events
+
         compute_grad = compute_survival_grad
         compute_hessian = compute_survival_hessian
     elif labeler_type == "boolean":
@@ -458,7 +485,7 @@ def train_linear_probe() -> None:
         mask = split_indices == split_index
 
         if labeler_type == "survival":
-            e_t = apply_mask(event_time, mask)
+            e_t = apply_mask(event_times, mask)
             is_c = apply_mask(is_censor, mask)
 
             limit_time = jnp.quantile(e_t[~is_c], 0.9)
@@ -517,7 +544,11 @@ def train_linear_probe() -> None:
         birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
         prediction_dates.append(birth_date + datetime.timedelta(minutes=int(age)))
 
-    predictions = sigmoid(best_hazards.astype(np.float32))
+
+    if labeler_type == "boolean":
+        predictions = sigmoid(best_hazards.astype(np.float32))
+    else:
+        predictions = best_hazards
 
     with open(os.path.join(args.output_dir, "predictions.pkl"), "wb") as of:
         pickle.dump([predictions, label_pids, label_values, prediction_dates], of)
