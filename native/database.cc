@@ -1187,6 +1187,17 @@ Ontology create_ontology(std::vector<int64_t> raw_codes,
     auto text = get_concept_text(raw_codes, parent_info.first, concept,
                                  delimiter, num_threads);
 
+    absl::flat_hash_map<std::string, uint64_t> seen_text_codes;
+    for (size_t i = 0; i < raw_codes.size(); i++) {
+        auto iter = seen_text_codes.find(text[i].first);
+        if (iter != std::end(seen_text_codes)) {
+            throw std::runtime_error(
+                absl::StrCat("Cannot support duplicate code strings, text \"", text[i].first, "\" for concept_ids ", iter->second, " ", raw_codes[i]));
+        } else {
+            seen_text_codes.insert(std::make_pair(text[i].first, raw_codes[i]));
+        }
+    }
+
     {
         boost::filesystem::create_directory(target);
         DictionaryWriter main(target / "main");

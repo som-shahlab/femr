@@ -127,7 +127,7 @@ class _ConceptTableConverter(CSVExtractor):
         if concept_id == 0:
             # The following are worth recovering even without the code ...
             if self.prefix == "note":
-                concept_id = 26
+                concept_id = 46235038
             elif self.prefix == "visit":
                 concept_id = 8
             elif self.prefix == "visit_detail":
