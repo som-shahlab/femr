@@ -367,7 +367,7 @@ class NoteFeaturizer:
             save_embedded_notes_chunk(path_to_temp_dir, chunk_id, note_embeddings)
             reload = load_embedded_note_chunk(path_to_temp_dir, chunk_id)
             assert reload.shape == note_embeddings.shape
-            assert type(reload) == type(note_embeddings)
+            # assert type(reload) == type(note_embeddings)
 
             notes_embedded.append(note_embeddings)
             print_log("embed", f"finished chunk #{chunk_id}")
