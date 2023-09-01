@@ -9,9 +9,18 @@ from typing import Any, Dict, Mapping, Optional, Sequence
 from femr.datasets import RawEvent
 from femr.extractors.csv import CSVExtractor
 
-OMOP_BIRTH = 4216316
+OMOP_BIRTH = 4083587
 OMOP_DEATH = 4306655
 
+def get_concept_id(row, field_name):
+    source_concept_id = field_name.replace('concept_id', 'source_concept_id')
+    possib_source = row.get(source_concept_id, '0')
+    if possib_source not in ('', '0'):
+        source_value = int(possib_source)
+        if source_value < 2000000000:
+            return source_value
+        
+    return int(row.get(field_name))
 
 class _DemographicsConverter(CSVExtractor):
     """Convert the OMOP demographics table to events."""
@@ -54,10 +63,9 @@ class _DemographicsConverter(CSVExtractor):
         ] + [
             RawEvent(
                 start=birth,
-                concept_id=int(row[target]),
+                concept_id=get_concept_id(row, target),
                 omop_table="person",
                 clarity_table=row.get("load_table_id"),
-                source_code=row.get(target.replace("_concept_id", "_source_value")),
             )
             for target in [
                 "gender_concept_id",
@@ -122,7 +130,7 @@ class _ConceptTableConverter(CSVExtractor):
             concept_id = self.force_concept_id
         else:
             concept_id_field = self.concept_id_field or (self.prefix + "_concept_id")
-            concept_id = int(row[concept_id_field])
+            concept_id = get_concept_id(row, concept_id_field)
 
         if concept_id == 0:
             # The following are worth recovering even without the code ...
@@ -169,12 +177,6 @@ class _ConceptTableConverter(CSVExtractor):
 
         if unit is not None:
             metadata["unit"] = unit
-
-        if self.force_concept_id is None:
-            source_code_column = concept_id_field.replace("_concept_id", "_source_value")
-            source_code = row.get(source_code_column)
-            if source_code is not None:
-                metadata["source_code"] = source_code
 
         return [RawEvent(start=start, concept_id=concept_id, value=value, **metadata)]
 
