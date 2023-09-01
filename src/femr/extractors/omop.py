@@ -17,9 +17,7 @@ def get_concept_id(row, field_name):
     source_concept_id = field_name.replace("concept_id", "source_concept_id")
     possib_source = row.get(source_concept_id, "0")
     if possib_source not in ("", "0"):
-        source_value = int(possib_source)
-        if source_value < 2000000000:
-            return source_value
+        return int(possib_source)
 
     return int(row.get(field_name))
 

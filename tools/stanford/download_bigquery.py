@@ -81,6 +81,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    target = f"{args.output_dir}/{args.gcp_datset_id}"
+    os.mkdir(target)
+
     print('Make sure to run "gcloud auth application-default login" before running this command')
 
     # Connect to our BigQuery project
@@ -146,8 +149,6 @@ if __name__ == "__main__":
         print(f"====> Finished extracting {i} out of {n_tables} tables")
 
     print("Starting to download tables")
-
-    target = f"{args.output_dir}/{table.project}.{table.dataset_id}"
 
     os.system(f"gsutil -m rsync -r gs://{scratch_bucket_name}/{random_dir} {target}")
 
