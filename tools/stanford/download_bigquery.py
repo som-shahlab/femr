@@ -147,7 +147,9 @@ if __name__ == "__main__":
 
     print("Starting to download tables")
 
-    os.system(f"gsutil -m rsync -r gs://{scratch_bucket_name}/{random_dir} {args.output_dir}")
+    target = f"{args.output_dir}/{table.project}.{table.dataset_id}"
+
+    os.system(f"gsutil -m rsync -r gs://{scratch_bucket_name}/{random_dir} {target}")
 
     print("------\n------")
     print("Successfully downloaded all tables!")
@@ -155,12 +157,7 @@ if __name__ == "__main__":
 
     # Delete the temporary Google Cloud Storage bucket
     print("\nDeleting temporary files...")
-    undeleted_blobs: google.api_core.page_iterator.HTTPIterator = storage_client.list_blobs(
-        bucket,
-        prefix=random_dir + "/",
-    )
-    for blob in undeleted_blobs:
-        blob.delete()
+    os.system(f"gsutil -m rm -r gs://{scratch_bucket_name}/{random_dir}")
     print("------\n------")
     print("Successfully deleted temporary Google Cloud Storage files!")
     print("------\n------")
