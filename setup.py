@@ -82,9 +82,9 @@ class cmake_build_ext(build_ext):
             )
 
             if source_env.get("DEBUG", False):
-                compile_mode = 'dbg'
+                compile_mode = "dbg"
             else:
-                compile_mode = 'opt'
+                compile_mode = "opt"
 
             subprocess.run(
                 args=["bazel"] + bazel_extra_args + ["build", "-c", compile_mode, ext.target] + extra_args,
