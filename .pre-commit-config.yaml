@@ -8,7 +8,7 @@ repos:
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
 -   repo: https://github.com/psf/black
-    rev: 23.7.0
+    rev: 23.9.1
     hooks:
     -   id: black
 -   repo: https://github.com/PyCQA/flake8
@@ -17,7 +17,7 @@ repos:
     -   id: flake8
         exclude: ^tutorials|^native
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.5.0
+    rev: v1.5.1
     hooks:
     -   id: mypy
         exclude: ^src/femr/extension/|^tutorials|^native
