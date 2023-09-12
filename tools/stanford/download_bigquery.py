@@ -81,7 +81,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    target = f"{args.output_dir}/{args.gcp_datset_id}"
+    target = f"{args.output_dir}/{args.gcp_dataset_id}"
     os.mkdir(target)
 
     print('Make sure to run "gcloud auth application-default login" before running this command')

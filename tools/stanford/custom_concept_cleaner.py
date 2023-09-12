@@ -35,9 +35,6 @@ def get_concepts_to_fix(root: str, child: str) -> Dict[str, List[str]]:
                 if row["vocabulary_id"] == "Vocabulary":
                     continue
 
-                if row["vocabulary_id"].endswith("_to_value"):
-                    continue
-
                 code = row["vocabulary_id"] + "/" + row["concept_code"]
                 result[code].append(row["concept_id"])
     except Exception as e:
