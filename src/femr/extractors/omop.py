@@ -9,8 +9,17 @@ from typing import Any, Dict, Mapping, Optional, Sequence
 from femr.datasets import RawEvent
 from femr.extractors.csv import CSVExtractor
 
-OMOP_BIRTH = 4216316
+OMOP_BIRTH = 4083587
 OMOP_DEATH = 4306655
+
+
+def get_concept_id(row, field_name):
+    source_concept_id = field_name.replace("concept_id", "source_concept_id")
+    possib_source = row.get(source_concept_id, "0")
+    if possib_source not in ("", "0"):
+        return int(possib_source)
+
+    return int(row.get(field_name))
 
 
 class _DemographicsConverter(CSVExtractor):
@@ -54,10 +63,9 @@ class _DemographicsConverter(CSVExtractor):
         ] + [
             RawEvent(
                 start=birth,
-                concept_id=int(row[target]),
+                concept_id=get_concept_id(row, target),
                 omop_table="person",
                 clarity_table=row.get("load_table_id"),
-                source_code=row.get(target.replace("_concept_id", "_source_value")),
             )
             for target in [
                 "gender_concept_id",
@@ -96,6 +104,7 @@ class _ConceptTableConverter(CSVExtractor):
     concept_id_field: Optional[str] = None
     string_value_field: Optional[str] = None
     numeric_value_field: Optional[str] = None
+    concept_id_value_field: Optional[str] = None
     force_concept_id: Optional[int] = None
 
     def get_patient_id_field(self) -> str:
@@ -118,11 +127,47 @@ class _ConceptTableConverter(CSVExtractor):
         value = normalize_to_float_if_possible(self.string_value_field, None)
         value = normalize_to_float_if_possible(self.numeric_value_field, value)
 
+        if self.string_value_field and self.numeric_value_field and self.concept_id_value_field and value is None:
+            concept_id_value = _try_numeric(row[self.concept_id_value_field])
+            if concept_id_value == 0:
+                concept_id_value = None
+        else:
+            concept_id_value = None
+
         if self.force_concept_id is not None:
             concept_id = self.force_concept_id
         else:
             concept_id_field = self.concept_id_field or (self.prefix + "_concept_id")
-            concept_id = int(row[concept_id_field])
+            concept_id = get_concept_id(row, concept_id_field)
+
+        if concept_id_value is not None:
+            # This is a very special case. We have a value_as_concept_id with no string or numeric value
+            #
+            # There are two reasons for this, each with different desired behavior:
+            # 1. OMOP defines a code with a maps to value relationship.
+            #      See https://www.ohdsi.org/web/wiki/doku.php?id=documentation:vocabulary:mapping
+            #      In this cases we generally just want to drop the value, as the data is captured in source_concept_id
+            # 2. The ETL has decided to put non-maps to value codes in observation for various reasons.
+            #      For instance STARR-OMOP puts shc_medical_hx in here
+            #      In this case, we generally want to create a string value with the source code value.
+            #
+            # As a temporary solution, I am going to just treat these as string features
+            # In the future, we might want to explore these as code features
+            source_concept_id_column = concept_id_field.replace("_concept_id", "_source_concept_id")
+            source_code_column = concept_id_field.replace("_concept_id", "_source_value")
+            source_concept_id = row.get(source_concept_id_column) or "0"
+            source_code = row.get(source_code_column, "")
+
+            if source_concept_id == "0" and source_code != "":
+                # This indicates case #2 above, so we want to set the concept id to the "regular" concept_id and
+                # have no value
+                concept_id = int(row[concept_id_field])
+
+                # Note that we have to "escape" the source code to avoid integer conversions ..
+                value = "SOURCE_CODE/" + source_code
+            else:
+                # This indicates case #1, so discard the value as it should be retained in source_concept_id correctly
+                value = None
 
         if concept_id == 0:
             # The following are worth recovering even without the code ...
@@ -170,12 +215,6 @@ class _ConceptTableConverter(CSVExtractor):
         if unit is not None:
             metadata["unit"] = unit
 
-        if self.force_concept_id is None:
-            source_code_column = concept_id_field.replace("_concept_id", "_source_value")
-            source_code = row.get(source_code_column)
-            if source_code is not None:
-                metadata["source_code"] = source_code
-
         return [RawEvent(start=start, concept_id=concept_id, value=value, **metadata)]
 
 
@@ -208,11 +247,13 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             prefix="measurement",
             string_value_field="value_source_value",
             numeric_value_field="value_as_number",
+            concept_id_value_field="value_as_concept_id",
         ),
         _ConceptTableConverter(
             prefix="observation",
             string_value_field="value_as_string",
             numeric_value_field="value_as_number",
+            concept_id_value_field="value_as_concept_id",
         ),
         _ConceptTableConverter(
             prefix="note",

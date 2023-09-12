@@ -24,13 +24,18 @@ import zstandard
 
 def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
     """Convert an incorrect row into a correct one, splitting out the JSON into the correct OMOP columns."""
-    if row["load_table_id"] in ("shc_ip_flwsht_meas", "lpch_ip_flwsht_meas"):
+    if (
+        row["load_table_id"] in ("shc_ip_flwsht_meas", "lpch_ip_flwsht_meas")
+        and row["observation_source_concept_id"] == "2000006253"
+    ):
         first_data = json.loads(row["value_as_string"])
-        second_data = json.loads(row["observation_source_value"])
 
-        values = first_data["values"] + second_data["values"]
+        # This field is currently broken unformately
+        # second_data = json.loads(row["observation_source_value"])
 
-        if len(values) != 5:
+        values = first_data["values"]
+
+        if len(values) != 3:
             raise RuntimeError(f"Wrong number of values? {values}")
 
         sheet = ""
@@ -68,15 +73,12 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
             new_row["observation_parent_value"] = ""
 
         new_row["observation_source_value"] = name
-        new_row["observation_concept_id"] = "0"
 
         new_row["value_as_number"] = value_as_number
         new_row["value_as_string"] = value
         if units is not None and units != "":
-            new_row["unit_concept_id"] = "0"
             new_row["unit_source_value"] = units
         else:
-            new_row["unit_concept_id"] = ""
             new_row["unit_source_value"] = ""
 
         return new_row
@@ -97,18 +99,18 @@ def get_concepts_to_add(root: str, child: str) -> Tuple[Set[str], Set[Tuple[str,
                 new_row = convert_row(row)
                 if new_row is None:
                     continue
-                if new_row["observation_concept_id"] == "0":
-                    new_concepts.add(new_row["observation_source_value"])
-                    new_concepts.add(new_row["observation_parent_value"])
 
-                    new_relationships.add(
-                        (
-                            new_row["observation_source_value"],
-                            new_row["observation_parent_value"],
-                        )
+                new_concepts.add(new_row["observation_source_value"])
+                new_concepts.add(new_row["observation_parent_value"])
+
+                new_relationships.add(
+                    (
+                        new_row["observation_source_value"],
+                        new_row["observation_parent_value"],
                     )
+                )
 
-                if new_row["unit_concept_id"] == "0":
+                if new_row["unit_source_value"] != "":
                     new_concepts.add(new_row["unit_source_value"])
     except Exception as e:
         traceback.print_exc()
@@ -135,12 +137,12 @@ def correct_rows(root: str, target: str, mapping: Mapping[str, str], child: str)
                 if new_row is None:
                     writer.writerow(row)
                 else:
-                    new_row["observation_concept_id"] = mapping[new_row["observation_source_value"]]
+                    new_row["observation_source_concept_id"] = mapping[new_row["observation_source_value"]]
 
                     del new_row["observation_parent_id"]
                     del new_row["observation_parent_value"]
 
-                    if new_row["unit_concept_id"] != "":
+                    if new_row["unit_source_value"] != "":
                         new_row["unit_concept_id"] = mapping[new_row["unit_source_value"]]
 
                     writer.writerow(new_row)
