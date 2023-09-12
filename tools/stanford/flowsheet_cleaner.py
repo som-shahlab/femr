@@ -29,11 +29,13 @@ def convert_row(row: Mapping[str, str]) -> Optional[Dict[str, str]]:
         and row["observation_source_concept_id"] == "2000006253"
     ):
         first_data = json.loads(row["value_as_string"])
-        second_data = json.loads(row["observation_source_value"])
 
-        values = first_data["values"] + second_data["values"]
+        # This field is currently broken unformately
+        # second_data = json.loads(row["observation_source_value"])
 
-        if len(values) != 5:
+        values = first_data["values"]
+
+        if len(values) != 3:
             raise RuntimeError(f"Wrong number of values? {values}")
 
         sheet = ""

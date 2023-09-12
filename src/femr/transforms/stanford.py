@@ -65,7 +65,7 @@ def move_visit_start_to_first_event_start(patient: RawPatient) -> RawPatient:
     # Find the stated start time for each visit
     for event in patient.events:
         if event.omop_table == "visit_occurrence":
-            if event.visit_id in visit_starts:
+            if event.visit_id in visit_starts and visit_starts[event.visit_id] != event.start:
                 raise RuntimeError(
                     f"Multiple visit events with visit ID {event.visit_id} for patient ID {patient.patient_id}"
                 )
