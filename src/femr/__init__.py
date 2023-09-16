@@ -65,7 +65,7 @@ class Event:
         return bool(get_val(self) == get_val(other))
 
     def __repr__(self) -> str:
-        val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items())
+        val_str = ", ".join(f"{a}={b}" for a, b in self.__dict__.items() if b is not None)
         return f"Event({val_str})"
 
     def __getstate__(self) -> Dict[str, Any]:
