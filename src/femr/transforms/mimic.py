@@ -61,3 +61,16 @@ def move_billing_codes(patient: RawPatient) -> RawPatient:
     patient.resort()
 
     return patient
+
+
+def remove_very_old(patient: RawPatient) -> RawPatient:
+    """Remove events that are after 125 years."""
+    birth_date = patient.events[0].start
+    new_events = []
+    for event in patient.events:
+        age = event.start - birth_date
+        if age > datetime.timedelta(days=125 * 365):  # Greater than 125 years old is not plausible
+            continue
+        new_events.append(event)
+    patient.events = new_events
+    return patient

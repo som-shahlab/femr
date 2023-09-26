@@ -152,7 +152,7 @@ class EventWrapper {
     py::object start() {
         if (!m_start) {
             absl::CivilSecond start_time =
-                m_birth_date + 60 * m_event.start_age_in_minutes;
+                m_birth_date + 60 * ((uint64_t) m_event.start_age_in_minutes);
 
             m_start.emplace(py::cast(start_time));
         }
