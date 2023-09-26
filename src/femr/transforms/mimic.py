@@ -68,8 +68,8 @@ def remove_very_old(patient: RawPatient) -> RawPatient:
     new_events = []
     for event in patient.events:
         age = (event.start - birth_date)
-        if age > datetime.timedelta(years=125): # Greater than 125 years old is not plausible
+        if age > datetime.timedelta(days=125 * 365): # Greater than 125 years old is not plausible
             continue
-        newe_events.append(event)
+        new_events.append(event)
     patient.events = new_events
     return patient
