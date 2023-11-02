@@ -12,6 +12,9 @@ cuda_library(
     name="local_attention",
     hdrs=["local_attention.hh"],
     srcs=["local_attention.cu"],
+    deps=[
+        ":common_jax_extension"
+    ]
 )
 
 cuda_library(
@@ -33,6 +36,11 @@ cuda_library(
 )
 
 pybind_library(
+    name="common_jax_extension",
+    hdrs=["common_jax_extension.hh"],
+)
+
+pybind_library(
     name="jax_extension",
     hdrs=[
         "jax_extension.hh",
@@ -41,6 +49,7 @@ pybind_library(
         "jax_extension.cc",
     ],
     deps=[
+        ":common_jax_extension",
         ":embedding_dot",
         ":exp_mean",
         ":local_attention",
@@ -56,6 +65,9 @@ pybind_library(
     srcs=[
         "cpu_jax_extension.cc",
     ],
+    deps=[
+        ":common_jax_extension",
+    ]
 )
 
 string_flag(name="cuda", build_setting_default="disabled")

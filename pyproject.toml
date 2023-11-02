@@ -32,6 +32,7 @@ clmbr_create_survival_dictionary = "femr.models.scripts:create_survival_dictiona
 clmbr_train_model = "femr.models.scripts:train_model"
 clmbr_compute_representations = "femr.models.scripts:compute_representations"
 clmbr_train_linear_probe= "femr.models.linear_probe:train_linear_probe"
+femr_compute_representations = "femr.models.scripts:new_compute_representations"
 
 [project.optional-dependencies]
 build = [

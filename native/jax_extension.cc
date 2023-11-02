@@ -8,6 +8,7 @@
 #include "exp_mean.hh"
 #include "gather_scatter.hh"
 #include "local_attention.hh"
+#include "common_jax_extension.hh"
 
 namespace py = pybind11;
 
@@ -32,26 +33,6 @@ py::capsule convert_to_capsule(T *fn) {
     return py::capsule(bit_cast<void *>(fn), "xla._CUSTOM_CALL_TARGET");
 }
 
-void convert_to_dense(void *out, const void **in) {
-    float *actual_out = reinterpret_cast<float *>(out);
-
-    int32_t n = *reinterpret_cast<const int64_t *>(in[0]);
-    int32_t m = *reinterpret_cast<const int64_t *>(in[1]);
-
-    const int32_t *offsets = reinterpret_cast<const int32_t *>(in[2]);
-    const float *defaults = reinterpret_cast<const float *>(in[3]);
-    const int32_t *indices = reinterpret_cast<const int32_t *>(in[4]);
-    const float *values = reinterpret_cast<const float *>(in[5]);
-
-    for (int32_t i = 0; i < n; i++) {
-        for (int32_t j = 0; j < m; j++) {
-            actual_out[i * m + j] = defaults[i];
-        }
-        for (int32_t offset = offsets[i]; offset < offsets[i + 1]; offset++) {
-            actual_out[i * m + indices[offset]] = values[offset];
-        }
-    }
-}
 
 std::vector<std::tuple<std::string, py::capsule, std::string>> get_kernels() {
     std::vector<std::tuple<std::string, py::capsule, std::string>> result;

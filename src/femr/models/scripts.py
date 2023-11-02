@@ -6,6 +6,7 @@ import logging
 import os
 import pickle
 import random
+import tempfile
 from typing import TypeVar
 
 import haiku as hk
@@ -604,6 +605,119 @@ def train_model() -> None:
             config,
             batch,
         )
+
+
+def new_compute_representations() -> None:
+    parser = argparse.ArgumentParser(prog="Compute representations")
+    parser.add_argument("destination", type=str)
+    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument("--model_path", type=str, required=True)
+    parser.add_argument("--prediction_times_path", type=str, required=False)
+    parser.add_argument("--batch_size", type=int, default=(1 << 12), required=True)
+
+    args = parser.parse_args()
+
+    with open(os.path.join(args.model_path, "model", "config.msgpack"), "rb") as f:
+        config = msgpack.load(f, use_list=False)
+
+    random.seed(config["seed"])
+
+    config = hk.data_structures.to_immutable_dict(config)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        batches_path = os.path.join(tmpdir, "task_batches")
+
+        command = f"clmbr_create_batches {tmpdir}/task_batches --data_path {args.data_path}"
+        command += f"--task labeled_patients --labeled_patients_path {args.prediction_times_path} --val_start 70"
+        command += f"--dictionary_path {args.model_path}/dictionary"
+        if config["transformer"]["is_hierarchical"]:
+            command += " --is_hierarchical"
+        command += f" --transformer_vocab_size {config['transformer']['vocab_size']}"
+        command += f" --batch_size {args.batch_size}"
+        os.system(command)
+
+        batch_info_path = os.path.join(batches_path, "batch_info.msgpack")
+
+        loader = femr.extension.dataloader.BatchLoader(args.data_path, batch_info_path)
+
+        def model_fn(config, batch):
+            model = femr.models.transformer.EHRTransformer(config)(batch, no_task=True)
+            return model
+
+        dummy_batch = loader.get_batch("train", 0)
+        dummy_batch = jax.tree_map(lambda a: jnp.array(a), dummy_batch)
+
+        rng = jax.random.PRNGKey(42)
+        model = hk.transform(model_fn)
+
+        with open(os.path.join(args.model_path, "model", "best"), "rb") as f:
+            params = pickle.load(f)
+
+        @functools.partial(jax.jit, static_argnames="config")
+        def compute_repr(params, rng, config, batch):
+            return model.apply(params, rng, config, batch)
+
+        database = femr.datasets.PatientDatabase(args.data_path)
+
+        results = []
+
+        for split in ("train", "dev", "test"):
+            for dev_index in range(loader.get_number_of_batches(split)):
+                raw_batch = loader.get_batch(split, dev_index)
+                batch = jax.tree_map(lambda a: jnp.array(a), raw_batch)
+
+                repr, mask = compute_repr(
+                    femr.models.transformer.convert_params(params, dtype=jnp.float16),
+                    rng,
+                    config,
+                    batch,
+                )
+
+                repr = np.array(repr)
+
+                p_index = batch["transformer"]["label_indices"] // batch["transformer"]["length"]
+
+                for i in range(batch["num_indices"]):
+                    r = repr[i, :]
+
+                    label_pid = raw_batch["patient_ids"][p_index[i]]
+                    label_age = raw_batch["task"]["label_ages"][i]
+                    label_value = raw_batch["task"]["labels"][i]
+
+                    offset = raw_batch["offsets"][p_index[i]]
+                    results.append((label_pid, label_age, offset, r, label_value))
+
+        results.sort(key=lambda a: a[:3])
+
+        label_times = []
+
+        data_matrix = []
+        label_pids = []
+        label_ages = []
+
+        last_label_idx = None
+
+        for pid, age, offset, r, label_value in results:
+            # Ignore duplicate
+            if (pid, age) == last_label_idx:
+                continue
+            last_label_idx = (pid, age)
+
+            birth_date = datetime.datetime.combine(database.get_patient_birth_date(pid), datetime.time.min)
+            label_time = birth_date + datetime.timedelta(minutes=int(age))
+            label_times.append(label_time)
+            data_matrix.append(r)
+            label_pids.append(pid)
+            label_ages.append(age)
+
+        result = {
+            "representations": np.stack(data_matrix),
+            "patient_ids": np.array(label_pids),
+            "prediction_times": np.array(label_times),
+        }
+
+        with open(args.destination, "wb") as wf:
+            pickle.dump(result, wf)
 
 
 def compute_representations() -> None:
