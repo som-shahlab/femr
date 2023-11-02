@@ -613,7 +613,7 @@ def new_compute_representations() -> None:
     parser.add_argument("--data_path", type=str, required=True)
     parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--prediction_times_path", type=str, required=False)
-    parser.add_argument("--batch_size", type=int, default=(1 << 12), required=True)
+    parser.add_argument("--batch_size", type=int, default=(1 << 12), required=False)
 
     args = parser.parse_args()
 
@@ -628,8 +628,8 @@ def new_compute_representations() -> None:
         batches_path = os.path.join(tmpdir, "task_batches")
 
         command = f"clmbr_create_batches {tmpdir}/task_batches --data_path {args.data_path}"
-        command += f"--task labeled_patients --labeled_patients_path {args.prediction_times_path} --val_start 70"
-        command += f"--dictionary_path {args.model_path}/dictionary"
+        command += f" --task labeled_patients --labeled_patients_path {args.prediction_times_path} --val_start 70"
+        command += f" --dictionary_path {args.model_path}/dictionary"
         if config["transformer"]["is_hierarchical"]:
             command += " --is_hierarchical"
         command += f" --transformer_vocab_size {config['transformer']['vocab_size']}"
