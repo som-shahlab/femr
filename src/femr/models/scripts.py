@@ -682,10 +682,9 @@ def new_compute_representations() -> None:
 
                     label_pid = raw_batch["patient_ids"][p_index[i]]
                     label_age = raw_batch["task"]["label_ages"][i]
-                    label_value = raw_batch["task"]["labels"][i]
 
                     offset = raw_batch["offsets"][p_index[i]]
-                    results.append((label_pid, label_age, offset, r, label_value))
+                    results.append((label_pid, label_age, offset, r))
 
         results.sort(key=lambda a: a[:3])
 
@@ -697,7 +696,7 @@ def new_compute_representations() -> None:
 
         last_label_idx = None
 
-        for pid, age, offset, r, label_value in results:
+        for pid, age, offset, r in results:
             # Ignore duplicate
             if (pid, age) == last_label_idx:
                 continue
