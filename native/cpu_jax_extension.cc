@@ -1,6 +1,8 @@
 #include "jax_extension.hh"
 #include "common_jax_extension.hh"
 
+#include <pybind11/stl.h>
+
 namespace py = pybind11;
 
 template <class To, class From>
