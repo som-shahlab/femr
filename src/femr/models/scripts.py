@@ -710,7 +710,7 @@ def new_compute_representations() -> None:
             for j in range(loader.get_number_of_batches(split)):
                 raw_batch = loader.get_batch(split, j)
 
-                batch = jax.tree_map(lambda a: jax.device_put(a, device=jax.devices("gpu")[0]), raw_batch)
+                batch = jax.tree_map(lambda a: jax.device_put(a), raw_batch)
 
                 repr = compute_repr(
                     params,
