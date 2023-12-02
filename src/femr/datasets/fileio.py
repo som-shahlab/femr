@@ -10,8 +10,6 @@ import tempfile
 import warnings
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-import zstandard
-
 from femr.datasets.types import RawEvent, RawPatient
 
 
@@ -38,11 +36,8 @@ class EventWriter:
 
     def __init__(self, path: str):
         """Open a file for writing."""
-        self.file = tempfile.NamedTemporaryFile(dir=path, suffix=".csv.zst", delete=False)
-        compressor = zstandard.ZstdCompressor(level=1)
-        self.o = io.TextIOWrapper(
-            compressor.stream_writer(self.file),
-        )
+        self.file = tempfile.NamedTemporaryFile(dir=path, suffix=".csv", delete=False)
+        self.o = open(self.file.name, "w")
         self.rows_written = 0
         self.writer = csv.DictWriter(
             self.o,
@@ -78,8 +73,7 @@ class EventReader:
     def __init__(self, filename: str):
         """Open the event file."""
         self.filename = filename
-        decompressor = zstandard.ZstdDecompressor()
-        self.o = io.TextIOWrapper(decompressor.stream_reader(open(self.filename, "rb")))
+        self.o = open(self.filename, "r")
         self.reader = csv.DictReader(self.o)
 
     def __iter__(self) -> Iterator[Tuple[int, RawEvent]]:

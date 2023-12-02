@@ -181,7 +181,7 @@ def etl_starr_omop_program() -> None:
             rootLogger.info("Converting to extract")
 
             print("Converting to extract", datetime.datetime.now())
-            patient_collection.to_patient_database(
+            patient_collection.to_huggingface_dataset(
                 args.target_location,
                 args.omop_source,
                 num_threads=args.num_threads,

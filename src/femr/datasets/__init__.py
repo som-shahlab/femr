@@ -7,14 +7,30 @@ import functools
 import itertools
 import multiprocessing.pool
 import os
-from typing import Any, Callable, ContextManager, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+import tempfile
+from typing import Any, Callable, ContextManager, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
 
+import datasets
+import event_stream_data_standard as ESDS
 import numpy as np
+import polars as pl
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from femr.datasets import fileio
 from femr.datasets.types import RawEvent, RawPatient
-from femr.extension import datasets as extension_datasets
 
+femr_metadata = pa.struct([
+    ('end', pa.timestamp('us')),
+    ('visit_id', pa.int64()),
+    ('omop_table', pa.string()),
+    ('clarity_table', pa.string()),
+    ('visit_id', pa.int64()),
+    ('note_id', pa.int64()),
+    ('unit', pa.string()),
+])
+
+femr_patient = ESDS.patient_schema(femr_metadata)
 
 def _get_sort_key(pid_and_event: Tuple[int, RawEvent]) -> Any:
     """Get the sort key for an event."""
@@ -95,19 +111,29 @@ class EventCollection:
 
     def to_patient_collection(self, target_path: str, num_threads: int = 1) -> PatientCollection:
         """Convert the EventCollection to a PatientCollection, which is stored in target_path."""
-        extension_datasets.sort_and_join_csvs(
-            self.path,
-            target_path,
-            np.dtype(
-                [
-                    ("patient_id", np.int64),
-                    ("start", np.datetime64),
-                    ("concept_id", np.int64),
-                ]
-            ),
-            ",",
-            num_threads,
-        )
+        assert not os.path.exists(target_path)
+
+
+        event_files = [os.path.join(self.path, child) for child in os.listdir(self.path)]
+        events = pl.scan_csv(event_files,
+            schema={
+                'patient_id': pl.Int64(),
+                'concept_id': pl.Int64(),
+                'start': pl.Datetime(),
+                'metadata': pl.Utf8(),
+                'value': pl.Utf8(),
+            })
+        events = events.sort(by=(pl.col("patient_id"), pl.col("start")))
+
+        hashed_patient_id = pl.col("patient_id").hash() % num_threads
+        events = events.with_columns(hashed_patient_id=hashed_patient_id)
+
+        os.mkdir(target_path)
+
+        partitioned_patients = events.collect().partition_by("hashed_patient_id")
+
+        for i, patient in enumerate(partitioned_patients):
+            patient.write_csv(os.path.join(target_path, f"{i}.csv"))
 
         return PatientCollection(target_path)
 
@@ -153,6 +179,58 @@ def _transform_single_reader(
         return {k: dict(v) for k, v in information.items()}
     else:
         return None
+
+def _convert_to_parquet(target_path: str, concept_map: Mapping[int, str], reader_func: Callable[[], ContextManager[Iterable[RawPatient]]]) -> None:
+    file = tempfile.NamedTemporaryFile(dir=target_path, suffix=".parquet", delete=False)
+    current_patients = []
+
+    with pq.ParquetWriter(file.name, schema=femr_patient) as w:
+        with reader_func() as reader:
+            for p in reader:
+                events: List[ESDS.Event] = []
+                current_measurement = None
+                current_time = None
+                for event in p.events:
+                    event_dict: ESDS.Measurement = {
+                        'code': concept_map[event.concept_id],
+                    }
+
+            pickle.dumps({a: b for a, b in event.__dict__.items() if a not in ("start", "concept_id", "value")})
+
+
+                    if event.value is None:
+                        pass
+                    elif isinstance(event.value, str):
+                        event_dict['text_value'] = event.value
+                    elif isinstance(event.value, float):
+                        event_dict['numeric_value'] = event.value
+
+                    if current_time is None:
+                        current_time = event.start
+                        current_measurement = [event_dict]
+                    elif current_time == event.start:
+                        current_measurement.append(event_dict)
+                    else:
+                        events.append({'time': current_time, 'measurements': current_measurement})
+                        current_time = event.start
+                        current_measurement = [event_dict]
+
+                if current_measurement is not None:
+                    assert current_time is not None
+                    events.append({'time': current_time, 'measurements': current_measurement})
+
+                current_patients.append({
+                    'patient_id': p.patient_id,
+                    'events': events
+                })
+                if p.patient_id == 29925175:
+                    print(current_patients[-1])
+
+                if len(current_patients) > 10_000:
+                    w.write_batch(pa.RecordBatch.from_pylist(current_patients, schema=femr_patient))
+                    current_patients = []
+
+        w.write_batch(pa.RecordBatch.from_pylist(current_patients, schema=femr_patient))
 
 
 class PatientCollection:
@@ -213,21 +291,37 @@ class PatientCollection:
 
         return PatientCollection(target_path)
 
-    def to_patient_database(
+    def to_huggingface_dataset(
         self,
         target_path: str,
         concept_path: str,
         num_threads: int = 1,
         delimiter: str = ",",
-    ) -> PatientDatabase:
+    ) -> datasets.Dataset:
         """Convert a PatientCollection to a PatientDatabase."""
-        extension_datasets.convert_patient_collection_to_patient_database(
-            self.path, concept_path, target_path, delimiter, num_threads
+
+        dataset_path = os.path.join(target_path, "dataset")
+        os.mkdir(dataset_path)
+
+        concept_table = pl.scan_csv(
+            [os.path.join(concept_path, 'concept', a) for a in os.listdir(os.path.join(concept_path, 'concept'))],
+            schema={
+                'concept_id': pl.Int64(),
+                'vocabulary_id': pl.Utf8(),
+                'concept_code': pl.Utf8(),
+            }
         )
-        return PatientDatabase(target_path)
+        result = concept_table.select(pl.col("concept_id"), pl.col("vocabulary_id") + "/" + pl.col("concept_code"))
+        collected_result = result.collect().to_dict()
+        concept_map = dict(zip(collected_result['concept_id'], collected_result['vocabulary_id']))
 
-
-# Import from C++ extension
-
-PatientDatabase = extension_datasets.PatientDatabase
-Ontology = extension_datasets.Ontology
+        with multiprocessing.pool.Pool(num_threads) as pool:
+            for _ in pool.imap_unordered(
+                functools.partial(
+                    _convert_to_parquet,
+                    dataset_path,
+                    concept_map,
+                ),
+                self.sharded_readers(),
+            ):
+                pass

@@ -15,11 +15,8 @@ from dataclasses import dataclass
 from typing import Any, DefaultDict, Dict, List, Literal, Mapping, Optional, Sequence, Set, Tuple, Union, cast
 
 import numpy as np
+from event_stream_data_standard import Patient
 from nptyping import NDArray
-
-from femr import Patient
-from femr.datasets import PatientDatabase
-from femr.extension import datasets as extension_datasets
 
 
 @dataclass(frozen=True)

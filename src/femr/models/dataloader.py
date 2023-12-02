@@ -1,359 +1,250 @@
-from __future__ import annotations
-
-import argparse
+import collections
 import datetime
-import logging
-import math
-import os
-import queue
+import functools
 import random
-import sys
-import threading
-from typing import Any, List, Optional, Tuple, TypeVar
 
-import jax
-import msgpack
+import datasets
 import numpy as np
 
-import femr.datasets
-import femr.extension.dataloader
-import femr.labelers
-
-T = TypeVar("T")
-
-BatchLoader = femr.extension.dataloader.BatchLoader
+import femr.hf_utils
+import femr.models.dictionary
 
 
-def _index_thread(
-    index_queue: queue.Queue[Optional[Tuple[int, int]]],
-    seed: int,
-    num_epochs: int,
-    num_batch_threads: int,
-    split: str,
-    data_path: str,
-    batch_info_path: str,
-    num_batches: int,
-) -> None:
-    """Generate indices in random order and add them to the queue."""
-    rng = random.Random(seed)
-    step = 0
-    for _ in range(num_epochs):
-        order: List[int] = list(range(num_batches))
-        rng.shuffle(order)
+def map_length_stats(batch, indices, *, processor, max_length):
+    length_map = collections.defaultdict(list)
 
-        for i in order:
-            index_queue.put((i, step))
-            step += 1
-
-    for _ in range(num_batch_threads):
-        index_queue.put(None)
-
-
-def _batch_thread(
-    index_queue: queue.Queue[Optional[Tuple[int, int]]],
-    batch_queue: queue.Queue[Optional[Tuple[Any, int]]],
-    data_path: str,
-    batch_info_path: str,
-    token_dropout: float,
-    split: str,
-) -> None:
-    """Load batches according to the indices in the index thread and add them to the batch queue."""
-    thread_loader = BatchLoader(data_path, batch_info_path, token_dropout=token_dropout)
-    while True:
-        next_item = index_queue.get()
-        if next_item is None:
-            batch_queue.put(None)
-            break
-
-        batch_index, step = next_item
-
-        batch = thread_loader.get_batch(split, batch_index)
-        if batch["num_indices"] == 0:
-            batch_queue.put((None, step))
-        else:
-            batch = jax.tree_map(lambda a: jax.device_put(a, device=jax.devices("cpu")[0]), batch)
-            batch_queue.put((batch, step))
-
-    batch_queue.put(None)
-
-
-class Batches:
-    def __init__(
-        self,
-        data_path: str,
-        batch_info_path: str,
-        token_dropout: float,
-        seed: int,
-        num_epochs: int,
-        num_batch_threads: int,
-        num_batches: int,
-        split: str = "train",
-    ):
-        print("Working with seed", seed, file=sys.stderr)
-        """Create a multithreaded batch loader for the given batch info."""
-        index_queue: queue.Queue[Optional[int]] = queue.Queue(maxsize=300)
-        _ = index_queue
-
-        self.batch_queue: queue.Queue[Optional[Any]] = queue.Queue(maxsize=5)
-
-        batch_queue = self.batch_queue
-        _ = batch_queue
-
-        local = locals()
-
-        batcher_thread = threading.Thread(
-            target=_index_thread,
-            kwargs={
-                k: local[k]
-                for k in (
-                    "index_queue",
-                    "seed",
-                    "num_batch_threads",
-                    "num_epochs",
-                    "data_path",
-                    "batch_info_path",
-                    "num_batches",
-                    "split",
-                )
-            },
-            name="batch_thread",
-            daemon=True,
-        )
-        batcher_thread.start()
-
-        batcher_threads = [
-            threading.Thread(
-                target=_batch_thread,
-                kwargs={
-                    k: local[k]
-                    for k in (
-                        "index_queue",
-                        "batch_queue",
-                        "data_path",
-                        "batch_info_path",
-                        "data_path",
-                        "token_dropout",
-                        "split",
-                    )
-                },
-                name="batch_thread",
-                daemon=True,
-            )
-            for _ in range(num_batch_threads)
-        ]
-
-        for t in batcher_threads:
-            t.start()
-
-        self.remaining_threads = num_batch_threads
-
-    def get_next(self) -> Optional[Any]:
-        """Get the next batch, or None if we are out of batches."""
-        next_item = None
-
-        while next_item is None:
-            next_item = self.batch_queue.get()
-            if next_item is not None:
-                return next_item
-            else:
-                self.remaining_threads -= 1
-                if self.remaining_threads == 0:
-                    return None
-
-
-def create_batches() -> None:
-    parser = argparse.ArgumentParser(prog="Create batches")
-    parser.add_argument("directory", type=str, help="The target directory to contain the batches")
-    parser.add_argument("--data_path", type=str, required=True, help="The path to the source extract")
-    parser.add_argument("--dictionary_path", type=str, required=True, help="The path to the dictionary")
-    parser.add_argument("--task", type=str, help="Either clmbr, survival_clmbr, or labeled_patients")
-    parser.add_argument("--transformer_vocab_size", type=int, default=1024 * 64, help="Size of the transformer vocab")
-    parser.add_argument(
-        "--clmbr_survival_dictionary_path", type=str, help="The survival clmbr dictionary if running that task"
-    )
-    parser.add_argument("--labeled_patients_path", type=str, help="The labeled patients")
-    parser.add_argument(
-        "--is_hierarchical", default=False, action="store_true", help="Whether to use hierarchical embeddings"
-    )
-    parser.add_argument("--seed", default=97, type=int, help="The random seed used for data splitting")
-    parser.add_argument(
-        "--val_start",
-        default=80,
-        type=int,
-        help="The start of the validation split (and thus end of the train split)",
-    )
-    parser.add_argument(
-        "--test_start",
-        default=85,
-        type=int,
-        help="The start of the test split (and thus end of the val split)",
-    )
-    parser.add_argument(
-        "--batch_size",
-        default=int(1 << 14),
-        type=int,
-        help="The batch size (in events). Must be a power of two",
-    )
-    parser.add_argument("--note_embedding_data", default=None, type=str, help="Note embedding data when using notes")
-    parser.add_argument(
-        "--limit_to_patients_file",
-        default=None,
-        type=str,
-        help="A file containing the only patient_ids to allow in batches",
-    )
-    parser.add_argument("--limit_before_date", default=None, type=str, help="Limit the batches to before a given date")
-    parser.add_argument("--num_clmbr_tasks", default=8 * 1024, type=int, help="The number of codes to train CLMBR with")
-
-    args = parser.parse_args()
-
-    os.mkdir(args.directory)
-
-    logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
-    rootLogger = logging.getLogger()
-
-    fileHandler = logging.FileHandler(os.path.join(args.directory, "log"))
-    fileHandler.setFormatter(logFormatter)
-    rootLogger.addHandler(fileHandler)
-
-    consoleHandler = logging.StreamHandler()
-    consoleHandler.setFormatter(logFormatter)
-    rootLogger.addHandler(consoleHandler)
-
-    rootLogger.setLevel(logging.INFO)
-    rootLogger.info(f"Preparing batches with {args}")
-
-    with open(args.dictionary_path, "rb") as f:
-        dictionary = msgpack.load(f, use_list=False)
-
-        if args.is_hierarchical:
-            dict_len = len(dictionary["ontology_rollup"])
-        else:
-            dict_len = len(dictionary["regular"])
-
-        assert (
-            args.transformer_vocab_size <= dict_len
-        ), f"Transformer vocab size ({args.transformer_vocab_size}) must be <= len(dictionary) ({dict_len})"
-
-    data = femr.datasets.PatientDatabase(args.data_path)
-
-    task: Any
-
-    if args.labeled_patients_path is not None:
-        labeled_patients = femr.labelers.load_labeled_patients(args.labeled_patients_path)
-
-        result_labels = []
-        offsets = []
+    for patient_index, patient_id, events in zip(indices, batch["patient_id"], batch["events"]):
         total_events = 0
-        total = 0
-        for pid, labels in labeled_patients.items():
-            birth_date = datetime.datetime.combine(data.get_patient_birth_date(pid), datetime.time.min)
+        for event in events:
+            for measurement in event["measurements"]:
+                total_events += 1
 
-            for label in labels:
-                age = (label.time - birth_date) / datetime.timedelta(minutes=1)
-                assert int(age) == age, f"Age must be in minutes {age}"
-                value: Any
-                if labeled_patients.labeler_type == "boolean":
-                    assert isinstance(label.value, bool)
-                    value = label.value
-                elif labeled_patients.labeler_type == "survival":
-                    assert isinstance(label.value, femr.labelers.SurvivalValue)
-                    event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
-
-                    if event_offset == 0:
-                        continue
-
-                    offsets.append(event_offset)
-                    total += 1
-                    total_events += not label.value.is_censored
-
-                    value = {
-                        "event_time": event_offset + age,
-                        "is_censored": label.value.is_censored,
-                    }
-                elif labeled_patients.labeler_type == "none":
-                    assert label.value is None
-                    value = None
-                result_labels.append((int(pid), int(age), value))
-
-        task = {
-            "type": "labeled_patients",
-            "labeler_type": labeled_patients.labeler_type,
-            "labels": result_labels,
+        patient = {
+            "patient_id": patient_id,
+            "events": events,
         }
-        if labeled_patients.labeler_type == "survival":
-            mean_time = np.mean(offsets)
-            frac_events = total_events / total
-            task["lambda"] = frac_events / mean_time
 
-            print(frac_events, mean_time, task["lambda"])
-    elif args.task == "survival_clmbr":
-        with open(args.clmbr_survival_dictionary_path, "rb") as f:
-            surv_dict = msgpack.load(f, use_list=False)
-        task = {
-            "type": "survival_clmbr",
-            "survival_dict": surv_dict,
+        data = processor.convert_patient(patient)
+        if data["transformer"]["label_indices"].shape[0] == 0:
+            continue
+        if data["needs_exact"]:
+            current_start = 0
+            current_end = 0
+            for label_index in data["transformer"]["label_indices"]:
+                next_end = label_index
+                if label_index - current_start >= max_length:
+                    length_map[(current_end - current_start + 1)].append((patient_id, current_start))
+                    current_start = current_end - max_length + 1
+                    current_end = current_end
+                else:
+                    current_end = next_end
+        else:
+            last_index = data["transformer"]["label_indices"][-1]
+            length = min(max_length, last_index + 1)
+            length_map[length].append((patient_index, last_index + 1 - length))
+    return length_map
+
+
+def agg_length_stats(length_stats1, length_stats2):
+    for k, v in length_stats2.items():
+        length_stats1[k].extend(v)
+
+    return length_stats1
+
+
+class BatchCreator:
+    def __init__(self, dictionary, task=None):
+        self.feature_lookup = femr.models.dictionary.FeatureLookup(dictionary)
+
+        self.task = task
+        self.dictionary = dictionary
+
+    def start_batch(self, num_patients, max_length):
+        self.patient_ids = np.zeros(num_patients, dtype=np.int64)
+        self.offsets = np.zeros(num_patients, dtype=np.int32)
+
+        self.tokens = np.zeros((num_patients, max_length), dtype=np.int32)
+        self.valid_tokens = np.zeros((num_patients, max_length), dtype=np.bool_)
+
+        self.ages = np.zeros((num_patients, max_length), dtype=np.float32)
+        self.integer_ages = np.zeros((num_patients, max_length), dtype=np.int32)
+        self.normalized_ages = np.zeros((num_patients, max_length), dtype=np.float32)
+
+        self.label_indices = []
+
+        self.patient_index = 0
+
+        self.num_patients = num_patients
+        self.max_length = max_length
+
+        if self.task is not None:
+            self.task.start_batch()
+
+    def add_patient(self, patient, offset):
+        self.patient_ids[self.patient_index] = patient["patient_id"]
+        self.offsets[self.patient_index] = offset
+
+        current_date = None
+        last_time = None
+
+        if self.task is not None:
+            self.task.start_patient(patient)
+
+        self.length_index = 0
+
+        birth = patient["events"][0]["time"]
+
+        for event in patient["events"]:
+            if event["time"].date() != current_date:
+                current_date = event["time"].date()
+                codes_seen_today = set()
+
+            for measurement in event["measurements"]:
+                features = self.feature_lookup.get_feature_codes(measurement)
+                if len(features) == 0:
+                    continue
+                if all(feature in codes_seen_today for feature in features):
+                    continue
+
+                if self.length_index < offset:
+                    self.length_index += 1
+                    continue
+
+                codes_seen_today |= set(features)
+
+                if self.task is not None:
+                    if self.length_index == 0:
+                        # We cannot create tasks before birth so this needs special handling
+                        # If we are at birth and the task needs an exact match, we are forced to try to add a task even if it is invalid
+                        if not self.task.needs_exact():
+                            # Don't need exact task mapping, so we can safely ignore this edge case
+                            pass
+                        else:
+                            # Hope that this returns False so we can ignore this
+                            added_task_event = self.task.add_event(last_time, event["time"], features)
+                            assert not added_task_event, f"Cannot create labels before birth {patient['patient_id']}"
+                    else:
+                        added_task_event = self.task.add_event(last_time, event["time"], features)
+                        if added_task_event:
+                            self.label_indices.append(
+                                self.patient_index * self.max_length + self.length_index - offset - 1
+                            )
+
+                if self.length_index - offset >= self.max_length:
+                    break
+
+                if self.dictionary["is_hierarchical"]:
+                    assert False  # TODO: Implement this
+                else:
+                    self.tokens[self.patient_index, self.length_index - offset] = features[0]
+
+                self.valid_tokens[self.patient_index, self.length_index - offset] = True
+                self.ages[self.patient_index, self.length_index - offset] = (
+                    event["time"] - birth
+                ) / datetime.timedelta(days=1)
+                self.integer_ages[self.patient_index, self.length_index - offset] = (
+                    event["time"] - birth
+                ) / datetime.timedelta(minutes=1)
+                self.normalized_ages[
+                    self.patient_index, self.length_index - offset
+                ] = self.feature_lookup.normalize_age(self.integer_ages[self.patient_index, self.length_index - offset])
+
+                self.length_index += 1
+
+            last_time = event["time"]
+
+        self.patient_index += 1
+
+    def get_batch_data(self):
+        transformer = {
+            "length": self.max_length,
+            "tokens": self.tokens,
+            "valid_tokens": self.valid_tokens,
+            "ages": self.ages,
+            "normalized_ages": self.normalized_ages,
+            "label_indices": np.array(self.label_indices, dtype=np.int32),
         }
-    elif args.task == "clmbr":
-        task = {"type": "clmbr", "vocab_size": args.num_clmbr_tasks}
-    else:
-        rootLogger.error("Invalid task?")
-        exit()
 
-    if args.limit_to_patients_file:
-        with open(args.limit_to_patients_file) as f:
-            ids_to_limit = [int(a) for a in f]
-        task["patient_ids"] = ids_to_limit
+        final = {
+            "num_patients": len(self.patient_ids),
+            "num_indices": len(self.label_indices),
+            "patient_ids": self.patient_ids,
+            "offsets": self.offsets,
+            "transformer": transformer,
+        }
 
-    if args.limit_before_date:
-        limit_date = datetime.date.fromisoformat(args.limit_before_date)
-        task["limit_date"] = limit_date.isoformat()
+        if self.task is not None:
+            final["task"] = self.task.get_batch_data()
+            final["needs_exact"] = self.task.needs_exact()
+        return final
 
-    max_size = math.log2(args.batch_size)
-    assert int(max_size) == max_size, "Batch size must be a power of two"
-    max_size = int(max_size)
 
-    loader_config: Any = {
-        "transformer": {
-            "vocab_size": args.transformer_vocab_size,
-            "dictionary": dictionary,
-            "min_size": 5,
-            "max_size": max_size,
-            "is_hierarchical": args.is_hierarchical,
-        },
-        "task": task,
-        "seed": args.seed,
-        "splits": [
-            ["train", 0, args.val_start],
-            ["dev", args.val_start, args.test_start],
-            ["test", args.test_start, 100],
-        ],
-    }
+class FEMRBatchProcessor:
+    def __init__(self, dictionary, task=None):
+        self.creator = BatchCreator(dictionary, task)
 
-    if args.note_embedding_data:
-        loader_config["transformer"]["note_embedding_data"] = args.note_embedding_data
+    def convert_patient(self, patient):
+        total_events = 0
+        for event in patient["events"]:
+            for measurement in event["measurements"]:
+                total_events += 1
+        self.creator.start_batch(1, total_events)
+        self.creator.add_patient(patient, 0)
+        return self.creator.get_batch_data()
 
-    random.seed(loader_config["seed"])
+    def convert_dataset(self, dataset, tokens_per_batch, min_samples_per_batch=4, num_proc=16):
+        if isinstance(dataset, datasets.DatasetDict):
+            return datasets.DatasetDict(
+                {
+                    k: self.convert_dataset(v, tokens_per_batch, min_samples_per_batch, num_proc)
+                    for k, v in dataset.items()
+                }
+            )
 
-    config_path = os.path.join(args.directory, "loader_config.msgpack")
-    with open(config_path, "wb") as out:
-        msgpack.dump(loader_config, out)
+        max_length = tokens_per_batch // min_samples_per_batch
+        length_stats = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(map_length_stats, processor=self, max_length=max_length),
+            agg_length_stats,
+            num_proc=num_proc,
+            batch_size=1_000,
+            with_indices=True,
+        )
 
-    logging.info("Wrote config ...")
+        size_and_samples = sorted(list(length_stats.items()), reverse=True)
 
-    rootLogger.info("Starting to load")
+        batches = []
 
-    target_path = os.path.join(args.directory, "batch_info.msgpack")
+        current_batch_size = size_and_samples[0][0]
+        current_batch = []
+        for size, samples in size_and_samples:
+            random.shuffle(samples)
+            for sample in samples:
+                if (1 + len(current_batch)) * current_batch_size >= tokens_per_batch:
+                    batches.append((current_batch_size, current_batch))
 
-    femr.extension.dataloader.create_batches(
-        target_path,
-        args.data_path,
-        config_path,
-    )
+                    current_batch_size = size
+                    current_batch = []
 
-    os.remove(config_path)
+                current_batch.append(sample)
 
-    rootLogger.info("Loaded")
+        batches.append((current_batch_size, current_batch))
 
-    loader = femr.extension.dataloader.BatchLoader(args.data_path, target_path)
+        def batch_generator(dataset, batches):
+            for batch_size, batch_items in batches:
+                self.creator.start_batch(len(batch_items), batch_size)
+                for patient_index, offset in batch_items:
+                    self.creator.add_patient(dataset[patient_index], offset)
 
-    rootLogger.info("Number of train patients %s", loader.get_number_of_batches("train"))
+                yield self.creator.get_batch_data()
+
+        batch_dataset = datasets.Dataset.from_generator(
+            batch_generator,
+            gen_kwargs={
+                "dataset": dataset,
+                "batches": batches,
+            },
+            num_proc=16,
+        )
+
+        return batch_dataset
