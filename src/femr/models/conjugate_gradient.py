@@ -1,17 +1,17 @@
-import functools
-import os
 import argparse
 import datetime
+import functools
 import logging
+import os
 import pickle
 import random
-import msgpack
 from typing import TypeVar
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import jax.scipy.optimize
+import msgpack
 import numpy as np
 import optax
 import sklearn.metrics

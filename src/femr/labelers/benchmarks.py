@@ -5,6 +5,7 @@ import datetime
 from typing import Any, List, Optional, Set, Tuple, Union
 
 import pandas as pd
+
 from femr import Event, Patient
 from femr.extension import datasets as extension_datasets
 from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
@@ -716,6 +717,7 @@ class EssentialHypertensionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
 class HyperlipidemiaCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     # n = 3048320
     root_concept_code = "SNOMED/55822004"
+
 
 ##########################################################
 ##########################################################

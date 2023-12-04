@@ -3,20 +3,19 @@ from __future__ import annotations
 
 import collections
 import datetime
+import multiprocessing
 from abc import abstractmethod
 from collections import deque
-import multiprocessing
 from datetime import timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+import numpy as np
+import pandas as pd
 
 from femr import Event, Patient
 from femr.datasets import PatientDatabase
 from femr.extension import datasets as extension_datasets
 from femr.labelers.core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
-
-import numpy as np
-import pandas as pd
-
 
 CHEXPERT_LABELS = [
     "No Finding",
@@ -527,6 +526,7 @@ class HighHbA1cCodeLabeler(Labeler):
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
+
 
 if __name__ == "__main__":
     pass
