@@ -6,12 +6,11 @@ try:
     import jax
     import jax.numpy as jnp
 
-    from femr.models.conjugate_gradient import (
+    from femr.models.linear_probe import (
         compute_logistic_grad,
         compute_logistic_hessian,
         compute_logistic_loss,
         conjugate_gradient,
-        train_logistic_regression,
     )
 
 except ImportError:
@@ -65,11 +64,5 @@ def test_logistic_model():
             break
 
     best_loss = compute_logistic_loss(beta, data)
-
-    assert best_loss <= truth_loss
-
-    optimal_beta = train_logistic_regression(reprs, labels, reprs, labels)
-
-    best_loss = compute_logistic_loss(optimal_beta, data)
 
     assert best_loss <= truth_loss
