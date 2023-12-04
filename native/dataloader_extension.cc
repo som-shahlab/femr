@@ -28,8 +28,6 @@ namespace py = pybind11;
 #include "parse_utils.hh"
 #include "pybind11/eigen/tensor.h"
 #include "survival.hh"
-#include <unsupported/Eigen/CXX11/Tensor>
-#include <pybind11/eigen/tensor.h>
 
 const bool SPARSE_FALLBACK = false;
 
