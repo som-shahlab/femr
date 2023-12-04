@@ -597,6 +597,7 @@ def train_model() -> None:
             batch,
         )
 
+
 def new_compute_representations() -> None:
     parser = argparse.ArgumentParser(prog="Compute representations")
     parser.add_argument("destination", type=str)
