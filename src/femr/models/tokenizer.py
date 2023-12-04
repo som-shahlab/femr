@@ -1,13 +1,20 @@
+from __future__ import annotations
+
+import msgpack
 import collections
+import transformers
+import datasets
 import datetime
 import functools
 import math
+import os
 
 import femr.hf_utils
 import femr.stat_utils
 
 
-def create_dictionary(dataset, vocab_size, is_hierarchical=False, num_proc=1):
+def train_tokenizer(dataset, vocab_size, is_hierarchical=False, num_proc=1) -> FEMRTokenizer:
+    """Train a FEMR tokenizer from the given dataset"""
     statistics = femr.hf_utils.aggregate_over_dataset(
         dataset,
         functools.partial(map_statistics, num_patients=len(dataset)),
@@ -15,7 +22,7 @@ def create_dictionary(dataset, vocab_size, is_hierarchical=False, num_proc=1):
         num_proc=num_proc,
         batch_size=1_000,
     )
-    return convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical)
+    return FEMRTokenizer(convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical))
 
 
 def agg_statistics(stats1, stats2):
@@ -139,9 +146,11 @@ def convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical):
     return result
 
 
-class FeatureLookup:
+class FEMRTokenizer(transformers.utils.PushToHubMixin):
     def __init__(self, dictionary):
         assert not dictionary["is_hierarchical"], "Currently not supported"
+
+        self.is_hierarchical = dictionary['is_hierarchical']
 
         self.dictionary = dictionary
         vocab = dictionary["vocab"]
@@ -162,14 +171,81 @@ class FeatureLookup:
             else:
                 pass
 
+    @classmethod
+    def from_pretrained(self, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs):
+        """
+        Load the FEMR tokenizer.
+
+        Parameters:
+            pretrained_model_name_or_path (`str` or `os.PathLike`, *optional*):
+                Can be either:
+                    - A string, the *model id* of a pretrained model hosted inside a model repo on huggingface.co.
+                      Valid model ids can be located at the root-level, like `bert-base-uncased`, or namespaced under a
+                      user or organization name, like `dbmdz/bert-base-german-cased`.
+                    - A path to a *directory* containing tokenization data saved using
+                      [`save_pretrained`], e.g., `./my_data_directory/`.
+            kwargs: Arguments for loading to pass to transformers.utils.hub.cached_file
+        
+        Returns:
+            A FEMR Tokenizer
+        """
+
+        dictionary_file = transformers.utils.hub.cached_file(pretrained_model_name_or_path, "dictionary.msgpack", **kwargs)
+
+        with open(dictionary_file, "rb") as f:
+            dictionary = msgpack.load(f)
+        
+        return FEMRTokenizer(dictionary)
+    
+    def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
+        """
+        Save the FEMR tokenizer.
+
+
+        This method make sure the batch processor can then be re-loaded using the
+        .from_pretrained class method.
+
+        Args:
+            save_directory (`str` or `os.PathLike`): The path to a directory where the tokenizer will be saved.
+            push_to_hub (`bool`, *optional*, defaults to `False`):
+                Whether or not to push your model to the Hugging Face model hub after saving it. You can specify the
+                repository you want to push to with `repo_id` (will default to the name of `save_directory` in your
+                namespace).
+            kwargs (`Dict[str, Any]`, *optional*):
+                Additional key word arguments passed along to the [`transformers.utils.PushToHubMixin.push_to_hub`] method.
+        """
+        if os.path.isfile(save_directory):
+            logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
+            return
+        
+        os.makedirs(save_directory, exist_ok=True)
+
+        if push_to_hub:
+            commit_message = kwargs.pop("commit_message", None)
+            repo_id = kwargs.pop("repo_id", save_directory.split(os.path.sep)[-1])
+            repo_id = self._create_repo(repo_id, **kwargs)
+            files_timestamps = self._get_files_timestamps(save_directory)
+
+        with open(os.path.join(save_directory, 'dictionary.msgpack'), 'wb') as f:
+            msgpack.dump(self.dictionary, f)
+
+        if push_to_hub:
+            self._upload_modified_files(
+                save_directory,
+                repo_id,
+                files_timestamps,
+                commit_message=commit_message,
+                token=kwargs.get("token"),
+            )
+
     def get_feature_codes(self, measurement):
-        if measurement["numeric_value"] is not None:
+        if measurement.get("numeric_value") is not None:
             for start, end, i in self.numeric_lookup.get(measurement["code"], []):
                 if start <= measurement["numeric_value"] < end:
                     return [i]
             else:
                 return []
-        elif measurement["text_value"] is not None:
+        elif measurement.get("text_value") is not None:
             value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
             if value is not None:
                 return [value]
