@@ -24,10 +24,8 @@ try:
     # Globally register all of our custom operators
     for name, value, platform in femr.extension.jax.get_kernels():
         jax.lib.xla_client.register_custom_call_target(name, value, platform=platform)
-except Exception as exec:
-    raise RuntimeError(
-        "Could not load Jax kernels, did you compile with CUDA installed? Run 'nvcc --version' to check."
-    ) from exec
+except Exception:
+    warnings.warn("Could not load JAX CUDA kernels, CUDA support is disabled.")
 
 # Per the jax documentation, we currently don't have good typing for arrays
 Array = Any
@@ -725,8 +723,6 @@ def local_attention_fallback_single(
         full_mask = causal_mask & local_mask & length_mask
     else:
         full_mask = local_mask & length_mask
-
-    print(full_mask.astype(int))
 
     logits = jnp.where(full_mask, logits, float("-inf"))
 

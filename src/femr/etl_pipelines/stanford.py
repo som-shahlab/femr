@@ -3,11 +3,14 @@
 import argparse
 import datetime
 import functools
+import io
 import json
 import logging
 import os
 import resource
 from typing import Callable, Dict, Optional, Sequence
+
+import zstandard
 
 from femr.datasets import EventCollection, PatientCollection, RawEvent, RawPatient
 from femr.extractors.csv import run_csv_extractors
@@ -25,10 +28,20 @@ def _is_visit_event(e: RawEvent) -> bool:
     return e.omop_table == "visit_occurrence"
 
 
-def _get_stanford_transformations() -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
+def _map_bad_concepts(concept_map: Dict[int, int], patient: RawPatient) -> RawPatient:
+    for event in patient.events:
+        event.concept_id = concept_map.get(event.concept_id, event.concept_id)
+
+    return patient
+
+
+def _get_stanford_transformations(
+    concept_map: Dict[int, int]
+) -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
     transforms: Sequence[Callable[[RawPatient], Optional[RawPatient]]] = [
+        functools.partial(_map_bad_concepts, concept_map),
         move_pre_birth,
         move_visit_start_to_first_event_start,
         move_to_day_end,
@@ -139,11 +152,21 @@ def etl_starr_omop_program() -> None:
             patient_collection = PatientCollection(raw_patients_dir)
 
         if not os.path.exists(cleaned_patients_dir):
+            concept_map = {}
+            with io.TextIOWrapper(
+                zstandard.ZstdDecompressor().stream_reader(
+                    open(os.path.join(args.omop_source, "concept_remap.csv.zst"), "rb")
+                )
+            ) as f:
+                for row in f:
+                    a, b = [int(a) for a in row.split(",")]
+                    concept_map[a] = b
+
             stats_dict = {}
             rootLogger.info("Appling transformations")
             patient_collection = patient_collection.transform(
                 cleaned_patients_dir,
-                _get_stanford_transformations(),
+                _get_stanford_transformations(concept_map),
                 num_threads=args.num_threads,
                 stats_dict=stats_dict,
             )

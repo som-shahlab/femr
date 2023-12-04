@@ -15,7 +15,7 @@ from femr.datasets import EventCollection, PatientCollection, RawEvent, RawPatie
 from femr.extractors.csv import run_csv_extractors
 from femr.extractors.omop import get_omop_csv_extractors
 from femr.transforms import delta_encode, remove_nones
-from femr.transforms.mimic import move_early_end_date_to_start_date
+from femr.transforms.mimic import move_billing_codes, move_early_end_date_to_start_date, remove_very_old
 from femr.transforms.stanford import move_pre_birth, move_to_day_end, move_visit_start_to_first_event_start
 
 
@@ -26,9 +26,9 @@ def _is_visit_event(e: RawEvent) -> bool:
 def _get_mimic_transformations() -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving except
-    # replace_categorical_measurement_results
     transforms: Sequence[Callable[[RawPatient], Optional[RawPatient]]] = [
         move_pre_birth,
+        move_billing_codes,
         move_visit_start_to_first_event_start,
         move_early_end_date_to_start_date,
         move_to_day_end,
@@ -42,6 +42,7 @@ def _get_mimic_transformations() -> Sequence[Callable[[RawPatient], Optional[Raw
             # If we ever remove or revisit visit_id, we would want to revisit this
             do_not_apply_to_filter=_is_visit_event,
         ),
+        remove_very_old,
     ]
 
     return transforms

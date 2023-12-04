@@ -43,10 +43,10 @@ LabelType = Union[
     Literal["numeric"],
     Literal["survival"],
     Literal["categorical"],
-    Literal["empty"],
+    Literal["none"],
 ]
 
-VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical", "empty"]
+VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical", "none"]
 
 
 @dataclass
@@ -101,14 +101,17 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
         rows = list(reader)
         assert len(rows) != 0, "Must have at least one label to load it"
 
-        labeler_type: LabelType = cast(LabelType, rows[0]["label_type"])
+        labeler_type: LabelType
+        if "label_type" in rows[0]:
+            labeler_type = cast(LabelType, rows[0]["label_type"])
+        else:
+            labeler_type = "none"
+
         labels = collections.defaultdict(list)
 
         for row in rows:
             value: Union[bool, SurvivalValue, int, float, None]
-            if labeler_type == "empty":
-                value = None
-            elif labeler_type == "survival":
+            if labeler_type == "survival":
                 value = SurvivalValue(
                     time_to_event=datetime.timedelta(minutes=float(row["value"])),
                     is_censored=row["is_censored"].lower() == "true",
@@ -119,6 +122,8 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
                 value = int(row["value"])
             elif labeler_type == "numeric":
                 value = float(row["value"])
+            elif labeler_type == "none":
+                value = None
             else:
                 assert False, f"Invalid labeler type {labeler_type}"
 

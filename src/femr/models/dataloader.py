@@ -268,10 +268,9 @@ def create_batches() -> None:
                         "event_time": event_offset + age,
                         "is_censored": label.value.is_censored,
                     }
-                else:
-                    if labeled_patients.labeler_type == "boolean":
-                        assert isinstance(label.value, bool)
-                    value = label.value
+                elif labeled_patients.labeler_type == "none":
+                    assert label.value is None
+                    value = None
                 result_labels.append((int(pid), int(age), value))
 
         task = {

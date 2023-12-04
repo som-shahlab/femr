@@ -946,27 +946,31 @@ std::vector<std::result_of_t<F(CSVReader<TextReader>&)>> process_nested(
     }
 }
 
-absl::flat_hash_set<int64_t> get_standard_codes(
+absl::flat_hash_map<int64_t, char> get_code_types(
     const boost::filesystem::path& concept, char delimiter,
     size_t num_threads) {
     auto valid = process_nested(
         concept, "concept", num_threads, true,
         {"concept_id", "standard_concept"}, delimiter, [&](auto& reader) {
-            std::vector<int64_t> result;
+            std::vector<std::pair<int64_t, char>> result;
 
             while (reader.next_row()) {
                 int64_t concept_id;
                 attempt_parse_or_die(reader.get_row()[0], concept_id);
 
+                char value = 0;
+
                 if (reader.get_row()[1] != "") {
-                    result.push_back(concept_id);
+                    value = reader.get_row()[1][0];
                 }
+
+                result.push_back(std::make_pair(concept_id, value));
             }
 
             return result;
         });
 
-    absl::flat_hash_set<int64_t> result;
+    absl::flat_hash_map<int64_t, char> result;
     for (const auto& entry : valid) {
         for (const auto& val : entry) {
             result.insert(val);
@@ -976,25 +980,44 @@ absl::flat_hash_set<int64_t> get_standard_codes(
     return result;
 }
 
+int get_priority(char code_type) {
+    if (code_type == 0) {
+        return 0;
+    } else if (code_type == 'S') {
+        return -1;
+    } else if (code_type == 'C') {
+        return -2;
+    }
+
+    char code_type_string[] = " ";
+    code_type_string[0] = code_type;
+
+    throw std::runtime_error(absl::StrCat("Unexpected code type", code_type_string));
+}
+
 std::pair<absl::flat_hash_map<int64_t, uint32_t>,
           std::vector<std::vector<uint32_t>>>
 get_parents(std::vector<int64_t>& raw_codes,
             const boost::filesystem::path& concept, char delimiter,
             size_t num_threads) {
-    auto standard_code_map =
-        get_standard_codes(concept, delimiter, num_threads);
+    auto code_types =
+        get_code_types(concept, delimiter, num_threads);
 
     using ParentMap =
         absl::flat_hash_map<int64_t,
-                            std::vector<std::tuple<bool, size_t, int64_t>>>;
+                            std::vector<std::tuple<int, size_t, int64_t>>>;
 
-    std::vector<std::string> valid_rels = {"Has precise ingredient",
+    std::vector<std::string> valid_rels = {
+                                           "Maps to",
+                                           "RxNorm - ATC pr lat",
+                                           "Is a",
+                                           "Has precise ingredient",
                                            "RxNorm has ing",
                                            "Quantified form of",
                                            "Has ingredient",
                                            "Form of",
                                            "Consists of",
-                                           "Is a"};
+    };
 
     auto parents = process_nested(
         concept, "concept_relationship", num_threads, false,
@@ -1009,8 +1032,17 @@ get_parents(std::vector<int64_t>& raw_codes,
                 int64_t concept_id_2;
                 attempt_parse_or_die(reader.get_row()[1], concept_id_2);
 
-                bool is_non_standard =
-                    standard_code_map.count(concept_id_2) == 0;
+                int source_priority = get_priority(code_types[concept_id_1]);
+                int target_priority = get_priority(code_types[concept_id_2]);
+
+                if (target_priority > source_priority) {
+                    // Link is going in the wrong direction! Abort
+                    continue;
+                }
+
+                if (concept_id_1 == concept_id_2) {
+                    continue;
+                }
 
                 size_t valid_rel_index;
                 for (valid_rel_index = 0; valid_rel_index < valid_rels.size();
@@ -1022,7 +1054,7 @@ get_parents(std::vector<int64_t>& raw_codes,
 
                 if (valid_rel_index < valid_rels.size()) {
                     result[concept_id_1].push_back(std::make_tuple(
-                        is_non_standard, valid_rel_index, concept_id_2));
+                        target_priority, valid_rel_index, concept_id_2));
                 }
             }
 
@@ -1086,13 +1118,13 @@ get_parents(std::vector<int64_t>& raw_codes,
         }
     };
 
+    std::vector<uint32_t> indices;
     std::vector<std::vector<uint32_t>> result;
     while (!to_process.empty()) {
         const auto& ps = merged[to_process.front()];
         to_process.pop_front();
 
-        std::vector<uint32_t> indices;
-        indices.reserve(merged.size());
+        indices.clear();
         for (auto parent : ps) {
             indices.push_back(get_index(std::get<2>(parent)));
         }
@@ -1100,7 +1132,7 @@ get_parents(std::vector<int64_t>& raw_codes,
         std::sort(std::begin(indices), std::end(indices));
         auto last = std::unique(std::begin(indices), std::end(indices));
         indices.erase(last, std::end(indices));
-        result.emplace_back(std::move(indices));
+        result.push_back(indices);
     }
 
     return {std::move(index_map), std::move(result)};
@@ -1186,6 +1218,17 @@ Ontology create_ontology(std::vector<int64_t> raw_codes,
     auto parent_info = get_parents(raw_codes, concept, delimiter, num_threads);
     auto text = get_concept_text(raw_codes, parent_info.first, concept,
                                  delimiter, num_threads);
+
+    absl::flat_hash_map<std::string, uint64_t> seen_text_codes;
+    for (size_t i = 0; i < raw_codes.size(); i++) {
+        auto iter = seen_text_codes.find(text[i].first);
+        if (iter != std::end(seen_text_codes)) {
+            throw std::runtime_error(
+                absl::StrCat("Cannot support duplicate code strings, text \"", text[i].first, "\" for concept_ids ", iter->second, " ", raw_codes[i]));
+        } else {
+            seen_text_codes.insert(std::make_pair(text[i].first, raw_codes[i]));
+        }
+    }
 
     {
         boost::filesystem::create_directory(target);

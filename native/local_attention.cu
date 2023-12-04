@@ -13,15 +13,15 @@
 #include <stdexcept>
 #include <vector>
 
+#include "common_jax_extension.hh"
+
 using namespace nvcuda;
 
-constexpr int DIM_SIZE = 16;
 constexpr int WARP_SIZE = 32;
 constexpr int WARPS_PER_BLOCK = 16;
 
 static_assert(WARPS_PER_BLOCK == DIM_SIZE);  // Current algorithm assumes this
 
-constexpr int LAUNCH_SIZE = 64;
 
 static_assert(LAUNCH_SIZE % 4 == 0);  // Current algorithm assumes this
 
@@ -372,20 +372,18 @@ const local_attention_info *create_attention_info(uint32_t b, uint32_t n,
 
     convert_to_pointer(rows, result->row_data, result->num_rows);
 
+    std::vector<uint32_t> expected_shape = {b, result->num_rows, LAUNCH_SIZE * DIM_SIZE,
+                                    DIM_SIZE};
+
+    if (expected_shape != get_attention_shape(b, n, k, w, causal)) {
+        throw std::runtime_error("Attention shapes do not match? Fundamental logic error within the local attention kernel.");
+    }
+
     const local_attention_info *cuda_result = convert_to_cuda(result);
 
     return cuda_result;
 }
 
-std::vector<uint32_t> get_attention_shape(uint32_t b, uint32_t n, uint32_t k,
-                                          uint32_t w, bool causal) {
-    const local_attention_info *info =
-        create_attention_info(b, n, k, w, causal);
-    std::vector<uint32_t> result = {b, info->num_rows, LAUNCH_SIZE * DIM_SIZE,
-                                    DIM_SIZE};
-    free_attention_info(info);
-    return result;
-}
 
 __global__ void __launch_bounds__(WARPS_PER_BLOCK *WARP_SIZE)
     local_attention_backward(const local_attention_info *__restrict__ info,
