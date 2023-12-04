@@ -4,6 +4,8 @@ from __future__ import annotations
 import datetime
 from typing import Any, List, Optional, Set, Tuple, Union
 
+import pandas as pd
+
 from femr import Event, Patient
 from femr.extension import datasets as extension_datasets
 from femr.labelers.core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
@@ -715,6 +717,73 @@ class EssentialHypertensionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
 class HyperlipidemiaCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     # n = 3048320
     root_concept_code = "SNOMED/55822004"
+
+
+##########################################################
+##########################################################
+# CheXpert
+##########################################################
+##########################################################
+
+CHEXPERT_LABELS = [
+    "No Finding",
+    "Enlarged Cardiomediastinum",
+    "Cardiomegaly",
+    "Lung Lesion",
+    "Lung Opacity",
+    "Edema",
+    "Consolidation",
+    "Pneumonia",
+    "Atelectasis",
+    "Pneumothorax",
+    "Pleural Effusion",
+    "Pleural Other",
+    "Fracture",
+    "Support Devices",
+]
+
+
+class ChexpertLabeler(Labeler):
+    """CheXpert labeler.
+
+    Multi-label classification task of patient's radiology reports.
+    Make prediction 24 hours before radiology note is recorded.
+
+    Excludes:
+        - Radiology reports that are written <=24 hours of a patient's first event (i.e. `patient.events[0].start`)
+    """
+
+    def __init__(
+        self,
+        path_to_chexpert_csv: str,
+    ):
+        self.path_to_chexpert_csv = path_to_chexpert_csv
+        self.prediction_offset: datetime.timedelta = datetime.timedelta(hours=-24)
+        self.df_chexpert = pd.read_csv(self.path_to_chexpert_csv, sep="\t").sort_values(by=["start"], ascending=True)
+
+    def get_labeler_type(self) -> LabelType:
+        return "categorical"
+
+    def label(self, patient: Patient) -> List[Label]:  # type: ignore
+        labels: List[Label] = []
+        patient_start_time, _ = self.get_patient_start_end_times(patient)
+        df_patient = self.df_chexpert[self.df_chexpert["patient_id"] == patient.patient_id].sort_values(
+            by=["start"], ascending=True
+        )
+
+        for idx, row in df_patient.iterrows():
+            label_time: datetime.datetime = datetime.datetime.fromisoformat(row["start"])
+            prediction_time: datetime.datetime = label_time + self.prediction_offset
+            if prediction_time <= patient_start_time:
+                # Exclude radiology reports where our prediction time would be before patient's first timeline event
+                continue
+
+            bool_labels = row[CHEXPERT_LABELS].astype(int).to_list()
+            label_string = "".join([str(x) for x in bool_labels])
+            label_num: int = int(label_string, 2)
+            labels.append(Label(time=prediction_time, value=label_num))
+
+        return labels
 
 
 if __name__ == "__main__":
