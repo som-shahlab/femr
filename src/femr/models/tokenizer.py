@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import msgpack
 import collections
-import transformers
-import datasets
 import datetime
 import functools
 import math
 import os
+
+import datasets
+import msgpack
+import transformers
 
 import femr.hf_utils
 import femr.stat_utils
@@ -150,7 +151,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
     def __init__(self, dictionary):
         assert not dictionary["is_hierarchical"], "Currently not supported"
 
-        self.is_hierarchical = dictionary['is_hierarchical']
+        self.is_hierarchical = dictionary["is_hierarchical"]
 
         self.dictionary = dictionary
         vocab = dictionary["vocab"]
@@ -185,18 +186,20 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                     - A path to a *directory* containing tokenization data saved using
                       [`save_pretrained`], e.g., `./my_data_directory/`.
             kwargs: Arguments for loading to pass to transformers.utils.hub.cached_file
-        
+
         Returns:
             A FEMR Tokenizer
         """
 
-        dictionary_file = transformers.utils.hub.cached_file(pretrained_model_name_or_path, "dictionary.msgpack", **kwargs)
+        dictionary_file = transformers.utils.hub.cached_file(
+            pretrained_model_name_or_path, "dictionary.msgpack", **kwargs
+        )
 
         with open(dictionary_file, "rb") as f:
             dictionary = msgpack.load(f)
-        
+
         return FEMRTokenizer(dictionary)
-    
+
     def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
         """
         Save the FEMR tokenizer.
@@ -217,7 +220,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         if os.path.isfile(save_directory):
             logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
             return
-        
+
         os.makedirs(save_directory, exist_ok=True)
 
         if push_to_hub:
@@ -226,7 +229,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             repo_id = self._create_repo(repo_id, **kwargs)
             files_timestamps = self._get_files_timestamps(save_directory)
 
-        with open(os.path.join(save_directory, 'dictionary.msgpack'), 'wb') as f:
+        with open(os.path.join(save_directory, "dictionary.msgpack"), "wb") as f:
             msgpack.dump(self.dictionary, f)
 
         if push_to_hub:

@@ -9,6 +9,7 @@ import numpy as np
 import femr.hf_utils
 import femr.models.tokenizer
 
+
 def map_length_stats(batch, indices, *, processor, max_length):
     length_map = collections.defaultdict(list)
 
@@ -36,7 +37,7 @@ def map_length_stats(batch, indices, *, processor, max_length):
                     current_end = label_index
                 else:
                     current_end = label_index
-                
+
             length_map[(current_end - current_start + 1)].append((patient_index, current_start))
         else:
             last_index = data["transformer"]["label_indices"][-1]
@@ -114,9 +115,7 @@ class BatchCreator:
                 if self.task is not None and last_time is not None:
                     num_added = self.task.add_event(last_time, event["time"], features)
                     for i in range(num_added):
-                        self.label_indices.append(
-                            self.patient_index * self.max_length + self.length_index - offset - 1
-                        )
+                        self.label_indices.append(self.patient_index * self.max_length + self.length_index - offset - 1)
 
                 if self.length_index - offset >= self.max_length:
                     break
@@ -133,21 +132,19 @@ class BatchCreator:
                 self.integer_ages[self.patient_index, self.length_index - offset] = (
                     event["time"] - birth
                 ) / datetime.timedelta(minutes=1)
-                self.normalized_ages[
-                    self.patient_index, self.length_index - offset
-                ] = self.tokenizer.normalize_age(self.integer_ages[self.patient_index, self.length_index - offset])
+                self.normalized_ages[self.patient_index, self.length_index - offset] = self.tokenizer.normalize_age(
+                    self.integer_ages[self.patient_index, self.length_index - offset]
+                )
                 self.timestamps[self.patient_index, self.length_index - offset] = event["time"].timestamp()
 
                 self.length_index += 1
 
                 last_time = event["time"]
-        
+
         if self.task is not None:
             num_added = self.task.add_event(last_time, None, None)
             for i in range(num_added):
-                self.label_indices.append(
-                    self.patient_index * self.max_length + self.length_index - offset - 1
-                )
+                self.label_indices.append(self.patient_index * self.max_length + self.length_index - offset - 1)
 
         self.patient_index += 1
 
@@ -194,7 +191,7 @@ class FEMRBatchProcessor:
             batch_data = formatter.recursive_tensorize(batch_data)
         return batch_data
 
-    def convert_dataset(self, dataset, tokens_per_batch: int, min_samples_per_batch: int =4, num_proc:int=16):
+    def convert_dataset(self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 16):
         if isinstance(dataset, datasets.DatasetDict):
             return datasets.DatasetDict(
                 {
