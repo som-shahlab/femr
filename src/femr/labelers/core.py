@@ -43,9 +43,10 @@ LabelType = Union[
     Literal["numeric"],
     Literal["survival"],
     Literal["categorical"],
+    Literal["empty"],
 ]
 
-VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical"]
+VALID_LABEL_TYPES = ["boolean", "numeric", "survival", "categorical", "empty"]
 
 
 @dataclass
@@ -54,7 +55,7 @@ class Label:
     The prediction for this label is made with all data <= time."""
 
     time: datetime.datetime
-    value: Union[bool, int, float, SurvivalValue, str]
+    value: Union[bool, int, float, SurvivalValue, str, None]
 
 
 def _apply_labeling_function(
@@ -104,8 +105,10 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
         labels = collections.defaultdict(list)
 
         for row in rows:
-            value: Union[bool, SurvivalValue, int, float]
-            if labeler_type == "survival":
+            value: Union[bool, SurvivalValue, int, float, None]
+            if labeler_type == "empty":
+                value = None
+            elif labeler_type == "survival":
                 value = SurvivalValue(
                     time_to_event=datetime.timedelta(minutes=float(row["value"])),
                     is_censored=row["is_censored"].lower() == "true",
@@ -114,8 +117,10 @@ def load_labeled_patients(filename: str) -> LabeledPatients:
                 value = row["value"].lower() == "true"
             elif labeler_type == "categorical":
                 value = int(row["value"])
-            else:
+            elif labeler_type == "numeric":
                 value = float(row["value"])
+            else:
+                assert False, f"Invalid labeler type {labeler_type}"
 
             time = datetime.datetime.fromisoformat(row["prediction_time"])
             assert time.second == 0, "FEMR only supports minute level time resolution"

@@ -304,8 +304,8 @@ def test_readmission(tmp_path: pathlib.Path):
 
 class DummyMortalityOntology:
     def get_children(self, code: str) -> List[str]:
-        if code == "SNOMED/419620001":
-            return ["DEATH_CHILD"]
+        if code == "Death Type/OMOP generated":
+            return ["Condition Type/OMOP4822053"]
         return []
 
 
