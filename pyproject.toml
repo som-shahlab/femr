@@ -9,7 +9,6 @@ readme = "README.md"
 dependencies = [
     "numpy >= 1.22",
     "scipy >= 1.6",
-    "pandas >= 2.0.3",
     "scikit-learn >= 0.24",
     "tqdm >= 4.60.0",
     "zstandard >= 0.18",
@@ -32,7 +31,7 @@ clmbr_create_batches = "femr.models.dataloader:create_batches"
 clmbr_create_dictionary = "femr.models.scripts:create_dictionary"
 clmbr_create_survival_dictionary = "femr.models.scripts:create_survival_dictionary"
 clmbr_train_model = "femr.models.scripts:train_model"
-clmbr_compute_representations = "femr.models.compute_representations:compute_representations"
+clmbr_compute_representations = "femr.models.scripts:compute_representations"
 clmbr_train_linear_probe= "femr.models.linear_probe:train_linear_probe"
 femr_compute_representations = "femr.models.scripts:new_compute_representations"
 
