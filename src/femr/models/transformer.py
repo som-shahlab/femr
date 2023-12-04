@@ -225,7 +225,6 @@ class FEMRModel(transformers.PreTrainedModel):
         if "task" in batch:
             features = features.reshape(-1, features.shape[-1])
             features = features[batch["transformer"]["label_indices"], :]
-            print(self.task_model)
             return self.task_model(features, batch["task"])
         else:
             return batch["patient_ids"], batch["transformer"]['timestamps'].cpu().numpy().astype("datetime64[s]").astype(datetime.datetime), features
