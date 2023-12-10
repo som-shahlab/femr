@@ -6,7 +6,7 @@ import datetime
 from typing import Any, List, Mapping, Sequence
 
 import datasets
-import event_stream_data_standard as ESDS
+import esds_spec
 import numpy as np
 import torch
 import torch.nn as nn
@@ -29,7 +29,7 @@ class Task(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def start_patient(self, patient: ESDS.Patient) -> None:
+    def start_patient(self, patient: esds_spec.Patient) -> None:
         ...
 
     @abc.abstractmethod
@@ -48,7 +48,7 @@ class Task(abc.ABC):
 
 
 class LabeledPatientTask(Task):
-    def __init__(self, labels: Sequence[ESDS.Label]):
+    def __init__(self, labels: Sequence[esds_spec.Label]):
         super().__init__()
 
         self.label_map = collections.defaultdict(list)
@@ -67,7 +67,7 @@ class LabeledPatientTask(Task):
         indices = [index.get_index(patient_id) for patient_id in self.label_map]
         return dataset.select(indices)
 
-    def start_patient(self, patient: ESDS.Patient) -> None:
+    def start_patient(self, patient: esds_spec.Patient) -> None:
         self.current_labels = self.label_map[patient["patient_id"]]
         self.current_label_index = 0
         self.patient_id = patient["patient_id"]
@@ -121,7 +121,7 @@ class CLMBRTask(Task):
     def get_task_config(self) -> femr.models.transformer.FEMRTaskConfig:
         return femr.models.transformer.FEMRTaskConfig(task_type="clmbr", clmbr_vocab_size=self.clmbr_vocab_size)
 
-    def start_patient(self, patient: ESDS.Patient) -> None:
+    def start_patient(self, patient: esds_spec.Patient) -> None:
         pass
 
     def needs_exact(self) -> bool:
