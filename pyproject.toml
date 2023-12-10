@@ -39,10 +39,12 @@ build = [
     "sphinx-rtd-theme >= 0.5.0",
     "sphinx-autoapi >= 1.5.1",
     "torchtyping == 0.1.4",
-    "transformers >= 4.25.1",
-    "flash_attn >= 2.3.6",
 ]
 models = [
+    "torch",
+    "transformers >= 4.25.1",
+    "flash_attn >= 2.3.6",
+    "datasets >= 2.15.0",
 ]
 
 [tool.isort]
