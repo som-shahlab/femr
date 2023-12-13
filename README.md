@@ -23,13 +23,13 @@ There are two variants of the **FEMR** package, a CPU only version and a CUDA en
 ## How to install **FEMR** without CUDA
 
 ```bash
-pip install femr
+pip install femr==0.1.16
 ```
 
 If you have a particularly old CPU, we offer a variant of femr without CPU optimations.
 
 ```bash
-pip install femr_oldcpu
+pip install femr_oldcpu==0.1.16
 ```
 
 ## How to install **FEMR** with CUDA support
@@ -38,7 +38,7 @@ Note that CUDA-enabled **FEMR** requires jax in order to function.
 
 ```bash
 pip install --upgrade "jax[cuda11_pip]==0.4.8" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-pip install "femr_cuda[models]"
+pip install "femr_cuda[models]==0.1.16"
 ```
 
 # Getting Started
