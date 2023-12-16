@@ -15,13 +15,14 @@ dependencies = [
     "icecream == 2.1.3",
     "nptyping == 2.4.1",
     "msgpack >= 1.0.5",
-    "esds_spec == 0.1.0",
+    "meds == 0.1.0",
 ]
 requires-python=">3.9"
 version = "0.2.1"
 
 [project.scripts]
 
+femr_stanford_omop_fixer = "femr.post_etl_pipelines.stanford:femr_stanford_omop_fixer_program"
 etl_stanford_omop = "femr.etl_pipelines.stanford:etl_starr_omop_program"
 etl_generic_omop = "femr.etl_pipelines.omop:etl_generic_omop_program"
 etl_simple_femr = "femr.etl_pipelines.simple:etl_simple_femr_program"
