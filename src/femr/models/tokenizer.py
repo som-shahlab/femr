@@ -5,7 +5,7 @@ import datetime
 import functools
 import math
 import os
-from typing import Union
+from typing import Union, Optional
 
 import msgpack
 import transformers
@@ -14,11 +14,11 @@ import femr.hf_utils
 import femr.stat_utils
 
 
-def train_tokenizer(dataset, vocab_size, is_hierarchical=False, num_proc=1) -> FEMRTokenizer:
+def train_tokenizer(dataset, vocab_size: int, is_hierarchical: bool = False, ontology: Optional[femr.ontology.Ontology] = None, num_proc: int =1) -> FEMRTokenizer:
     """Train a FEMR tokenizer from the given dataset"""
     statistics = femr.hf_utils.aggregate_over_dataset(
         dataset,
-        functools.partial(map_statistics, num_patients=len(dataset)),
+        functools.partial(map_statistics, num_patients=len(dataset), is_hierarchical=is_hierarchical, ontology=ontology),
         agg_statistics,
         num_proc=num_proc,
         batch_size=1_000,
@@ -39,10 +39,12 @@ def agg_statistics(stats1, stats2):
     return stats1
 
 
-def map_statistics(batch, *, num_patients):
+def map_statistics(batch, *, num_patients: int, is_hierarchical: bool, ontology: Optional[femr.ontology.Ontology]) -> Mapping[str, Any]:
     age_stats = femr.stat_utils.OnlineStatistics()
     code_counts = collections.defaultdict(float)
-    hierarchical_code_counts = collections.defaultdict(float)
+
+    if is_hierarchical:
+        assert ontology is not None
 
     text_counts = collections.defaultdict(float)
     numeric_samples = collections.defaultdict(functools.partial(femr.stat_utils.ReservoirSampler, 1_000))
@@ -60,29 +62,31 @@ def map_statistics(batch, *, num_patients):
         birth_date = events[0]["time"]
         for event in events:
             for measurement in event["measurements"]:
-                age_stats.add(weight, (event["time"] - birth_date) / datetime.timedelta(minutes=1))
+                if event["time"] != birth_date:
+                    age_stats.add(weight, (event["time"] - birth_date) / datetime.timedelta(minutes=1))
                 if measurement["numeric_value"] is not None:
                     numeric_samples[measurement["code"]].add(measurement["numeric_value"], weight)
                 elif measurement["text_value"] is not None:
                     text_counts[(measurement["code"], measurement["text_value"])] += weight
                 else:
-                    code_counts[measurement["code"]] += weight
+                    if not is_hierarchical:
+                        code_counts[measurement["code"]] += weight
+                    else:
+                        for code in ontology.get_all_parents(measurement['code']):
+                            code_counts[code] += weight
 
     return {
         "age_stats": age_stats,
         "code_counts": code_counts,
-        "hierarchical_code_counts": hierarchical_code_counts,
         "text_counts": text_counts,
         "numeric_samples": numeric_samples,
     }
 
 
-def convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical):
+def convert_statistics_to_msgpack(statistics, vocab_size: int, is_hierarchical: bool, ontology: Optional[femr.ontology.Ontology]):
     vocab = []
 
-    if is_hierarchical:
-        assert False, "not implemented yet"
-    else:
+    if not is_hierarchical:
         for code, weight in statistics["code_counts"].items():
             entry = {
                 "type": "code",
@@ -90,6 +94,18 @@ def convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical):
                 "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
             }
             vocab.append(entry)
+    else:
+        for code, weight in statistics["code_counts"].items():
+            baseline = min([1] + [statistics["code_counts"][parent] for parent in ontology.get_parents(code)])
+            weight = weight / baseline
+
+            if weight != 0 and weight != 1:
+                entry = {
+                    "type": "code",
+                    "code_string": code,
+                    "weight": baseline * (weight * math.log(weight) + (1 - weight) * math.log(1 - weight)),
+                }
+                vocab.append(entry)
 
     for (code, text), weight in statistics["text_counts"].items():
         entry = {

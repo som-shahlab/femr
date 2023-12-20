@@ -151,6 +151,10 @@ class CLMBRTask(Task):
 
 
 class MOTORTask(Task):
+    @classmethod
+    def train_pretraining_task_info(cls, dataset: datasets.Dataset, num_tasks: int, num_bins: int) -> None:
+
+
     def __init__(self, pretraining_task_info: List[Tuple[str, float]]):
         self.pretraining_task_info = pretraining_task_info
 
