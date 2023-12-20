@@ -243,7 +243,7 @@ class FEMRBatchProcessor:
                 "dataset": dataset,
                 "batches": batches,
             },
-            num_proc=16,
+            num_proc=num_proc,
         )
 
         return batch_dataset
