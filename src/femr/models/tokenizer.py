@@ -5,8 +5,8 @@ import datetime
 import functools
 import math
 import os
+from typing import Union
 
-import datasets
 import msgpack
 import transformers
 
@@ -215,17 +215,15 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                 repository you want to push to with `repo_id` (will default to the name of `save_directory` in your
                 namespace).
             kwargs (`Dict[str, Any]`, *optional*):
-                Additional key word arguments passed along to the [`transformers.utils.PushToHubMixin.push_to_hub`] method.
+                Additional key word arguments passed along to the [`PushToHubMixin.push_to_hub`] method.
         """
-        if os.path.isfile(save_directory):
-            logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
-            return
+        assert not os.path.isfile(save_directory), f"Provided path ({save_directory}) should be a directory, not a file"
 
         os.makedirs(save_directory, exist_ok=True)
 
         if push_to_hub:
             commit_message = kwargs.pop("commit_message", None)
-            repo_id = kwargs.pop("repo_id", save_directory.split(os.path.sep)[-1])
+            repo_id = kwargs.pop("repo_id", str(save_directory).split(os.path.sep)[-1])
             repo_id = self._create_repo(repo_id, **kwargs)
             files_timestamps = self._get_files_timestamps(save_directory)
 

@@ -63,3 +63,9 @@ target_version = ['py310']
 
 [tool.pydocstyle]
 match = "src/.*\\.py"
+
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "tests"
+]

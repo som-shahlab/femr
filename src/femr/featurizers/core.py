@@ -1,20 +1,19 @@
 """Core featurizer functionality, shared across Featurizers."""
 from __future__ import annotations
 
-import multiprocessing
+import collections
+import datetime
+import functools
 from abc import ABC, abstractmethod
-from typing import Any, List, Literal, NamedTuple, Optional, Tuple, TypeVar
+from typing import Any, List, Mapping, NamedTuple, TypeVar
 
+import datasets
+import meds
 import numpy as np
 import scipy.sparse
-from nptyping import NDArray
 
-from femr import Patient
-from femr.extension import datasets as extension_datasets
-from femr.labelers import Label, LabeledPatients
-
-PatientDatabase = extension_datasets.PatientDatabase
-Ontology = extension_datasets.Ontology
+import femr.index
+import femr.ontology
 
 
 class ColumnValue(NamedTuple):
@@ -27,19 +26,30 @@ class ColumnValue(NamedTuple):
     value: float | int
 
 
-def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer]]) -> Tuple[Any, Any, Any, Any]:
-    """Apply featurization to the set of patients included in `patient_ids`.
-    Gets called as a parallelized subprocess of the .featurize() method of `FeaturizerList`.
-    """
-    database_path: str = args[0]
-    patient_ids: List[int] = args[1]
-    labeled_patients: LabeledPatients = args[2]
-    featurizers: List[Featurizer] = args[3]
+def _preprocess_map_func(
+    batch, *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
+) -> List[List[Any]]:
+    patients: List[meds.Patient] = [
+        {"patient_id": patient_id, "events": events} for patient_id, events in zip(batch["patient_id"], batch["events"])
+    ]
 
-    # Load patients + ontology
-    database: PatientDatabase = PatientDatabase(database_path)
-    ontology: Ontology = database.get_ontology()
+    result = []
+    for featurizer in featurizers:
+        result.append([featurizer.generate_preprocess_data(patients, label_map)])
 
+    return result
+
+
+def _preprocess_agg_func(first: List[List[Any]], second: List[List[Any]]) -> List[List[Any]]:
+    for a, b in zip(first, second):
+        a.extend(b)
+
+    return first
+
+
+def _features_map_func(
+    batch, *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
+) -> Mapping[str, Any]:
     # Construct CSR sparse matrix
     #   non-zero entries in sparse matrix
     data: List[Any] = []
@@ -47,66 +57,62 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
     indices: List[int] = []
     #   maps each element in `data` and `indices` to the rows of the sparse matrix
     indptr: List[int] = []
-    #   tracks Labels
-    label_data: List[Tuple] = []
 
-    # For each Patient...
-    for patient_id in patient_ids:
-        patient: Patient = database[patient_id]  # type: ignore
-        labels: List[Label] = labeled_patients.get_labels_from_patient_idx(patient_id)
+    patient_ids: List[int] = []
+    feature_times: List[datetime.datetime] = []
 
-        if len(labels) == 0:
-            continue
+    for patient_id, events in zip(batch["patient_id"], batch["events"]):
+        patient: meds.Patient = {"patient_id": patient_id, "events": events}
+        labels = label_map[patient_id]
+
+        assert len(labels) != 0, "Must have at least one label per patient processed"
+
+        for label in labels:
+            patient_ids.append(patient_id)
+            feature_times.append(label["prediction_time"])
 
         # For each Featurizer, apply it to this Patient...
-        columns_by_featurizer: List[List[List[ColumnValue]]] = []
+        features_per_label: List[List[List[ColumnValue]]] = [[] for _ in range(len(labels))]
         for featurizer in featurizers:
-            # `features` can be thought of as a 2D array (i.e. list of lists),
-            # where rows correspond to `labels` and columns to `ColumnValue` (i.e. features)
-            features: List[List[ColumnValue]] = featurizer.featurize(patient, labels, ontology)
+            features: List[List[ColumnValue]] = featurizer.featurize(patient, labels)
             assert len(features) == len(labels), (
                 f"The featurizer `{featurizer}` didn't generate a set of features for "
                 f"every label for patient {patient_id} ({len(features)} != {len(labels)})"
             )
-            columns_by_featurizer.append(features)
+            for a, b in zip(features_per_label, features):
+                a.append(b)
 
-        for i, label in enumerate(labels):
+        for features in features_per_label:
             indptr.append(len(indices))
-            label_data.append(
-                (
-                    patient_id,  # patient_ids
-                    label.value,  # result_labels
-                    label.time,  # labeling_time
-                )
-            )
 
             # Keep track of starting column for each successive featurizer as we
             # combine their features into one large matrix
             column_offset: int = 0
-            for j, feature_columns in enumerate(columns_by_featurizer):
-                for column, value in feature_columns[i]:
-                    assert 0 <= column < featurizers[j].get_num_columns(), (
-                        f"The featurizer {featurizers[j]} provided an out of bounds column for "
+            for featurizer, feature_columns in zip(featurizers, features):
+                for column, value in feature_columns:
+                    assert 0 <= column < featurizer.get_num_columns(), (
+                        f"The featurizer {featurizer} provided an out of bounds column for "
                         f"{column} on patient {patient_id} ({column} must be between 0 and "
-                        f"{featurizers[j].get_num_columns()})"
+                        f"{featurizer.get_num_columns()})"
                     )
                     indices.append(column_offset + column)
                     data.append(value)
 
                 # Record what the starting column should be for the next featurizer
-                column_offset += featurizers[j].get_num_columns()
+                column_offset += featurizer.get_num_columns()
+
     # Need one last `indptr` for end of last row in CSR sparse matrix
     indptr.append(len(indices))
 
     # n_rows = number of Labels across all Patients
-    total_rows: int = len(label_data)
+    total_rows: int = len(indptr) - 1
     # n_cols = sum of number of columns output by each Featurizer
     total_columns: int = sum(x.get_num_columns() for x in featurizers)
 
     # Explanation of CSR Matrix: https://stackoverflow.com/questions/52299420/scipy-csr-matrix-understand-indptr
-    np_data: NDArray[Literal["n_total_features, 1"], np.float32] = np.array(data, dtype=np.float32)
-    np_indices: NDArray[Literal["n_total_features, 1"], np.int64] = np.array(indices, dtype=np.int64)
-    np_indptr: NDArray[Literal["n_labels + 1, 1"], np.int64] = np.array(indptr, dtype=np.int64)
+    np_data: np.ndarray = np.array(data, dtype=np.float32)
+    np_indices: np.ndarray = np.array(indices, dtype=np.int64)
+    np_indptr: np.ndarray = np.array(indptr, dtype=np.int64)
 
     assert (
         np_indptr.shape[0] == total_rows + 1
@@ -116,44 +122,17 @@ def _run_featurizer(args: Tuple[str, List[int], LabeledPatients, List[Featurizer
     ), f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
     data_matrix = scipy.sparse.csr_matrix((np_data, np_indices, np_indptr), shape=(total_rows, total_columns))
 
-    label_pids: NDArray[Literal["n_labels, 1"], np.int64] = np.array([x[0] for x in label_data], dtype=np.int64)
-    label_values: NDArray[Literal["n_labels, 1"], Any] = np.array([x[1] for x in label_data])
-    label_times: NDArray[Literal["n_labels, 1"], np.datetime64] = np.array(
-        [x[2] for x in label_data], dtype=np.datetime64
-    )
-    assert (
-        label_pids.shape == label_values.shape == label_times.shape
-    ), f"These should all be equal: {label_pids.shape} | {label_values.shape} | {label_times.shape}"
+    np_patient_ids: np.ndarray = np.array(patient_ids, dtype=np.int64)
+    np_feature_times: np.ndarray = np.array(feature_times, dtype="datetime64[us]")
 
-    return data_matrix, label_pids, label_values, label_times
+    return {"patient_ids": [np_patient_ids], "feature_times": [np_feature_times], "features": [data_matrix]}
 
 
-def _run_preprocess_featurizers(args: Tuple[str, List[int], LabeledPatients, List[Featurizer]]) -> List[Featurizer]:
-    """Apply preprocessing of featurizers to the set of patients included in `patient_ids`.
-    Gets called as a parallelized subprocess of the .preprocess_featurizers() method of `FeaturizerList`.
-    """
-    database_path: str = args[0]
-    patient_ids: List[int] = args[1]
-    labeled_patients: LabeledPatients = args[2]
-    featurizers: List[Featurizer] = args[3]
+def _features_agg_func(first_result: Any, second_result: Any) -> Any:
+    for k in first_result:
+        first_result[k].extend(second_result[k])
 
-    # Load patients
-    database: PatientDatabase = PatientDatabase(database_path)
-
-    # Preprocess featurizers on all Labels for each Patient...
-    for patient_id in patient_ids:
-        patient: Patient = database[patient_id]  # type: ignore
-        labels: List[Label] = labeled_patients.get_labels_from_patient_idx(patient_id)
-
-        if len(labels) == 0:
-            continue
-
-        # Preprocess featurizers
-        for featurizer in featurizers:
-            if featurizer.is_needs_preprocessing():
-                featurizer.preprocess(patient, labels, database.get_ontology())
-
-    return featurizers
+    return first_result
 
 
 class Featurizer(ABC):
@@ -162,37 +141,22 @@ class Featurizer(ABC):
     A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
     """
 
-    def preprocess(self, patient: Patient, labels: List[Label], ontology: Ontology):
-        """Preprocess the featurizer on the given patient and label indices.
-        This should do nothing if `is_needs_preprocessing()` returns FALSE,
-        i.e. the featurizer doesn't need preprocessing.
+    def generate_preprocess_data(self, patients: List[meds.Patient], label_map: Mapping[int, List[meds.Label]]) -> Any:
+        """
+        Some featurizers need to do some preprocessing in order to prepare for featurization.
+        This function performs that preprocessing on the given patients and labels, and returns some state.
+        That state is concatinated across the entire database,
+            and then passed to encorperate_preprocessed_data.
 
-        Args:
-            patient (Patient): A patient to preprocess on.
-            labels (List[Label]): The list of labels of this patient to preprocess on.
+        Note that this function shouldn't mutate the Featurizer as it will be sharded.
         """
         pass
 
-    @classmethod
-    def aggregate_preprocessed_featurizers(cls, featurizers: List[FeaturizerType]) -> FeaturizerType:
-        """After preprocessing featurizer using multiprocessing, this method aggregates all
-        those featurizers into one.
-
-        NOTE: This function only needs to be provided if you are using multiprocessing to
-        distribute featurization across multiple processes.
-
-        Note: This runs BEFORE `aggregate_preprocessed_featurizers()`.
-
-        Args:
-            featurizers (List[self]): A list of preprocessed featurizers
+    def encorperate_prepreprocessed_data(self, data_elements: List[Any]) -> None:
         """
-        return featurizers[0]
+        This encorperates data generated from generate_preprocess_data across the entire dataset into the featurizer
 
-    def finalize_preprocessing(self):
-        """Finish the featurizer at the end of preprocessing. This is not needed for every
-        featurizer, but does become necessary for things like verifying counts, etc.
-
-        Note: This runs AFTER `aggregate_preprocessed_featurizers()`.
+        This should mutate the Featurizer.
         """
         pass
 
@@ -204,9 +168,8 @@ class Featurizer(ABC):
     @abstractmethod
     def featurize(
         self,
-        patient: Patient,
-        labels: List[Label],
-        ontology: Optional[Ontology],
+        patient: meds.Patient,
+        labels: List[meds.Label],
     ) -> List[List[ColumnValue]]:
         """Featurize the patient such that each label in `labels` has an associated list of features.
 
@@ -275,52 +238,48 @@ class FeaturizerList:
 
     def preprocess_featurizers(
         self,
-        database_path: str,
-        labeled_patients: LabeledPatients,
+        dataset: datasets.Dataset,
+        index: femr.index.PatientIndex,
+        labels: List[meds.Label],
         num_threads: int = 1,
-    ):
-        """Preprocess `self.featurizers` on the provided set of `labeled_patients`."""
+    ) -> None:
+        """Preprocess `self.featurizers` on the provided set of labels."""
 
         # Check if any featurizers need preprocessing. If not, return early.
         any_needs_preprocessing: bool = any(featurizer.is_needs_preprocessing() for featurizer in self.featurizers)
         if not any_needs_preprocessing:
             return
 
+        label_map = collections.defaultdict(list)
+
+        for label in labels:
+            label_map[label["patient_id"]].append(label)
         # Split patients across multiple threads
-        patient_ids: List[int] = labeled_patients.get_all_patient_ids()
-        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads * 10)
-        tasks = [
-            (database_path, patient_ids, labeled_patients, self.featurizers) for patient_ids in patient_ids_per_thread
-        ]
+        patient_ids: List[int] = sorted(list({label["patient_id"] for label in labels}))
+
+        dataset = index.filter_dataset(dataset, patient_ids)
 
         # Preprocess in parallel
-        with multiprocessing.Pool(num_threads) as pool:
-            preprocessed_featurizers: List[Featurizer] = [
-                y for x in pool.imap(_run_preprocess_featurizers, tasks) for y in x
-            ]
+        featurize_stats = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
+            functools.partial(_preprocess_agg_func, label_map=label_map, featurizers=self.featurizers),
+            batch_size=1_000,
+            num_proc=num_threads,
+        )
 
         # Aggregate featurizers
-        for idx, featurizer in enumerate(self.featurizers):
+        for featurizer, featurizer_stat in zip(self.featurizers, featurize_stats):
             # Merge all featurizers of the same class as `featurizer`
-            self.featurizers[idx] = featurizer.aggregate_preprocessed_featurizers(
-                [f for f in preprocessed_featurizers if f.__class__.__name__ == featurizer.__class__.__name__]
-            )
-
-        # Finalize preprocessing
-        for featurizer in self.featurizers:
-            featurizer.finalize_preprocessing()
+            featurizer.encorperate_prepreprocessed_data(featurizer_stat)
 
     def featurize(
         self,
-        database_path: str,
-        labeled_patients: LabeledPatients,
+        dataset: datasets.Dataset,
+        index: femr.index.PatientIndex,
+        labels: List[meds.Label],
         num_threads: int = 1,
-    ) -> Tuple[
-        Any,
-        NDArray[Literal["n_labels, 1"], np.int64],
-        NDArray[Literal["n_labels, 1"], Any],
-        NDArray[Literal["n_labels, 1"], np.datetime64],
-    ]:
+    ) -> Mapping[str, np.ndarray]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
 
@@ -334,28 +293,28 @@ class FeaturizerList:
                 label_values is a list of boolean values representing the labels for each row in the matrix.
                 labeling_time is a list of labeling/prediction time for each row.
         """
+        label_map = collections.defaultdict(list)
 
-        patient_ids: List[int] = labeled_patients.get_all_patient_ids()
-        patient_ids_per_thread: List[NDArray[np.int64]] = np.array_split(patient_ids, num_threads * 10)
-        tasks = [
-            (database_path, patient_ids, labeled_patients, self.featurizers)
-            for patient_ids in patient_ids_per_thread
-            if len(patient_ids) > 0
-        ]
+        for label in labels:
+            label_map[label["patient_id"]].append(label)
+        # Split patients across multiple threads
+        patient_ids: List[int] = sorted(list({label["patient_id"] for label in labels}))
 
-        # Run featurizers in parallel
-        with multiprocessing.Pool(num_threads) as pool:
-            results: List[Tuple[Any, Any, Any, Any]] = list(pool.imap(_run_featurizer, tasks))
+        dataset = index.filter_dataset(dataset, patient_ids)
 
-        results = [res for res in results if res[2].shape[0] > 0]
+        features = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
+            functools.partial(_features_agg_func, label_map=label_map, featurizers=self.featurizers),
+            batch_size=1_000,
+            num_proc=num_threads,
+        )
 
-        # Join results
-        data_matrix = scipy.sparse.vstack([x[0] for x in results])
-        label_pids: NDArray[Literal["n_labels, 1"], np.int64] = np.concatenate([x[1] for x in results])
-        label_values: NDArray[Literal["n_labels, 1"], Any] = np.concatenate([x[2] for x in results])
-        label_times: NDArray[Literal["n_labels, 1"], np.datetime64] = np.concatenate([x[3] for x in results])
+        result = {k: np.concatenate(features[k]) for k in ("patient_ids", "feature_times")}
 
-        return data_matrix, label_pids, label_values, label_times
+        result["features"] = scipy.sparse.vstack(features["features"])
+
+        return result
 
     def get_column_name(self, column_idx: int) -> str:
         column_offset: int = 0

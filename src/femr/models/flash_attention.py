@@ -1,17 +1,8 @@
 import math
 
 import torch
-import torch.nn.functional as F
 from einops import rearrange, repeat
-from flash_attn import (
-    flash_attn_func,
-    flash_attn_kvpacked_func,
-    flash_attn_qkvpacked_func,
-    flash_attn_varlen_func,
-    flash_attn_varlen_kvpacked_func,
-    flash_attn_varlen_qkvpacked_func,
-    flash_attn_with_kvcache,
-)
+from flash_attn import flash_attn_func
 
 # From https://github.com/Dao-AILab/flash-attention/blob/main/tests/test_flash_attn.py#L183
 

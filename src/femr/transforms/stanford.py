@@ -1,7 +1,7 @@
 """Transforms that are unique to STARR OMOP."""
 
 import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import meds
 
@@ -47,7 +47,8 @@ def move_visit_start_to_first_event_start(patient: meds.Patient) -> meds.Patient
                     and visit_starts[measurement["metadata"]["visit_id"]] != event["time"]
                 ):
                     raise RuntimeError(
-                        f"Multiple visit events with visit ID {measurement['metadata']['visit_id']} for patient ID {patient['patient_id']}"
+                        f"Multiple visit events with visit ID {measurement['metadata']['visit_id']} "
+                        + f" for patient ID {patient['patient_id']}"
                     )
                 visit_starts[measurement["metadata"]["visit_id"]] = event["time"]
 
@@ -67,7 +68,7 @@ def move_visit_start_to_first_event_start(patient: meds.Patient) -> meds.Patient
                     )
 
     # Assign visit start times to be same as first non-visit event with same visit ID
-    new_events = []
+    new_events: List[meds.Event] = []
     for event in patient["events"]:
         new_measurements = []
         for measurement in event["measurements"]:

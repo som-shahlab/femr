@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import collections
 import datetime
 import functools
 import random
+from typing import List
 
 import datasets
 import numpy as np
@@ -33,7 +36,7 @@ def map_length_stats(batch, indices, *, processor, max_length):
             for label_index in data["transformer"]["label_indices"]:
                 if (label_index - current_start + 1) >= max_length:
                     length_map[(current_end - current_start + 1)].append((patient_index, current_start))
-                    current_start = labeld_index - max_length + 1
+                    current_start = label_index - max_length + 1
                     current_end = label_index
                 else:
                     current_end = label_index
@@ -215,7 +218,7 @@ class FEMRBatchProcessor:
         batches = []
 
         current_batch_size = size_and_samples[0][0]
-        current_batch = []
+        current_batch: List[int] = []
         for size, samples in size_and_samples:
             random.shuffle(samples)
             for sample in samples:

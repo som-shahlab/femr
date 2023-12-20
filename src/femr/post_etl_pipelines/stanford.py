@@ -1,18 +1,13 @@
 """An ETL script for doing an end to end transform of Stanford data into a PatientDatabase."""
 
 import argparse
-import datetime
 import functools
-import io
 import json
-import logging
 import os
-import resource
-from typing import Callable, Dict, Optional, Sequence
+from typing import Callable, Sequence
 
 import datasets
 import meds
-import zstandard
 
 from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
@@ -81,13 +76,8 @@ def femr_stanford_omop_fixer_program() -> None:
 
     fixed_patient = dataset.map(_get_stanford_transformations(), num_proc=args.num_threads)
 
-    print(dataset[0])
-    print(fixed_patient[0])
-
     os.mkdir(os.path.join(args.target_dataset, "data"))
     fixed_patient.to_parquet(os.path.join(args.target_dataset, "data", "data.parquet"))
-
-    blah = datasets.Dataset.from_parquet(os.path.join(args.target_dataset, "data", "*"))
 
     with open(os.path.join(args.source_dataset, "metadata.json")) as f:
         metadata = json.load(f)

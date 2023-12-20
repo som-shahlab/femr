@@ -4,7 +4,6 @@ import datetime
 
 import meds
 
-import femr
 from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
     move_billing_codes,

@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import datetime
-import math
-from typing import Any, Dict, TypeVar
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-import datasets
-import flash_attn
 import torch
 import torch.nn.functional as F
 import transformers
-from einops import rearrange, repeat
 from torch import nn
 
 import femr.models.flash_attention
@@ -182,6 +178,20 @@ class CLMBRTaskHead(nn.Module):
         return loss, logits
 
 
+class MOTORTaskHead(nn.Module):
+    def __init__(self, hidden_size: int, pretraining_task_info: List[Tuple[str, float]], **kwargs):
+        super().__init__()
+
+        self.final_layer = nn.Linear(hidden_size, 10)
+
+    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor]):
+        logits = self.final_layer(features)
+        labels = batch["labels"]
+        loss = F.cross_entropy(logits, labels)
+
+        return loss, logits
+
+
 class FEMRTaskConfig(transformers.PretrainedConfig):
     def __init__(self, task_type: str = "", **kwargs):
         super().__init__(**kwargs)
@@ -193,14 +203,23 @@ class FEMRTaskConfig(transformers.PretrainedConfig):
             return CLMBRTaskHead(hidden_size, **self.kwargs)
         elif self.task_type == "labeled_patients":
             return LabeledPatientTaskHead(hidden_size, **self.kwargs)
+        elif self.task_type == "motor":
+            return MOTORTaskHead(hidden_size, **self.kwargs)
 
 
 class FEMRModelConfig(transformers.PretrainedConfig):
-    def __init__(self, transformer_config: Dict[str, Any] = None, task_config: Dict[str, Any] = None, **kwargs):
+    def __init__(
+        self,
+        transformer_config: Optional[Dict[str, Any]] = None,
+        task_config: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         if transformer_config is None:
             transformer_config = {}
         self.transformer_config = FEMRTransformerConfig(**transformer_config)
+
+        self.task_config: Optional[FEMRTaskConfig]
 
         if task_config is not None:
             self.task_config = FEMRTaskConfig(**task_config)

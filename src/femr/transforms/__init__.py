@@ -85,7 +85,8 @@ def delta_encode(
 
 
 def fix_events(patient: meds.Patient) -> meds.Patient:
-    """After a series of transformations, sometimes the patient structure gets a bit messed up, either with duplicate event times or missorted events.
+    """After a series of transformations, sometimes the patient structure gets a bit messed up.
+    The usual issues are either duplicate event times or missorted events.
 
     This does a final cleanup pass to meet the MEDS requirements.
     """
