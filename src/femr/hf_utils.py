@@ -23,6 +23,8 @@ def aggregate_over_dataset(dataset, map_func, agg_func, batch_size, num_proc, wi
         remove_columns=dataset.column_names,
         num_proc=num_proc,
         with_indices=with_indices,
+        keep_in_memory=True,
+        new_fingerprint="invalid_fingerprint",
     )
 
     current = None

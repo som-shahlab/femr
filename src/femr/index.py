@@ -21,6 +21,9 @@ class PatientIndex:
         )
         self.index_map = dict(data)
 
+    def get_patient_ids(self):
+        return self.index_map.keys()
+
     def get_index(self, patient_id):
         return self.index_map[patient_id]
 

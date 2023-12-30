@@ -1,55 +1,85 @@
 from __future__ import annotations
 
+import bisect
 import collections
-import datetime
 import functools
 import math
 import os
-from typing import Union, Optional
+from typing import Any, Dict, Mapping, Optional, Set, Union
 
 import msgpack
+import numpy as np
 import transformers
 
 import femr.hf_utils
 import femr.stat_utils
 
 
-def train_tokenizer(dataset, vocab_size: int, is_hierarchical: bool = False, ontology: Optional[femr.ontology.Ontology] = None, num_proc: int =1) -> FEMRTokenizer:
+def train_tokenizer(
+    dataset,
+    vocab_size: int,
+    is_hierarchical: bool = False,
+    num_numeric: int = 1000,
+    ontology: Optional[femr.ontology.Ontology] = None,
+    num_proc: int = 1,
+) -> FEMRTokenizer:
     """Train a FEMR tokenizer from the given dataset"""
     statistics = femr.hf_utils.aggregate_over_dataset(
         dataset,
-        functools.partial(map_statistics, num_patients=len(dataset), is_hierarchical=is_hierarchical, ontology=ontology),
+        functools.partial(
+            map_statistics, num_patients=len(dataset), is_hierarchical=is_hierarchical, ontology=ontology
+        ),
         agg_statistics,
         num_proc=num_proc,
         batch_size=1_000,
     )
-    return FEMRTokenizer(convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical))
+    return FEMRTokenizer(
+        convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical, num_numeric, ontology), ontology
+    )
 
 
 def agg_statistics(stats1, stats2):
     stats1["age_stats"].combine(stats2["age_stats"])
 
-    for n in ("code_counts", "hierarchical_code_counts", "text_counts"):
+    for n in ("code_counts", "text_counts"):
         for k, v in stats2[n].items():
             stats1[n][k] += v
 
-    for k, v in stats2["numeric_samples"].items():
-        stats1["numeric_samples"][k].combine(v)
+    if stats1.get("numeric_samples"):
+        stats1["numeric_samples"].combine(stats2["numeric_samples"])
+    if stats1.get("numeric_samples_by_lab"):
+        for k, v in stats2["numeric_samples_by_lab"].items():
+            stats1["numeric_samples_by_lab"][k].combine(v)
 
     return stats1
 
 
-def map_statistics(batch, *, num_patients: int, is_hierarchical: bool, ontology: Optional[femr.ontology.Ontology]) -> Mapping[str, Any]:
-    age_stats = femr.stat_utils.OnlineStatistics()
-    code_counts = collections.defaultdict(float)
+def normalize_unit(unit):
+    if unit:
+        return unit.lower().replace(" ", "")
+    else:
+        return None
 
+
+def map_statistics(
+    batch, *, num_patients: int, is_hierarchical: bool, frac_values=0.05, ontology: Optional[femr.ontology.Ontology]
+) -> Mapping[str, Any]:
+    age_stats = femr.stat_utils.OnlineStatistics()
+    code_counts: Dict[str, float] = collections.defaultdict(float)
+
+    numeric_samples: Optional[femr.stat_utils.ReservoirSampler]
+    numeric_samples_by_lab: Optional[Dict[str, femr.stat_utils.ReservoirSampler]]
     if is_hierarchical:
         assert ontology is not None
+        numeric_samples = femr.stat_utils.ReservoirSampler(10_000)
+        numeric_samples_by_lab = None
+    else:
+        numeric_samples = None
+        numeric_samples_by_lab = collections.defaultdict(functools.partial(femr.stat_utils.ReservoirSampler, 1_000))
 
-    text_counts = collections.defaultdict(float)
-    numeric_samples = collections.defaultdict(functools.partial(femr.stat_utils.ReservoirSampler, 1_000))
+    text_counts: Dict[Any, float] = collections.defaultdict(float)
 
-    for patient_id, events in zip(batch["patient_id"], batch["events"]):
+    for events in batch["events"]:
         total_events = 0
         for event in events:
             for measurement in event["measurements"]:
@@ -60,30 +90,61 @@ def map_statistics(batch, *, num_patients: int, is_hierarchical: bool, ontology:
 
         weight = 1.0 / (num_patients * total_events)
         birth_date = events[0]["time"]
+        code_set = set()
+        text_set = set()
+        pat_numeric_samples = []
         for event in events:
             for measurement in event["measurements"]:
                 if event["time"] != birth_date:
-                    age_stats.add(weight, (event["time"] - birth_date) / datetime.timedelta(minutes=1))
-                if measurement["numeric_value"] is not None:
-                    numeric_samples[measurement["code"]].add(measurement["numeric_value"], weight)
-                elif measurement["text_value"] is not None:
-                    text_counts[(measurement["code"], measurement["text_value"])] += weight
-                else:
-                    if not is_hierarchical:
-                        code_counts[measurement["code"]] += weight
+                    age_stats.add(weight, (event["time"] - birth_date).total_seconds())
+                if not is_hierarchical:
+                    assert numeric_samples_by_lab is not None
+                    if measurement["numeric_value"] is not None:
+                        numeric_samples_by_lab[measurement["code"]].add(measurement["numeric_value"], weight)
+                    elif measurement["text_value"] is not None:
+                        text_counts[(measurement["code"], measurement["text_value"])] += weight
                     else:
-                        for code in ontology.get_all_parents(measurement['code']):
-                            code_counts[code] += weight
+                        code_counts[measurement["code"]] += weight
+                else:
+                    code_set.add(measurement["code"])
+
+                    if measurement["text_value"] is not None and measurement["text_value"] != "":
+                        text_set.add(measurement["text_value"])
+
+                    if measurement.get("metadata") and normalize_unit(measurement["metadata"].get("unit")) is not None:
+                        text_set.add(normalize_unit(measurement["metadata"]["unit"]))
+
+                    if measurement["numeric_value"] is not None:
+                        pat_numeric_samples.append(measurement["numeric_value"])
+
+        if is_hierarchical:
+            assert numeric_samples is not None
+            assert ontology is not None
+            final_codes: Set[str] = set()
+            for code in code_set:
+                final_codes |= ontology.get_all_parents(code)
+
+            for code in final_codes:
+                code_counts[code] += 1 / num_patients
+
+            for text in text_set:
+                text_counts[text] += 1 / num_patients
+
+            for value in pat_numeric_samples:
+                numeric_samples.add(value, 1 / (num_patients * len(pat_numeric_samples)))
 
     return {
         "age_stats": age_stats,
         "code_counts": code_counts,
         "text_counts": text_counts,
         "numeric_samples": numeric_samples,
+        "numeric_samples_by_lab": numeric_samples_by_lab,
     }
 
 
-def convert_statistics_to_msgpack(statistics, vocab_size: int, is_hierarchical: bool, ontology: Optional[femr.ontology.Ontology]):
+def convert_statistics_to_msgpack(
+    statistics, vocab_size: int, is_hierarchical: bool, num_numeric: int, ontology: Optional[femr.ontology.Ontology]
+):
     vocab = []
 
     if not is_hierarchical:
@@ -94,10 +155,54 @@ def convert_statistics_to_msgpack(statistics, vocab_size: int, is_hierarchical: 
                 "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
             }
             vocab.append(entry)
+
+        for (code, text), weight in statistics["text_counts"].items():
+            entry = {
+                "type": "text",
+                "code_string": code,
+                "text_string": text,
+                "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
+            }
+            vocab.append(entry)
+
+        for code, reservoir in statistics["numeric_samples_by_lab"].items():
+            weight = reservoir.total_weight / 10
+            samples = reservoir.samples
+            samples.sort()
+
+            samples_per_bin = (len(samples) + 9) // 10
+
+            for bin_index in range(0, 10):
+                if bin_index == 0:
+                    start_val = float("-inf")
+                else:
+                    if bin_index * samples_per_bin >= len(samples):
+                        continue
+                    start_val = samples[bin_index * samples_per_bin]
+
+                if bin_index == 9 or (bin_index + 1) * samples_per_bin >= len(samples):
+                    end_val = float("inf")
+                else:
+                    end_val = samples[(bin_index + 1) * samples_per_bin]
+
+                if start_val == end_val:
+                    continue
+
+            entry = {
+                "type": "numeric",
+                "code_string": code,
+                "val_start": start_val,
+                "val_end": end_val,
+                "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
+            }
+            vocab.append(entry)
     else:
+        assert ontology
         for code, weight in statistics["code_counts"].items():
             baseline = min([1] + [statistics["code_counts"][parent] for parent in ontology.get_parents(code)])
             weight = weight / baseline
+
+            weight = min(1, weight)
 
             if weight != 0 and weight != 1:
                 entry = {
@@ -107,46 +212,36 @@ def convert_statistics_to_msgpack(statistics, vocab_size: int, is_hierarchical: 
                 }
                 vocab.append(entry)
 
-    for (code, text), weight in statistics["text_counts"].items():
-        entry = {
-            "type": "text",
-            "code_string": code,
-            "text_string": text,
-            "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
-        }
-        vocab.append(entry)
+        for text, weight in statistics["text_counts"].items():
+            weight = min(1, weight)
 
-    for code, reservoir in statistics["numeric_samples"].items():
-        weight = reservoir.total_weight / 10
-        samples = reservoir.samples
-        samples.sort()
+            if weight != 0 and weight != 1:
+                entry = {
+                    "type": "text",
+                    "text_string": text,
+                    "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
+                }
+                vocab.append(entry)
 
-        samples_per_bin = (len(samples) + 9) // 10
+        numeric_samples = list(statistics["numeric_samples"].samples)
 
-        for bin_index in range(0, 10):
-            if bin_index == 0:
-                start_val = float("-inf")
-            else:
-                if bin_index * samples_per_bin >= len(samples):
-                    continue
-                start_val = samples[bin_index * samples_per_bin]
+        if len(numeric_samples) > 0:
+            assert num_numeric >= 1
 
-            if bin_index == 9 or (bin_index + 1) * samples_per_bin >= len(samples):
-                end_val = float("inf")
-            else:
-                end_val = samples[(bin_index + 1) * samples_per_bin]
+            samples = sorted(list(set(np.percentile(numeric_samples, np.linspace(0, 1, num=num_numeric + 1)))))
+            samples[0] = float("-inf")
+            samples[-1] = float("inf")
 
-            if start_val == end_val:
-                continue
+            assert len(samples) >= 2
 
-        entry = {
-            "type": "numeric",
-            "code_string": code,
-            "val_start": start_val,
-            "val_end": end_val,
-            "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
-        }
-        vocab.append(entry)
+            for start_val, end_val in zip(samples, samples[1:]):
+                entry = {
+                    "type": "numeric",
+                    "val_start": start_val,
+                    "val_end": end_val,
+                    "weight": -1,
+                }
+                vocab.append(entry)
 
     vocab.sort(key=lambda a: a["weight"])
     vocab = vocab[:vocab_size]
@@ -164,32 +259,63 @@ def convert_statistics_to_msgpack(statistics, vocab_size: int, is_hierarchical: 
 
 
 class FEMRTokenizer(transformers.utils.PushToHubMixin):
-    def __init__(self, dictionary):
-        assert not dictionary["is_hierarchical"], "Currently not supported"
+    def __init__(self, dictionary: Mapping[str, Any], ontology: Optional[femr.ontology.Ontology] = None):
+        self.dictionary = dictionary
 
         self.is_hierarchical = dictionary["is_hierarchical"]
+
+        if self.is_hierarchical:
+            assert ontology is not None
+
+        self.ontology = ontology
 
         self.dictionary = dictionary
         vocab = dictionary["vocab"]
 
-        self.numeric_lookup = collections.defaultdict(list)
         self.string_lookup = {}
         self.code_lookup = {}
 
-        for i, dict_entry in enumerate(vocab):
-            if dict_entry["type"] == "code":
-                self.code_lookup[dict_entry["code_string"]] = i
-            elif dict_entry["type"] == "numeric":
-                self.numeric_lookup[dict_entry["code_string"]].append(
-                    (dict_entry["val_start"], dict_entry["val_end"], i)
-                )
-            elif dict_entry["type"] == "text":
-                self.string_lookup[(dict_entry["code_string"], dict_entry["text_string"])] = i
+        self.vocab_size = len(vocab)
+
+        if not self.is_hierarchical:
+            self.numeric_lookup = collections.defaultdict(list)
+            for i, dict_entry in enumerate(vocab):
+                if dict_entry["type"] == "code":
+                    self.code_lookup[dict_entry["code_string"]] = i
+                elif dict_entry["type"] == "numeric":
+                    self.numeric_lookup[dict_entry["code_string"]].append(
+                        (dict_entry["val_start"], dict_entry["val_end"], i)
+                    )
+                elif dict_entry["type"] == "text":
+                    self.string_lookup[(dict_entry["code_string"], dict_entry["text_string"])] = i
+                else:
+                    pass
+        else:
+            numeric_entries = []
+            for i, dict_entry in enumerate(vocab):
+                if dict_entry["type"] == "code":
+                    self.code_lookup[dict_entry["code_string"]] = i
+                elif dict_entry["type"] == "numeric":
+                    numeric_entries.append((dict_entry["val_start"], i))
+                elif dict_entry["type"] == "text":
+                    self.string_lookup[dict_entry["text_string"]] = i
+                else:
+                    pass
+            numeric_entries.sort()
+            if len(numeric_entries) > 0:
+                self.numeric_values = [a[0] for a in numeric_entries[1:]]
+                self.numeric_indices = [a[1] for a in numeric_entries]
             else:
-                pass
+                self.numeric_values = []
+                self.numeric_indices = []
 
     @classmethod
-    def from_pretrained(self, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs):
+    def from_pretrained(
+        self,
+        pretrained_model_name_or_path: Union[str, os.PathLike],
+        ontology: Optional[femr.ontology.Ontology] = None,
+        **kwargs,
+    ):
         """
         Load the FEMR tokenizer.
 
@@ -201,6 +327,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                       user or organization name, like `dbmdz/bert-base-german-cased`.
                     - A path to a *directory* containing tokenization data saved using
                       [`save_pretrained`], e.g., `./my_data_directory/`.
+            ontology: An ontology object for hierarchical tokenizers
             kwargs: Arguments for loading to pass to transformers.utils.hub.cached_file
 
         Returns:
@@ -214,7 +341,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         with open(dictionary_file, "rb") as f:
             dictionary = msgpack.load(f)
 
-        return FEMRTokenizer(dictionary)
+        return FEMRTokenizer(dictionary, ontology=ontology)
 
     def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
         """
@@ -256,24 +383,47 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             )
 
     def get_feature_codes(self, measurement):
-        if measurement.get("numeric_value") is not None:
-            for start, end, i in self.numeric_lookup.get(measurement["code"], []):
-                if start <= measurement["numeric_value"] < end:
-                    return [i]
-            else:
-                return []
-        elif measurement.get("text_value") is not None:
-            value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
-            if value is not None:
-                return [value]
-            else:
-                return []
+        if self.is_hierarchical:
+            codes = [
+                self.code_lookup[parent]
+                for parent in self.ontology.get_all_parents(measurement["code"])
+                if parent in self.code_lookup
+            ]
+            weights = [1 / len(codes) for _ in codes]
+            if measurement.get("metadata") and normalize_unit(measurement["metadata"].get("unit")) is not None:
+                value = self.string_lookup.get(normalize_unit(measurement["metadata"]["unit"]))
+                if value is not None:
+                    codes.append(value)
+                    weights.append(1)
+            if measurement.get("numeric_value") is not None and len(self.numeric_indices) > 0:
+                codes.append(self.numeric_indices[bisect.bisect(self.numeric_values, measurement["numeric_value"])])
+                weights.append(1)
+            if measurement.get("text_value") is not None:
+                value = self.string_lookup.get(measurement["text_value"])
+                if value is not None:
+                    codes.append(value)
+                    weights.append(1)
+
+            return codes, weights
         else:
-            value = self.code_lookup.get(measurement["code"])
-            if value is not None:
-                return [value]
+            if measurement.get("numeric_value") is not None:
+                for start, end, i in self.numeric_lookup.get(measurement["code"], []):
+                    if start <= measurement["numeric_value"] < end:
+                        return [i], None
+                else:
+                    return [], None
+            elif measurement.get("text_value") is not None:
+                value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
+                if value is not None:
+                    return [value], None
+                else:
+                    return [], None
             else:
-                return []
+                value = self.code_lookup.get(measurement["code"])
+                if value is not None:
+                    return [value], None
+                else:
+                    return [], None
 
     def normalize_age(self, age):
-        return (age - self.dictionary["age_stats"]["mean"]) / (self.dictionary["age_stats"]["std"])
+        return (age.total_seconds() - self.dictionary["age_stats"]["mean"]) / (self.dictionary["age_stats"]["std"])

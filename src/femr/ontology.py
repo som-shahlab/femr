@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import collections
+import functools
 import os
 from typing import Dict, Iterable, Optional, Set
 
+import datasets
 import meds
 import polars as pl
+
+import femr.hf_utils
+
+
+def _get_all_codes_map(batch) -> Set[str]:
+    result = set()
+    for events in batch["events"]:
+        for event in events:
+            for measurement in event["measurements"]:
+                result.add(measurement["code"])
+    return result
+
+
+def _get_all_codes_agg(first: Set[str], second: Set[str]) -> Set[str]:
+    first |= second
+    return first
 
 
 class Ontology:
@@ -37,14 +55,12 @@ class Ontology:
             .rows()
         )
 
-        self.concept_id_to_code_map = {}
-        self.code_to_concept_id_map = {}
+        concept_id_to_code_map = {}
 
         non_standard_concepts = set()
 
         for code, concept_id, description, is_non_standard in processed_concepts:
-            self.concept_id_to_code_map[concept_id] = code
-            self.code_to_concept_id_map[code] = concept_id
+            concept_id_to_code_map[concept_id] = code
 
             # We don't want to override code metadata
             if code not in self.description_map:
@@ -66,9 +82,7 @@ class Ontology:
             .rows()
         ):
             if concept_id_1 in non_standard_concepts:
-                self.parents_map[self.concept_id_to_code_map[concept_id_1]].add(
-                    self.concept_id_to_code_map[concept_id_2]
-                )
+                self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
 
         ancestor = pl.scan_csv(os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), separator="\t", infer_schema_length=0)
         ancestor = ancestor.filter(pl.col("min_levels_of_separation") == "1")
@@ -79,9 +93,7 @@ class Ontology:
             .collect()
             .rows()
         ):
-            self.parents_map[self.concept_id_to_code_map[concept_id]].add(
-                self.concept_id_to_code_map[parent_concept_id]
-            )
+            self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
 
         self.children_map = collections.defaultdict(set)
         for code, parents in self.parents_map.items():
@@ -90,6 +102,50 @@ class Ontology:
 
         self.all_parents_map: Dict[str, Set[str]] = {}
         self.all_children_map: Dict[str, Set[str]] = {}
+
+    def prune_to_dataset(
+        self,
+        dataset: datasets.Dataset,
+        num_proc: int = 1,
+        prune_all_descriptions: bool = False,
+        remove_ontologies: Set[str] = set(),
+    ) -> None:
+        valid_codes = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(_get_all_codes_map),
+            _get_all_codes_agg,
+            num_proc=num_proc,
+            batch_size=1_000,
+        )
+
+        if prune_all_descriptions:
+            self.description_map = {}
+
+        all_parents = set()
+
+        for code in valid_codes:
+            all_parents |= self.get_all_parents(code)
+
+        def is_valid(code):
+            ontology = code.split("/")[0]
+            return (ontology not in remove_ontologies) and (code in all_parents)
+
+        codes = self.children_map.keys() | self.parents_map.keys() | self.description_map.keys()
+        for code in codes:
+            if is_valid(code):
+                for m in (self.children_map, self.parents_map):
+                    m[code] = {a for a in m[code] if is_valid(a)}
+            else:
+                for m in (self.children_map, self.parents_map, self.description_map):
+                    if code in m:
+                        del m[code]
+
+        self.all_parents_map = {}
+        self.all_children_map = {}
+
+        # Prime the pump
+        for code in self.children_map.keys() | self.parents_map.keys():
+            self.get_all_parents(code)
 
     def get_description(self, code: str) -> Optional[str]:
         """Get a description of a code."""

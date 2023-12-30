@@ -3,7 +3,9 @@ from __future__ import annotations
 import abc
 import collections
 import datetime
-from typing import Any, List, Mapping, Sequence, Tuple
+import functools
+import math
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 import datasets
 import meds
@@ -11,6 +13,8 @@ import numpy as np
 
 import femr.index
 import femr.models.transformer
+import femr.pat_utils
+import femr.stat_utils
 
 
 class Task(abc.ABC):
@@ -26,7 +30,7 @@ class Task(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def start_patient(self, patient: meds.Patient) -> None:
+    def start_patient(self, patient: meds.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
         ...
 
     @abc.abstractmethod
@@ -64,7 +68,7 @@ class LabeledPatientTask(Task):
         indices = [index.get_index(patient_id) for patient_id in self.label_map]
         return dataset.select(indices)
 
-    def start_patient(self, patient: meds.Patient) -> None:
+    def start_patient(self, patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
         self.current_labels = self.label_map[patient["patient_id"]]
         self.current_label_index = 0
         self.patient_id = patient["patient_id"]
@@ -117,9 +121,11 @@ class CLMBRTask(Task):
         self.clmbr_vocab_size = clmbr_vocab_size
 
     def get_task_config(self) -> femr.models.transformer.FEMRTaskConfig:
-        return femr.models.transformer.FEMRTaskConfig(task_type="clmbr", clmbr_vocab_size=self.clmbr_vocab_size)
+        return femr.models.transformer.FEMRTaskConfig(
+            task_type="clmbr", task_kwargs=dict(clmbr_vocab_size=self.clmbr_vocab_size)
+        )
 
-    def start_patient(self, patient: meds.Patient) -> None:
+    def start_patient(self, patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
         pass
 
     def needs_exact(self) -> bool:
@@ -150,40 +156,213 @@ class CLMBRTask(Task):
         return {"labels": np.array(self.batch_labels, dtype=np.int32)}
 
 
+def should_make_survival_prediction(current_date: datetime.datetime, next_date: Optional[datetime.datetime]):
+    if next_date is None:
+        return False
+
+    if current_date == next_date or current_date.date() == next_date.date():
+        return False
+
+    return True
+
+
+class SurvivalCalculator:
+    def __init__(self, ontology: femr.ontology.Ontology, patient: meds.Patient):
+        self.survival_events = []
+        self.final_date = patient["events"][-1]["time"]
+        self.future_times = collections.defaultdict(list)
+
+        for event in patient["events"]:
+            codes = set()
+            for measurement in event["measurements"]:
+                for parent in ontology.get_all_parents(measurement["code"]):
+                    codes.add(parent)
+
+            for code in codes:
+                self.future_times[code].append(event["time"])
+                self.survival_events.append((code, event["time"]))
+
+        for v in self.future_times.values():
+            v.reverse()
+
+        self.survival_events.reverse()
+
+    def get_future_events_for_time(
+        self, time: datetime.datetime
+    ) -> Tuple[datetime.timedelta, Mapping[str, datetime.timedelta]]:
+        while len(self.survival_events) > 0 and self.survival_events[-1][1] <= time:
+            code = self.survival_events[-1][0]
+            vals = self.future_times[code]
+            vals.pop()
+            if len(vals) == 0:
+                del self.future_times[code]
+
+            self.survival_events.pop()
+
+        delta = self.final_date - time
+        return (delta, {k: v[-1] - time for k, v in self.future_times.items()})
+
+
+def _prefit_motor_map(batch, *, tasks: List[str], ontology: femr.ontology.Ontology) -> Any:
+    task_time_stats: List[Any] = [[0, 0, femr.stat_utils.OnlineStatistics()] for _ in range(len(tasks))]
+    event_times = femr.stat_utils.ReservoirSampler(100_000)
+
+    for patient_id, events in zip(batch["patient_id"], batch["events"]):
+        patient = {"patient_id": patient_id, "events": events}
+
+        calculator = SurvivalCalculator(ontology, patient)
+
+        birth = femr.pat_utils.get_patient_birthdate(patient)
+
+        for event, next_event in zip(patient["events"], patient["events"][1:]):
+            if (event["time"] - birth).days <= 1:
+                continue
+            if should_make_survival_prediction(event["time"], next_event["time"]):
+                censor_time, tte = calculator.get_future_events_for_time(event["time"])
+
+                for i, task in enumerate(tasks):
+                    if task in tte:
+                        time = tte[task]
+                        is_censored = False
+                    else:
+                        time = censor_time
+                        is_censored = True
+
+                    if is_censored:
+                        task_time_stats[i][0] += 1
+                    else:
+                        event_times.add(time.total_seconds(), 1)
+                        task_time_stats[i][1] += 1
+                    task_time_stats[i][2].add(1, time.total_seconds())
+
+    return (event_times, task_time_stats)
+
+
+def _prefit_motor_agg(first: Any, second: Any) -> Any:
+    for a, b in zip(first[1], second[1]):
+        a[0] += b[0]
+        a[1] += b[1]
+        a[2].combine(b[2])
+    first[0].combine(second[0])
+    return first
+
+
 class MOTORTask(Task):
     @classmethod
-    def train_pretraining_task_info(cls, dataset: datasets.Dataset, num_tasks: int, num_bins: int) -> None:
+    def fit_pretraining_task_info(
+        cls,
+        dataset: datasets.Dataset,
+        tokenizer: femr.models.tokenizer.FEMRTokenizer,
+        num_tasks: int,
+        num_bins: int,
+        final_layer_size: int,
+        num_proc: int = 1,
+    ) -> MOTORTask:
+        tasks = []
+        for dict_entry in tokenizer.dictionary["vocab"]:
+            if dict_entry["type"] == "code":
+                tasks.append(dict_entry["code_string"])
+                if len(tasks) == num_tasks:
+                    break
 
+        assert len(tasks) == num_tasks, "Could not find enough tasks in the provided tokenizer"
 
-    def __init__(self, pretraining_task_info: List[Tuple[str, float]]):
+        length_samples, stats = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(_prefit_motor_map, tasks=tasks, ontology=tokenizer.ontology),
+            _prefit_motor_agg,
+            1_000,
+            num_proc=num_proc,
+        )
+
+        time_bins = np.percentile(length_samples.samples, np.linspace(0, 100, num_bins + 1))
+        time_bins[0] = 0
+        time_bins[-1] = float("inf")
+        time_bins = list(time_bins)
+
+        task_data = []
+
+        for task, task_stats in zip(tasks, stats):
+            frac_events = task_stats[1] / (task_stats[0] + task_stats[1])
+            rate = frac_events / task_stats[2].mean()
+            task_data.append((task, rate))
+
+        return MOTORTask(task_data, time_bins, final_layer_size)
+
+    def __init__(self, pretraining_task_info: List[Tuple[str, float]], time_bins: List[float], final_layer_size: int):
         self.pretraining_task_info = pretraining_task_info
+        self.time_bins = time_bins
+        self.final_layer_size = final_layer_size
 
     def get_task_config(self) -> femr.models.transformer.FEMREncoderLayer:
-        return femr.models.transformer.FEMRTaskConfig(task_type="motor")
+        return femr.models.transformer.FEMRTaskConfig(
+            task_type="motor",
+            task_kwargs=dict(
+                pretraining_task_info=self.pretraining_task_info,
+                time_bins=self.time_bins,
+                final_layer_size=self.final_layer_size,
+            ),
+        )
 
-    def start_patient(self, patient: meds.Patient) -> None:
-        pass
+    def start_patient(self, patient: meds.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
+        assert ontology
+        self.calculator = SurvivalCalculator(ontology, patient)
 
     def needs_exact(self) -> bool:
         return False
 
     def start_batch(self) -> None:
-        self.batch_labels: List[int] = []
+        self.log_event_time: List[np.ndarray] = []
+        self.is_event: List[np.ndarray] = []
 
     def add_event(
         self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
     ) -> int:
-        if len(next_features) == 0:
+        if not should_make_survival_prediction(current_date, next_date):
             return 0
 
-        if len(next_features) != 1:
-            raise RuntimeError("Only supports one for right now")
+        censor_time, tte = self.calculator.get_future_events_for_time(current_date)
 
-        next_feature = next_features[0]
+        if len(tte) == 0:
+            return 0
 
-        self.batch_labels.append(next_feature)
+        log_event_time = float("-inf") * np.ones(
+            shape=(len(self.time_bins) - 1, len(self.pretraining_task_info)), dtype=np.float16
+        )
+        is_event = np.zeros(shape=(len(self.time_bins) - 1, len(self.pretraining_task_info)), dtype=np.bool_)
+
+        censor_seconds = censor_time.total_seconds()
+
+        for i, (start, end) in enumerate(zip(self.time_bins, self.time_bins[1:])):
+            time_in_bin = min(end, censor_seconds) - start
+            if time_in_bin <= 0:
+                log_event_time[i, :] = float("-inf")
+            else:
+                log_event_time[i, :] = math.log2(time_in_bin)
+
+        for j, (event_name, _) in enumerate(self.pretraining_task_info):
+            time = tte.get(event_name)
+            if time is None:
+                continue
+            seconds = time.total_seconds()
+
+            for i, (start, end) in enumerate(zip(self.time_bins, self.time_bins[1:])):
+                time_in_bin = min(end, seconds) - start
+                if time_in_bin <= 0:
+                    log_event_time[i, j] = float("-inf")
+                else:
+                    log_event_time[i, j] = math.log2(time_in_bin)
+
+                if start <= seconds < end:
+                    is_event[i, j] = True
+
+        self.log_event_time.append(log_event_time)
+        self.is_event.append(is_event)
 
         return 1
 
     def get_batch_data(self) -> Mapping[str, np.ndarray]:
-        return {"labels": np.array(self.batch_labels, dtype=np.int32)}
+        return {
+            "log_event_time": np.stack(self.log_event_time, dtype=np.float16),
+            "is_event": np.stack(self.is_event, dtype=np.bool_),
+        }

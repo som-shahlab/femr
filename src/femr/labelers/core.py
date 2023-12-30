@@ -68,13 +68,13 @@ class Labeler(ABC):
     def apply(
         self,
         dataset: datasets.Dataset,
-        num_threads: int = 1,
+        num_proc: int = 1,
     ) -> List[meds.Label]:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
             dataset (datasets.Dataset): A HuggingFace Dataset with meds.Patient objects to be labeled.
-            num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
+            num_proc (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
 
         Returns:
             A list of labels
@@ -85,7 +85,7 @@ class Labeler(ABC):
             functools.partial(_label_map_func, labeler=self),
             _label_agg_func,
             batch_size=10_000,
-            num_proc=num_threads,
+            num_proc=num_proc,
         )
 
 

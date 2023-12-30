@@ -111,6 +111,16 @@ def move_to_day_end(patient: meds.Patient) -> meds.Patient:
     return patient
 
 
+def switch_to_icd10cm(patient: meds.Patient) -> meds.Patient:
+    """Switch from ICD10 to ICD10CM."""
+    for event in patient["events"]:
+        for measurement in event["measurements"]:
+            if measurement["code"].startswith("ICD10/"):
+                measurement["code"] = measurement["code"].replace("ICD10/", "ICD10CM/", 1)
+
+    return patient
+
+
 def move_pre_birth(patient: meds.Patient) -> meds.Patient:
     """Move all events to after the birth of a patient."""
     birth_date = None

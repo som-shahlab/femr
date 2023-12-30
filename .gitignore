@@ -6,3 +6,4 @@ bazel-*
 ignore/*
 *.ipynb_checkpoints*
 tutorials/trash
+tutorials/tmp_trainer

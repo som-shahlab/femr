@@ -241,7 +241,7 @@ class FeaturizerList:
         dataset: datasets.Dataset,
         index: femr.index.PatientIndex,
         labels: List[meds.Label],
-        num_threads: int = 1,
+        num_proc: int = 1,
     ) -> None:
         """Preprocess `self.featurizers` on the provided set of labels."""
 
@@ -265,7 +265,7 @@ class FeaturizerList:
             functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
             functools.partial(_preprocess_agg_func, label_map=label_map, featurizers=self.featurizers),
             batch_size=1_000,
-            num_proc=num_threads,
+            num_proc=num_proc,
         )
 
         # Aggregate featurizers
@@ -278,7 +278,7 @@ class FeaturizerList:
         dataset: datasets.Dataset,
         index: femr.index.PatientIndex,
         labels: List[meds.Label],
-        num_threads: int = 1,
+        num_proc: int = 1,
     ) -> Mapping[str, np.ndarray]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
@@ -307,7 +307,7 @@ class FeaturizerList:
             functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
             functools.partial(_features_agg_func, label_map=label_map, featurizers=self.featurizers),
             batch_size=1_000,
-            num_proc=num_threads,
+            num_proc=num_proc,
         )
 
         result = {k: np.concatenate(features[k]) for k in ("patient_ids", "feature_times")}
@@ -323,3 +323,40 @@ class FeaturizerList:
                 return f"Featurizer {featurizer}, {featurizer.get_column_name(column_idx - column_offset)}"
             column_offset += featurizer.get_num_columns()
         raise IndexError(f"Column index '{column_idx}' out of bounds for this FeaturizerList")
+
+
+def join_labels(features: Mapping[str, np.array], labels: List[meds.Label]) -> Mapping[str, np.array]:
+    labels = list(labels)
+    labels.sort(key=lambda a: (a["patient_id"], a["prediction_time"]))
+
+    label_index = 0
+
+    indices = []
+    label_values = []
+
+    order = np.lexsort((features["feature_times"], features["patient_ids"]))
+
+    for i, patient_id, feature_time in zip(order, features["patient_ids"][order], features["feature_times"][order]):
+        if label_index == len(labels):
+            break
+
+        assert patient_id <= labels[label_index]["patient_id"], f"Missing features for label {labels[label_index]}"
+        if patient_id < labels[label_index]["patient_id"]:
+            continue
+
+        assert (
+            feature_time <= labels[label_index]["prediction_time"]
+        ), f"Missing features for label {labels[label_index]}"
+        if feature_time < labels[label_index]["prediction_time"]:
+            continue
+
+        indices.append(i)
+        label_values.append(labels[label_index]["boolean_value"])
+        label_index += 1
+
+    return {
+        "boolean_values": np.array(label_values),
+        "patient_ids": features["patient_ids"][indices],
+        "times": features["feature_times"][indices],
+        "features": features["features"][indices, :],
+    }

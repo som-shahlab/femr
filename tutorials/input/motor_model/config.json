@@ -1,0 +1,348 @@
+{
+  "architectures": [
+    "FEMRModel"
+  ],
+  "task_config": {
+    "_name_or_path": "",
+    "add_cross_attention": false,
+    "architectures": null,
+    "bad_words_ids": null,
+    "begin_suppress_tokens": null,
+    "bos_token_id": null,
+    "chunk_size_feed_forward": 0,
+    "cross_attention_hidden_size": null,
+    "decoder_start_token_id": null,
+    "diversity_penalty": 0.0,
+    "do_sample": false,
+    "early_stopping": false,
+    "encoder_no_repeat_ngram_size": 0,
+    "eos_token_id": null,
+    "exponential_decay_length_penalty": null,
+    "finetuning_task": null,
+    "forced_bos_token_id": null,
+    "forced_eos_token_id": null,
+    "id2label": {
+      "0": "LABEL_0",
+      "1": "LABEL_1"
+    },
+    "is_decoder": false,
+    "is_encoder_decoder": false,
+    "label2id": {
+      "LABEL_0": 0,
+      "LABEL_1": 1
+    },
+    "length_penalty": 1.0,
+    "max_length": 20,
+    "min_length": 0,
+    "model_type": "",
+    "no_repeat_ngram_size": 0,
+    "num_beam_groups": 1,
+    "num_beams": 1,
+    "num_return_sequences": 1,
+    "output_attentions": false,
+    "output_hidden_states": false,
+    "output_scores": false,
+    "pad_token_id": null,
+    "prefix": null,
+    "problem_type": null,
+    "pruned_heads": {},
+    "remove_invalid_values": false,
+    "repetition_penalty": 1.0,
+    "return_dict": true,
+    "return_dict_in_generate": false,
+    "sep_token_id": null,
+    "suppress_tokens": null,
+    "task_kwargs": {
+      "final_layer_size": 32,
+      "pretraining_task_info": [
+        [
+          "Gender/M",
+          0.0
+        ],
+        [
+          "Gender/F",
+          0.0
+        ],
+        [
+          "Race/White",
+          0.0
+        ],
+        [
+          "Race/Non-White",
+          0.0
+        ],
+        [
+          "ATC/A",
+          5.719351040713301e-09
+        ],
+        [
+          "ATC/N",
+          6.666090580571138e-09
+        ],
+        [
+          "ATC/C",
+          5.611235577012589e-09
+        ],
+        [
+          "ATC/G",
+          4.17262039988868e-09
+        ],
+        [
+          "ATC/D",
+          4.494370846052993e-09
+        ],
+        [
+          "ATC/B",
+          4.798896952294494e-09
+        ],
+        [
+          "ATC/S",
+          4.436450546874025e-09
+        ],
+        [
+          "ATC/R",
+          3.368117836190634e-09
+        ],
+        [
+          "ATC/M",
+          2.5283492306738974e-09
+        ],
+        [
+          "ATC/V",
+          2.181084265423455e-09
+        ],
+        [
+          "ATC/J",
+          2.114047639274057e-09
+        ],
+        [
+          "ATC/L",
+          8.662884193384472e-10
+        ],
+        [
+          "ATC/A12",
+          1.7777375933433268e-09
+        ],
+        [
+          "ATC/A07",
+          1.685358159742201e-09
+        ],
+        [
+          "ATC/C01",
+          2.382732213838055e-09
+        ],
+        [
+          "ATC/A03",
+          2.481865885376849e-09
+        ],
+        [
+          "ATC/A06",
+          1.713504952029312e-09
+        ],
+        [
+          "ATC/C05",
+          3.0400814249212493e-09
+        ],
+        [
+          "ATC/N06",
+          2.563475856997944e-09
+        ],
+        [
+          "ATC/C02",
+          1.7816259058245883e-09
+        ],
+        [
+          "ATC/P",
+          1.0723584749995218e-09
+        ],
+        [
+          "ATC/C03",
+          1.6047884410041399e-09
+        ],
+        [
+          "ATC/N05",
+          1.4126485066519696e-09
+        ],
+        [
+          "ATC/N02",
+          4.077860900251553e-09
+        ],
+        [
+          "ATC/A02",
+          1.7004331887557016e-09
+        ],
+        [
+          "ATC/A01",
+          1.770799411457108e-09
+        ],
+        [
+          "ATC/N01",
+          1.572363492343308e-09
+        ],
+        [
+          "HemOnc/46134",
+          3.269928119132112e-10
+        ],
+        [
+          "ATC/D07",
+          2.1096546658056864e-09
+        ],
+        [
+          "ATC/D01",
+          2.228772941752536e-09
+        ],
+        [
+          "ATC/D11",
+          1.8406754194464211e-09
+        ],
+        [
+          "ATC/B03",
+          1.5609533397269982e-09
+        ],
+        [
+          "ATC/S01",
+          2.0977942532544724e-09
+        ],
+        [
+          "ATC/S03",
+          2.0767622351112023e-09
+        ],
+        [
+          "ATC/C10",
+          1.090610299312562e-09
+        ],
+        [
+          "ATC/N02C",
+          1.4570294244556658e-09
+        ],
+        [
+          "ATC/N02A",
+          1.7753579763099891e-09
+        ],
+        [
+          "ATC/S02",
+          2.9327970504441103e-09
+        ],
+        [
+          "ATC/B05",
+          3.3265425980985946e-09
+        ],
+        [
+          "HemOnc/46112",
+          5.276507631416624e-10
+        ],
+        [
+          "ATC/R06",
+          9.87469496508308e-10
+        ],
+        [
+          "ATC/A11",
+          6.064814741301909e-10
+        ],
+        [
+          "ATC/A08",
+          3.645205446695139e-10
+        ],
+        [
+          "ATC/G01",
+          3.59446278965988e-09
+        ],
+        [
+          "ATC/D05",
+          5.160678156754386e-10
+        ],
+        [
+          "ATC/D08",
+          1.1256990082461005e-09
+        ],
+        [
+          "ATC/N02BE",
+          1.7802771353628795e-09
+        ],
+        [
+          "ATC/N02BB",
+          2.1021154455574453e-09
+        ],
+        [
+          "ATC/A09",
+          4.0410281621750714e-10
+        ],
+        [
+          "ATC/G04",
+          4.417810349409922e-10
+        ],
+        [
+          "ATC/G03",
+          4.4388124791708695e-10
+        ],
+        [
+          "ATC/G02",
+          7.973666813293132e-10
+        ],
+        [
+          "ATC/C05B",
+          1.9579039800513067e-09
+        ],
+        [
+          "ATC/C05A",
+          1.8448849638170619e-09
+        ],
+        [
+          "ATC/B05B",
+          1.667070060158976e-09
+        ],
+        [
+          "ATC/B05X",
+          1.8207762690788067e-09
+        ],
+        [
+          "ATC/A03C",
+          1.3930310856468038e-09
+        ],
+        [
+          "ATC/R01",
+          4.73162899183516e-10
+        ],
+        [
+          "ATC/R05",
+          5.838810867778668e-10
+        ],
+        [
+          "ATC/G01AE",
+          1.5601673662383725e-09
+        ]
+      ],
+      "time_bins": [
+        0.0,
+        9676800.0,
+        21081600.0,
+        39830400.0,
+        Infinity
+      ]
+    },
+    "task_specific_params": null,
+    "task_type": "motor",
+    "temperature": 1.0,
+    "tf_legacy_loss": false,
+    "tie_encoder_decoder": false,
+    "tie_word_embeddings": true,
+    "tokenizer_class": null,
+    "top_k": 50,
+    "top_p": 1.0,
+    "torch_dtype": null,
+    "torchscript": false,
+    "typical_p": 1.0,
+    "use_bfloat16": false
+  },
+  "torch_dtype": "float32",
+  "transformer_config": {
+    "hidden_size": 64,
+    "intermediate_size": 128,
+    "is_hierarchical": true,
+    "model_type": "",
+    "n_heads": 8,
+    "n_layers": 2,
+    "vocab_size": 128
+  },
+  "transformers_version": "4.36.2"
+}

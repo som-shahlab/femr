@@ -85,8 +85,5 @@ class ReservoirSampler:
                 self.p_none = 1
 
     def combine(self, other):
-        if self.total_weight == 0:
-            self.total_weight = other.total_weight
-
         for val in other.samples:
             self.add(val, other.total_weight / len(other.samples))

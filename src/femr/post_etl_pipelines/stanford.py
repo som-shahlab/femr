@@ -15,6 +15,7 @@ from femr.transforms.stanford import (
     move_pre_birth,
     move_to_day_end,
     move_visit_start_to_first_event_start,
+    switch_to_icd10cm,
 )
 
 
@@ -29,6 +30,7 @@ def _get_stanford_transformations() -> Callable[[meds.Patient], meds.Patient]:
         move_pre_birth,
         move_visit_start_to_first_event_start,
         move_to_day_end,
+        switch_to_icd10cm,
         move_billing_codes,
         functools.partial(
             remove_nones,  # We have to keep visits in order to sync up visit_ids later in the process
@@ -62,7 +64,7 @@ def femr_stanford_omop_fixer_program() -> None:
     )
 
     parser.add_argument(
-        "--num_threads",
+        "--num_proc",
         type=int,
         help="The number of threads to use",
         default=1,
@@ -74,7 +76,7 @@ def femr_stanford_omop_fixer_program() -> None:
 
     dataset = datasets.Dataset.from_parquet(os.path.join(args.source_dataset, "data", "*"))
 
-    fixed_patient = dataset.map(_get_stanford_transformations(), num_proc=args.num_threads)
+    fixed_patient = dataset.map(_get_stanford_transformations(), num_proc=args.num_proc)
 
     os.mkdir(os.path.join(args.target_dataset, "data"))
     fixed_patient.to_parquet(os.path.join(args.target_dataset, "data", "data.parquet"))
