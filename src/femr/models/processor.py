@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import collections
 import datetime
 import functools
-import random
-from typing import List, Tuple
+from typing import Any, Dict, List, Mapping, Tuple
 
 import datasets
 import numpy as np
+import torch.utils.data
 
 import femr.hf_utils
 import femr.models.tokenizer
@@ -17,11 +18,6 @@ def map_length_stats(batch, indices, *, processor, max_length):
     lengths = []
 
     for patient_index, patient_id, events in zip(indices, batch["patient_id"], batch["events"]):
-        total_events = 0
-        for event in events:
-            for measurement in event["measurements"]:
-                total_events += 1
-
         patient = {
             "patient_id": patient_id,
             "events": events,
@@ -45,7 +41,10 @@ def map_length_stats(batch, indices, *, processor, max_length):
             last_index = data["transformer"]["label_indices"][-1]
             length = min(max_length, last_index + 1)
             lengths.append((patient_index, last_index + 1 - length, length))
-    return lengths
+    if len(lengths) > 0:
+        return [np.array(lengths, dtype=np.int64)]
+    else:
+        return []
 
 
 def agg_length_stats(lengths1, lengths2):
@@ -125,7 +124,7 @@ class BatchCreator:
                     and (needs_exact or (last_time - birth).days > 1)
                 ):
                     num_added = self.task.add_event(last_time, event["time"], features)
-                    for i in range(num_added):
+                    for _ in range(num_added):
                         self.label_indices.append(len(self.ages) - 1)
 
                 if max_patient_length is not None and (patient_length_index - offset >= max_patient_length):
@@ -150,7 +149,7 @@ class BatchCreator:
 
         if self.task is not None:
             num_added = self.task.add_event(last_time, None, [])
-            for i in range(num_added):
+            for _ in range(num_added):
                 self.label_indices.append(len(self.ages) - 1)
 
         self.patient_lengths.append(len(self.ages) - start_index)
@@ -169,7 +168,7 @@ class BatchCreator:
             transformer["tokens"] = np.array(self.tokens, dtype=np.int32)
         else:
             transformer["hierarchical_tokens"] = np.array(self.hierarchical_tokens, dtype=np.int32)
-            transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float16)
+            transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float32)
             transformer["token_indices"] = np.array(self.token_indices, dtype=np.int32)
 
         final = {
@@ -185,16 +184,43 @@ class BatchCreator:
             final["needs_exact"] = self.task.needs_exact()
         return final
 
+    def cleanup_batch(self, batch: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean a batch, applying final processing.
+
+        This is necessary as some tasks use sparse matrices that need to be postprocessed."""
+        if self.task is not None and "task" in batch:
+            batch["task"] = self.task.cleanup(batch["task"])
+
+        return batch
+
+
+def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: BatchCreator, dataset: datasets.Dataset):
+    for lengths, offsets in batch_data:
+        offsets = list(offsets)
+        for start, end in zip(offsets, offsets[1:]):
+            creator.start_batch()
+            for patient_index, offset, length in lengths[start:end, :]:
+                creator.add_patient(dataset[patient_index.item()], offset, length)
+
+            yield creator.get_batch_data()
+
+
+def _add_dimension(data: Any) -> Any:
+    if isinstance(data, collections.abc.Mapping):
+        return {k: _add_dimension(v) for k, v in data.items()}
+    elif isinstance(data, torch.Tensor):
+        return data.unsqueeze(dim=0)
+    elif isinstance(data, (int, float, np.number, np.bool_)):
+        return data
+    else:
+        raise RuntimeError("Could not convert item of type " + str(type(data)))
+
 
 class FEMRBatchProcessor:
     def __init__(self, tokenizer, task=None):
         self.creator = BatchCreator(tokenizer, task)
 
     def convert_patient(self, patient, tensor_type=None, **formatter_kwargs):
-        total_events = 0
-        for event in patient["events"]:
-            for measurement in event["measurements"]:
-                total_events += 1
         self.creator.start_batch()
         self.creator.add_patient(patient, 0)
         batch_data = self.creator.get_batch_data()
@@ -202,6 +228,10 @@ class FEMRBatchProcessor:
             formatter = datasets.formatting.get_formatter(tensor_type, **formatter_kwargs)
             batch_data = formatter.recursive_tensorize(batch_data)
         return batch_data
+
+    def collate(self, batches: List[Mapping[str, Any]]) -> Mapping[str, Any]:
+        assert len(batches) == 1, "Can only have one batch when collating"
+        return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
     def convert_dataset(self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1):
         if isinstance(dataset, datasets.DatasetDict):
@@ -212,7 +242,8 @@ class FEMRBatchProcessor:
                 }
             )
 
-        print("Processing", len(dataset))
+        # dataset = dataset.select(range(10000))
+
         max_length = tokens_per_batch // min_samples_per_batch
         lengths = femr.hf_utils.aggregate_over_dataset(
             dataset,
@@ -223,38 +254,60 @@ class FEMRBatchProcessor:
             with_indices=True,
         )
 
-        random.shuffle(lengths)
+        lengths = np.concatenate(lengths)
 
-        batches: List[List[Tuple[int, int, int]]] = []
-        current_batch: List[Tuple[int, int, int]] = []
+        rng = np.random.default_rng()
+        rng.shuffle(lengths)
+
         current_batch_length = 0
 
-        for patient_id, offset, length in lengths:
+        batch_offsets = [0]
+
+        for i, length in enumerate(lengths[:, 2]):
             if current_batch_length + length > tokens_per_batch:
-                batches.append(current_batch)
-                current_batch = []
+                batch_offsets.append(i)
                 current_batch_length = 0
 
             current_batch_length += length
-            current_batch.append((patient_id, offset, length))
 
-        batches.append(current_batch)
+        batch_offsets.append(len(lengths))
 
-        def batch_generator(dataset, batches):
-            for batch in batches:
-                self.creator.start_batch()
-                for patient_index, offset, length in batch:
-                    self.creator.add_patient(dataset[patient_index], offset, length)
+        batches = list(zip(batch_offsets, batch_offsets[1:]))
 
-                yield self.creator.get_batch_data()
+        split_batches = np.array_split(batches, num_proc)
+
+        final_batch_data = []
+
+        for batch_part in split_batches:
+            if len(batch_part) == 0:
+                continue
+            start = batch_part[0][0]
+            end = batch_part[-1][-1]
+            lengths_part = lengths[start:end, :]
+            offsets = [0] + [b - start for _, b in batch_part]
+
+            final_batch_data.append(
+                (
+                    lengths_part,
+                    np.array(offsets, dtype=np.int32),
+                )
+            )
+
+        print("Creating batches", len(batches))
+
+        batch_func = functools.partial(
+            _batch_generator,
+            creator=self.creator,
+            dataset=dataset,
+        )
 
         batch_dataset = datasets.Dataset.from_generator(
-            batch_generator,
+            batch_func,
             gen_kwargs={
-                "dataset": dataset,
-                "batches": batches,
+                "batch_data": final_batch_data,
             },
             num_proc=num_proc,
+            writer_batch_size=8,
         )
 
         return batch_dataset

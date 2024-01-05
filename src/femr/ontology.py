@@ -37,11 +37,6 @@ class Ontology:
         self.description_map = {}
         self.parents_map: Dict[str, Set[str]] = collections.defaultdict(set)
 
-        for code, code_info in code_metadata.items():
-            if code_info.get("description") is not None:
-                self.description_map[code] = code_info["description"]
-            if code_info.get("parent_codes") is not None:
-                self.parents_map[code] |= set(code_info["parent_codes"])
 
         # Load from the athena path ...
         concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0)
@@ -95,6 +90,13 @@ class Ontology:
         ):
             self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
 
+        # Have to add after OMOP to overwrite ...
+        for code, code_info in code_metadata.items():
+            if code_info.get("description") is not None:
+                self.description_map[code] = code_info["description"]
+            if code_info.get("parent_codes") is not None:
+                self.parents_map[code] |= set(code_info["parent_codes"])
+
         self.children_map = collections.defaultdict(set)
         for code, parents in self.parents_map.items():
             for parent in parents:
@@ -128,7 +130,7 @@ class Ontology:
 
         def is_valid(code):
             ontology = code.split("/")[0]
-            return (ontology not in remove_ontologies) and (code in all_parents)
+            return (code in valid_codes) or ((ontology not in remove_ontologies) and (code in all_parents))
 
         codes = self.children_map.keys() | self.parents_map.keys() | self.description_map.keys()
         for code in codes:

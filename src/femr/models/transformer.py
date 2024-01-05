@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import datetime
 import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -57,7 +58,10 @@ def fixed_pos_embedding(ages, dim, dtype):
 
 def apply_rotary_pos_emb(x, sincos):
     sin, cos = sincos
-    assert x.dtype == sin.dtype == cos.dtype
+    sin = sin.to(dtype=x.dtype)
+    cos = cos.to(dtype=x.dtype)
+
+    assert x.dtype == sin.dtype == cos.dtype, f"{x.dtype} {sin.dtype} {cos.dtype}"
 
     if len(sin.shape) != len(x.shape):
         new_shape = (1,) + sin.shape
@@ -72,23 +76,32 @@ class FEMREncoderLayer(nn.Module):
         super().__init__()
         self.config = config
         self.norm = femr.models.rmsnorm.RMSNorm(self.config.hidden_size)
+        if self.config.hidden_act == "swiglu":
+            hidden_mult = 2
+        else:
+            hidden_mult = 1
+
         self.input_proj = nn.Linear(
-            self.config.hidden_size, self.config.hidden_size * 3 + self.config.intermediate_size
+            self.config.hidden_size,
+            self.config.hidden_size * 3 + hidden_mult * self.config.intermediate_size,
+            bias=self.config.use_bias,
         )
-        self.output_proj = nn.Linear(self.config.hidden_size + self.config.intermediate_size, self.config.hidden_size)
+        self.output_proj = nn.Linear(
+            self.config.hidden_size + self.config.intermediate_size, self.config.hidden_size, bias=self.config.use_bias
+        )
         self.activate = nn.GELU()
 
     def forward(self, x, normed_ages, pos_embed, attn_bias):
         x = self.norm(x)
 
         if self.config.use_normed_ages:
-            x[:, -2] = normed_ages
-            x[:, -1] = normed_ages**2
+            x[:, -2] = normed_ages.to(dtype=x.dtype)
+            x[:, -1] = (normed_ages**2).to(dtype=x.dtype)
 
         transformed = self.input_proj(x)
 
-        ff = transformed[:, -self.config.intermediate_size :]
-        qkv = transformed[:, : -self.config.intermediate_size]
+        ff = transformed[:, : -self.config.hidden_size * 3]
+        qkv = transformed[:, -self.config.hidden_size * 3 :]
 
         head_size = self.config.hidden_size // self.config.n_heads
 
@@ -106,6 +119,12 @@ class FEMREncoderLayer(nn.Module):
         )
 
         attn = attn.reshape(x.shape)
+
+        if self.config.hidden_act == "gelu":
+            ff = F.gelu(ff)
+        elif self.config.hidden_act == "swiglu":
+            x1, x2 = ff.chunk(2, dim=-1)
+            ff = F.silu(x1) * x2
 
         ff = self.activate(ff)
 
@@ -126,6 +145,8 @@ class FEMRTransformerConfig(transformers.PretrainedConfig):
         n_layers: int = 6,
         attention_width: int = 496,
         use_normed_ages: bool = False,
+        use_bias: bool = True,
+        hidden_act: str = "gelu",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -140,6 +161,9 @@ class FEMRTransformerConfig(transformers.PretrainedConfig):
         self.attention_width = attention_width
 
         self.use_normed_ages = use_normed_ages
+
+        self.use_bias = use_bias
+        self.hidden_act = hidden_act
 
 
 class FEMRTransformer(nn.Module):
@@ -171,6 +195,7 @@ class FEMRTransformer(nn.Module):
         x = self.in_norm(x)
         normed_ages = batch["normalized_ages"]
         pos_embed = fixed_pos_embedding(batch["ages"], self.config.hidden_size // self.config.n_heads, x.dtype)
+
         attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens(
             list(batch["patient_lengths"])
         ).make_local_attention(self.config.attention_width)
@@ -220,42 +245,31 @@ class MOTORTaskHead(nn.Module):
         super().__init__()
 
         self.num_time_bins = len(time_bins) - 1
+        self.num_tasks = len(pretraining_task_info)
 
         self.final_layer_size = final_layer_size
         self.final_layer = nn.Linear(hidden_size, self.num_time_bins * final_layer_size)
 
-        self.task_embedding = nn.Embedding(len(pretraining_task_info), final_layer_size)
-        nn.init.trunc_normal_(self.task_embedding.weight, std=1 / math.sqrt(final_layer_size))
-
-        start_bias = torch.log2(torch.tensor([a[1] for a in pretraining_task_info], dtype=torch.float32)).unsqueeze(1)
-
-        self.task_embedding_bias = nn.Embedding.from_pretrained(start_bias, freeze=False)
+        self.task_layer = nn.Linear(self.final_layer_size, self.num_tasks)
+        start_bias = torch.log2(torch.tensor([a[1] for a in pretraining_task_info], dtype=torch.float32))
+        self.task_layer.bias.data = start_bias
 
     def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor], return_logits=False):
         time_independent_features = self.final_layer(features).reshape(
             features.shape[0], self.num_time_bins, self.final_layer_size
         )
 
-        time_dependent_logits = torch.matmul(time_independent_features, self.task_embedding.weight.T)
-        time_dependent_logits += self.task_embedding_bias.weight.reshape(1, 1, -1)
+        time_dependent_logits = self.task_layer(time_independent_features)
 
         assert (
-            batch["log_event_time"].shape == time_dependent_logits.shape
-        ), f"{time_dependent_logits.shape} {batch['log_event_time'].shape}"
+            batch["log_time"].shape == time_dependent_logits.shape
+        ), f"{time_dependent_logits.shape} {batch['log_time'].shape}"
         assert (
             batch["is_event"].shape == time_dependent_logits.shape
         ), f"{time_dependent_logits.shape} {batch['is_event'].shape}"
 
-        survival_loss = torch.exp2(time_dependent_logits + batch["log_event_time"]).mean()
+        survival_loss = torch.exp2(time_dependent_logits + batch["log_time"]).mean()
         event_loss = -math.log(2) * torch.where(batch["is_event"], time_dependent_logits, 0).mean()
-
-        if False:
-            print(features)
-            print(survival_loss, event_loss)
-            print(time_dependent_logits.sum())
-            print(torch.where(batch["is_event"], time_dependent_logits, 0))
-            print(torch.where(batch["is_event"], time_dependent_logits, 0).sum())
-            print(batch["is_event"].sum())
 
         loss = survival_loss + event_loss
 
@@ -311,6 +325,18 @@ class FEMRModelConfig(transformers.PretrainedConfig):
         return cls(transformer_config=transformer_config.to_dict(), task_config=task_config_dict)
 
 
+def remove_first_dimension(data: Any) -> Any:
+    if isinstance(data, collections.abc.Mapping):
+        return {k: remove_first_dimension(v) for k, v in data.items()}
+    elif isinstance(data, torch.Tensor):
+        assert data.shape[0] == 1
+        return data.squeeze(dim=0)
+    elif isinstance(data, (int, float, np.number, np.bool_)):
+        return data
+    else:
+        raise RuntimeError("Could not convert item of type " + str(type(data)))
+
+
 class FEMRModel(transformers.PreTrainedModel):
     config_class = FEMRModelConfig
 
@@ -328,6 +354,8 @@ class FEMRModel(transformers.PreTrainedModel):
     def forward(self, batch: Mapping[str, Any], return_loss=True):
         # Need a return_loss parameter for transformers.Trainer to work properly
         assert return_loss
+
+        batch = remove_first_dimension(batch)
 
         features = self.transformer(batch["transformer"])
         if "task" in batch:
@@ -375,6 +403,7 @@ def compute_features(
     all_representations = []
 
     for batch in batches:
+        batch = processor.collate([batch])["batch"]
         with torch.no_grad():
             patient_ids, feature_times, representations = model(batch)
             all_patient_ids.append(patient_ids.cpu().numpy())

@@ -4,12 +4,13 @@ import abc
 import collections
 import datetime
 import functools
-import math
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import datasets
 import meds
 import numpy as np
+import scipy.sparse
+import torch
 
 import femr.index
 import femr.models.transformer
@@ -46,6 +47,9 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def get_batch_data(self) -> Mapping[str, np.ndarray]:
         ...
+
+    def cleanup(self, batch: Mapping[str, torch.Tensor]) -> Mapping[str, torch.Tensor]:
+        return batch
 
 
 class LabeledPatientTask(Task):
@@ -167,7 +171,9 @@ def should_make_survival_prediction(current_date: datetime.datetime, next_date: 
 
 
 class SurvivalCalculator:
-    def __init__(self, ontology: femr.ontology.Ontology, patient: meds.Patient):
+    def __init__(
+        self, ontology: femr.ontology.Ontology, patient: meds.Patient, code_whitelist: Optional[Set[str]] = None
+    ):
         self.survival_events = []
         self.final_date = patient["events"][-1]["time"]
         self.future_times = collections.defaultdict(list)
@@ -176,7 +182,8 @@ class SurvivalCalculator:
             codes = set()
             for measurement in event["measurements"]:
                 for parent in ontology.get_all_parents(measurement["code"]):
-                    codes.add(parent)
+                    if code_whitelist is None or parent in code_whitelist:
+                        codes.add(parent)
 
             for code in codes:
                 self.future_times[code].append(event["time"])
@@ -206,11 +213,12 @@ class SurvivalCalculator:
 def _prefit_motor_map(batch, *, tasks: List[str], ontology: femr.ontology.Ontology) -> Any:
     task_time_stats: List[Any] = [[0, 0, femr.stat_utils.OnlineStatistics()] for _ in range(len(tasks))]
     event_times = femr.stat_utils.ReservoirSampler(100_000)
+    task_set = set(tasks)
 
     for patient_id, events in zip(batch["patient_id"], batch["events"]):
         patient = {"patient_id": patient_id, "events": events}
 
-        calculator = SurvivalCalculator(ontology, patient)
+        calculator = SurvivalCalculator(ontology, patient, task_set)
 
         birth = femr.pat_utils.get_patient_birthdate(patient)
 
@@ -294,6 +302,12 @@ class MOTORTask(Task):
         self.time_bins = time_bins
         self.final_layer_size = final_layer_size
 
+        self.pretraining_task_codes = set()
+        self.task_to_index_map = {}
+        for i, task in enumerate(self.pretraining_task_info):
+            self.pretraining_task_codes.add(task[0])
+            self.task_to_index_map[task[0]] = i
+
     def get_task_config(self) -> femr.models.transformer.FEMREncoderLayer:
         return femr.models.transformer.FEMRTaskConfig(
             task_type="motor",
@@ -306,14 +320,19 @@ class MOTORTask(Task):
 
     def start_patient(self, patient: meds.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
         assert ontology
-        self.calculator = SurvivalCalculator(ontology, patient)
+        self.calculator = SurvivalCalculator(ontology, patient, self.pretraining_task_codes)
 
     def needs_exact(self) -> bool:
         return False
 
     def start_batch(self) -> None:
-        self.log_event_time: List[np.ndarray] = []
-        self.is_event: List[np.ndarray] = []
+        self.censor_time: List[float] = []
+
+        self.time_sparse: Dict[str, List[float]] = {
+            "data": [],
+            "indices": [],
+            "indptr": [0],
+        }
 
     def add_event(
         self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
@@ -326,43 +345,66 @@ class MOTORTask(Task):
         if len(tte) == 0:
             return 0
 
-        log_event_time = float("-inf") * np.ones(
-            shape=(len(self.time_bins) - 1, len(self.pretraining_task_info)), dtype=np.float16
-        )
-        is_event = np.zeros(shape=(len(self.time_bins) - 1, len(self.pretraining_task_info)), dtype=np.bool_)
-
         censor_seconds = censor_time.total_seconds()
+        self.censor_time.append(censor_seconds)
 
-        for i, (start, end) in enumerate(zip(self.time_bins, self.time_bins[1:])):
-            time_in_bin = min(end, censor_seconds) - start
-            if time_in_bin <= 0:
-                log_event_time[i, :] = float("-inf")
-            else:
-                log_event_time[i, :] = math.log2(time_in_bin)
-
-        for j, (event_name, _) in enumerate(self.pretraining_task_info):
-            time = tte.get(event_name)
-            if time is None:
-                continue
+        for event_name, time in tte.items():
+            j = self.task_to_index_map[event_name]
             seconds = time.total_seconds()
 
-            for i, (start, end) in enumerate(zip(self.time_bins, self.time_bins[1:])):
-                time_in_bin = min(end, seconds) - start
-                if time_in_bin <= 0:
-                    log_event_time[i, j] = float("-inf")
-                else:
-                    log_event_time[i, j] = math.log2(time_in_bin)
+            self.time_sparse["data"].append(seconds)
+            self.time_sparse["indices"].append(j)
 
-                if start <= seconds < end:
-                    is_event[i, j] = True
-
-        self.log_event_time.append(log_event_time)
-        self.is_event.append(is_event)
+        self.time_sparse["indptr"].append(len(self.time_sparse["data"]))
 
         return 1
 
     def get_batch_data(self) -> Mapping[str, np.ndarray]:
+        def h(a, dtype):
+            return {
+                "data": np.array(a["data"], dtype=dtype),
+                "indices": np.array(a["indices"], dtype=np.int32),
+                "indptr": np.array(a["indptr"], dtype=np.int32),
+            }
+
         return {
-            "log_event_time": np.stack(self.log_event_time, dtype=np.float16),
-            "is_event": np.stack(self.is_event, dtype=np.bool_),
+            "censor_time": np.array(self.censor_time, dtype=np.float32),
+            "time_sparse": h(self.time_sparse, dtype=np.float32),
         }
+
+    def cleanup(self, batch: Mapping[str, torch.Tensor]) -> Mapping[str, torch.Tensor]:
+        num_time_bins = len(self.time_bins) - 1
+        num_tasks = len(self.pretraining_task_info)
+        num_indices = len(batch["censor_time"])
+
+        def h(a):
+            shape = (num_indices, num_tasks)
+            a = {k: v.numpy() for k, v in batch[a].items()}
+            s = scipy.sparse.csr_array((a["data"], a["indices"], a["indptr"]), shape=shape)
+            return torch.from_numpy(s.toarray())
+
+        time = h("time_sparse")
+
+        log_time = torch.zeros(size=(num_time_bins, num_indices, num_tasks), dtype=torch.float16)
+        is_event = torch.zeros(size=(num_time_bins, num_indices, num_tasks), dtype=torch.bool)
+
+        is_event_global = time != 0
+
+        def inf_log(arr):
+            mask = arr != 0
+            arr[mask] = torch.log2(arr[mask])
+            arr[~mask] = -torch.inf
+
+            return arr
+
+        for i, (start, end) in enumerate(zip(self.time_bins, self.time_bins[1:])):
+            censor_time_in_bin = torch.unsqueeze(torch.clip(batch["censor_time"] - start, 0, float(end - start)), -1)
+            event_time_in_bin = torch.clip(time - start, 0, float(end - start))
+            time_in_bin = torch.where(is_event_global, event_time_in_bin, censor_time_in_bin)
+            log_time[i, :] = inf_log(time_in_bin)
+            is_event[i, :] = is_event_global & (start <= time) & (time < end)
+
+        log_time = torch.transpose(log_time, 0, 1).contiguous()
+        is_event = torch.transpose(is_event, 0, 1).contiguous()
+
+        return {"is_event": is_event, "log_time": log_time}
