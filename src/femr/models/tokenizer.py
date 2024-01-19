@@ -39,6 +39,16 @@ def train_tokenizer(
 
 
 def agg_statistics(stats1, stats2):
+    """combine two dict-like objects. each object should have keys "age_stats", "code_counts", "text_counts", and can
+     have keys "numeric_samples", "numeric_samples_by_lab". 
+     
+     this function updates statistics in stats1 with those in stats2. 
+     
+     POSSIBLE BUG: if there is no "numeric_samples" or "numeric_samples_by_lab" key in stats1 but these keys exist in 
+     stats2, then these values will NOT be merged into stats1, and these data from stats2 will be lost.
+
+     it might be nice to have a dedicated class for statistics results.
+     """
     stats1["age_stats"].combine(stats2["age_stats"])
 
     for n in ("code_counts", "text_counts"):
@@ -70,7 +80,7 @@ def map_statistics(
     numeric_samples: Optional[femr.stat_utils.ReservoirSampler]
     numeric_samples_by_lab: Optional[Dict[str, femr.stat_utils.ReservoirSampler]]
     if is_hierarchical:
-        assert ontology is not None
+        assert ontology is not None, "an ontology must be provided when is_hierarchical=True"
         numeric_samples = femr.stat_utils.ReservoirSampler(10_000)
         numeric_samples_by_lab = None
     else:
