@@ -16,9 +16,9 @@ dependencies = [
     "nptyping == 2.4.1",
     "msgpack >= 1.0.5",
     "meds == 0.1.1",
-    "torch",
+    "torch == 2.0.1",
+    "xformers == 0.0.22",
     "transformers >= 4.25.1",
-    "flash_attn >= 2.3.6",
     "datasets >= 2.15.0",
 ]
 requires-python=">3.9"
