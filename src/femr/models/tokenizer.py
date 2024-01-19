@@ -4,6 +4,7 @@ import bisect
 import collections
 import functools
 import math
+import datetime
 import os
 from typing import Any, Dict, Mapping, Optional, Set, Union
 
@@ -13,6 +14,7 @@ import transformers
 
 import femr.hf_utils
 import femr.stat_utils
+import meds
 
 
 def train_tokenizer(
@@ -392,7 +394,10 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                 token=kwargs.get("token"),
             )
 
-    def get_feature_codes(self, measurement):
+    def start_patient(self):
+        pass
+
+    def get_feature_codes(self, time: datetime.datetime, measurement: meds.Measurement):
         if self.is_hierarchical:
             codes = [
                 self.code_lookup[parent]

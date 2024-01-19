@@ -97,10 +97,10 @@ class LabeledPatientTask(Task):
             is_valid = current_date <= current_label["prediction_time"]
             next_valid = next_date is not None and next_date <= current_label["prediction_time"]
 
-            assert is_valid, (
-                "We have labels that appear to be before birth? "
-                + f"{self.patient_id} {current_label} {current_date} {next_date}"
-            )
+            if not is_valid:
+                # We don't have any valid representation for this label, so ignore
+                self.current_label_index += 1
+                continue
 
             if next_valid:
                 # Next one is valid, so break early to give it a chance next time
