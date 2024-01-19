@@ -95,7 +95,7 @@ class Ontology:
             if code_info.get("description") is not None:
                 self.description_map[code] = code_info["description"]
             if code_info.get("parent_codes") is not None:
-                self.parents_map[code] |= set(code_info["parent_codes"])
+                self.parents_map[code] = set(code_info["parent_codes"])
 
         self.children_map = collections.defaultdict(set)
         for code, parents in self.parents_map.items():

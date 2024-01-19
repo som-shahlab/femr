@@ -89,7 +89,6 @@ class FEMREncoderLayer(nn.Module):
         self.output_proj = nn.Linear(
             self.config.hidden_size + self.config.intermediate_size, self.config.hidden_size, bias=self.config.use_bias
         )
-        self.activate = nn.GELU()
 
     def forward(self, x, normed_ages, pos_embed, attn_bias):
         x = self.norm(x)
@@ -125,8 +124,6 @@ class FEMREncoderLayer(nn.Module):
         elif self.config.hidden_act == "swiglu":
             x1, x2 = ff.chunk(2, dim=-1)
             ff = F.silu(x1) * x2
-
-        ff = self.activate(ff)
 
         combined = torch.concatenate((attn, ff), axis=-1)
         result = self.output_proj(combined)
@@ -197,7 +194,7 @@ class FEMRTransformer(nn.Module):
         pos_embed = fixed_pos_embedding(batch["ages"], self.config.hidden_size // self.config.n_heads, x.dtype)
 
         attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens(
-            list(batch["patient_lengths"])
+            batch["patient_lengths"].tolist()
         ).make_local_attention(self.config.attention_width)
 
         for layer in self.layers:
@@ -331,6 +328,9 @@ def remove_first_dimension(data: Any) -> Any:
     elif isinstance(data, torch.Tensor):
         assert data.shape[0] == 1
         return data.squeeze(dim=0)
+    elif isinstance(data, np.ndarray):
+        assert data.shape[0] == 1
+        return np.squeeze(data, axis=0)
     elif isinstance(data, (int, float, np.number, np.bool_)):
         return data
     else:

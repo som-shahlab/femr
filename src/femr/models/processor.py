@@ -3,7 +3,7 @@ from __future__ import annotations
 import collections
 import datetime
 import functools
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Tuple, Optional
 
 import datasets
 import numpy as np
@@ -85,90 +85,96 @@ class BatchCreator:
         self.patient_ids.append(patient["patient_id"])
         self.offsets.append(offset)
 
-        current_date = None
-        last_time = None
+        def process_patient_events():
+            current_date = None
+            last_time = None
 
-        if self.task is not None:
-            self.task.start_patient(patient, self.tokenizer.ontology)
+            if self.task is not None:
+                self.task.start_patient(patient, self.tokenizer.ontology)
 
-        start_index = len(self.ages)
-        patient_length_index = 0
+            patient_length_index = 0
 
-        needs_exact = True
-        if self.task and not self.task.needs_exact():
-            needs_exact = False
+            birth = femr.pat_utils.get_patient_birthdate(patient)
+            self.tokenizer.start_patient()
 
-        birth = femr.pat_utils.get_patient_birthdate(patient)
+            for event in patient["events"]:
+                if event["time"].date() != current_date:
+                    current_date = event["time"].date()
+                    codes_seen_today = set()
 
-        for event in patient["events"]:
-            if event["time"].date() != current_date:
-                current_date = event["time"].date()
-                codes_seen_today = set()
+                for measurement in event["measurements"]:
+                    features, weights = self.tokenizer.get_feature_codes(event['time'], measurement)
+                    if len(features) == 0:
+                        continue
+                    if all(feature in codes_seen_today for feature in features):
+                        continue
 
-            for measurement in event["measurements"]:
-                features, weights = self.tokenizer.get_feature_codes(measurement)
-                if len(features) == 0:
-                    continue
-                if all(feature in codes_seen_today for feature in features):
-                    continue
+                    codes_seen_today |= set(features)
+                    
+                    if patient_length_index < offset:
+                        patient_length_index += 1
+                        continue
 
-                if patient_length_index < offset:
+                    if (
+                        (self.task is not None)
+                        and (last_time is not None)
+                    ):
+                        num_added = self.task.add_event(last_time, event["time"], features)
+                        for _ in range(num_added):
+                            self.label_indices.append(len(self.ages) - 1)
+
+                    if max_patient_length is not None and (patient_length_index - offset >= max_patient_length):
+                        return None
+
+                    if not self.tokenizer.is_hierarchical:
+                        assert len(features) == 1
+                        self.tokens.append(features[0])
+                    else:
+                        self.hierarchical_tokens.extend(features)
+                        self.hierarchical_weights.extend(weights)
+                        self.token_indices.append(len(self.hierarchical_tokens))
+
+                    self.valid_tokens.append(True)
+                    self.ages.append((event["time"] - birth) / datetime.timedelta(days=1))
+                    self.normalized_ages.append(self.tokenizer.normalize_age(event["time"] - birth))
+                    self.timestamps.append(event["time"].timestamp())
+
                     patient_length_index += 1
-                    continue
 
-                codes_seen_today |= set(features)
+                    last_time = event["time"]
 
-                if (
-                    (self.task is not None)
-                    and (last_time is not None)
-                    and (needs_exact or (last_time - birth).days > 1)
-                ):
-                    num_added = self.task.add_event(last_time, event["time"], features)
-                    for _ in range(num_added):
-                        self.label_indices.append(len(self.ages) - 1)
+            return last_time
+        
+        start_index = len(self.ages)
+        final_time = process_patient_events()
 
-                if max_patient_length is not None and (patient_length_index - offset >= max_patient_length):
-                    break
-
-                if not self.tokenizer.is_hierarchical:
-                    assert len(features) == 1
-                    self.tokens.append(features[0])
-                else:
-                    self.hierarchical_tokens.extend(features)
-                    self.hierarchical_weights.extend(weights)
-                    self.token_indices.append(len(self.hierarchical_tokens))
-
-                self.valid_tokens.append(True)
-                self.ages.append((event["time"] - birth) / datetime.timedelta(days=1))
-                self.normalized_ages.append(self.tokenizer.normalize_age(event["time"] - birth))
-                self.timestamps.append(event["time"].timestamp())
-
-                patient_length_index += 1
-
-                last_time = event["time"]
-
-        if self.task is not None:
-            num_added = self.task.add_event(last_time, None, [])
+        if self.task is not None and final_time is not None:
+            num_added = self.task.add_event(final_time, None, [])
             for _ in range(num_added):
                 self.label_indices.append(len(self.ages) - 1)
 
         self.patient_lengths.append(len(self.ages) - start_index)
 
     def get_batch_data(self):
+        if self.tokenizer.vocab_size <= 2**15:
+            token_dtype = np.int16
+        else:
+            token_dtype = np.int32
+
         transformer = {
             "valid_tokens": np.array(self.valid_tokens),
             "ages": np.array(self.ages, dtype=np.float32),
-            "normalized_ages": np.array(self.normalized_ages, dtype=np.float32),
-            "timestamps": np.array(self.timestamps, dtype=np.float64),
+            "normalized_ages": np.array(self.normalized_ages, dtype=np.float16),
+            "timestamps": np.array(self.timestamps, dtype=np.int64),
             "patient_lengths": np.array(self.patient_lengths, dtype=np.int32),
             "label_indices": np.array(self.label_indices, dtype=np.int32),
         }
 
         if not self.tokenizer.is_hierarchical:
-            transformer["tokens"] = np.array(self.tokens, dtype=np.int32)
+            transformer["tokens"] = np.array(self.tokens, dtype=token_dtype)
         else:
-            transformer["hierarchical_tokens"] = np.array(self.hierarchical_tokens, dtype=np.int32)
-            transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float32)
+            transformer["hierarchical_tokens"] = np.array(self.hierarchical_tokens, dtype=token_dtype)
+            transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float16)
             transformer["token_indices"] = np.array(self.token_indices, dtype=np.int32)
 
         final = {
@@ -188,6 +194,10 @@ class BatchCreator:
         """Clean a batch, applying final processing.
 
         This is necessary as some tasks use sparse matrices that need to be postprocessed."""
+
+        batch["transformer"]['patient_lengths'] = np.array(batch["transformer"]['patient_lengths'])
+        assert isinstance(batch["transformer"]['patient_lengths'], np.ndarray)
+
         if self.task is not None and "task" in batch:
             batch["task"] = self.task.cleanup(batch["task"])
 
@@ -202,7 +212,10 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
             for patient_index, offset, length in lengths[start:end, :]:
                 creator.add_patient(dataset[patient_index.item()], offset, length)
 
-            yield creator.get_batch_data()
+            result = creator.get_batch_data()
+            assert 'task' in result, f"No task present in {lengths[start:end,:]}"
+
+            yield result
 
 
 def _add_dimension(data: Any) -> Any:
@@ -210,6 +223,8 @@ def _add_dimension(data: Any) -> Any:
         return {k: _add_dimension(v) for k, v in data.items()}
     elif isinstance(data, torch.Tensor):
         return data.unsqueeze(dim=0)
+    elif isinstance(data, np.ndarray):
+        return np.expand_dims(data, axis=0)
     elif isinstance(data, (int, float, np.number, np.bool_)):
         return data
     else:
@@ -220,9 +235,9 @@ class FEMRBatchProcessor:
     def __init__(self, tokenizer, task=None):
         self.creator = BatchCreator(tokenizer, task)
 
-    def convert_patient(self, patient, tensor_type=None, **formatter_kwargs):
+    def convert_patient(self, patient, offset=0, max_patient_length=None, tensor_type=None, **formatter_kwargs):
         self.creator.start_batch()
-        self.creator.add_patient(patient, 0)
+        self.creator.add_patient(patient, offset=offset, max_patient_length=max_patient_length)
         batch_data = self.creator.get_batch_data()
         if tensor_type is not None:
             formatter = datasets.formatting.get_formatter(tensor_type, **formatter_kwargs)
@@ -241,8 +256,6 @@ class FEMRBatchProcessor:
                     for k, v in dataset.items()
                 }
             )
-
-        # dataset = dataset.select(range(10000))
 
         max_length = tokens_per_batch // min_samples_per_batch
         lengths = femr.hf_utils.aggregate_over_dataset(
