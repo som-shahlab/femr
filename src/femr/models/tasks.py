@@ -178,16 +178,28 @@ class SurvivalCalculator:
         self.final_date = patient["events"][-1]["time"]
         self.future_times = collections.defaultdict(list)
 
-        for event in patient["events"]:
-            codes = set()
-            for measurement in event["measurements"]:
-                for parent in ontology.get_all_parents(measurement["code"]):
-                    if code_whitelist is None or parent in code_whitelist:
-                        codes.add(parent)
+        if ontology is None:
+            for event in patient["events"]:
+                codes = set()
+                for measurement in event["measurements"]:
+                    if code_whitelist is None or measurement["code"] in code_whitelist:
+                        codes.add(measurement["code"])
 
-            for code in codes:
-                self.future_times[code].append(event["time"])
-                self.survival_events.append((code, event["time"]))
+                for code in codes:
+                    self.future_times[code].append(event["time"])
+                    self.survival_events.append((code, event["time"]))
+      
+        else:
+            for event in patient["events"]:
+                codes = set()
+                for measurement in event["measurements"]:
+                    for parent in ontology.get_all_parents(measurement["code"]):
+                        if code_whitelist is None or parent in code_whitelist:
+                            codes.add(parent)
+
+                for code in codes:
+                    self.future_times[code].append(event["time"])
+                    self.survival_events.append((code, event["time"]))
 
         for v in self.future_times.values():
             v.reverse()
@@ -319,7 +331,6 @@ class MOTORTask(Task):
         )
 
     def start_patient(self, patient: meds.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
-        assert ontology
         self.calculator = SurvivalCalculator(ontology, patient, self.pretraining_task_codes)
 
     def needs_exact(self) -> bool:
