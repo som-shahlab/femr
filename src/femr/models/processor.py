@@ -146,6 +146,7 @@ class BatchCreator:
                         self.hierarchical_weights.extend(weights)
                         self.token_indices.append(len(self.hierarchical_tokens))
 
+                    self.patient_ids.append(patient["patient_id"])
                     self.valid_tokens.append(True)
                     self.ages.append((event["time"] - birth) / datetime.timedelta(days=1))
                     self.normalized_ages.append(self.tokenizer.normalize_age(event["time"] - birth))
@@ -190,7 +191,7 @@ class BatchCreator:
             transformer["token_indices"] = np.array(self.token_indices, dtype=np.int32)
 
         final = {
-            "num_patients": len(self.patient_ids),
+            "num_patients": len(self.patient_lengths),
             "num_indices": len(self.label_indices),
             "patient_ids": np.array(self.patient_ids, dtype=np.int64),
             "offsets": np.array(self.offsets, dtype=np.int32),
