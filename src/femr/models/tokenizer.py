@@ -42,15 +42,15 @@ def train_tokenizer(
 
 def agg_statistics(stats1, stats2):
     """combine two dict-like objects. each object should have keys "age_stats", "code_counts", "text_counts", and can
-     have keys "numeric_samples", "numeric_samples_by_lab". 
-     
-     this function updates statistics in stats1 with those in stats2. 
-     
-     POSSIBLE BUG: if there is no "numeric_samples" or "numeric_samples_by_lab" key in stats1 but these keys exist in 
-     stats2, then these values will NOT be merged into stats1, and these data from stats2 will be lost.
+    have keys "numeric_samples", "numeric_samples_by_lab".
 
-     it might be nice to have a dedicated class for statistics results.
-     """
+    this function updates statistics in stats1 with those in stats2.
+
+    POSSIBLE BUG: if there is no "numeric_samples" or "numeric_samples_by_lab" key in stats1 but these keys exist in
+    stats2, then these values will NOT be merged into stats1, and these data from stats2 will be lost.
+
+    it might be nice to have a dedicated class for statistics results.
+    """
     stats1["age_stats"].combine(stats2["age_stats"])
 
     for n in ("code_counts", "text_counts"):
@@ -329,7 +329,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         **kwargs,
     ):
         """
-        Load the FEMR tokenizer.
+        Load the FEMR tokenizer by reading a file named "dictionary.msgpack" from directory "pretrained_model_name_or_path"
 
         Parameters:
             pretrained_model_name_or_path (`str` or `os.PathLike`, *optional*):
@@ -357,8 +357,9 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
 
     def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
         """
-        Save the FEMR tokenizer.
+        Save the FEMR tokenizer as a file named "dictionary.msgpack" in save_directory. This will overwrite an existing file with this name if it exists.
 
+        If push_to_hub=True, this file will also be uploaded to huggingace model hub.
 
         This method make sure the batch processor can then be re-loaded using the
         .from_pretrained class method.

@@ -18,6 +18,13 @@ import meds
 
 
 def map_length_stats(batch, indices, *, processor: FEMRBatchProcessor, max_length):
+    """
+    construct a set of "lengths" for each patient in a batch. Each length is a tuple (patient_index, start_index, length), where...
+
+    if data["needs_exact"], then...
+
+    <to be continued>
+    """
     lengths = []
 
     for patient_index, patient_id, events in zip(indices, batch["patient_id"], batch["events"]):
