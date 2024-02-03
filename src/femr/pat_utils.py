@@ -8,4 +8,4 @@ def get_patient_birthdate(patient: meds.Patient) -> datetime.datetime:
         for m in e["measurements"]:
             if m["code"] == meds.birth_code:
                 return e["time"]
-    raise ValueError("Couldn't find patient birthdate -- Patient has no events " + str(patient["events"][:5]))
+    raise ValueError("Couldn't find patient birthdate -- Patient has no birth events (which must be {meds.birth_code}): " + str(patient["events"][:5]))
