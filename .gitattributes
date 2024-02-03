@@ -1,1 +1,4 @@
 tutorials/input/* binary
+
+*6_Train*.ipynb merge=ours
+*7_MOTOR*.ipynb merge=ours
