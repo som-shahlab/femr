@@ -102,22 +102,19 @@ class BatchCreator:
                     codes_seen_today = set()
 
                 for measurement in event["measurements"]:
-                    features, weights = self.tokenizer.get_feature_codes(event['time'], measurement)
+                    features, weights = self.tokenizer.get_feature_codes(event["time"], measurement)
                     if len(features) == 0:
                         continue
                     if all(feature in codes_seen_today for feature in features):
                         continue
 
                     codes_seen_today |= set(features)
-                    
+
                     if patient_length_index < offset:
                         patient_length_index += 1
                         continue
 
-                    if (
-                        (self.task is not None)
-                        and (last_time is not None)
-                    ):
+                    if (self.task is not None) and (last_time is not None):
                         num_added = self.task.add_event(last_time, event["time"], features)
                         for _ in range(num_added):
                             self.label_indices.append(len(self.ages) - 1)
@@ -144,7 +141,7 @@ class BatchCreator:
                     last_time = event["time"]
 
             return last_time
-        
+
         start_index = len(self.ages)
         final_time = process_patient_events()
 
@@ -164,7 +161,7 @@ class BatchCreator:
         transformer = {
             "valid_tokens": np.array(self.valid_tokens),
             "ages": np.array(self.ages, dtype=np.float32),
-            "normalized_ages": np.array(self.normalized_ages, dtype=np.float16),
+            "normalized_ages": np.array(self.normalized_ages, dtype=np.float32),
             "timestamps": np.array(self.timestamps, dtype=np.int64),
             "patient_lengths": np.array(self.patient_lengths, dtype=np.int32),
             "label_indices": np.array(self.label_indices, dtype=np.int32),
@@ -174,7 +171,7 @@ class BatchCreator:
             transformer["tokens"] = np.array(self.tokens, dtype=token_dtype)
         else:
             transformer["hierarchical_tokens"] = np.array(self.hierarchical_tokens, dtype=token_dtype)
-            transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float16)
+            transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float32)
             transformer["token_indices"] = np.array(self.token_indices, dtype=np.int32)
 
         final = {
@@ -195,8 +192,8 @@ class BatchCreator:
 
         This is necessary as some tasks use sparse matrices that need to be postprocessed."""
 
-        batch["transformer"]['patient_lengths'] = np.array(batch["transformer"]['patient_lengths'])
-        assert isinstance(batch["transformer"]['patient_lengths'], np.ndarray)
+        batch["transformer"]["patient_lengths"] = np.array(batch["transformer"]["patient_lengths"])
+        assert isinstance(batch["transformer"]["patient_lengths"], np.ndarray)
 
         if self.task is not None and "task" in batch:
             batch["task"] = self.task.cleanup(batch["task"])
@@ -213,7 +210,7 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
                 creator.add_patient(dataset[patient_index.item()], offset, length)
 
             result = creator.get_batch_data()
-            assert 'task' in result, f"No task present in {lengths[start:end,:]}"
+            assert "task" in result, f"No task present in {lengths[start:end,:]}"
 
             yield result
 

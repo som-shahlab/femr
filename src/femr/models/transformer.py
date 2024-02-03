@@ -380,7 +380,6 @@ def compute_features(
     ontology: Optional[femr.ontology.Ontology] = None,
 ) -> Dict[str, np.ndarray]:
     task = femr.models.tasks.LabeledPatientTask(labels)
-
     index = femr.index.PatientIndex(dataset, num_proc=num_proc)
 
     model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
