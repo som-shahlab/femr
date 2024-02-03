@@ -97,6 +97,8 @@ def map_statistics(
         pat_numeric_samples = []
         for event in events:
             for measurement in event["measurements"]:
+                if measurement["code"] == meds.birth_code:
+                    continue
                 if event["time"] != birth_date:
                     age_stats.add(weight, (event["time"] - birth_date).total_seconds())
                 if not is_hierarchical:
@@ -245,6 +247,12 @@ def convert_statistics_to_msgpack(
                 }
                 vocab.append(entry)
 
+    entry = {
+        "type": "code",
+        "code_string": meds.birth_code,
+        "weight": -1,
+    }
+    vocab.append(entry)
     vocab.sort(key=lambda a: a["weight"])
     vocab = vocab[:vocab_size]
 
