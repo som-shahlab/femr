@@ -304,7 +304,10 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             numeric_entries = []
             for i, dict_entry in enumerate(vocab):
                 if dict_entry["type"] == "code":
-                    self.code_lookup[dict_entry["code_string"]] = i
+                    if type(dict_entry["code_string"]) == list:
+                        self.code_lookup[dict_entry["code_string"][0]] = i
+                    else:
+                        self.code_lookup[dict_entry["code_string"]] = i
                 elif dict_entry["type"] == "numeric":
                     numeric_entries.append((dict_entry["val_start"], i))
                 elif dict_entry["type"] == "text":

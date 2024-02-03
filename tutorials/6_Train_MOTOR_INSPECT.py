@@ -20,7 +20,8 @@ import os
 
 TARGET_DIR = 'trash/tutorial_6_INSEPCT'
 
-from_pretrained = True
+from_pretrained = False
+num_proc = 20
 
 
 if not from_pretrained:
@@ -43,7 +44,7 @@ parquet_folder = '/share/pi/nigam/projects/zphuo/data/PE/inspect/timelines_small
 dataset = datasets.Dataset.from_parquet(parquet_folder)
 
 
-index = femr.index.PatientIndex(dataset, num_proc=4)
+index = femr.index.PatientIndex(dataset, num_proc=num_proc)
 main_split = femr.splits.generate_hash_split(index.get_patient_ids(), 97, frac_test=0.15)
 
 
@@ -57,7 +58,7 @@ train_split = femr.splits.generate_hash_split(main_split.train_patient_ids, 87, 
 # print(train_split.test_patient_ids)
 
 main_dataset = main_split.split_dataset(dataset, index)
-train_dataset = train_split.split_dataset(main_dataset['train'], femr.index.PatientIndex(main_dataset['train'], num_proc=4))
+train_dataset = train_split.split_dataset(main_dataset['train'], femr.index.PatientIndex(main_dataset['train'], num_proc=num_proc))
 
 # print(train_dataset)
 
@@ -78,7 +79,7 @@ with open('input/meds/ontology.pkl', 'rb') as f:
 
 if not from_pretrained:
     tokenizer = femr.models.tokenizer.train_tokenizer(
-        main_dataset['train'], vocab_size=128, is_hierarchical=True, num_proc=4, ontology=ontology)
+        main_dataset['train'], vocab_size=128, is_hierarchical=True, num_proc=num_proc, ontology=ontology)
 
     # Save the tokenizer to the same directory as the model
     tokenizer.save_pretrained(os.path.join(TARGET_DIR, "motor_model"))
@@ -98,7 +99,7 @@ else:
 # Second, we need to prefit the MOTOR model. This is necessary because piecewise exponential models are unstable without an initial fit
 
 motor_task = femr.models.tasks.MOTORTask.fit_pretraining_task_info(
-    main_dataset['train'], tokenizer, num_tasks=num_tasks, num_bins=4, final_layer_size=32, num_proc=4)
+    main_dataset['train'], tokenizer, num_tasks=num_tasks, num_bins=4, final_layer_size=32, num_proc=num_proc)
 
 
 # It's recommended to save this with pickle to avoid recomputing since it's an expensive operation
@@ -112,12 +113,12 @@ import femr.models.tasks
 processor = femr.models.processor.FEMRBatchProcessor(tokenizer, motor_task)
 
 # We can do this one patient at a time
-print("Convert a single patient")
-example_batch = processor.collate([processor.convert_patient(train_dataset['train'][0], tensor_type='pt')])
+# print("Convert a single patient")
+# example_batch = processor.collate([processor.convert_patient(train_dataset['train'][0], tensor_type='pt')])
 
 print("Convert batches")
 # But generally we want to convert entire datasets
-train_batches = processor.convert_dataset(train_dataset, tokens_per_batch=32, num_proc=4)
+train_batches = processor.convert_dataset(train_dataset, tokens_per_batch=32, num_proc=num_proc)
 
 print("Convert batches to pytorch")
 # Convert our batches to pytorch tensors
@@ -176,5 +177,6 @@ trainer.train()
 model.save_pretrained(os.path.join(TARGET_DIR, 'motor_model'))
 
 
+# linear probe
 
 
