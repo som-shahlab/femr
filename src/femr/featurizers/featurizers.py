@@ -18,8 +18,8 @@ from .utils import OnlineStatistics
 
 # assume that first patient event is their birthdate
 def get_patient_birthdate(patient: meds.Patient) -> datetime.datetime:
-    if len(patient.events) > 0:
-        return patient.events[0].start
+    if len(patient["events"]) > 0:
+        return patient["events"][0].start
     raise ValueError("Couldn't find patient birthdate -- Patient has no events")
 
 
