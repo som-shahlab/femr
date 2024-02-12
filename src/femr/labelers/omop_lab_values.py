@@ -1,4 +1,5 @@
 """Labeling functions for OMOP data based on lab values."""
+
 from __future__ import annotations
 
 import datetime
