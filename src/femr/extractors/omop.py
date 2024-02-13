@@ -247,13 +247,13 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             prefix="measurement",
             string_value_field="value_source_value",
             numeric_value_field="value_as_number",
-            concept_id_value_field="value_as_concept_id",
+            concept_id_value_field="observation_concept_id",
         ),
         _ConceptTableConverter(
             prefix="observation",
             string_value_field="value_as_string",
             numeric_value_field="value_as_number",
-            concept_id_value_field="value_as_concept_id",
+            concept_id_value_field="observation_concept_id",
         ),
         _ConceptTableConverter(
             prefix="note",
