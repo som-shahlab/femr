@@ -1,4 +1,5 @@
 """Labeling functions for SHC data."""
+
 from __future__ import annotations
 
 import datetime
