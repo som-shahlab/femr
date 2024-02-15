@@ -9,3 +9,8 @@ tutorials/trash
 tutorials/tmp_trainer
 
 .databricks
+
+build
+dist
+pyenv
+databricks.yml
