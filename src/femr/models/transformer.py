@@ -1,14 +1,25 @@
 from __future__ import annotations
 
-from typing import TypeVar
+import collections
+import datetime
+import math
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-import haiku as hk
-import jax
-import jax.numpy as jnp
-import optax
-from jax import debug, random
+import datasets
+import meds
+import numpy as np
+import torch
+import torch.nn.functional as F
+import transformers
+import xformers.ops
+from torch import nn
 
-import femr.jax
+import femr.models.config
+import femr.models.processor
+import femr.models.rmsnorm
+import femr.models.tasks
+import femr.models.tokenizer
+import femr.models.xformers
 
 
 # From https://github.com/kingoflolz/mesh-transformer-jax
@@ -18,15 +29,40 @@ def rotate_every_two_v2(x):
     x1 = flat_x[:, ::2]
     x2 = flat_x[:, 1::2]
 
-    result = jnp.stack((-x2, x1), axis=-1).reshape(x.shape)
+    result = torch.stack((-x2, x1), axis=-1).reshape(x.shape)
 
     assert x.dtype == result.dtype
     return result
 
 
+def fixed_pos_embedding(ages, dim, dtype):
+    assert ages.dtype == torch.float32
+    assert len(ages.shape) == 1
+
+    inv_freq = 1.0 / (10000 ** (torch.linspace(0, 2, steps=dim // 2, device=ages.device)))
+    inv_freq = inv_freq.reshape(1, 1, dim // 2)
+    assert inv_freq.dtype == torch.float32
+
+    ages = ages.reshape(ages.shape[0], 1)
+
+    t = inv_freq * ages
+
+    sin, cos = torch.sin(t), torch.cos(t)
+
+    final_shape = (ages.shape[0], 1, dim)
+
+    sin = torch.stack((sin, sin), axis=-1).reshape(final_shape).type(dtype)
+    cos = torch.stack((cos, cos), axis=-1).reshape(final_shape).type(dtype)
+
+    return sin, cos
+
+
 def apply_rotary_pos_emb(x, sincos):
     sin, cos = sincos
-    assert x.dtype == sin.dtype == cos.dtype
+    sin = sin.to(dtype=x.dtype)
+    cos = cos.to(dtype=x.dtype)
+
+    assert x.dtype == sin.dtype == cos.dtype, f"{x.dtype} {sin.dtype} {cos.dtype}"
 
     if len(sin.shape) != len(x.shape):
         new_shape = (1,) + sin.shape
@@ -36,501 +72,280 @@ def apply_rotary_pos_emb(x, sincos):
     return (x * cos) + (rotate_every_two_v2(x) * sin)
 
 
-def fixed_pos_embedding(ages, dim, dtype):
-    assert ages.dtype == jnp.float32
-    assert len(ages.shape) == 1
-
-    inv_freq = 1.0 / (10000 ** (jnp.linspace(0, 2, num=dim // 2)))
-    inv_freq = inv_freq.reshape(1, dim // 2)
-    assert inv_freq.dtype == jnp.float32
-
-    ages = ages.reshape(ages.shape[0], 1)
-
-    t = inv_freq * ages
-
-    sin, cos = jnp.sin(t), jnp.cos(t)
-
-    final_shape = (ages.shape[0], dim)
-
-    sin = jnp.stack((sin, sin), axis=-1).reshape(final_shape).astype(dtype)
-    cos = jnp.stack((cos, cos), axis=-1).reshape(final_shape).astype(dtype)
-
-    return sin, cos
-
-
-class TransformerBlock(hk.Module):
-    def __init__(self, config):
-        super().__init__("TransformerBlock")
+class FEMREncoderLayer(nn.Module):
+    def __init__(self, config: femr.models.config.FEMRTransformerConfig):
+        super().__init__()
         self.config = config
+        self.norm = femr.models.rmsnorm.RMSNorm(self.config.hidden_size)
+        if self.config.hidden_act == "swiglu":
+            hidden_mult = 2
+        else:
+            hidden_mult = 1
 
-        self.norm = hk.RMSNorm(-1)
-        # self.norm = hk.LayerNorm(-1, True, True)
-        self.input_proj = hk.Linear(
-            output_size=3 * self.config["hidden_size"] + self.config["intermediate_size"],
+        self.input_proj = nn.Linear(
+            self.config.hidden_size,
+            self.config.hidden_size * 3 + hidden_mult * self.config.intermediate_size,
+            bias=self.config.use_bias,
         )
-        self.output_proj = hk.Linear(
-            self.config["hidden_size"],
-            w_init=hk.initializers.TruncatedNormal(
-                stddev=2 / (self.config["n_layers"] * jnp.sqrt(self.config["hidden_size"]))
-            ),
+        self.output_proj = nn.Linear(
+            self.config.hidden_size + self.config.intermediate_size, self.config.hidden_size, bias=self.config.use_bias
         )
 
-    def __call__(self, x, normed_ages, pos_embed, batch, is_training):
-        assert x.shape[1] == self.config["hidden_size"]
-        assert len(x.shape) == 2
-
+    def forward(self, x, normed_ages, pos_embed, attn_bias):
         x = self.norm(x)
 
-        x_with_ages = jnp.concatenate(
-            (x, jnp.expand_dims(normed_ages, -1), jnp.expand_dims(normed_ages**2, -1)), axis=-1
+        if self.config.use_normed_ages:
+            x[:, -2] = normed_ages.to(dtype=x.dtype)
+            x[:, -1] = (normed_ages**2).to(dtype=x.dtype)
+
+        transformed = self.input_proj(x)
+
+        ff = transformed[:, : -self.config.hidden_size * 3]
+        qkv = transformed[:, -self.config.hidden_size * 3 :]
+
+        head_size = self.config.hidden_size // self.config.n_heads
+
+        qkv = qkv.reshape(x.shape[0], 3, self.config.n_heads, head_size)
+
+        q = apply_rotary_pos_emb(qkv[:, 0, :, :], pos_embed)
+        k = apply_rotary_pos_emb(qkv[:, 1, :, :], pos_embed)
+        v = qkv[:, 2, :, :]
+
+        attn = femr.models.xformers.memory_efficient_attention_wrapper(
+            q.unsqueeze(0),
+            k.unsqueeze(0),
+            v.unsqueeze(0),
+            attn_bias=attn_bias,
         )
-        assert x_with_ages.shape[0] == x.shape[0]
-        assert x_with_ages.shape[1] == self.config["hidden_size"] + 2
-        assert x_with_ages.dtype == x.dtype
 
-        if self.config.get("with_age_beta"):
-            middle = self.input_proj(x_with_ages)
-        else:
-            middle = self.input_proj(x)
+        attn = attn.reshape(x.shape)
 
-        head_size = self.config["hidden_size"] // self.config["n_heads"]
+        if self.config.hidden_act == "gelu":
+            ff = F.gelu(ff)
+        elif self.config.hidden_act == "swiglu":
+            x1, x2 = ff.chunk(2, dim=-1)
+            ff = F.silu(x1) * x2
 
-        q, k, v, ff = jnp.split(
-            middle,
-            [i * self.config["hidden_size"] for i in range(1, 4)],
-            axis=-1,
-        )
-
-        if self.config["rotary"] == "global":
-            q = apply_rotary_pos_emb(q, pos_embed)
-            k = apply_rotary_pos_emb(k, pos_embed)
-
-        def move_to_batch(val):
-            with_head = val.reshape((x.shape[0], self.config["n_heads"], head_size))
-            with_head_at_start = with_head.transpose((1, 0, 2))
-            return with_head_at_start
-
-        q = move_to_batch(q)
-        k = move_to_batch(k)
-        v = move_to_batch(v)
-
-        if self.config["rotary"] == "per_head":
-            q = apply_rotary_pos_emb(q, pos_embed)
-            k = apply_rotary_pos_emb(k, pos_embed)
-
-        length_mask = batch["length"].astype(jnp.uint32)
-        length_mask = ~(length_mask - 1)
-
-        if hk.running_init():
-            attn = jnp.zeros_like(q)
-        else:
-            attn = femr.jax.local_attention(q, k, v, length_mask, self.config["attention_width"])
-
-        def move_out_of_batch(val):
-            with_head_at_start = val.transpose((1, 0, 2))
-            return with_head_at_start.reshape(x.shape)
-
-        shaped_attn = move_out_of_batch(attn)
-
-        ff = jax.nn.gelu(ff)
-
-        combined = jnp.concatenate((shaped_attn, ff), axis=-1)
-
+        combined = torch.concatenate((attn, ff), axis=-1)
         result = self.output_proj(combined)
-        if is_training and self.config["internal_dropout"] != 0:
-            print(
-                "Applying dropout to an internal layer",
-                self.config["internal_dropout"],
-            )
-            result = hk.dropout(
-                hk.next_rng_key(),
-                rate=self.config["internal_dropout"],
-                x=result,
-            )
 
         return result
 
 
-class Transformer(hk.Module):
-    def __init__(self, config):
-        """config has the following keys:
-
-        vocab_size: Embedding vocab size
-        hidden_size: Embedding dimension
-        n_layers: Number of transformer blocks
-        is_hierarchical: Whether or not to use the SNOMED hierarchy for ontology expansion
-        """
-        super().__init__(name="Transformer")
+class FEMRTransformer(nn.Module):
+    def __init__(self, config: femr.models.config.FEMRTransformerConfig):
+        super().__init__()
         self.config = config
-        self.in_norm = hk.RMSNorm(-1)
-        self.out_norm = hk.RMSNorm(-1)
-        self.embed = hk.Embed(
-            vocab_size=self.config["vocab_size"],
-            embed_dim=self.config["hidden_size"],
-            w_init=hk.initializers.TruncatedNormal(stddev=1),
-        )
 
-        self.layer_transform = hk.transform(lambda *args: TransformerBlock(config)(*args))
-        self.lifted_params = [
-            hk.lift(self.layer_transform.init, name=f"loop_{i}") for i in range(self.config["n_layers"])
-        ]
+        self.in_norm = femr.models.rmsnorm.RMSNorm(self.config.hidden_size)
+        self.out_norm = femr.models.rmsnorm.RMSNorm(self.config.hidden_size)
 
-    def __call__(self, batch, is_training):
-        ages = batch["ages"]
-        assert ages.dtype == jnp.float32
-
-        normed_ages = batch["normalized_ages"]
-        assert normed_ages.dtype == jnp.float32
-
-        if self.config.get("is_hierarchical"):
-            e = self.embed.embeddings
-            assert e.dtype == jnp.float32
-
-            x = femr.jax.gather_scatter_add(e, batch["sparse_token_indices"], batch["ages"].shape[0])
-
-            if "bad_tokens" in batch:
-                alt = batch["bad_tokens"] @ e
-
-                delta = jnp.abs(alt - x).max()
-
-                debug.print(
-                    "Got {a} {e} {d}",
-                    a=x.sum(),
-                    e=alt.sum(),
-                    d=delta,
-                )
+        if not self.config.is_hierarchical:
+            self.embed = nn.Embedding(self.config.vocab_size, self.config.hidden_size)
         else:
+            self.embed_bag = nn.EmbeddingBag(
+                num_embeddings=self.config.vocab_size,
+                embedding_dim=self.config.hidden_size,
+                mode="sum",
+                include_last_offset=True,
+            )
+
+        self.layers = nn.ModuleList([FEMREncoderLayer(config) for _ in range(self.config.n_layers)])
+
+    def forward(self, batch):
+        if not self.config.is_hierarchical:
             x = self.embed(batch["tokens"])
-
-        if self.config.get("note_embedding_data"):
-            note_embedding_matrix = batch["note_embedding_bytes"].view(dtype=jnp.float16).reshape(-1, 768)
-            note_embedding = note_embedding_matrix.at[batch["tokens"]].get(mode="clip")
-            # debug.print("Got {a}", a=batch["is_note_embedding"].mean())
-            assert note_embedding.shape == x.shape
-            x = jnp.where(batch["is_note_embedding"].reshape(-1, 1), note_embedding, x)
-
-        dummy_values = jnp.ones((1, 1), dtype=x.dtype)
-
-        x = jnp.where(
-            batch["valid_tokens"].reshape((-1, 1)),
-            x,
-            dummy_values,
-        )
+        else:
+            x = self.embed_bag(batch["hierarchical_tokens"], batch["token_indices"], batch["hierarchical_weights"])
 
         x = self.in_norm(x)
+        normed_ages = batch["normalized_ages"]
+        pos_embed = fixed_pos_embedding(batch["ages"], self.config.hidden_size // self.config.n_heads, x.dtype)
 
-        if not hk.running_init():
-            x = x.astype(jnp.float16)
+        attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens(
+            batch["patient_lengths"].tolist()
+        ).make_local_attention(self.config.attention_width)
 
-        normed_ages = normed_ages.astype(x.dtype)
+        for layer in self.layers:
+            x = x + layer(x, normed_ages, pos_embed, attn_bias)
 
-        if self.config["rotary"] == "global":
-            pos_embed = fixed_pos_embedding(ages, self.config["hidden_size"], x.dtype)
-        elif self.config["rotary"] == "per_head":
-            pos_embed = fixed_pos_embedding(
-                ages,
-                self.config["hidden_size"] // self.config["n_heads"],
-                x.dtype,
-            )
-        elif self.config["rotary"] == "disabled":
-            pos_embed = None
-        else:
-            raise RuntimeError("Invalid rotary embedding option")
+        final = self.out_norm(x)
 
-        layer_rngs = random.split(hk.next_rng_key(), len(self.lifted_params))
-
-        all_params = [
-            lifted(rng, x, normed_ages, pos_embed, batch, is_training)
-            for lifted, rng in zip(self.lifted_params, layer_rngs)
-        ]
-        flattened = [jax.tree_util.tree_flatten(a) for a in all_params]
-        all_flat, all_defs = zip(*flattened)
-
-        assert all(all_defs[0] == a for a in all_defs)
-
-        all_stacked = [jnp.stack(tuple(a[i] for a in all_flat)) for i in range(len(all_flat[0]))]
-
-        all_stacked_tree = [
-            jax.tree_util.tree_unflatten(all_defs[0], all_stacked),
-            layer_rngs,
-        ]
-
-        def process(v, params_rng):
-            params, rng = params_rng
-
-            res = self.layer_transform.apply(params, rng, v, normed_ages, pos_embed, batch, is_training)
-            return (v + res, None)
-
-        final_x = jax.lax.scan(process, x, all_stacked_tree)[0]
-
-        assert final_x.dtype == x.dtype
-        assert final_x.shape == x.shape
-
-        return self.out_norm(final_x)
+        return final
 
 
-class TransformerFeaturizer(hk.Module):
-    def __init__(self, config):
-        """Config matches Transformer(hk.Module)"""
-        super().__init__(name="TransformerFeaturizer")
-        self.config = config
-        self.transformer = Transformer(config)
+class LabeledPatientTaskHead(nn.Module):
+    def __init__(self, hidden_size: int):
+        super().__init__()
 
-    def __call__(self, batch, is_training):
-        """Transforms a batch using the given transformer featurizer.
-
-        It then pulls representations from that transformer according to batch["label_indices"].
-        """
-        sequence_data = self.transformer(batch, is_training)
-        if is_training and self.config["internal_dropout"] != 0:
-            print(
-                "Applying dropout to the sequence data ",
-                self.config["internal_dropout"],
-            )
-            sequence_data = hk.dropout(
-                hk.next_rng_key(),
-                rate=self.config["internal_dropout"],
-                x=sequence_data,
-            )
-
-        # batch["labeld_indices"] is padded with padding value sequence_data.shape[0]
-        mask = batch["label_indices"] != sequence_data.shape[0]
-        assert len(sequence_data.shape) == 2
-
+    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor]):
         return (
-            jnp.take(
-                sequence_data,
-                batch["label_indices"],
-                axis=0,
-                unique_indices=True,
-                indices_are_sorted=True,
-                mode="fill",
-                fill_value=0,
-            ),
-            mask,
+            batch["patient_ids"],
+            batch["prediction_timestamps"].cpu().numpy().astype("datetime64[s]").astype(datetime.datetime),
+            features,
         )
 
 
-class BooleanTask(hk.Module):
-    def __init__(self, _config):
-        super().__init__(name="BooleanClassifier")
-        self.final_layer = hk.Linear(output_size=1)
+class CLMBRTaskHead(nn.Module):
+    def __init__(self, hidden_size: int, clmbr_vocab_size: int):
+        super().__init__()
 
-    def __call__(self, features, mask, batch, _is_training):
-        logits = self.final_layer(features)[:, 0]
+        self.final_layer = nn.Linear(hidden_size, clmbr_vocab_size)
 
-        labels = batch["labels"]
-
-        loss_vector = optax.sigmoid_binary_cross_entropy(logits, labels)
-        masked_loss_vector = jnp.where(mask, loss_vector, 0)
-
-        loss = masked_loss_vector.sum(dtype=jnp.float32) / mask.sum(dtype=jnp.float32)
-
-        return loss, logits
-
-
-class SurvivalTask(hk.Module):
-    def __init__(self, config):
-        """Config consists of:
-        time_bins: The time bins for the piecewice exponential
-        dim: The dimension size to use for the piecewice exponential.
-
-        Please read the Survival-CLMBR paper to understand the algorithm here.
-        """
-        super().__init__(name="SurvivalTask")
-        self.config = config
-        self.time_bins = jnp.array(tuple(config["time_bins"]) + (float("inf"),))
-        self.time_bins = self.time_bins
-        self.num_time_bins = len(config["time_bins"])
-        self.dim = self.config["dim"]
-        self.final_layer = hk.Linear(output_size=self.num_time_bins * (self.dim - 1))
-
-        self.code_weight = hk.get_parameter(
-            "code_weight",
-            (1, self.dim - 1),
-            init=hk.initializers.TruncatedNormal(stddev=1 / jnp.sqrt(config["dim"])),
-        )
-
-        self.code_weight_bias = hk.get_parameter(
-            "code_weight_bias",
-            (1, 1),
-            init=hk.initializers.TruncatedNormal(stddev=1 / jnp.sqrt(config["dim"])),
-        )
-
-    def __call__(self, features, mask, batch, _is_training):
-        binned_reprs = self.final_layer(features).reshape((features.shape[0], self.num_time_bins, self.dim - 1))
-        offsets = jnp.ones((features.shape[0], self.num_time_bins, 1), dtype=features.dtype)
-
-        times = batch["event_times"]
-
-        tiled_bins = jnp.expand_dims(self.time_bins, 0)
-
-        tiled_times = jnp.expand_dims(times, -1)
-
-        time_in_bin = jnp.clip(
-            tiled_times - tiled_bins[:, :-1],
-            0,
-            tiled_bins[:, 1:] - tiled_bins[:, :-1],
-        )
-
-        log_time_in_bin = jnp.log2(time_in_bin)
-
-        # Marker of whether it is in the bin
-        within_bin = jnp.logical_and(
-            tiled_bins[:, :-1] <= tiled_times,
-            tiled_times < tiled_bins[:, 1:],
-        )
-
-        is_event = jnp.expand_dims(~batch["is_censor"], 1) * within_bin
-        assert log_time_in_bin.shape == is_event.shape
-
-        total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
-
-        total_code_weight = jnp.concatenate((self.code_weight, self.code_weight_bias), axis=-1)
-
-        hazards = total_reps @ total_code_weight.T
-
-        assert hazards.shape[-1] == 1
-        hazards = hazards[:, :, 0]
-
-        assert hazards.shape == is_event.shape
-
-        num_masked = mask.sum()
-
-        event_loss = jnp.log(2) * (hazards * is_event).sum(dtype=jnp.float32)
-        event_loss = -event_loss / num_masked
-
-        survival_loss = jnp.exp2(hazards + log_time_in_bin).sum(dtype=jnp.float32) / num_masked
-
-        return (
-            (event_loss + survival_loss),
-            hazards,
-        )
-
-
-class CLMBRTask(hk.Module):
-    def __init__(self, config):
-        super().__init__(name="CLMBRTask")
-        self.config = config
-        self.final_layer = hk.Linear(output_size=config["vocab_size"])
-
-    def __call__(self, features, mask, batch, _is_training):
+    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor]):
         logits = self.final_layer(features)
-
         labels = batch["labels"]
-
-        loss_vector = optax.softmax_cross_entropy_with_integer_labels(logits, labels)
-        masked_loss_vector = jnp.where(mask, loss_vector, 0)
-
-        loss = masked_loss_vector.sum(dtype=jnp.float32) / mask.sum(dtype=jnp.float32)
+        loss = F.cross_entropy(logits, labels)
 
         return loss, logits
 
 
-class SurvivalCLMBRTask(hk.Module):
-    def __init__(self, config, get_time_reprs=False):
-        """Please read the Survival-CLMBR paper to understand the algorithm here."""
-        super().__init__(name="SurvivalCLMBRTask")
-        self.config = config
-        num_codes = config["num_codes"]
+class MOTORTaskHead(nn.Module):
+    def __init__(
+        self,
+        hidden_size: int,
+        pretraining_task_info: List[Tuple[str, float]],
+        time_bins: List[float],
+        final_layer_size: int,
+    ):
+        super().__init__()
 
-        self.code_weight = hk.get_parameter(
-            "code_weight",
-            (num_codes, config["dim"] - 1),
-            init=hk.initializers.TruncatedNormal(stddev=1 / jnp.sqrt(config["dim"])),
+        self.num_time_bins = len(time_bins) - 1
+        self.num_tasks = len(pretraining_task_info)
+
+        self.final_layer_size = final_layer_size
+        self.final_layer = nn.Linear(hidden_size, self.num_time_bins * final_layer_size)
+
+        self.task_layer = nn.Linear(self.final_layer_size, self.num_tasks)
+        start_bias = torch.log2(torch.tensor([a[1] for a in pretraining_task_info], dtype=torch.float32))
+        self.task_layer.bias.data = start_bias
+
+    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor], return_logits=False):
+        time_independent_features = self.final_layer(features).reshape(
+            features.shape[0], self.num_time_bins, self.final_layer_size
         )
 
-        self.code_weight_bias = hk.get_parameter(
-            "code_weight_bias",
-            (num_codes, 1),
-            init=hk.initializers.TruncatedNormal(stddev=1),
-        )
+        time_dependent_logits = self.task_layer(time_independent_features)
 
-        self.num_time_bins = config["num_time_bins"]
-        self.dim = self.config["dim"]
-        self.final_layer = hk.Linear(output_size=self.num_time_bins * (self.dim - 1))
+        assert (
+            batch["log_time"].shape == time_dependent_logits.shape
+        ), f"{time_dependent_logits.shape} {batch['log_time'].shape}"
+        assert (
+            batch["is_event"].shape == time_dependent_logits.shape
+        ), f"{time_dependent_logits.shape} {batch['is_event'].shape}"
 
-    def __call__(self, features, mask, batch, _is_training):
-        binned_reprs = self.final_layer(features).reshape((features.shape[0], self.num_time_bins, self.dim - 1))
-        offsets = jnp.ones((features.shape[0], self.num_time_bins, 1), dtype=features.dtype)
+        survival_loss = torch.exp2(time_dependent_logits + batch["log_time"]).mean()
+        event_loss = -math.log(2) * torch.where(batch["is_event"], time_dependent_logits, 0).mean()
 
-        total_reps = jnp.concatenate((binned_reprs, offsets), axis=-1)
+        loss = survival_loss + event_loss
 
-        total_code_weight = jnp.concatenate((self.code_weight, self.code_weight_bias), axis=-1)
+        if not return_logits:
+            time_dependent_logits = None
 
-        num_masked = mask.sum(dtype=jnp.float32)
-
-        full_a = total_reps.reshape(-1, self.dim)
-
-        assert full_a.dtype == features.dtype
-
-        if not hk.running_init():
-            survival_loss = femr.jax.exp_mean(full_a, total_code_weight, batch["sparse_time"]) * (
-                full_a.shape[0] / num_masked
-            )
-        else:
-            survival_loss = 0
-
-        event_loss = jnp.log(2) * femr.jax.embedding_dot(full_a, total_code_weight, batch["event_indices"]).sum(
-            dtype=jnp.float32
-        )
-        event_loss = -event_loss / (num_masked * total_code_weight.shape[0])
-
-        logits = jnp.exp2((full_a @ total_code_weight.T).astype(jnp.float32))
-
-        return (event_loss + survival_loss), logits, total_reps
+        return loss, time_dependent_logits
 
 
-def create_task(config):
-    if config["type"] == "clmbr":
-        return CLMBRTask(config)
-    elif config["type"] == "survival_clmbr":
-        return SurvivalCLMBRTask(config)
-    elif config["type"] == "labeled_patients":
-        if config["labeler_type"] == "boolean":
-            return BooleanTask(config)
-        elif config["labeler_type"] == "survival":
-            return SurvivalTask(config)
-        else:
-            assert False
+def remove_first_dimension(data: Any) -> Any:
+    if isinstance(data, collections.abc.Mapping):
+        return {k: remove_first_dimension(v) for k, v in data.items()}
+    elif isinstance(data, torch.Tensor):
+        assert data.shape[0] == 1
+        return data.squeeze(dim=0)
+    elif isinstance(data, np.ndarray):
+        assert data.shape[0] == 1
+        return np.squeeze(data, axis=0)
+    elif isinstance(data, (int, float, np.number, np.bool_)):
+        return data
     else:
-        assert False
+        raise RuntimeError("Could not convert item of type " + str(type(data)))
 
 
-class EHRTransformer(hk.Module):
-    def __init__(self, config):
-        super().__init__(name="EHRTransformer")
-        self.config = config
-        self.featurizer = TransformerFeaturizer(self.config["transformer"])
-        self.task_model = create_task(self.config["task"])
+class FEMRModel(transformers.PreTrainedModel):
+    config_class = femr.models.config.FEMRModelConfig
 
-    def __call__(self, batch, is_training=False, no_task=False):
-        print(
-            "Compiling the transformer ...",
-            batch["transformer"]["normalized_ages"].shape,
-            batch["transformer"]["label_indices"].shape,
-        )
-        features, mask = self.featurizer(batch["transformer"], is_training)
-        if no_task:
-            return features, mask
-        return self.task_model(features, mask, batch["task"], is_training)
+    def __init__(self, config: femr.models.config.FEMRModelConfig, **kwargs):
+        # Allow the task config to be ovewritten
+        if "task_config" in kwargs:
+            config.task_config = kwargs["task_config"]
 
+        super().__init__(config)
 
-T = TypeVar("T")
+        self.transformer = FEMRTransformer(self.config.transformer_config)
+        if self.config.task_config is not None:
+            self.task_model = self.create_task_head()
 
+    def create_task_head(self) -> nn.Module:
+        hidden_size = self.config.transformer_config.hidden_size
+        task_type = self.config.task_config.task_type
+        task_kwargs = self.config.task_config.task_kwargs
+        if task_type == "clmbr":
+            return CLMBRTaskHead(hidden_size, **task_kwargs)
+        elif task_type == "labeled_patients":
+            return LabeledPatientTaskHead(hidden_size, **task_kwargs)
+        elif task_type == "motor":
+            return MOTORTaskHead(hidden_size, **task_kwargs)
 
-def convert_params(tree: T, dtype: jnp.dtype) -> T:
-    embed_k = "EHRTransformer/~/TransformerFeaturizer/~/Transformer/~/embed"
+    def forward(self, batch: Mapping[str, Any], return_loss=True):
+        # Need a return_loss parameter for transformers.Trainer to work properly
+        assert return_loss
 
-    def mapper(module_name, name, value):
-        if module_name != embed_k:
-            return conditional_cast(value)
+        batch = remove_first_dimension(batch)
+
+        features = self.transformer(batch["transformer"])
+        if "task" in batch:
+            features = features.reshape(-1, features.shape[-1])
+            features = features[batch["transformer"]["label_indices"], :]
+            return self.task_model(features, batch["task"])
         else:
-            return value
+            return (
+                batch["patient_ids"],
+                batch["transformer"]["timestamps"].cpu().numpy().astype("datetime64[s]").astype(datetime.datetime),
+                features,
+            )
 
-    def conditional_cast(x):
-        if isinstance(x, jnp.ndarray) and jnp.issubdtype(x.dtype, jnp.floating):
-            x = x.astype(dtype)
-        return x
 
-    return hk.data_structures.map(mapper, tree)
+def compute_features(
+    dataset: datasets.Dataset,
+    model_path: str,
+    labels: List[meds.Label],
+    num_proc: int = 1,
+    tokens_per_batch: int = 1024,
+    device: Optional[torch.device] = None,
+    ontology: Optional[femr.ontology.Ontology] = None,
+) -> Dict[str, np.ndarray]:
+    task = femr.models.tasks.LabeledPatientTask(labels)
+
+    index = femr.index.PatientIndex(dataset, num_proc=num_proc)
+
+    model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
+    tokenizer = femr.models.tokenizer.FEMRTokenizer.from_pretrained(model_path, ontology=ontology)
+    processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
+
+    filtered_data = task.filter_dataset(dataset, index)
+
+    if device:
+        model = model.to(device)
+
+    batches = processor.convert_dataset(
+        filtered_data, tokens_per_batch=tokens_per_batch, min_samples_per_batch=1, num_proc=num_proc
+    )
+
+    batches.set_format("pt", device=device)
+
+    all_patient_ids = []
+    all_feature_times = []
+    all_representations = []
+
+    for batch in batches:
+        batch = processor.collate([batch])["batch"]
+        with torch.no_grad():
+            patient_ids, feature_times, representations = model(batch)
+            all_patient_ids.append(patient_ids.cpu().numpy())
+            all_feature_times.append(feature_times)
+            all_representations.append(representations.cpu().numpy())
+
+    return {
+        "patient_ids": np.concatenate(all_patient_ids),
+        "feature_times": np.concatenate(all_feature_times),
+        "features": np.concatenate(all_representations),
+    }

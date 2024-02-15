@@ -15,12 +15,12 @@ repos:
     rev: 6.1.0
     hooks:
     -   id: flake8
-        exclude: ^tutorials|^native
+        exclude: ^tutorials
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.5.1
     hooks:
     -   id: mypy
-        exclude: ^src/femr/extension/|^tutorials|^native
+        exclude: ^tutorials
 -   repo: https://github.com/PyCQA/isort
     rev: 5.12.0
     hooks:

@@ -1,5 +1,5 @@
 # flake8: noqa: E402
-# mypy: ignore-errors
+
 import datetime
 import os
 import pathlib
@@ -7,12 +7,10 @@ import sys
 import warnings
 from typing import List
 
-from femr import Patient
-from femr.labelers import TimeHorizon, TimeHorizonEventLabeler
+import meds
+from femr_test_tools import EventsWithLabels, run_test_for_labeler
 
-# Needed to import `tools` for local testing
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import EventsWithLabels, event, run_test_for_labeler, run_test_locally
+from femr.labelers import TimeHorizon, TimeHorizonEventLabeler
 
 
 class DummyLabeler(TimeHorizonEventLabeler):
@@ -26,17 +24,18 @@ class DummyLabeler(TimeHorizonEventLabeler):
     def allow_same_time_labels(self) -> bool:
         return self.allow_same_time
 
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        return sorted(list({e.start for e in patient.events}))
+    def get_prediction_times(self, patient: meds.Patient) -> List[datetime.datetime]:
+        return sorted(list({e["time"] for e in patient["events"]}))
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
+    def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
         times: List[datetime.datetime] = []
-        for e in patient.events:
-            if e.code in self.outcome_codes:
-                times.append(e.start)
+        for e in patient["events"]:
+            for m in e["measurements"]:
+                if m["code"] in self.outcome_codes:
+                    times.append(e["time"])
         return times
 
 
@@ -46,16 +45,16 @@ def test_no_outcomes(tmp_path: pathlib.Path):
     labeler = DummyLabeler([100], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 3), 2, None), "duplicate"),
-        (event((2015, 1, 3), 1, None), "duplicate"),
-        (event((2015, 1, 3), 3, None), False),
-        (event((2015, 10, 5), 1, None), False),
-        (event((2018, 1, 3), 2, None), False),
-        (event((2018, 3, 3), 1, None), False),
-        (event((2018, 5, 3), 2, None), False),
-        (event((2018, 5, 3, 11), 1, None), False),
-        (event((2018, 5, 4), 1, None), False),
-        (event((2018, 12, 4), 1, None), "out of range"),
+        (((2015, 1, 3), 2, None), "duplicate"),
+        (((2015, 1, 3), 1, None), "duplicate"),
+        (((2015, 1, 3), 3, None), False),
+        (((2015, 10, 5), 1, None), False),
+        (((2018, 1, 3), 2, None), False),
+        (((2018, 3, 3), 1, None), False),
+        (((2018, 5, 3), 2, None), False),
+        (((2018, 5, 3, 11), 1, None), False),
+        (((2018, 5, 4), 1, None), False),
+        (((2018, 12, 4), 1, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_no_outcomes")
@@ -67,16 +66,16 @@ def test_horizon_0_180_days(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 3), 2, None), "duplicate"),
-        (event((2015, 1, 3), 1, None), "duplicate"),
-        (event((2015, 1, 3), 3, None), True),
-        (event((2015, 10, 5), 1, None), False),
-        (event((2018, 1, 3), 2, None), True),
-        (event((2018, 3, 3), 1, None), True),
-        (event((2018, 5, 3), 2, None), True),
-        (event((2018, 5, 3, 11), 1, None), False),
-        (event((2018, 5, 4), 1, None), False),
-        (event((2018, 12, 4), 1, None), "out of range"),
+        (((2015, 1, 3), 2, None), "duplicate"),
+        (((2015, 1, 3), 1, None), "duplicate"),
+        (((2015, 1, 3), 3, None), True),
+        (((2015, 10, 5), 1, None), False),
+        (((2018, 1, 3), 2, None), True),
+        (((2018, 3, 3), 1, None), True),
+        (((2018, 5, 3), 2, None), True),
+        (((2018, 5, 3, 11), 1, None), False),
+        (((2018, 5, 4), 1, None), False),
+        (((2018, 12, 4), 1, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_180_days")
@@ -88,16 +87,16 @@ def test_horizon_0_180_days_no_same(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon, allow_same_time=False)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 3), 2, None), "duplicate"),
-        (event((2015, 1, 3), 1, None), "duplicate"),
-        (event((2015, 1, 3), 3, None), "same"),
-        (event((2015, 10, 5), 1, None), False),
-        (event((2018, 1, 3), 2, None), "same"),
-        (event((2018, 3, 3), 1, None), True),
-        (event((2018, 5, 3), 2, None), "same"),
-        (event((2018, 5, 3, 11), 1, None), False),
-        (event((2018, 5, 4), 1, None), False),
-        (event((2018, 12, 4), 1, None), "out of range"),
+        (((2015, 1, 3), 2, None), "duplicate"),
+        (((2015, 1, 3), 1, None), "duplicate"),
+        (((2015, 1, 3), 3, None), "same"),
+        (((2015, 10, 5), 1, None), False),
+        (((2018, 1, 3), 2, None), "same"),
+        (((2018, 3, 3), 1, None), True),
+        (((2018, 5, 3), 2, None), "same"),
+        (((2018, 5, 3, 11), 1, None), False),
+        (((2018, 5, 4), 1, None), False),
+        (((2018, 12, 4), 1, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_180_days")
@@ -109,16 +108,16 @@ def test_horizon_1_180_days(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 3), 2, None), "duplicate"),
-        (event((2015, 1, 3), 1, None), "duplicate"),
-        (event((2015, 1, 3), 3, None), False),
-        (event((2015, 10, 5), 1, None), False),
-        (event((2018, 1, 3), 2, None), True),
-        (event((2018, 3, 3), 1, None), True),
-        (event((2018, 5, 3), 2, None), False),
-        (event((2018, 5, 3, 11), 1, None), False),
-        (event((2018, 5, 4), 1, None), False),
-        (event((2018, 12, 4), 1, None), "out of range"),
+        (((2015, 1, 3), 2, None), "duplicate"),
+        (((2015, 1, 3), 1, None), "duplicate"),
+        (((2015, 1, 3), 3, None), False),
+        (((2015, 10, 5), 1, None), False),
+        (((2018, 1, 3), 2, None), True),
+        (((2018, 3, 3), 1, None), True),
+        (((2018, 5, 3), 2, None), False),
+        (((2018, 5, 3, 11), 1, None), False),
+        (((2018, 5, 4), 1, None), False),
+        (((2018, 12, 4), 1, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_1_180_days")
@@ -130,16 +129,16 @@ def test_horizon_180_365_days(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 3), 2, None), True),
-        (event((2000, 10, 5), 2, None), False),
-        (event((2002, 1, 5), 2, None), True),
-        (event((2002, 3, 1), 1, None), True),
-        (event((2002, 4, 5), 3, None), True),
-        (event((2002, 4, 12), 1, None), True),
-        (event((2002, 12, 5), 2, None), False),
-        (event((2002, 12, 10), 1, None), False),
-        (event((2004, 1, 10), 2, None), False),
-        (event((2008, 1, 10), 2, None), "out of range"),
+        (((2000, 1, 3), 2, None), True),
+        (((2000, 10, 5), 2, None), False),
+        (((2002, 1, 5), 2, None), True),
+        (((2002, 3, 1), 1, None), True),
+        (((2002, 4, 5), 3, None), True),
+        (((2002, 4, 12), 1, None), True),
+        (((2002, 12, 5), 2, None), False),
+        (((2002, 12, 10), 1, None), False),
+        (((2004, 1, 10), 2, None), False),
+        (((2008, 1, 10), 2, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_180_365_days")
@@ -151,12 +150,12 @@ def test_horizon_0_0_days(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 3), 2, None), "duplicate"),
-        (event((2015, 1, 3), 1, None), True),
-        (event((2015, 1, 4), 1, None), False),
-        (event((2015, 1, 5), 2, None), True),
-        (event((2015, 1, 5, 10), 1, None), False),
-        (event((2015, 1, 6), 2, None), True),
+        (((2015, 1, 3), 2, None), "duplicate"),
+        (((2015, 1, 3), 1, None), True),
+        (((2015, 1, 4), 1, None), False),
+        (((2015, 1, 5), 2, None), True),
+        (((2015, 1, 5, 10), 1, None), False),
+        (((2015, 1, 6), 2, None), True),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_0_days")
@@ -168,14 +167,14 @@ def test_horizon_10_10_days(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 3), 2, None), False),
-        (event((2015, 1, 13), 1, None), True),
-        (event((2015, 1, 23), 2, None), True),
-        (event((2015, 2, 2), 2, None), False),
-        (event((2015, 3, 10), 1, None), True),
-        (event((2015, 3, 20), 2, None), False),
-        (event((2015, 3, 29), 2, None), "out of range"),
-        (event((2015, 3, 30), 1, None), "out of range"),
+        (((2015, 1, 3), 2, None), False),
+        (((2015, 1, 13), 1, None), True),
+        (((2015, 1, 23), 2, None), True),
+        (((2015, 2, 2), 2, None), False),
+        (((2015, 3, 10), 1, None), True),
+        (((2015, 3, 20), 2, None), False),
+        (((2015, 3, 29), 2, None), "out of range"),
+        (((2015, 3, 30), 1, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_10_10_days")
@@ -187,13 +186,13 @@ def test_horizon_0_1000000_days(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2000, 1, 3), 2, None), True),
-        (event((2001, 10, 5), 1, None), True),
-        (event((2020, 10, 5), 2, None), True),
-        (event((2021, 10, 5), 1, None), True),
-        (event((2050, 1, 10), 2, None), True),
-        (event((2051, 1, 10), 1, None), False),
-        (event((5000, 1, 10), 1, None), "out of range"),
+        (((2000, 1, 3), 2, None), True),
+        (((2001, 10, 5), 1, None), True),
+        (((2020, 10, 5), 2, None), True),
+        (((2021, 10, 5), 1, None), True),
+        (((2050, 1, 10), 2, None), True),
+        (((2051, 1, 10), 1, None), False),
+        (((5000, 1, 10), 1, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_0_1000000_days")
@@ -205,28 +204,28 @@ def test_horizon_5_10_hours(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((2015, 1, 1, 0, 0), 1, None), True),
-        (event((2015, 1, 1, 10, 29), 2, None), False),
-        (event((2015, 1, 1, 10, 30), 1, None), False),
-        (event((2015, 1, 1, 10, 31), 1, None), False),
+        (((2015, 1, 1, 0, 0), 1, None), True),
+        (((2015, 1, 1, 10, 29), 2, None), False),
+        (((2015, 1, 1, 10, 30), 1, None), False),
+        (((2015, 1, 1, 10, 31), 1, None), False),
         #
-        (event((2016, 1, 1, 0, 0), 1, None), True),
-        (event((2016, 1, 1, 10, 29), 1, None), False),
-        (event((2016, 1, 1, 10, 30), 2, None), False),
-        (event((2016, 1, 1, 10, 31), 1, None), False),
+        (((2016, 1, 1, 0, 0), 1, None), True),
+        (((2016, 1, 1, 10, 29), 1, None), False),
+        (((2016, 1, 1, 10, 30), 2, None), False),
+        (((2016, 1, 1, 10, 31), 1, None), False),
         #
-        (event((2017, 1, 1, 0, 0), 1, None), False),
-        (event((2017, 1, 1, 10, 29), 1, None), False),
-        (event((2017, 1, 1, 10, 30), 1, None), False),
-        (event((2017, 1, 1, 10, 31), 2, None), False),
+        (((2017, 1, 1, 0, 0), 1, None), False),
+        (((2017, 1, 1, 10, 29), 1, None), False),
+        (((2017, 1, 1, 10, 30), 1, None), False),
+        (((2017, 1, 1, 10, 31), 2, None), False),
         #
-        (event((2018, 1, 1, 0, 0), 1, None), False),
-        (event((2018, 1, 1, 4, 59, 59), 2, None), False),
-        (event((2018, 1, 1, 5), 1, None), False),
+        (((2018, 1, 1, 0, 0), 1, None), False),
+        (((2018, 1, 1, 4, 59, 59), 2, None), False),
+        (((2018, 1, 1, 5), 1, None), False),
         #
-        (event((2019, 1, 1, 0, 0), 1, None), True),
-        (event((2019, 1, 1, 4, 59, 59), 1, None), "out of range"),
-        (event((2019, 1, 1, 5), 2, None), "out of range"),
+        (((2019, 1, 1, 0, 0), 1, None), True),
+        (((2019, 1, 1, 4, 59, 59), 1, None), "out of range"),
+        (((2019, 1, 1, 5), 2, None), "out of range"),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_5_10_hours")
@@ -241,28 +240,15 @@ def test_horizon_infinite(tmp_path: pathlib.Path):
     labeler = DummyLabeler([2], time_horizon)
     events_with_labels: EventsWithLabels = [
         # fmt: off
-        (event((1950, 1, 3), 1, None), True),
-        (event((2000, 1, 3), 1, None), True),
-        (event((2001, 10, 5), 1, None), True),
-        (event((2020, 10, 5), 1, None), True),
-        (event((2021, 10, 5), 1, None), True),
-        (event((2050, 1, 10), 2, None), True),
-        (event((2050, 1, 20), 2, None), False),
-        (event((2051, 1, 10), 1, None), False),
-        (event((5000, 1, 10), 1, None), False),
+        (((1950, 1, 3), 1, None), True),
+        (((2000, 1, 3), 1, None), True),
+        (((2001, 10, 5), 1, None), True),
+        (((2020, 10, 5), 1, None), True),
+        (((2021, 10, 5), 1, None), True),
+        (((2050, 1, 10), 2, None), True),
+        (((2050, 1, 20), 2, None), False),
+        (((2051, 1, 10), 1, None), False),
+        (((5000, 1, 10), 1, None), False),
         # fmt: on
     ]
     run_test_for_labeler(labeler, events_with_labels, help_text="test_horizon_infinite")
-
-
-# Local testing
-if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/", test_horizon_0_180_days)
-    run_test_locally("../ignore/test_labelers/", test_horizon_1_180_days)
-    run_test_locally("../ignore/test_labelers/", test_horizon_180_365_days)
-    run_test_locally("../ignore/test_labelers/", test_horizon_0_0_days)
-    run_test_locally("../ignore/test_labelers/", test_horizon_10_10_days)
-    run_test_locally("../ignore/test_labelers/", test_horizon_0_1000000_days)
-    run_test_locally("../ignore/test_labelers/", test_horizon_5_10_hours)
-    run_test_locally("../ignore/test_labelers/", test_horizon_infinite)
-    run_test_locally("../ignore/test_labelers/", test_no_outcomes)
