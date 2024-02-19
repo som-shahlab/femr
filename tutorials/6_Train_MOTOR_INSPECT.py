@@ -15,12 +15,12 @@
 import shutil
 import os
 
-# os.environ["HF_DATASETS_CACHE"] = '/share/pi/nigam/zphuo/cache_dir'
-
+os.environ["HF_DATASETS_CACHE"] = '/share/pi/nigam/projects/zphuo/.cache'
+os.environ["WANDB_DISABLED"] = "true"
 
 TARGET_DIR = 'trash/tutorial_6_INSEPCT'
 
-from_pretrained = False
+from_pretrained = True
 num_proc = 20
 
 
@@ -52,6 +52,13 @@ main_split = femr.splits.generate_hash_split(index.get_patient_ids(), 97, frac_t
 
 main_split.save_to_csv(os.path.join(TARGET_DIR, "motor_model", "main_split.csv"))
 
+import pandas as pd
+label_csv_subset = '/share/pi/nigam/projects/zphuo/data/PE/inspect/timelines_smallfiles_meds/cohort_0.2.0_master_file_anon_subset.csv'
+label_df = pd.read_csv(label_csv_subset)
+label_df = label_df[['patient_id', 'split', ]]
+inspect_split_csv = '/share/pi/nigam/projects/zphuo/repos/femr/tutorials/trash/tutorial_6_INSEPCT/motor_model/main_split.csv'
+label_df.to_csv(inspect_split_csv, index=False)
+
 train_split = femr.splits.generate_hash_split(main_split.train_patient_ids, 87, frac_test=0.15)
 
 # print(train_split.train_patient_ids)
@@ -62,8 +69,6 @@ train_dataset = train_split.split_dataset(main_dataset['train'], femr.index.Pati
 
 # print(train_dataset)
 
-
-# 
 
 import femr.models.tokenizer
 from femr.models.tokenizer import FEMRTokenizer
@@ -113,17 +118,74 @@ import femr.models.tasks
 processor = femr.models.processor.FEMRBatchProcessor(tokenizer, motor_task)
 
 # We can do this one patient at a time
-# print("Convert a single patient")
-# example_batch = processor.collate([processor.convert_patient(train_dataset['train'][0], tensor_type='pt')])
+print("Convert a single patient")
+example_batch = processor.collate([processor.convert_patient(train_dataset['train'][0], tensor_type='pt')])
 
 print("Convert batches")
 # But generally we want to convert entire datasets
-train_batches = processor.convert_dataset(train_dataset, tokens_per_batch=32, num_proc=num_proc)
+train_batches = processor.convert_dataset(train_dataset, tokens_per_batch=32, num_proc=num_proc, min_samples_per_batch=1)
 
 print("Convert batches to pytorch")
 # Convert our batches to pytorch tensors
 train_batches.set_format("pt")
 print("Done")
+
+
+patient_id = 646017672
+
+index_train = femr.index.PatientIndex(train_dataset['train'], num_proc=num_proc)
+
+example_batch = processor.collate([processor.convert_patient(train_dataset['train'][index_train.get_index(patient_id)], tensor_type='pt')])
+
+
+import torch
+torch.flatten(example_batch['batch']['task']['is_event']).shape
+
+
+print(len(train_batches['train']['patient_ids']))
+for id in train_batches['train']['patient_ids']:
+    print(len(id), set(id))
+
+
+for batch in train_batches['train']:
+    print(batch)
+    break
+
+
+largest_vocab = 0
+for n in range(1100):
+    example_batch = processor.collate([processor.convert_patient(train_dataset['train'][n], tensor_type='pt')])
+    print(example_batch['batch']['task']['is_event'].shape)
+    if example_batch['batch']['task']['is_event'].shape[1] > largest_vocab:
+        largest_vocab = example_batch['batch']['task']['is_event'].shape[1]
+        print(largest_vocab)
+
+
+example_batch['batch']
+
+
+example_batch['batch']['task']['is_event'].shape
+
+
+for key in example_batch['batch']['transformer']:
+    try:
+        print(key, example_batch['batch']['transformer'][key].shape)
+        print(example_batch['batch']['transformer'][key])
+    except:
+        print(key, len(example_batch['batch']['transformer'][key]))
+        print(example_batch['batch']['transformer'][key])
+
+
+for key in example_batch['batch']:
+    try:
+        print(key, example_batch['batch'][key].shape)
+        print(example_batch['batch'][key])
+    except:
+        print(key, len(example_batch['batch'][key]))
+        print(example_batch['batch'][key])
+
+
+example_batch['batch']
 
 
 import transformers
@@ -161,11 +223,20 @@ trainer_config = transformers.TrainingArguments(
     logging_strategy='steps',
 
     prediction_loss_only=True,
+    
+    report_to=None,
 )
+
+
+transformer_config.vocab_size
+
+
+transformer_config.hidden_size
+
 
 trainer = transformers.Trainer(
     model=model,
-    data_collator=processor.collate,
+    # data_collator=processor.collate,
     train_dataset=train_batches['train'],
     eval_dataset=train_batches['test'],
     args=trainer_config,
@@ -175,8 +246,3 @@ trainer = transformers.Trainer(
 trainer.train()
 
 model.save_pretrained(os.path.join(TARGET_DIR, 'motor_model'))
-
-
-# linear probe
-
-

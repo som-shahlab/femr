@@ -16,7 +16,6 @@ import femr.pat_utils
 
 def map_length_stats(batch, indices, *, processor, max_length):
     lengths = []
-
     for patient_index, patient_id, events in zip(indices, batch["patient_id"], batch["events"]):
         patient = {
             "patient_id": patient_id,
@@ -96,7 +95,6 @@ class BatchCreator:
 
             birth = femr.pat_utils.get_patient_birthdate(patient)
             self.tokenizer.start_patient()
-
             for event in patient["events"]:
                 if event["time"].date() != current_date:
                     current_date = event["time"].date()
@@ -145,7 +143,6 @@ class BatchCreator:
 
         start_index = len(self.ages)
         final_time = process_patient_events()
-
         if self.task is not None and final_time is not None:
             num_added = self.task.add_event(final_time, None, [])
             for _ in range(num_added):
@@ -261,7 +258,8 @@ class FEMRBatchProcessor:
             functools.partial(map_length_stats, processor=self, max_length=max_length),
             agg_length_stats,
             num_proc=num_proc,
-            batch_size=1_000,
+            #batch_size=1_000,
+            batch_size=1,
             with_indices=True,
         )
 

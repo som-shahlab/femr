@@ -184,24 +184,27 @@ class FEMRTransformer(nn.Module):
         self.layers = nn.ModuleList([FEMREncoderLayer(config) for _ in range(self.config.n_layers)])
 
     def forward(self, batch):
+        print('label_indices', batch['label_indices'])
+        print('normalized_ages', batch['normalized_ages'])
         if not self.config.is_hierarchical:
             x = self.embed(batch["tokens"])
         else:
             x = self.embed_bag(batch["hierarchical_tokens"], batch["token_indices"], batch["hierarchical_weights"])
-
+        print('before in norm',x.shape)
         x = self.in_norm(x)
+        print('after in norm',x.shape)
         normed_ages = batch["normalized_ages"]
         pos_embed = fixed_pos_embedding(batch["ages"], self.config.hidden_size // self.config.n_heads, x.dtype)
-
+        print('pos_embed',pos_embed[0].shape,pos_embed[1].shape, )
         attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens(
             batch["patient_lengths"].tolist()
         ).make_local_attention(self.config.attention_width)
 
         for layer in self.layers:
             x = x + layer(x, normed_ages, pos_embed, attn_bias)
-
+            print('x in each layer',x.shape)
         final = self.out_norm(x)
-
+        print('final',final.shape)
         return final
 
 
@@ -252,6 +255,7 @@ class MOTORTaskHead(nn.Module):
         self.task_layer.bias.data = start_bias
 
     def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor], return_logits=False):
+        print('MOTORTaskHead features',features.shape)
         time_independent_features = self.final_layer(features).reshape(
             features.shape[0], self.num_time_bins, self.final_layer_size
         )
@@ -272,10 +276,8 @@ class MOTORTaskHead(nn.Module):
 
         if not return_logits:
             time_dependent_logits = None
-
         return loss, time_dependent_logits
-
-
+    
 class FEMRTaskConfig(transformers.PretrainedConfig):
     def __init__(self, task_type: str = "", task_kwargs: Mapping[str, Any] = {}, **kwargs):
         super().__init__(**kwargs)
@@ -358,6 +360,8 @@ class FEMRModel(transformers.PreTrainedModel):
         batch = remove_first_dimension(batch)
 
         features = self.transformer(batch["transformer"])
+        print('FEMRModel label_indices', batch['transformer']['label_indices'])
+        print('FEMRModel features', features.shape)
         if "task" in batch:
             features = features.reshape(-1, features.shape[-1])
             features = features[batch["transformer"]["label_indices"], :]
@@ -383,6 +387,7 @@ def compute_features(
     index = femr.index.PatientIndex(dataset, num_proc=num_proc)
 
     model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
+    print(type(model), 'model type')
     tokenizer = femr.models.tokenizer.FEMRTokenizer.from_pretrained(model_path, ontology=ontology)
     processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
 
@@ -403,8 +408,10 @@ def compute_features(
 
     for batch in batches:
         batch = processor.collate([batch])["batch"]
+        print(batch, 'batch, compute_features')
         with torch.no_grad():
             patient_ids, feature_times, representations = model(batch)
+            print('all_patient_ids', patient_ids.shape, 'feature_times', feature_times.shape, 'representations', representations.shape)
             all_patient_ids.append(patient_ids.cpu().numpy())
             all_feature_times.append(feature_times)
             all_representations.append(representations.cpu().numpy())
