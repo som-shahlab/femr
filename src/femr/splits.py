@@ -31,10 +31,10 @@ class PatientSplit:
         test_patient_ids: List[int] = []
         with open(fname, "r") as f:
             for row in csv.DictReader(f):
-                if row["split_name"] == "train":
-                    train_patient_ids.append(int(row["patient_id"]))
-                else:
+                if row["split_name"] == "test":
                     test_patient_ids.append(int(row["patient_id"]))
+                else:
+                    train_patient_ids.append(int(row["patient_id"]))
 
         return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids)
 
