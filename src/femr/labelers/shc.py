@@ -174,3 +174,35 @@ class HospEncLabeler(CodeLabeler):
             prediction_codes=prediction_codes,
             prediction_time_adjustment_func=prediction_time_adjustment_func,
         )
+
+
+# class NumCodeLabaler(CodeLabeler):
+#     """
+#     Apply a label for whether or not a patient 
+#     """
+
+#     def __init__(
+#         self,
+#         time_horizon: TimeHorizon,
+#         prediction_codes: Optional[List[str]] = None,
+#         prediction_time_adjustment_func: Callable = identity,
+#     ):
+#         outcome_codes: List[str] = [
+#             "Encounter/Hospital Encounter",
+#             "Encounter/Historical Ambulatory Encounter",
+#         ]
+
+#         super().__init__(
+#             outcome_codes=outcome_codes,
+#             time_horizon=time_horizon,
+#             prediction_codes=prediction_codes,
+#             prediction_time_adjustment_func=prediction_time_adjustment_func,
+#         )
+
+
+
+# # ICD9/250.7", "ICD9/440.0", "ICD9/440.2", "ICD9/440.3", "ICD9/443.9", 
+# #         "ICD9/444.22", "ICD9/444.8", "ICD9/445.02", "ICD9/447.1", "ICD10/E08.51", 
+# #         "ICD10/E08.52", "ICD10/E10.5", "ICD10/E11.5", "ICD10/E13.5", "ICD10/I70.0", 
+# #         "ICD10/I70.2", "ICD10/I70.3", "ICD10/I70.4", "ICD10/I70.5", "ICD10/I70.6", 
+# #         "ICD10/I70.7", "ICD10/I70.9", "ICD10/I73.9", "ICD10/I74", "ICD10/I75.0", "ICD10/I77.1
