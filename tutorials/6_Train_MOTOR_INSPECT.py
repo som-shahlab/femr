@@ -77,7 +77,6 @@ import pickle
 # First, we need to train a tokenizer
 # Note, we need to use a hierarchical tokenizer for MOTOR
 
-
 with open('input/meds/ontology.pkl', 'rb') as f:
     ontology = pickle.load(f)
 
@@ -102,9 +101,17 @@ else:
     num_tasks = 64
 
 # Second, we need to prefit the MOTOR model. This is necessary because piecewise exponential models are unstable without an initial fit
-
-motor_task = femr.models.tasks.MOTORTask.fit_pretraining_task_info(
+#if not from_pretrained:
+if True:
+    motor_task = femr.models.tasks.MOTORTask.fit_pretraining_task_info(
     main_dataset['train'], tokenizer, num_tasks=num_tasks, num_bins=4, final_layer_size=32, num_proc=num_proc)
+    with open(os.path.join(TARGET_DIR, "motor_model", 'motor_task.pkl'), 'wb') as f:
+        pickle.dump(motor_task, f)
+        
+else:
+    with open(os.path.join(TARGET_DIR, "motor_model", 'motor_task.pkl'), 'wb') as f:
+        motor_task = pickle.load(f)
+    
 
 
 # It's recommended to save this with pickle to avoid recomputing since it's an expensive operation
@@ -124,68 +131,10 @@ example_batch = processor.collate([processor.convert_patient(train_dataset['trai
 print("Convert batches")
 # But generally we want to convert entire datasets
 train_batches = processor.convert_dataset(train_dataset, tokens_per_batch=32, num_proc=num_proc, min_samples_per_batch=1)
-
 print("Convert batches to pytorch")
 # Convert our batches to pytorch tensors
 train_batches.set_format("pt")
 print("Done")
-
-
-patient_id = 646017672
-
-index_train = femr.index.PatientIndex(train_dataset['train'], num_proc=num_proc)
-
-example_batch = processor.collate([processor.convert_patient(train_dataset['train'][index_train.get_index(patient_id)], tensor_type='pt')])
-
-
-import torch
-torch.flatten(example_batch['batch']['task']['is_event']).shape
-
-
-print(len(train_batches['train']['patient_ids']))
-for id in train_batches['train']['patient_ids']:
-    print(len(id), set(id))
-
-
-for batch in train_batches['train']:
-    print(batch)
-    break
-
-
-largest_vocab = 0
-for n in range(1100):
-    example_batch = processor.collate([processor.convert_patient(train_dataset['train'][n], tensor_type='pt')])
-    print(example_batch['batch']['task']['is_event'].shape)
-    if example_batch['batch']['task']['is_event'].shape[1] > largest_vocab:
-        largest_vocab = example_batch['batch']['task']['is_event'].shape[1]
-        print(largest_vocab)
-
-
-example_batch['batch']
-
-
-example_batch['batch']['task']['is_event'].shape
-
-
-for key in example_batch['batch']['transformer']:
-    try:
-        print(key, example_batch['batch']['transformer'][key].shape)
-        print(example_batch['batch']['transformer'][key])
-    except:
-        print(key, len(example_batch['batch']['transformer'][key]))
-        print(example_batch['batch']['transformer'][key])
-
-
-for key in example_batch['batch']:
-    try:
-        print(key, example_batch['batch'][key].shape)
-        print(example_batch['batch'][key])
-    except:
-        print(key, len(example_batch['batch'][key]))
-        print(example_batch['batch'][key])
-
-
-example_batch['batch']
 
 
 import transformers
@@ -226,12 +175,6 @@ trainer_config = transformers.TrainingArguments(
     
     report_to=None,
 )
-
-
-transformer_config.vocab_size
-
-
-transformer_config.hidden_size
 
 
 trainer = transformers.Trainer(
