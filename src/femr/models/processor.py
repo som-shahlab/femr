@@ -104,6 +104,11 @@ class BatchCreator:
             self.task.start_batch()
 
     def add_patient(self, patient: meds.Patient, offset, max_patient_length=None):
+        """
+        TODO: this needs documentation. specifically:
+        - describe logical flow
+        - describe return value (and, when is return value None?)
+        """
         self.patient_ids.append(patient["patient_id"])
         self.offsets.append(offset)
 
@@ -205,6 +210,9 @@ class BatchCreator:
             "transformer": transformer,
         }
 
+        # BUG: possible bug - if task is not none, why would we not populate task?
+        # Q: where does label_indices come from?
+        # this is created in BatchCreator.start_batch and updated in .add_patient
         if self.task is not None and transformer["label_indices"].shape[0] > 0:
             final["task"] = self.task.get_batch_data()
             final["needs_exact"] = self.task.needs_exact()
@@ -218,6 +226,7 @@ class BatchCreator:
         batch["transformer"]["patient_lengths"] = np.array(batch["transformer"]["patient_lengths"])
         assert isinstance(batch["transformer"]["patient_lengths"], np.ndarray)
 
+        # BUG: possible issue: is "task" not getting passed here, even if self.task is not None?
         if self.task is not None and "task" in batch:
             batch["task"] = self.task.cleanup(batch["task"])
 
@@ -289,7 +298,8 @@ class FEMRBatchProcessor:
 
         lengths = np.concatenate(lengths)
 
-        rng = np.random.default_rng()
+        # this should have a seed
+        rng = np.random.default_rng(seed=0)
         rng.shuffle(lengths)
 
         current_batch_length = 0
