@@ -113,7 +113,11 @@ class BatchCreator:
         self.offsets.append(offset)
 
         def process_patient_events():
+
+            # what is current_date?
             current_date = None
+
+            # it seems like "last_time" is the time of the previous event in the loop: for event in patient["events"]...
             last_time = None
 
             if self.task is not None:
@@ -122,28 +126,51 @@ class BatchCreator:
             patient_length_index = 0
 
             birth = femr.pat_utils.get_patient_birthdate(patient)
-            self.tokenizer.start_patient()
-
+            self.tokenizer.start_patient()  # <-- why???
+            
+            # for all events in this patient's timeline...
             for event in patient["events"]:
+
+                # if we haven't processed events for this day, start collecting a new set of codes that have occured on this day
                 if event["time"].date() != current_date:
                     current_date = event["time"].date()
+                    
+                    # all codes we have seen on this day 
                     codes_seen_today = set()
 
                 for measurement in event["measurements"]:
+
+                    # "features" is different depending on the type of code.
+                    # I'm not really sure what "features" contains.. sometimes it contains an empty list.
+                    # the argument event["time"] is also never used by this function...
+                    # wtf guys.
                     features, weights = self.tokenizer.get_feature_codes(event["time"], measurement)
                     if len(features) == 0:
                         continue
                     if all(feature in codes_seen_today for feature in features):
                         continue
-
+                    
+                    # add all features to codes_seen_today.
+                    # why use "|="? unnecessarily unintelligible
                     codes_seen_today |= set(features)
 
+                    # not sure what offset is. ¯\_(ツ)_/¯
                     if patient_length_index < offset:
                         patient_length_index += 1
                         continue
 
+                    # it looks like last_time is the time of the previous event visited by this loop
+                    # so... last_time is not None when this loop has passed the first event in the patient timeline
                     if (self.task is not None) and (last_time is not None):
-                        num_added = self.task.add_event(last_time, event["time"], features)
+                        # this will return 0 in some cases, meaning that nothing will be added to label_indices
+                        # these cases are...
+                        # 1 - next_date is None, or the date is the same for current_date and next_date
+                        # 2 - something about the "calculator" and function get_future_events_for_time
+                        num_added = self.task.add_event(
+                            current_date=last_time, 
+                            next_date=event["time"], 
+                            next_features=features,  # <-- this is not used...
+                        )
                         for _ in range(num_added):
                             self.label_indices.append(len(self.ages) - 1)
 

@@ -206,6 +206,7 @@ class SurvivalCalculator:
 
         self.survival_events.reverse()
 
+    # this is very hard to follow
     def get_future_events_for_time(
         self, time: datetime.datetime
     ) -> Tuple[datetime.timedelta, Mapping[str, datetime.timedelta]]:
