@@ -6,7 +6,6 @@ import functools
 import hashlib
 import struct
 import warnings
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -37,7 +36,7 @@ def _label_agg_func(first_labels: List[meds.Label], second_labels: List[meds.Lab
     return first_labels
 
 
-class Labeler(ABC):
+class Labeler(object):
     """An interface for labeling functions.
 
     A labeling function applies a label to a specific datetime in a given patient's timeline.
@@ -51,7 +50,6 @@ class Labeler(ABC):
     ```
     """
 
-    @abstractmethod
     def label(self, patient: meds.Patient) -> List[meds.Label]:
         """Apply every label that is applicable to the provided patient.
 
@@ -115,7 +113,6 @@ class TimeHorizonEventLabeler(Labeler):
     def __init__(self):
         pass
 
-    @abstractmethod
     def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes that the event of interest "occurs".
 
@@ -129,7 +126,6 @@ class TimeHorizonEventLabeler(Labeler):
         """
         pass
 
-    @abstractmethod
     def get_time_horizon(self) -> TimeHorizon:
         """Return time horizon for making predictions with this labeling function.
 
@@ -163,7 +159,6 @@ class TimeHorizonEventLabeler(Labeler):
         """
         pass
 
-    @abstractmethod
     def get_prediction_times(self, patient: meds.Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes at which we'll make a prediction.
 
