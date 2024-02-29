@@ -396,6 +396,8 @@ def compute_features(
         filtered_data, tokens_per_batch=tokens_per_batch, min_samples_per_batch=1, num_proc=num_proc
     )
 
+    # BUG: possible bug around here... batch being moved to device and then used with numpy functions?
+    # issue: https://github.com/som-shahlab/femr/issues/184
     batches.set_format("pt", device=device)
 
     all_patient_ids = []
