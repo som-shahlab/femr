@@ -30,7 +30,8 @@ def map_length_stats(batch, indices, *, processor, max_length):
             current_end = 0
             for label_index in data["transformer"]["label_indices"]:
                 if (label_index - current_start + 1) >= max_length:
-                    lengths.append((patient_index, current_start, current_end - current_start + 1))
+                    if current_start != current_end:
+                        lengths.append((patient_index, current_start, current_end - current_start + 1))
                     current_start = label_index - max_length + 1
                     current_end = label_index
                 else:
