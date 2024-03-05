@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import pickle
 import datetime
 import functools
 import math
@@ -148,9 +149,8 @@ def convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical):
 
 
 class FEMRTokenizer(transformers.utils.PushToHubMixin):
-    def __init__(self, dictionary):
-        assert not dictionary["is_hierarchical"], "Currently not supported"
-
+    def __init__(self, dictionary, ontology=None):
+        self.ontology = ontology
         self.is_hierarchical = dictionary["is_hierarchical"]
 
         self.dictionary = dictionary
@@ -197,10 +197,20 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
 
         with open(dictionary_file, "rb") as f:
             dictionary = msgpack.load(f)
+        
+        ontology_file = transformers.utils.hub.cached_file(
+            pretrained_model_name_or_path, "ontology.pkl", **kwargs
+        )
 
-        return FEMRTokenizer(dictionary)
+        if os.path.exists(ontology_file):
+            with open(ontology_file, 'rb') as f:
+                ontology = pickle.load(f)
+        else:
+            ontology = None
 
-    def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
+        return FEMRTokenizer(dictionary, ontology=ontology)
+
+    def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, save_ontology: bool = False,**kwargs):
         """
         Save the FEMR tokenizer.
 
@@ -232,6 +242,10 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         with open(os.path.join(save_directory, "dictionary.msgpack"), "wb") as f:
             msgpack.dump(self.dictionary, f)
 
+        if save_ontology:
+            with open(os.path.join(save_directory, "ontology.pkl"), "wb") as f:
+                pickle.dump(self.ontology, f)
+            
         if push_to_hub:
             self._upload_modified_files(
                 save_directory,
@@ -242,24 +256,41 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             )
 
     def get_feature_codes(self, measurement):
-        if measurement.get("numeric_value") is not None:
-            for start, end, i in self.numeric_lookup.get(measurement["code"], []):
-                if start <= measurement["numeric_value"] < end:
-                    return [i]
+        if not self.is_hierarchical:
+            if measurement.get("numeric_value") is not None:
+                for start, end, i in self.numeric_lookup.get(measurement["code"], []):
+                    if start <= measurement["numeric_value"] < end:
+                        return [i]
+                else:
+                    return []
+            elif measurement.get("text_value") is not None:
+                value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
+                if value is not None:
+                    return [value]
+                else:
+                    return []
             else:
-                return []
-        elif measurement.get("text_value") is not None:
-            value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
-            if value is not None:
-                return [value]
-            else:
-                return []
+                value = self.code_lookup.get(measurement["code"])
+                if value is not None:
+                    return [value]
+                else:
+                    return []
         else:
-            value = self.code_lookup.get(measurement["code"])
-            if value is not None:
-                return [value]
+            result = []
+            if measurement.get("numeric_value") is not None:
+                for start, end, i in self.numeric_lookup.get(measurement["code"], []):
+                    if start <= measurement["numeric_value"] < end:
+                        result.append(i)
+            elif measurement.get("text_value") is not None:
+                value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
+                if value is not None:
+                    result.append(value)
             else:
-                return []
+                for parent in self.ontology.get_all_parents(measurement['code']):
+                    value = self.code_lookup.get(parent)
+                    if value is not None:
+                        result.append(value)
+            return result
 
     def normalize_age(self, age):
         return (age - self.dictionary["age_stats"]["mean"]) / (self.dictionary["age_stats"]["std"])

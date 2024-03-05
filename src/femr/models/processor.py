@@ -63,6 +63,11 @@ class BatchCreator:
         self.offsets = np.zeros(num_patients, dtype=np.int32)
 
         self.tokens = np.zeros((num_patients, max_length), dtype=np.int32)
+
+        self.hier_tokens = []
+        self.hier_token_indices = [0]
+        self.hier_token_offsets = np.zeros((num_patients, max_length), dtype=np.int32)
+
         self.valid_tokens = np.zeros((num_patients, max_length), dtype=np.bool_)
 
         self.ages = np.zeros((num_patients, max_length), dtype=np.float32)
@@ -121,7 +126,12 @@ class BatchCreator:
                     break
 
                 if self.tokenizer.is_hierarchical:
-                    assert False  # TODO: Implement this
+                    self.hier_token_offsets[self.patient_index, self.length_index - offset] = len(self.hier_token_indices) - 1
+                    for t in features:
+                        self.hier_tokens.append(t)
+
+                    self.hier_token_indices.append(len(self.hier_tokens))
+                    
                 else:
                     self.tokens[self.patient_index, self.length_index - offset] = features[0]
 
@@ -145,13 +155,16 @@ class BatchCreator:
             num_added = self.task.add_event(last_time, None, None)
             for i in range(num_added):
                 self.label_indices.append(self.patient_index * self.max_length + self.length_index - offset - 1)
-
+        
         self.patient_index += 1
 
     def get_batch_data(self):
         transformer = {
             "length": self.max_length,
             "tokens": self.tokens,
+            "hier_tokens": np.array(self.hier_tokens, dtype=np.int32),
+            "hier_token_indices": np.array(self.hier_token_indices, dtype=np.int32),
+            "hier_token_offsets": self.hier_token_offsets,
             "valid_tokens": self.valid_tokens,
             "ages": self.ages,
             "integer_ages": self.integer_ages,

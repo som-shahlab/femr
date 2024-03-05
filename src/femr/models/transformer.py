@@ -137,13 +137,16 @@ class FEMRTransformer(nn.Module):
         if not self.config.is_hierarchical:
             self.embed = nn.Embedding(self.config.vocab_size, self.config.hidden_size)
         else:
-            # Need to be using an embedding bag here
-            assert False
+            self.embed = nn.EmbeddingBag(self.config.vocab_size, self.config.hidden_size)
 
         self.layers = nn.ModuleList([FEMREncoderLayer(config) for _ in range(self.config.n_layers)])
 
     def forward(self, batch):
-        x = self.embed(batch["tokens"])
+        if not self.config.is_hierarchical:
+            x = self.embed(batch["tokens"])
+        else:
+            embedded = self.embed(batch["hier_tokens"], batch["hier_token_indices"])
+            x = embedded[batch['hier_token_offsets'], :]
 
         x = self.in_norm(x)
         pos_embed = fixed_pos_embedding(batch["ages"], self.config.hidden_size // self.config.n_heads, x.dtype)
@@ -169,7 +172,7 @@ class LabeledPatientTaskHead(nn.Module):
 
 
 class CLMBRTaskHead(nn.Module):
-    def __init__(self, hidden_size: int, clmbr_vocab_size: int):
+    def __init__(self, hidden_size: int, clmbr_vocab_size: int, **kwargs):
         super().__init__()
 
         self.final_layer = nn.Linear(hidden_size, clmbr_vocab_size)
