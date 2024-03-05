@@ -15,6 +15,7 @@ import femr.index
 class PatientSplit:
     train_patient_ids: List[int]
     test_patient_ids: List[int]
+    valid_patient_ids: List[int]
 
     def save_to_csv(self, fname: str):
         with open(fname, "w") as f:
@@ -24,27 +25,34 @@ class PatientSplit:
                 writer.writerow({"patient_id": train, "split_name": "train"})
             for test in self.test_patient_ids:
                 writer.writerow({"patient_id": test, "split_name": "test"})
+            for valid in self.valid_patient_ids:
+                writer.writerow({"patient_id": valid, "split_name": "valid"})
 
     @classmethod
     def load_from_csv(cls, fname: str):
         train_patient_ids: List[int] = []
         test_patient_ids: List[int] = []
+        valid_patient_ids: List[int] = []
         with open(fname, "r") as f:
             for row in csv.DictReader(f):
                 if row["split_name"] == "test":
                     test_patient_ids.append(int(row["patient_id"]))
+                elif row["split_name"] == "valid":
+                    valid_patient_ids.append(int(row["patient_id"]))
                 else:
                     train_patient_ids.append(int(row["patient_id"]))
 
-        return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids)
+        return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids, valid_patient_ids=valid_patient_ids)
 
     def split_dataset(self, dataset: datasets.Dataset, index: femr.index.PatientIndex) -> datasets.DatasetDict:
         train_indices = [index.get_index(patient_id) for patient_id in self.train_patient_ids]
         test_indices = [index.get_index(patient_id) for patient_id in self.test_patient_ids]
+        valid_indices = [index.get_index(patient_id) for patient_id in self.valid_patient_ids]
         return datasets.DatasetDict(
             {
                 "train": dataset.select(train_indices),
                 "test": dataset.select(test_indices),
+                "valid": dataset.select(valid_indices),
             }
         )
 
