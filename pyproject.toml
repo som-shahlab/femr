@@ -18,7 +18,7 @@ dependencies = [
     "polars",
 ]
 requires-python=">3.9"
-version = "0.1.314"
+version = "0.0.314"
 
 [project.scripts]
 
