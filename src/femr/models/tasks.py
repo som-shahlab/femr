@@ -13,7 +13,7 @@ import scipy.sparse
 import torch
 
 import femr.index
-import femr.models.transformer
+import femr.models.config
 import femr.pat_utils
 import femr.stat_utils
 
@@ -23,7 +23,7 @@ class Task(abc.ABC):
         super().__init__()
 
     @abc.abstractmethod
-    def get_task_config(self) -> femr.models.transformer.FEMRTaskConfig:
+    def get_task_config(self) -> femr.models.config.FEMRTaskConfig:
         ...
 
     @abc.abstractmethod
@@ -65,8 +65,8 @@ class LabeledPatientTask(Task):
         for k, v in self.label_map.items():
             v.sort(key=lambda a: a["prediction_time"])
 
-    def get_task_config(self) -> femr.models.transformer.FEMRTaskConfig:
-        return femr.models.transformer.FEMRTaskConfig(task_type="labeled_patients")
+    def get_task_config(self) -> femr.models.config.FEMRTaskConfig:
+        return femr.models.config.FEMRTaskConfig(task_type="labeled_patients")
 
     def filter_dataset(self, dataset: datasets.Dataset, index: femr.index.PatientIndex) -> datasets.Dataset:
         indices = [index.get_index(patient_id) for patient_id in self.label_map]
@@ -124,8 +124,8 @@ class CLMBRTask(Task):
     def __init__(self, clmbr_vocab_size: int):
         self.clmbr_vocab_size = clmbr_vocab_size
 
-    def get_task_config(self) -> femr.models.transformer.FEMRTaskConfig:
-        return femr.models.transformer.FEMRTaskConfig(
+    def get_task_config(self) -> femr.models.config.FEMRTaskConfig:
+        return femr.models.config.FEMRTaskConfig(
             task_type="clmbr", task_kwargs=dict(clmbr_vocab_size=self.clmbr_vocab_size)
         )
 
@@ -308,8 +308,8 @@ class MOTORTask(Task):
             self.pretraining_task_codes.add(task[0])
             self.task_to_index_map[task[0]] = i
 
-    def get_task_config(self) -> femr.models.transformer.FEMREncoderLayer:
-        return femr.models.transformer.FEMRTaskConfig(
+    def get_task_config(self) -> femr.models.config.FEMRTaskConfig:
+        return femr.models.config.FEMRTaskConfig(
             task_type="motor",
             task_kwargs=dict(
                 pretraining_task_info=self.pretraining_task_info,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import collections
 import functools
 import os
-from typing import Dict, Iterable, Optional, Set
+from typing import Any, Dict, Iterable, Optional, Set
 
 import datasets
 import meds
@@ -34,9 +34,8 @@ class Ontology:
         It is recommended to create an ontology once and then save/load it as necessary.
         """
         # Load from code metadata
-        self.description_map = {}
+        self.description_map: Dict[str, str] = {}
         self.parents_map: Dict[str, Set[str]] = collections.defaultdict(set)
-
 
         # Load from the athena path ...
         concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0)
@@ -134,6 +133,7 @@ class Ontology:
 
         codes = self.children_map.keys() | self.parents_map.keys() | self.description_map.keys()
         for code in codes:
+            m: Any
             if is_valid(code):
                 for m in (self.children_map, self.parents_map):
                     m[code] = {a for a in m[code] if is_valid(a)}

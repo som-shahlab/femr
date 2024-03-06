@@ -14,11 +14,7 @@ import transformers
 import xformers.ops
 from torch import nn
 
-import femr.models.processor
-import femr.models.rmsnorm
-import femr.models.tasks
-import femr.models.tokenizer
-import femr.models.xformers
+import femr.jax
 
 
 # From https://github.com/kingoflolz/mesh-transformer-jax
@@ -72,7 +68,7 @@ def apply_rotary_pos_emb(x, sincos):
 
 
 class FEMREncoderLayer(nn.Module):
-    def __init__(self, config: FEMRTransformerConfig):
+    def __init__(self, config: femr.models.config.FEMRTransformerConfig):
         super().__init__()
         self.config = config
         self.norm = femr.models.rmsnorm.RMSNorm(self.config.hidden_size)
@@ -131,40 +127,8 @@ class FEMREncoderLayer(nn.Module):
         return result
 
 
-class FEMRTransformerConfig(transformers.PretrainedConfig):
-    def __init__(
-        self,
-        vocab_size: int = 32768,
-        is_hierarchical: bool = False,
-        hidden_size: int = 768,
-        intermediate_size: int = 3072,
-        n_heads: int = 12,
-        n_layers: int = 6,
-        attention_width: int = 496,
-        use_normed_ages: bool = False,
-        use_bias: bool = True,
-        hidden_act: str = "gelu",
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-
-        self.vocab_size = vocab_size
-        self.is_hierarchical = is_hierarchical
-
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.n_heads = n_heads
-        self.n_layers = n_layers
-        self.attention_width = attention_width
-
-        self.use_normed_ages = use_normed_ages
-
-        self.use_bias = use_bias
-        self.hidden_act = hidden_act
-
-
 class FEMRTransformer(nn.Module):
-    def __init__(self, config: FEMRTransformerConfig):
+    def __init__(self, config: femr.models.config.FEMRTransformerConfig):
         super().__init__()
         self.config = config
 
@@ -276,52 +240,6 @@ class MOTORTaskHead(nn.Module):
         return loss, time_dependent_logits
 
 
-class FEMRTaskConfig(transformers.PretrainedConfig):
-    def __init__(self, task_type: str = "", task_kwargs: Mapping[str, Any] = {}, **kwargs):
-        super().__init__(**kwargs)
-        self.task_type = task_type
-        self.task_kwargs = task_kwargs
-
-    def create_task_head(self, hidden_size: int):
-        if self.task_type == "clmbr":
-            return CLMBRTaskHead(hidden_size, **self.task_kwargs)
-        elif self.task_type == "labeled_patients":
-            return LabeledPatientTaskHead(hidden_size, **self.task_kwargs)
-        elif self.task_type == "motor":
-            return MOTORTaskHead(hidden_size, **self.task_kwargs)
-
-
-class FEMRModelConfig(transformers.PretrainedConfig):
-    def __init__(
-        self,
-        transformer_config: Optional[Dict[str, Any]] = None,
-        task_config: Optional[Dict[str, Any]] = None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        if transformer_config is None:
-            transformer_config = {}
-        self.transformer_config = FEMRTransformerConfig(**transformer_config)
-
-        self.task_config: Optional[FEMRTaskConfig]
-
-        if task_config is not None:
-            self.task_config = FEMRTaskConfig(**task_config)
-        else:
-            self.task_config = None
-
-    @classmethod
-    def from_transformer_task_configs(
-        cls, transformer_config: FEMRTransformerConfig, task_config: FEMRTaskConfig
-    ) -> FEMRModelConfig:
-        if task_config is not None:
-            task_config_dict = task_config.to_dict()
-        else:
-            task_config_dict = None
-
-        return cls(transformer_config=transformer_config.to_dict(), task_config=task_config_dict)
-
-
 def remove_first_dimension(data: Any) -> Any:
     if isinstance(data, collections.abc.Mapping):
         return {k: remove_first_dimension(v) for k, v in data.items()}
@@ -338,9 +256,9 @@ def remove_first_dimension(data: Any) -> Any:
 
 
 class FEMRModel(transformers.PreTrainedModel):
-    config_class = FEMRModelConfig
+    config_class = femr.models.config.FEMRModelConfig
 
-    def __init__(self, config: FEMRModelConfig, **kwargs):
+    def __init__(self, config: femr.models.config.FEMRModelConfig, **kwargs):
         # Allow the task config to be ovewritten
         if "task_config" in kwargs:
             config.task_config = kwargs["task_config"]
@@ -349,7 +267,18 @@ class FEMRModel(transformers.PreTrainedModel):
 
         self.transformer = FEMRTransformer(self.config.transformer_config)
         if self.config.task_config is not None:
-            self.task_model = self.config.task_config.create_task_head(self.config.transformer_config.hidden_size)
+            self.task_model = self.create_task_head()
+
+    def create_task_head(self) -> nn.Module:
+        hidden_size = self.config.transformer_config.hidden_size
+        task_type = self.config.task_config.task_type
+        task_kwargs = self.config.task_config.task_kwargs
+        if task_type == "clmbr":
+            return CLMBRTaskHead(hidden_size, **task_kwargs)
+        elif task_type == "labeled_patients":
+            return LabeledPatientTaskHead(hidden_size, **task_kwargs)
+        elif task_type == "motor":
+            return MOTORTaskHead(hidden_size, **task_kwargs)
 
     def forward(self, batch: Mapping[str, Any], return_loss=True):
         # Need a return_loss parameter for transformers.Trainer to work properly

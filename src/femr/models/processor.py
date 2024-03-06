@@ -3,7 +3,7 @@ from __future__ import annotations
 import collections
 import datetime
 import functools
-from typing import Any, Dict, List, Mapping, Tuple, Optional
+from typing import Any, Dict, List, Mapping, Tuple
 
 import datasets
 import numpy as np
@@ -27,10 +27,10 @@ def map_length_stats(batch, indices, *, processor, max_length):
             continue
         if data["needs_exact"]:
             current_start = 0
-            current_end = None
+            current_end = 0
             for label_index in data["transformer"]["label_indices"]:
                 if (label_index - current_start + 1) >= max_length:
-                    if current_end is not None:
+                    if current_start != current_end:
                         lengths.append((patient_index, current_start, current_end - current_start + 1))
                     current_start = label_index - max_length + 1
                     current_end = label_index
@@ -103,22 +103,19 @@ class BatchCreator:
                     codes_seen_today = set()
 
                 for measurement in event["measurements"]:
-                    features, weights = self.tokenizer.get_feature_codes(event['time'], measurement)
+                    features, weights = self.tokenizer.get_feature_codes(event["time"], measurement)
                     if len(features) == 0:
                         continue
                     if all(feature in codes_seen_today for feature in features):
                         continue
 
                     codes_seen_today |= set(features)
-                    
+
                     if patient_length_index < offset:
                         patient_length_index += 1
                         continue
 
-                    if (
-                        (self.task is not None)
-                        and (last_time is not None)
-                    ):
+                    if (self.task is not None) and (last_time is not None):
                         num_added = self.task.add_event(last_time, event["time"], features)
                         for _ in range(num_added):
                             self.label_indices.append(len(self.ages) - 1)
@@ -145,7 +142,7 @@ class BatchCreator:
                     last_time = event["time"]
 
             return last_time
-        
+
         start_index = len(self.ages)
         final_time = process_patient_events()
 
@@ -196,8 +193,8 @@ class BatchCreator:
 
         This is necessary as some tasks use sparse matrices that need to be postprocessed."""
 
-        batch["transformer"]['patient_lengths'] = np.array(batch["transformer"]['patient_lengths'])
-        assert isinstance(batch["transformer"]['patient_lengths'], np.ndarray)
+        batch["transformer"]["patient_lengths"] = np.array(batch["transformer"]["patient_lengths"])
+        assert isinstance(batch["transformer"]["patient_lengths"], np.ndarray)
 
         if self.task is not None and "task" in batch:
             batch["task"] = self.task.cleanup(batch["task"])
@@ -214,7 +211,7 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
                 creator.add_patient(dataset[patient_index.item()], offset, length)
 
             result = creator.get_batch_data()
-            assert 'task' in result, f"No task present in {lengths[start:end,:]}"
+            assert "task" in result, f"No task present in {lengths[start:end,:]}"
 
             yield result
 
