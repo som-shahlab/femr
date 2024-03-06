@@ -21,6 +21,7 @@ dependencies = [
     "datasets >= 2.15",
     "polars >= 0.20",
     "dill >= 0.3.7",
+    "xformers == 0.0.22",
 ]
 
 requires-python=">3.9"
