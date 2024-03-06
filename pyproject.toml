@@ -16,10 +16,11 @@ dependencies = [
     "nptyping == 2.4.1",
     "msgpack >= 1.0.5",
     "meds == 0.1.1",
-    "torch == 2.0.1",
-    "xformers == 0.0.22",
-    "transformers >= 4.25.1",
-    "datasets >= 2.15.0",
+    "torch >= 2.1.2",
+    "transformers >= 4.25",
+    "datasets >= 2.15",
+    "polars >= 0.20",
+    "dill >= 0.3.7",
 ]
 
 requires-python=">3.9"
