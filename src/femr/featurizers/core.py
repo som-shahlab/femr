@@ -263,7 +263,7 @@ class FeaturizerList:
         featurize_stats = femr.hf_utils.aggregate_over_dataset(
             dataset,
             functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
-            functools.partial(_preprocess_agg_func, label_map=label_map, featurizers=self.featurizers),
+            _preprocess_agg_func,
             batch_size=1_000,
             num_proc=num_proc,
         )
@@ -305,7 +305,7 @@ class FeaturizerList:
         features = femr.hf_utils.aggregate_over_dataset(
             dataset,
             functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
-            functools.partial(_features_agg_func, label_map=label_map, featurizers=self.featurizers),
+            _features_agg_func,
             batch_size=1_000,
             num_proc=num_proc,
         )
