@@ -404,13 +404,20 @@ def compute_features(
     all_feature_times = []
     all_representations = []
 
+    # num_feature_times_processed = 0
     for batch in batches:
+        # print(f"num feature times processed: {num_feature_times_processed}")
+        # print(f"batch (len={len(batch)}):")
+        # # print(batch)
         batch = processor.collate([batch])["batch"]
         with torch.no_grad():
             patient_ids, feature_times, representations = model(batch)
             all_patient_ids.append(patient_ids.cpu().numpy())
             all_feature_times.append(feature_times)
             all_representations.append(representations.cpu().numpy())
+        # num_feature_times_processed += len(feature_times)
+        # print(f"patient ids: {patient_ids}")
+        # print(f"feature_times: {feature_times}")
 
     return {
         "patient_ids": np.concatenate(all_patient_ids),
