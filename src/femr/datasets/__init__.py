@@ -1,4 +1,5 @@
 """femr.datasets provides the main tools for doing raw data manipulation."""
+
 from __future__ import annotations
 
 import collections.abc
@@ -181,8 +182,9 @@ class PatientCollection:
     def transform(
         self,
         target_path: str,
-        transform: Callable[[RawPatient], Optional[RawPatient]]
-        | Sequence[Callable[[RawPatient], Optional[RawPatient]]],
+        transform: (
+            Callable[[RawPatient], Optional[RawPatient]] | Sequence[Callable[[RawPatient], Optional[RawPatient]]]
+        ),
         num_threads: int = 1,
         stats_dict: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> PatientCollection:
