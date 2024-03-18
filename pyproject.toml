@@ -15,24 +15,19 @@ dependencies = [
     "icecream == 2.1.3",
     "nptyping == 2.4.1",
     "msgpack >= 1.0.5",
+    "meds == 0.1.1",
+    "torch >= 2.1.2",
+    "transformers >= 4.25",
+    "datasets >= 2.15",
+    "polars >= 0.20",
+    "dill >= 0.3.7",
 ]
 requires-python=">3.9"
-version = "0.1.16"
+version = "0.2.2"
 
 [project.scripts]
 
-etl_stanford_omop = "femr.etl_pipelines.stanford:etl_starr_omop_program"
-etl_generic_omop = "femr.etl_pipelines.omop:etl_generic_omop_program"
-etl_simple_femr = "femr.etl_pipelines.simple:etl_simple_femr_program"
-etl_sickkids_omop = "femr.etl_pipelines.sickkids:etl_sk_omop_program"
-etl_mimic_omop = "femr.etl_pipelines.mimic:etl_mimic_omop_program"
-clmbr_create_batches = "femr.models.dataloader:create_batches"
-clmbr_create_dictionary = "femr.models.scripts:create_dictionary"
-clmbr_create_survival_dictionary = "femr.models.scripts:create_survival_dictionary"
-clmbr_train_model = "femr.models.scripts:train_model"
-clmbr_compute_representations = "femr.models.scripts:compute_representations"
-clmbr_train_linear_probe= "femr.models.linear_probe:train_linear_probe"
-femr_compute_representations = "femr.models.scripts:new_compute_representations"
+femr_stanford_omop_fixer = "femr.post_etl_pipelines.stanford:femr_stanford_omop_fixer_program"
 
 [project.optional-dependencies]
 build = [
@@ -46,12 +41,6 @@ build = [
     "sphinx-rtd-theme >= 0.5.0",
     "sphinx-autoapi >= 1.5.1",
     "torchtyping == 0.1.4",
-    "transformers == 4.25.1",
-]
-models = [
-   "optax == 0.1.4",
-   "dm-haiku == 0.0.9",
-   "jax == 0.4.8",
 ]
 
 [tool.isort]
@@ -68,3 +57,9 @@ target_version = ['py310']
 
 [tool.pydocstyle]
 match = "src/.*\\.py"
+
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "tests"
+]

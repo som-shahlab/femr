@@ -1,249 +1,252 @@
-# flake8: noqa: E402
 import datetime
-import os
-import pathlib
-import sys
-from typing import cast
+from typing import Any, List, Mapping, cast
 
-import numpy as np
-import pytest
+import femr_test_tools
+import meds
 import scipy.sparse
 
 import femr
-import femr.datasets
-from femr.featurizers import ColumnValue, FeaturizerList
+import femr.index
+from femr.featurizers import FeaturizerList
 from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from femr.labelers import TimeHorizon
 from femr.labelers.omop import CodeLabeler
 
-# Needed to import `tools` for local testing
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import create_database, get_femr_code, load_from_pkl, run_test_locally, save_to_pkl  # type: ignore
+
+def _assert_featurized_patients_structure(labels: List[meds.Label], features: Mapping[str, Any]):
+    assert features["features"].dtype == "float32"
+    assert features["patient_ids"].dtype == "int64"
+    assert features["feature_times"].dtype == "datetime64[us]"
+
+    assert features["feature_times"].shape[0] == len(labels)
+    assert features["patient_ids"].shape[0] == len(labels)
+    assert features["features"].shape[0] == len(labels)
+
+    assert sorted(list(features["patient_ids"])) == sorted(list(label["patient_id"] for label in labels))
+    assert sorted(list(features["feature_times"])) == sorted(list(label["prediction_time"] for label in labels))
 
 
-def _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient):
-    assert len(featurized_patients) == 4
-
-    assert featurized_patients[0].dtype == "float32"
-    assert featurized_patients[1].dtype == "int64"
-    assert featurized_patients[2].dtype == "bool"
-    assert featurized_patients[3].dtype == "datetime64[us]"
-
-    assert len(featurized_patients[1]) == len(labeled_patients) * len(
-        labels_per_patient
-    ), f"len(featurized_patients[1]) = {len(featurized_patients[1])}"
-
-    patient_ids = np.array(sorted(list(labeled_patients) * len(labels_per_patient)))
-    assert np.sum(featurized_patients[1] == patient_ids) == len(labeled_patients) * len(labels_per_patient)
-
-    all_labels = np.array(labels_per_patient * len(labeled_patients))
-    assert np.sum(featurized_patients[2] == all_labels) == len(labeled_patients) * len(labels_per_patient)
-
-    label_time = labeled_patients.as_numpy_arrays()[2]
-    assert np.sum(featurized_patients[3] == label_time) == len(labeled_patients) * len(labels_per_patient)
-
-
-def test_age_featurizer(tmp_path: pathlib.Path):
+def test_age_featurizer() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
-    create_database(tmp_path)
+    dataset = femr_test_tools.create_patients_dataset(100)
+    index = femr.index.PatientIndex(dataset)
 
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
-
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-
-    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    patient: meds.Patient = dataset[0]
     labels = labeler.label(patient)
     featurizer = AgeFeaturizer(is_normalize=False)
-    patient_features = featurizer.featurize(patient, labels, ontology)
+    patient_features = featurizer.featurize(patient, labels)
 
     assert patient_features[0] == [(0, 15.43013698630137)]
     assert patient_features[1] == [(0, 17.767123287671232)]
     assert patient_features[-1] == [(0, 20.46027397260274)]
 
-    labeled_patients = labeler.apply(path_to_patient_database=database_path)
+    all_labels = labeler.apply(dataset)
 
     featurizer = AgeFeaturizer(is_normalize=True)
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    featurized_patients = featurizer_list.featurize(database_path, labeled_patients)
+    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
 
-    labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (
-        len(labeled_patients) * len(labels_per_patient),
-        1,
-    )
-    _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+    _assert_featurized_patients_structure(all_labels, featurized_patients)
 
 
-def test_count_featurizer(tmp_path: pathlib.Path):
+def test_count_featurizer() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-    create_database(tmp_path)
 
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
+    dataset = femr_test_tools.create_patients_dataset(100)
+    index = femr.index.PatientIndex(dataset)
 
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-
-    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    patient: meds.Patient = dataset[0]
     labels = labeler.label(patient)
     featurizer = CountFeaturizer()
-    featurizer.preprocess(patient, labels, ontology)
-    patient_features = featurizer.featurize(patient, labels, ontology)
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
 
-    assert featurizer.get_num_columns() == 3, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+    patient_features = featurizer.featurize(patient, labels)
 
-    simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
-
-    assert simple_patient_features[0] == {("dummy/three", 1)}, f"patient_features[0] = {patient_features[0]}"
-    assert simple_patient_features[1] == {
-        ("dummy/three", 2),
-        ("dummy/two", 2),
-    }
-    assert simple_patient_features[2] == {
-        ("dummy/three", 3),
-        ("dummy/two", 4),
-    }
-
-    labeled_patients = labeler.apply(path_to_patient_database=database_path)
-
-    featurizer = CountFeaturizer(is_ontology_expansion=True)
-    featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    featurized_patients = featurizer_list.featurize(database_path, labeled_patients)
-
-    labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (
-        len(labeled_patients) * len(labels_per_patient),
-        3,
-    )
-    _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
-
-
-def test_count_featurizer_with_values(tmp_path: pathlib.Path):
-    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-    create_database(tmp_path)
-
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
-
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
-
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-
-    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
-    labels = labeler.label(patient)
-    featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
-    featurizer.preprocess(patient, labels, ontology)
-    patient_features = featurizer.featurize(patient, labels, ontology)
-
-    assert featurizer.get_num_columns() == 8, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+    assert featurizer.get_num_columns() == 4, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
 
     simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
 
     assert simple_patient_features[0] == {
-        ("dummy/three", 1),
-        ("dummy/zero [34.5, inf)", 1),
-        ("dummy/one test_value", 2),
-        ("dummy/one test_value", 2),
-        ("dummy/two [1.0, inf)", 1),
-        ("dummy/zero [34.5, inf)", 1),
-    }, f"patient_features[0] = {patient_features[0]}"
+        ("SNOMED/184099003", 1),
+        ("3", 1),
+    }
     assert simple_patient_features[1] == {
-        ("dummy/one test_value", 2),
-        ("dummy/two [1.0, inf)", 1),
-        ("dummy/zero [34.5, inf)", 1),
-        ("dummy/three", 2),
-        ("dummy/two", 2),
+        ("SNOMED/184099003", 1),
+        ("3", 2),
+        ("2", 2),
     }
     assert simple_patient_features[2] == {
-        ("dummy/one test_value", 2),
-        ("dummy/two [1.0, inf)", 1),
-        ("dummy/zero [34.5, inf)", 1),
-        ("dummy/three", 3),
-        ("dummy/two", 4),
+        ("SNOMED/184099003", 1),
+        ("3", 3),
+        ("2", 4),
     }
 
-    labeled_patients = labeler.apply(path_to_patient_database=database_path)
+    all_labels = labeler.apply(dataset)
 
-    featurizer = CountFeaturizer(is_ontology_expansion=True)
+    featurizer = CountFeaturizer()
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    featurized_patients = featurizer_list.featurize(database_path, labeled_patients)
+    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
 
-    labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (
-        len(labeled_patients) * len(labels_per_patient),
-        3,
-    )
-    _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+    _assert_featurized_patients_structure(all_labels, featurized_patients)
 
 
-def test_count_featurizer_exclude_filter(tmp_path: pathlib.Path):
+def test_count_featurizer_with_ontology() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-    create_database(tmp_path)
 
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
+    dataset = femr_test_tools.create_patients_dataset(100)
+    index = femr.index.PatientIndex(dataset)
 
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-
-    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    patient: meds.Patient = dataset[0]
     labels = labeler.label(patient)
 
-    count_nonempty_columns = lambda lol: len([x for x in lol if x])  # lol -> list of lists
+    class DummyOntology:
+        def get_all_parents(self, code):
+            if code in ("2", "SNOMED/184099003"):
+                return {"parent", code}
+            else:
+                return {code}
+
+    featurizer = CountFeaturizer(is_ontology_expansion=True, ontology=cast(femr.ontology.Ontology, DummyOntology()))
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
+
+    patient_features = featurizer.featurize(patient, labels)
+
+    assert featurizer.get_num_columns() == 5, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+
+    simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
+
+    assert simple_patient_features[0] == {
+        ("SNOMED/184099003", 1),
+        ("3", 1),
+        ("parent", 1),
+    }
+    assert simple_patient_features[1] == {
+        ("SNOMED/184099003", 1),
+        ("3", 2),
+        ("2", 2),
+        ("parent", 3),
+    }
+    assert simple_patient_features[2] == {
+        ("SNOMED/184099003", 1),
+        ("parent", 5),
+        ("3", 3),
+        ("2", 4),
+    }
+
+    all_labels = labeler.apply(dataset)
+
+    featurizer = CountFeaturizer(is_ontology_expansion=True, ontology=cast(femr.ontology.Ontology, DummyOntology()))
+    featurizer_list = FeaturizerList([featurizer])
+    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+
+    _assert_featurized_patients_structure(all_labels, featurized_patients)
+
+
+def test_count_featurizer_with_values() -> None:
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+
+    dataset = femr_test_tools.create_patients_dataset(100)
+    index = femr.index.PatientIndex(dataset)
+
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
+
+    patient: meds.Patient = dataset[0]
+    labels = labeler.label(patient)
+    featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
+
+    patient_features = featurizer.featurize(patient, labels)
+
+    assert featurizer.get_num_columns() == 7
+
+    simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
+
+    assert simple_patient_features[0] == {
+        ("SNOMED/184099003", 1),
+        ("3", 1),
+        ("2 [1.0, inf)", 1),
+        ("1 test_value", 2),
+    }
+
+    assert simple_patient_features[1] == {
+        ("SNOMED/184099003", 1),
+        ("3", 2),
+        ("2", 2),
+        ("2 [1.0, inf)", 1),
+        ("1 test_value", 2),
+    }
+    assert simple_patient_features[2] == {
+        ("SNOMED/184099003", 1),
+        ("3", 3),
+        ("2", 4),
+        ("2 [1.0, inf)", 1),
+        ("1 test_value", 2),
+    }
+
+    all_labels = labeler.apply(dataset)
+
+    featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
+    featurizer_list = FeaturizerList([featurizer])
+    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+
+    _assert_featurized_patients_structure(all_labels, featurized_patients)
+
+
+def test_count_featurizer_exclude_filter() -> None:
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+
+    dataset = femr_test_tools.create_patients_dataset(100)
+
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
+
+    patient: meds.Patient = dataset[0]
+    labels = labeler.label(patient)
 
     # Test filtering all codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: True)
-    featurizer.preprocess(patient, labels, ontology)
-    patient_features = featurizer.featurize(patient, labels, ontology)
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
 
-    assert count_nonempty_columns(patient_features) == 0
+    assert featurizer.get_num_columns() == 0
 
     # Test filtering no codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: False)
-    featurizer.preprocess(patient, labels, ontology)
-    patient_features = featurizer.featurize(patient, labels, ontology)
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
 
-    assert count_nonempty_columns(patient_features) == 3
+    assert featurizer.get_num_columns() == 4
 
     # Test filtering single code
-    featurizer = CountFeaturizer(excluded_event_filter=lambda e: e.code == "dummy/three")
-    featurizer.preprocess(patient, labels, ontology)
-    patient_features = featurizer.featurize(patient, labels, ontology)
+    featurizer = CountFeaturizer(excluded_event_filter=lambda e: e["code"] == "3")
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
 
-    assert count_nonempty_columns(patient_features) == 2
+    assert featurizer.get_num_columns() == 3
 
 
-def test_count_bins_featurizer(tmp_path: pathlib.Path):
+def test_count_bins_featurizer() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-    create_database(tmp_path)
 
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
+    dataset = femr_test_tools.create_patients_dataset(100)
+    index = femr.index.PatientIndex(dataset)
 
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-
-    patient: femr.Patient = cast(femr.Patient, database[next(iter(database))])
+    patient: meds.Patient = dataset[0]
     labels = labeler.label(patient)
     time_bins = [
         datetime.timedelta(days=90),
@@ -253,77 +256,74 @@ def test_count_bins_featurizer(tmp_path: pathlib.Path):
     featurizer = CountFeaturizer(
         time_bins=time_bins,
     )
-    featurizer.preprocess(patient, labels, ontology)
-    patient_features = featurizer.featurize(patient, labels, ontology)
+    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer.encorperate_prepreprocessed_data([data])
 
-    assert set(featurizer.code_to_column_index.keys()) == {
-        "dummy/four",
-        "dummy/three",
-        "dummy/two",
-    }, f"featurizer.code_to_column_index = {featurizer.code_to_column_index}"
-    assert featurizer.get_num_columns() == 9, f"featurizer.get_num_columns() = {featurizer.get_num_columns()}"
+    patient_features = featurizer.featurize(patient, labels)
+
+    assert featurizer.get_num_columns() == 12
 
     simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
 
     assert simple_patient_features[0] == {
-        ("dummy/three_90 days, 0:00:00", 1),
-    }, f"patient_features[0] = {patient_features[0]}"
+        ("SNOMED/184099003_70000 days, 0:00:00", 1),
+        ("3_90 days, 0:00:00", 1),
+    }
     assert simple_patient_features[1] == {
-        ("dummy/three_90 days, 0:00:00", 1),
-        ("dummy/two_70000 days, 0:00:00", 2),
-        ("dummy/three_70000 days, 0:00:00", 1),
-    }, f"patient_features[1] = {patient_features[1]}"
+        ("3_90 days, 0:00:00", 1),
+        ("SNOMED/184099003_70000 days, 0:00:00", 1),
+        ("3_70000 days, 0:00:00", 1),
+        ("2_70000 days, 0:00:00", 2),
+    }
     assert simple_patient_features[2] == {
-        ("dummy/three_70000 days, 0:00:00", 2),
-        ("dummy/two_90 days, 0:00:00", 2),
-        ("dummy/three_90 days, 0:00:00", 1),
-        ("dummy/two_70000 days, 0:00:00", 2),
-    }, f"patient_features[2] = {patient_features[2]}"
+        ("2_70000 days, 0:00:00", 2),
+        ("2_90 days, 0:00:00", 2),
+        ("SNOMED/184099003_70000 days, 0:00:00", 1),
+        ("3_90 days, 0:00:00", 1),
+        ("3_70000 days, 0:00:00", 2),
+    }
 
-    labeled_patients = labeler.apply(path_to_patient_database=database_path)
+    all_labels = labeler.apply(dataset)
 
-    featurizer = CountFeaturizer(is_ontology_expansion=True, time_bins=time_bins)
+    time_bins = [
+        datetime.timedelta(days=90),
+        datetime.timedelta(days=180),
+        datetime.timedelta(weeks=1e4),
+    ]
+    featurizer = CountFeaturizer(
+        time_bins=time_bins,
+    )
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    featurized_patients = featurizer_list.featurize(database_path, labeled_patients)
+    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
 
-    labels_per_patient = [True, False, False]
-    assert featurized_patients[0].shape == (
-        len(labeled_patients) * len(labels_per_patient),
-        9,
-    ), f"featurized_patients[0].shape = {featurized_patients[0].shape}"
-    _assert_featurized_patients_structure(labeled_patients, featurized_patients, labels_per_patient)
+    _assert_featurized_patients_structure(all_labels, featurized_patients)
 
 
-def test_complete_featurization(tmp_path: pathlib.Path):
+def test_complete_featurization() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
-    create_database(tmp_path)
+    dataset = femr_test_tools.create_patients_dataset(100)
+    index = femr.index.PatientIndex(dataset)
 
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
+    labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
-
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-    labeled_patients = labeler.apply(path_to_patient_database=database_path)
+    all_labels = labeler.apply(dataset)
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
     age_featurizer_list = FeaturizerList([age_featurizer])
-    age_featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    age_featurized_patients = age_featurizer_list.featurize(database_path, labeled_patients)
+    age_featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    age_featurized_patients = age_featurizer_list.featurize(dataset, index, all_labels)
 
     time_bins = [
         datetime.timedelta(days=90),
         datetime.timedelta(days=180),
         datetime.timedelta(weeks=1e5),
     ]
-    count_featurizer = CountFeaturizer(is_ontology_expansion=True, time_bins=time_bins)
+    count_featurizer = CountFeaturizer(time_bins=time_bins)
     count_featurizer_list = FeaturizerList([count_featurizer])
-    count_featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    count_featurized_patients = count_featurizer_list.featurize(database_path, labeled_patients)
+    count_featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    count_featurized_patients = count_featurizer_list.featurize(dataset, index, all_labels)
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
     time_bins = [
@@ -331,62 +331,16 @@ def test_complete_featurization(tmp_path: pathlib.Path):
         datetime.timedelta(days=180),
         datetime.timedelta(weeks=1e5),
     ]
-    count_featurizer = CountFeaturizer(is_ontology_expansion=True, time_bins=time_bins)
+    count_featurizer = CountFeaturizer(time_bins=time_bins)
     featurizer_list = FeaturizerList([age_featurizer, count_featurizer])
-    featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    featurized_patients = featurizer_list.featurize(database_path, labeled_patients)
+    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
+    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
 
-    assert featurized_patients[0].shape == (len(labeled_patients) * 3, 10)
+    assert featurized_patients["patient_ids"].shape == count_featurized_patients["patient_ids"].shape
 
     the_same = (
-        featurized_patients[0].toarray()
-        == scipy.sparse.hstack((age_featurized_patients[0], count_featurized_patients[0])).toarray()
+        featurized_patients["features"].toarray()
+        == scipy.sparse.hstack((age_featurized_patients["features"], count_featurized_patients["features"])).toarray()
     )
 
     assert the_same.all()
-
-
-def test_serialization_and_deserialization(tmp_path: pathlib.Path):
-    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
-
-    create_database(tmp_path)
-
-    database_path = os.path.join(tmp_path, "target")
-    database = femr.datasets.PatientDatabase(database_path)
-    ontology = database.get_ontology()
-
-    femr_outcome_code = get_femr_code(ontology, 2)
-    femr_admission_code = get_femr_code(ontology, 3)
-
-    labeler = CodeLabeler([femr_outcome_code], time_horizon, [femr_admission_code])
-    labeled_patients = labeler.apply(path_to_patient_database=database_path)
-
-    time_bins = [
-        datetime.timedelta(days=90),
-        datetime.timedelta(days=180),
-        datetime.timedelta(weeks=1e5),
-    ]
-    count_featurizer = CountFeaturizer(is_ontology_expansion=True, time_bins=time_bins)
-    count_featurizer_list = FeaturizerList([count_featurizer])
-    count_featurizer_list.preprocess_featurizers(database_path, labeled_patients)
-    count_featurized_patient = count_featurizer_list.featurize(database_path, labeled_patients)
-
-    save_to_pkl(
-        count_featurizer_list,
-        os.path.join(tmp_path, "count_featurizer_list.pickle"),
-    )
-    save_to_pkl(
-        count_featurized_patient,
-        os.path.join(tmp_path, "count_featurized_patient.pickle"),
-    )
-
-    count_featurized_patient_loaded = load_from_pkl(os.path.join(tmp_path, "count_featurized_patient.pickle"))
-
-    assert (count_featurized_patient_loaded[0].toarray() == count_featurized_patient[0].toarray()).all()
-    assert (count_featurized_patient_loaded[1] == count_featurized_patient[1]).all()
-    assert (count_featurized_patient_loaded[2] == count_featurized_patient[2]).all()
-    assert (count_featurized_patient_loaded[3] == count_featurized_patient[3]).all()
-
-
-if __name__ == "__main__":
-    run_test_locally("../ignore/test_labelers/", test_complete_featurization)
