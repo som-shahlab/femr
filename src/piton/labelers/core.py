@@ -32,7 +32,7 @@ class TimeHorizon:
 @dataclass(frozen=True)
 class SurvivalValue:
     """Used for survival tasks."""
-
+#    event_time: int
     time_to_event: datetime.timedelta
     is_censored: bool  # TRUE if this patient was censored
 

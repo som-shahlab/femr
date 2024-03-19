@@ -539,13 +539,16 @@ PatientDatabase convert_patient_collection_to_patient_database(
     const boost::filesystem::path& patient_root,
     const boost::filesystem::path& concept_root,
     const boost::filesystem::path& target, char delimiter, size_t num_threads) {
+	std::cout<<"Starting to convert " << std::endl;
     boost::filesystem::create_directories(target);
 
     boost::filesystem::path temp_path =
         target / boost::filesystem::unique_path();
     boost::filesystem::create_directory(temp_path);
+    std::cout<<"Starting to count"<<std::endl;
     auto codes_and_values =
         count_codes_and_values(patient_root, temp_path, num_threads);
+    std::cout<<"Done counting"<<std::endl;
 
     std::vector<uint64_t> codes;
     codes.reserve(codes_and_values.first.size());
@@ -556,9 +559,12 @@ PatientDatabase convert_patient_collection_to_patient_database(
         code_to_index[entry.first] = i;
         codes.push_back(entry.first);
     }
+	
 
+    std::cout<<"Start ontology" << std::endl;
     create_ontology(codes, concept_root, target / "ontology", delimiter,
                     num_threads);
+    std::cout<<"Done ontology" << std::endl;
 
     absl::flat_hash_map<std::string, uint32_t> text_value_to_index;
     {
@@ -570,11 +576,12 @@ PatientDatabase convert_patient_collection_to_patient_database(
             writer.add_value(entry.first);
         }
     }
+    std::cout<<"Done text" << std::endl;
 
     std::vector<uint64_t> original_patient_ids;
     {
         DictionaryWriter patients(target / "patients");
-        DictionaryWriter event_metadata(target / "event_metadata");
+//        DictionaryWriter event_metadata(target / "event_metadata");
 
         std::vector<std::thread> threads;
 
@@ -591,6 +598,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
         queues.reserve(files.size());
 
         std::atomic<uint64_t> patient_and_unique_counter(0);
+	std::cout<<"Whatever"<<std::endl;
 
         for (size_t i = 0; i < files.size(); i++) {
             queues.emplace_back(QUEUE_SIZE);
@@ -601,6 +609,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
                               code_to_index, text_value_to_index);
             });
         }
+	std::cout<<"Blah"<<std::endl;
 
         uint32_t next_write_patient = 0;
         DictionaryWriter unique_text(target / "unique_text");
@@ -632,8 +641,8 @@ PatientDatabase convert_patient_collection_to_patient_database(
                     entry.data[i + entry.num_unique + 1]);
             }
 
-            event_metadata.add_value(container_to_view(event_metadata_offsets));
-            event_metadata.add_value(event_metadata_value);
+//            event_metadata.add_value(container_to_view(event_metadata_offsets));
+//            event_metadata.add_value(event_metadata_value);
 
             next_write_patient++;
         };
@@ -651,6 +660,7 @@ PatientDatabase convert_patient_collection_to_patient_database(
                 entry_heap.emplace(std::move(entry));
             }
         });
+	std::cout<<"Sure"<<std::endl;
 
         if (!entry_heap.empty()) {
             throw std::runtime_error(
@@ -992,6 +1002,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
                                            "Form of",
                                            "Consists of",
                                            "Is a"};
+    std::cout<<"Nested"<<std::endl;
 
     auto parents = process_nested(
         concept, "concept_relationship", num_threads, false,
@@ -1025,6 +1036,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
 
             return result;
         });
+    std::cout<<"About to merge"<<std::endl;
 
     ParentMap merged;
 
@@ -1036,6 +1048,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
                                 std::end(entry.second));
         }
     }
+    std::cout<<"Merged"<<std::endl;
 
     for (auto& entry : merged) {
         // Only use the ideal mappings
@@ -1054,6 +1067,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
 
         entry.second.erase(invalid, std::end(entry.second));
     }
+    std::cout<<"What in the world"<<std::endl;
 
     absl::flat_hash_map<uint64_t, uint32_t> index_map;
 
@@ -1066,6 +1080,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
         to_process.push_back(code);
     }
 
+    std::cout<<"Sure"<<std::endl;
     auto get_index = [&](uint64_t target_index) {
         auto iter = index_map.find(target_index);
         if (iter == std::end(index_map)) {
@@ -1082,6 +1097,7 @@ get_parents(std::vector<uint64_t>& raw_codes,
             return iter->second;
         }
     };
+    std::cout<<"Lol"<<std::endl;
 
     std::vector<std::vector<uint32_t>> result;
     while (!to_process.empty()) {
@@ -1089,7 +1105,9 @@ get_parents(std::vector<uint64_t>& raw_codes,
         to_process.pop_front();
 
         std::vector<uint32_t> indices;
-        indices.reserve(merged.size());
+
+	std::cout<<ps.size() << " " << merged.size() <<std::endl;
+        indices.reserve(ps.size());
         for (auto parent : ps) {
             indices.push_back(get_index(std::get<2>(parent)));
         }
@@ -1180,9 +1198,12 @@ Ontology create_ontology(std::vector<uint64_t> raw_codes,
                          const boost::filesystem::path& target, char delimiter,
                          size_t num_threads) {
     boost::filesystem::create_directory(target);
+    std::cout<<"Parents"<<std::endl;
     auto parent_info = get_parents(raw_codes, concept, delimiter, num_threads);
+    std::cout<<"Text"<<std::endl;
     auto text = get_concept_text(raw_codes, parent_info.first, concept,
                                  delimiter, num_threads);
+    std::cout<<"Main ont"<<std::endl;
 
     {
         boost::filesystem::create_directory(target);
@@ -1197,6 +1218,7 @@ Ontology create_ontology(std::vector<uint64_t> raw_codes,
             text_description.add_value(t.second);
         }
     }
+    std::cout<<"Child ont"<<std::endl;
     {
         std::vector<std::vector<uint32_t>> children(parent_info.second.size());
 
@@ -1216,6 +1238,7 @@ Ontology create_ontology(std::vector<uint64_t> raw_codes,
             child.add_value(container_to_view(ch));
         }
     }
+    std::cout<<"All parents"<<std::endl;
     {
         std::vector<boost::optional<std::vector<uint32_t>>> all_parents(
             parent_info.second.size());

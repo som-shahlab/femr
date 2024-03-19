@@ -275,8 +275,8 @@ class FeaturizerList:
 
     def preprocess_featurizers(
         self,
-        database_path: str,
         labeled_patients: LabeledPatients,
+        database_path: str,
         num_threads: int = 1,
     ):
         """Preprocess `self.featurizers` on the provided set of `labeled_patients`."""
@@ -312,8 +312,8 @@ class FeaturizerList:
 
     def featurize(
         self,
-        database_path: str,
         labeled_patients: LabeledPatients,
+        database_path: str,
         num_threads: int = 1,
     ) -> Tuple[
         Any,

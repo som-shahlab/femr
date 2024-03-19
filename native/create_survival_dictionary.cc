@@ -307,6 +307,11 @@ void create_survival_dictionary(const std::string& input,
     num_buckets);
     }*/
 
+    while (result_options.size() < 32) {
+	    result_options.push_back(database.get_code_dictionary().size());
+	    lambdas.push_back(1e-6);
+    }
+
     json j;
     j["codes"] = result_options;
     j["time_bins"] = get_buckets(global_samples, num_buckets);

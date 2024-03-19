@@ -208,10 +208,10 @@ def get_omop_csv_extractors() -> Sequence[CSVExtractor]:
             concept_id_field="note_class_concept_id",
             string_value_field="note_text",
         ),
-        _ConceptTableConverter(
-            prefix="visit_detail",
-            concept_id_field="piton_visit_detail_concept_id",
-        ),
+#        _ConceptTableConverter(
+#            prefix="visit_detail",
+#            concept_id_field="piton_visit_detail_concept_id",
+#        ),
     ]
 
     return converters

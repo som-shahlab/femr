@@ -24,14 +24,14 @@ size_t LSB(size_t i) { return ((i) & -(i)); }
 
 // Returns the sum of the first i elements (indices 0 to i)
 // Equivalent to range_sum(0, i)
-int compute_prefix_sum(const std::vector<int>& A, size_t i) {
-    int sum = A[0];
+double compute_prefix_sum(const std::vector<double>& A, size_t i) {
+    double sum = A[0];
     for (; i != 0; i -= LSB(i)) sum += A[i];
     return sum;
 }
 
 // Add delta to element with index i (zero-based)
-void add(std::vector<int>& A, size_t i, int delta) {
+void add(std::vector<double>& A, size_t i, double delta) {
     if (i == 0) {
         A[0] += delta;
         return;
@@ -39,7 +39,7 @@ void add(std::vector<int>& A, size_t i, int delta) {
     for (; i < A.size(); i += LSB(i)) A[i] += delta;
 }
 
-void init(std::vector<int>& A) {
+void init(std::vector<double>& A) {
     size_t needed = get_size(A.size());
     if (A.size() != needed) {
         A.resize(needed);
@@ -55,6 +55,18 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
     const Eigen::Tensor<bool, 1>& is_censor,
     const Eigen::Tensor<double, 1>& time_bins,
     const Eigen::Tensor<double, 2>& hazards) {
+	Eigen::Tensor<double, 1> dummy_weights(times.dimension(0));
+	dummy_weights.setConstant(1);
+	return compute_c_statistic_weighted(times, is_censor, time_bins, hazards, dummy_weights);
+}
+
+std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic_weighted(
+    const Eigen::Tensor<double, 1>& times,
+    const Eigen::Tensor<bool, 1>& is_censor,
+    const Eigen::Tensor<double, 1>& time_bins,
+    const Eigen::Tensor<double, 2>& hazards,
+    const Eigen::Tensor<double, 1>& sample_weights
+    ) {
     ssize_t num_elem = hazards.dimension(0);
     ssize_t num_times = hazards.dimension(1);
 
@@ -85,7 +97,7 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
 
     std::vector<size_t> location_map(num_elem);
     std::vector<std::pair<double, size_t>> current_sorted_indices;
-    std::vector<int> prefix_sum(num_elem, 0);
+    std::vector<double> prefix_sum(num_elem, 0);
     std::vector<bool> is_still_alive(num_elem, true);
 
     ssize_t num_events = 0;
@@ -119,7 +131,12 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
         for (size_t i = 0; i < current_sorted_indices.size(); i++) {
             location_map[current_sorted_indices[i].second] = i;
             bool alive = is_still_alive[current_sorted_indices[i].second];
-            prefix_sum.push_back(alive);
+	    double weight = 0;
+	    if (alive) {
+		    weight = sample_weights[current_sorted_indices[i].second];
+	    }
+
+            prefix_sum.push_back(weight);
         }
 
         init(prefix_sum);
@@ -133,16 +150,17 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
 
     auto resolve = [&]() {
         if (current_dead.size() != 0) {
-            size_t num_true = compute_prefix_sum(
+            double num_true = compute_prefix_sum(
                 prefix_sum, current_sorted_indices.size() - 1);
-            size_t num_false = current_dead.size();
-            size_t num_correct = 0;
+	    double num_false = 0;
+            double num_correct = 0;
             for (size_t dead : current_dead) {
+		num_false += sample_weights[dead];
                 num_correct +=
-                    compute_prefix_sum(prefix_sum, location_map[dead]);
+                    sample_weights[dead] * compute_prefix_sum(prefix_sum, location_map[dead]);
             }
 
-            double frac_died = (double)num_false / (num_true + num_false);
+            double frac_died = num_false / (num_true + num_false);
             double next_surv = surv * (1 - frac_died);
             double death_rate = surv * frac_died;
 
@@ -188,7 +206,7 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
             current_dead.push_back(index);
         }
 
-        add(prefix_sum, location_map[index], -1);
+        add(prefix_sum, location_map[index], -sample_weights[index]);
         is_still_alive[index] = false;
     }
 

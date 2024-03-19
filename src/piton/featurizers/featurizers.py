@@ -313,6 +313,9 @@ class CountFeaturizer(Featurizer):
                     # because it has a non-None value
                     continue
 
+                if False and ontology.get_dictionary()[event.code] == 'Domain/OMOP generated':
+                    print(event.code, [ (a, a in self.included_codes) for a in self.get_codes(event.code, ontology)])
+
                 for code in self.get_codes(event.code, ontology):
                     # Increment the count for this event's code (plus any parent codes
                     # if we are doing ontology expansion, as handled in `self.get_codes`)

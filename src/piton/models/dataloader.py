@@ -215,7 +215,10 @@ def create_batches() -> None:
                     if labeled_patients.labeler_type == "boolean":
                         value = label.value
                     elif labeled_patients.labeler_type == "survival":
-                        event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
+                        if True:
+                            event_offset = (label.value.event_time - label.time) / datetime.timedelta(minutes=1)
+                        else:
+                            event_offset = label.value.time_to_event / datetime.timedelta(minutes=1)
 
                         if event_offset == 0:
                             continue

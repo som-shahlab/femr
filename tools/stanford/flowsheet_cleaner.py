@@ -162,6 +162,8 @@ if __name__ == "__main__":
 
     os.mkdir(args.target)
 
+    print("Starting")
+
     new_concepts = set()
     new_relationships = set()
     with forkserver.Pool(args.num_threads) as pool:
@@ -181,6 +183,8 @@ if __name__ == "__main__":
         ):
             new_concepts |= child_concepts
             new_relationships |= child_relationships
+
+        print("Got new concepts")
 
         highest_concept_id = 0
 
@@ -262,8 +266,10 @@ if __name__ == "__main__":
                     }
                 )
 
+        print("About to clean")
         for _ in pool.imap_unordered(
             functools.partial(correct_rows, args.source, args.target, new_concept_map),
             os.listdir(os.path.join(args.source, "observation")),
         ):
             pass
+        print("Almost done?")

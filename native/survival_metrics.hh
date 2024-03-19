@@ -10,6 +10,13 @@ std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic(
     const Eigen::Tensor<double, 1>& time_bins,
     const Eigen::Tensor<double, 2>& hazards);
 
+std::pair<double, Eigen::Tensor<double, 2>> compute_c_statistic_weighted(
+    const Eigen::Tensor<double, 1>& times,
+    const Eigen::Tensor<bool, 1>& is_censor,
+    const Eigen::Tensor<double, 1>& time_bins,
+    const Eigen::Tensor<double, 2>& hazards,
+    const Eigen::Tensor<double, 1>& weights);
+
 Eigen::Tensor<double, 2> estimate_breslow(
     const Eigen::Tensor<double, 1>& times,
     const Eigen::Tensor<bool, 1>& is_censor,

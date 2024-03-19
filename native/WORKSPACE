@@ -318,7 +318,7 @@ dlpack_build = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//
 
 http_archive(
     name = "eigen",
-    strip_prefix = "eigen-dc252fbf00079ccab57948a164b1421703fe4361",
+    strip_prefix = "eigen-3.3.8",
     urls = [
         "https://gitlab.com/libeigen/eigen/-/archive/3.3.8/eigen-3.3.8.tar.bz2",
     ],
