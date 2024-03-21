@@ -75,49 +75,50 @@ class LabeledPatientTask(Task):
     def start_patient(self, patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
         self.current_labels = self.label_map[patient["patient_id"]]
         self.current_label_index = 0
-        self.patient_id = patient["patient_id"]
 
     def needs_exact(self) -> bool:
         return True
 
     def start_batch(self) -> None:
-        self.patient_ids: List[int] = []
-        self.prediction_timestamps: List[float] = []
+        """LabeledPatientTask currently has no per label state."""
+        pass
+
+    def add_patient_labels(self, _patient_label_offsets: List[int]) -> None:
+        """As there is no per label state, this is ignored"""
+        pass
 
     def add_event(
-        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
+        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Optional[Sequence[int]] = None
     ) -> int:
-        num_added = 0
+        has_label = False
+
         while True:
             if self.current_label_index == len(self.current_labels):
-                return num_added
+                break
 
             current_label = self.current_labels[self.current_label_index]
 
             is_valid = current_date <= current_label["prediction_time"]
             next_valid = next_date is not None and next_date <= current_label["prediction_time"]
 
-            if not is_valid:
-                # We don't have any valid representation for this label, so ignore
-                self.current_label_index += 1
-                continue
-
             if next_valid:
-                # Next one is valid, so break early to give it a chance next time
-                return num_added
-            else:
-                self.patient_ids.append(self.patient_id)
-                self.prediction_timestamps.append(current_label["prediction_time"].timestamp())
-                num_added += 1
-                self.current_label_index += 1
+                # Next one is valid, so break eary to give it a chance next time
+                break
 
-        assert False, "Should never reach end"
+            if is_valid:
+                has_label = True
+                self.current_label_index += 1
+            else:
+                # The next label isn't valid, so we have to break here
+                break
+        
+        if has_label:
+            return 1
+        else:
+            return 0
 
     def get_batch_data(self) -> Mapping[str, np.ndarray]:
-        return {
-            "patient_ids": np.array(self.patient_ids, dtype=np.int64),
-            "prediction_timestamps": np.array(self.prediction_timestamps, dtype=np.int64),
-        }
+        return {}
 
 
 class CLMBRTask(Task):
@@ -129,8 +130,8 @@ class CLMBRTask(Task):
             task_type="clmbr", task_kwargs=dict(clmbr_vocab_size=self.clmbr_vocab_size)
         )
 
-    def start_patient(self, patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
-        pass
+    def start_patient(self, _patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
+        self.per_patient_batch_labels: List[int] = []
 
     def needs_exact(self) -> bool:
         return False
@@ -138,10 +139,13 @@ class CLMBRTask(Task):
     def start_batch(self) -> None:
         self.batch_labels: List[int] = []
 
+    def add_patient_labels(self, patient_label_offsets: List[int]) -> None:
+        self.batch_labels.extend([self.per_patient_batch_labels[i] for i in patient_label_offsets])
+
     def add_event(
-        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
+        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Optional[Sequence[int]] = None
     ) -> int:
-        if len(next_features) == 0:
+        if next_features is None:
             return 0
 
         if len(next_features) != 1:
@@ -152,7 +156,7 @@ class CLMBRTask(Task):
         if next_feature >= self.clmbr_vocab_size:
             return 0
 
-        self.batch_labels.append(next_feature)
+        self.per_patient_batch_labels.append(next_feature)
 
         return 1
 
@@ -322,6 +326,13 @@ class MOTORTask(Task):
         assert ontology
         self.calculator = SurvivalCalculator(ontology, patient, self.pretraining_task_codes)
 
+        self.per_patient_censor_time = []
+        self.per_patient_time_sparse = {
+            "data": [],
+            "indices": [],
+            "indptr": [0],
+        }
+
     def needs_exact(self) -> bool:
         return False
 
@@ -333,6 +344,18 @@ class MOTORTask(Task):
             "indices": [],
             "indptr": [0],
         }
+
+    def add_patient_labels(self, patient_label_offsets: List[int]) -> None:
+        """Add per-patient labels to the global task labels."""
+        self.censor_time.extend([self.per_patient_censor_time[i] for i in patient_label_offsets])
+
+        for index in patient_label_offsets:
+            start = self.per_patient_time_sparse['indptr'][index]
+            end = self.per_patient_time_sparse['indptr'][index + 1]
+
+            self.time_sparse['data'].extend(self.per_patient_time_sparse['data'][start:end])
+            self.time_sparse['indices'].extend(self.per_patient_time_sparse['indices'][start:end])
+            self.time_sparse['indptr'].append(len(self.time_sparse['indices']))
 
     def add_event(
         self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
@@ -346,16 +369,16 @@ class MOTORTask(Task):
             return 0
 
         censor_seconds = censor_time.total_seconds()
-        self.censor_time.append(censor_seconds)
+        self.per_patient_censor_time.append(censor_seconds)
 
         for event_name, time in tte.items():
             j = self.task_to_index_map[event_name]
             seconds = time.total_seconds()
 
-            self.time_sparse["data"].append(seconds)
-            self.time_sparse["indices"].append(j)
+            self.per_patient_time_sparse["data"].append(seconds)
+            self.per_patient_time_sparse["indices"].append(j)
 
-        self.time_sparse["indptr"].append(len(self.time_sparse["data"]))
+        self.per_patient_time_sparse["indptr"].append(len(self.per_patient_time_sparse["data"]))
 
         return 1
 

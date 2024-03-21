@@ -178,12 +178,8 @@ class LabeledPatientTaskHead(nn.Module):
     def __init__(self, hidden_size: int):
         super().__init__()
 
-    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor]):
-        return (
-            batch["patient_ids"],
-            batch["prediction_timestamps"].cpu().numpy().astype("datetime64[s]").astype(datetime.datetime),
-            features,
-        )
+    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor], return_logits=False):
+        return 0, {}
 
 
 class CLMBRTaskHead(nn.Module):
@@ -192,12 +188,15 @@ class CLMBRTaskHead(nn.Module):
 
         self.final_layer = nn.Linear(hidden_size, clmbr_vocab_size)
 
-    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor]):
+    def forward(self, features: torch.Tensor, batch: Mapping[str, torch.Tensor], return_logits=False):
         logits = self.final_layer(features)
         labels = batch["labels"]
         loss = F.cross_entropy(logits, labels)
 
-        return loss, logits
+        if not return_logits:
+            logits = None
+
+        return loss, {'logits': logits}
 
 
 class MOTORTaskHead(nn.Module):
@@ -242,7 +241,7 @@ class MOTORTaskHead(nn.Module):
         if not return_logits:
             time_dependent_logits = None
 
-        return loss, time_dependent_logits
+        return loss, {'time_dependent_logits': time_dependent_logits}
 
 
 def remove_first_dimension(data: Any) -> Any:
@@ -285,23 +284,35 @@ class FEMRModel(transformers.PreTrainedModel):
         elif task_type == "motor":
             return MOTORTaskHead(hidden_size, **task_kwargs)
 
-    def forward(self, batch: Mapping[str, Any], return_loss=True):
+    def forward(self, batch: Mapping[str, Any], return_loss=True, return_logits=False, return_reprs=False):
         # Need a return_loss parameter for transformers.Trainer to work properly
         assert return_loss
 
         batch = remove_first_dimension(batch)
 
         features = self.transformer(batch["transformer"])
-        if "task" in batch:
+        if "task" in batch and self.config.task_config is not None:
             features = features.reshape(-1, features.shape[-1])
             features = features[batch["transformer"]["label_indices"], :]
-            return self.task_model(features, batch["task"])
+            loss, result = self.task_model(features, batch["task"], return_logits=return_logits)
+            if return_reprs:
+                result["representations"] = features
+            if return_logits or return_reprs:
+                result["timestamps"] = batch["transformer"]["timestamps"][batch["transformer"]["label_indices"]]
+                result["patient_ids"] = batch["patient_ids"][batch["transformer"]["label_indices"]]
+            return loss, result
         else:
-            return (
-                batch["patient_ids"],
-                batch["transformer"]["timestamps"].cpu().numpy().astype("datetime64[s]").astype(datetime.datetime),
-                features,
-            )
+            loss = 0
+            features = features.reshape(-1, features.shape[-1])
+            features = features[batch["transformer"]["label_indices"], :]
+            result = {
+                "timestamps": batch["transformer"]["timestamps"][batch["transformer"]["label_indices"]],
+                "patient_ids": batch["patient_ids"][batch["transformer"]["label_indices"]],
+                "representations": features,
+            }
+
+            return loss, result
+
 
 
 def compute_features(
@@ -327,7 +338,7 @@ def compute_features(
         model = model.to(device)
 
     batches = processor.convert_dataset(
-        filtered_data, tokens_per_batch=tokens_per_batch, min_samples_per_batch=1, num_proc=num_proc
+        filtered_data, tokens_per_batch=tokens_per_batch, min_patients_per_batch=1, num_proc=num_proc
     )
 
     batches.set_format("pt", device=device)
@@ -339,13 +350,13 @@ def compute_features(
     for batch in batches:
         batch = processor.collate([batch])["batch"]
         with torch.no_grad():
-            patient_ids, feature_times, representations = model(batch)
-            all_patient_ids.append(patient_ids.cpu().numpy())
-            all_feature_times.append(feature_times)
-            all_representations.append(representations.cpu().numpy())
+            _, result = model(batch, return_reprs=True)
+            all_patient_ids.append(result["patient_ids"].cpu().numpy())
+            all_feature_times.append(result["timestamps"].cpu().numpy())
+            all_representations.append(result["representations"].cpu().numpy())
 
     return {
         "patient_ids": np.concatenate(all_patient_ids),
-        "feature_times": np.concatenate(all_feature_times),
+        "feature_times": np.concatenate(all_feature_times).astype('datetime64[s]'),
         "features": np.concatenate(all_representations),
     }

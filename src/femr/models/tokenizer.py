@@ -6,7 +6,7 @@ import datetime
 import functools
 import math
 import os
-from typing import Any, Dict, Mapping, Optional, Set, Union
+from typing import Any, Dict, Mapping, Optional, Set, Union, Tuple, List
 
 import meds
 import msgpack
@@ -385,9 +385,15 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             )
 
     def start_patient(self):
+        """Compute per-patient statistics that are required to generate features."""
+
+        # This is currently a null-op, but is required for cost featurization
         pass
 
-    def get_feature_codes(self, time: datetime.datetime, measurement: meds.Measurement):
+    def get_feature_codes(self, _time: datetime.datetime, measurement: meds.Measurement) -> Tuple[List[int], Optional[List[float]]]:
+        """Get codes for the provided measurement and time"""
+
+        # Note that time is currently not used in this code, but it is required for cost featurization
         if self.is_hierarchical:
             assert self.ontology is not None
             codes = [
@@ -431,5 +437,5 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                 else:
                     return [], None
 
-    def normalize_age(self, age):
+    def normalize_age(self, age: datetime.timedelta) -> float:
         return (age.total_seconds() - self.dictionary["age_stats"]["mean"]) / (self.dictionary["age_stats"]["std"])

@@ -7,3 +7,4 @@ ignore/*
 *.ipynb_checkpoints*
 tutorials/trash
 tutorials/tmp_trainer
+_version.py
