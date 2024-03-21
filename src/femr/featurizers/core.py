@@ -260,10 +260,13 @@ class FeaturizerList:
         dataset = index.filter_dataset(dataset, patient_ids)
 
         # Preprocess in parallel
-        with multiprocessing.Pool(num_threads) as pool:
-            preprocessed_featurizers: List[Featurizer] = [
-                y for x in pool.imap(_run_preprocess_featurizers, tasks) for y in x
-            ]
+        featurize_stats = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
+            _preprocess_agg_func,
+            batch_size=1_000,
+            num_proc=num_proc,
+        )
 
         # Aggregate featurizers
         for featurizer, featurizer_stat in zip(self.featurizers, featurize_stats):
@@ -299,9 +302,13 @@ class FeaturizerList:
 
         dataset = index.filter_dataset(dataset, patient_ids)
 
-        # Run featurizers in parallel
-        with multiprocessing.Pool(num_threads) as pool:
-            results: List[Tuple[Any, Any, Any, Any]] = list(pool.imap(_run_featurizer, tasks))
+        features = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
+            _features_agg_func,
+            batch_size=1_000,
+            num_proc=num_proc,
+        )
 
         result = {k: np.concatenate(features[k]) for k in ("patient_ids", "feature_times")}
 

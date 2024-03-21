@@ -18,28 +18,9 @@ We recommend users start with our [tutorial folder](https://github.com/som-shahl
 
 # Installation
 
-There are two variants of the **FEMR** package, a CPU only version and a CUDA enabled version.
+FEMR can be installed with the simple command ```pip install femr```.
 
-## How to install **FEMR** without CUDA
-
-```bash
-pip install femr
-```
-
-If you have a particularly old CPU, we offer a variant of femr without CPU optimations.
-
-```bash
-pip install femr_oldcpu
-```
-
-## How to install **FEMR** with CUDA support
-
-Note that CUDA-enabled **FEMR** requires jax in order to function.
-
-```bash
-pip install --upgrade "jax[cuda11_pip]==0.4.8" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-pip install "femr_cuda[models]"
-```
+If you are using deep learning, you need to also install xformers ```pip install xformers```.
 
 # Getting Started
 

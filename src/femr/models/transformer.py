@@ -14,7 +14,12 @@ import transformers
 import xformers.ops
 from torch import nn
 
-import femr.jax
+import femr.models.config
+import femr.models.processor
+import femr.models.rmsnorm
+import femr.models.tasks
+import femr.models.tokenizer
+import femr.models.xformers
 
 
 # From https://github.com/kingoflolz/mesh-transformer-jax
