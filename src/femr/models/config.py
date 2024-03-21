@@ -21,19 +21,19 @@ class FEMRTransformerConfig(transformers.PretrainedConfig):
         **kwargs,
     ) -> None:
         """Defined a configuration for a FEMR Transformer.
-        
+
         Arguments:
             vocab_size: The number of tokens in the vocabulary
-            is_hierarchical: Whether to use a hierarchical vocabulary. See FEMRTokenizer for more information.
+            is_hierarchical: Whether to use a hierarchical vocabulary. See FEMRTokenizer for more information
             hidden_size: The internal representation size
             intermediate_size: The size of the FFN in the transformer layers
             n_heads: The number of attention heads
             n_layers: The number of transformer encoder layers
-            attention_width: FEMR by default uses a local attention transformer. This defines the width of those attention windows.
+            attention_width: FEMR by default uses a local attention transformer with a width defined here
             use_normed_ages: Whether or not to provide normalized ages as a feature to the model
-            use_bias: Whether or not to use bias terms in the transformer layers. Current research indicates that this should be set to False.
-            hidden_act: The type of activation function to use in the transformer.
-            """
+            use_bias: Whether or not to use bias terms in the transformer layers
+            hidden_act: The type of activation function to use in the transformer
+        """
         super().__init__(**kwargs)
 
         self.vocab_size = vocab_size
@@ -56,9 +56,9 @@ class FEMRTaskConfig(transformers.PretrainedConfig):
         """A generic FEMR task definition. This holds state used for initalizing a tasks.py class.
 
         Task.get_task_config returns the task type and kwargs used to initialize this.
-        
+
         Arguments:
-            task_type: The name of the task. 
+            task_type: The name of the task.
             task_kwargs: Arbitrary arguments used to store state for that task.
         """
         super().__init__(**kwargs)
@@ -68,6 +68,7 @@ class FEMRTaskConfig(transformers.PretrainedConfig):
 
 class FEMRModelConfig(transformers.PretrainedConfig):
     """A model config is defined as the combination of a transformer config and a task config."""
+
     def __init__(
         self,
         transformer_config: Optional[Dict[str, Any]] = None,
@@ -75,8 +76,9 @@ class FEMRModelConfig(transformers.PretrainedConfig):
         **kwargs,
     ):
         """A combination of a transformer config and a task config.
-        
-        It is possible to initialize this with only a transformer config, in which case the model will be configured for inference only.
+
+        It is possible to initialize this with only a transformer config, in which
+        case the model will be configured for inference only.
         """
         super().__init__(**kwargs)
         if transformer_config is None:

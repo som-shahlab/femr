@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import collections
-import datetime
 import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -196,7 +195,7 @@ class CLMBRTaskHead(nn.Module):
         if not return_logits:
             logits = None
 
-        return loss, {'logits': logits}
+        return loss, {"logits": logits}
 
 
 class MOTORTaskHead(nn.Module):
@@ -241,7 +240,7 @@ class MOTORTaskHead(nn.Module):
         if not return_logits:
             time_dependent_logits = None
 
-        return loss, {'time_dependent_logits': time_dependent_logits}
+        return loss, {"time_dependent_logits": time_dependent_logits}
 
 
 def remove_first_dimension(data: Any) -> Any:
@@ -314,7 +313,6 @@ class FEMRModel(transformers.PreTrainedModel):
             return loss, result
 
 
-
 def compute_features(
     dataset: datasets.Dataset,
     model_path: str,
@@ -357,6 +355,6 @@ def compute_features(
 
     return {
         "patient_ids": np.concatenate(all_patient_ids),
-        "feature_times": np.concatenate(all_feature_times).astype('datetime64[s]'),
+        "feature_times": np.concatenate(all_feature_times).astype("datetime64[s]"),
         "features": np.concatenate(all_representations),
     }

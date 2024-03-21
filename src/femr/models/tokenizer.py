@@ -6,7 +6,7 @@ import datetime
 import functools
 import math
 import os
-from typing import Any, Dict, Mapping, Optional, Set, Union, Tuple, List
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 import meds
 import msgpack
@@ -390,7 +390,9 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         # This is currently a null-op, but is required for cost featurization
         pass
 
-    def get_feature_codes(self, _time: datetime.datetime, measurement: meds.Measurement) -> Tuple[List[int], Optional[List[float]]]:
+    def get_feature_codes(
+        self, _time: datetime.datetime, measurement: meds.Measurement
+    ) -> Tuple[List[int], Optional[List[float]]]:
         """Get codes for the provided measurement and time"""
 
         # Note that time is currently not used in this code, but it is required for cost featurization

@@ -35,12 +35,19 @@ class Task(abc.ABC):
         ...
 
     @abc.abstractmethod
+    def add_patient_labels(self, patient_label_offsets: List[int]) -> None:
+        ...
+
+    @abc.abstractmethod
     def needs_exact(self) -> bool:
         ...
 
     @abc.abstractmethod
     def add_event(
-        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
+        self,
+        current_date: datetime.datetime,
+        next_date: Optional[datetime.datetime],
+        next_features: Optional[Sequence[int]],
     ) -> int:
         ...
 
@@ -88,7 +95,10 @@ class LabeledPatientTask(Task):
         pass
 
     def add_event(
-        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Optional[Sequence[int]] = None
+        self,
+        current_date: datetime.datetime,
+        next_date: Optional[datetime.datetime],
+        next_features: Optional[Sequence[int]] = None,
     ) -> int:
         has_label = False
 
@@ -111,7 +121,7 @@ class LabeledPatientTask(Task):
             else:
                 # The next label isn't valid, so we have to break here
                 break
-        
+
         if has_label:
             return 1
         else:
@@ -143,7 +153,10 @@ class CLMBRTask(Task):
         self.batch_labels.extend([self.per_patient_batch_labels[i] for i in patient_label_offsets])
 
     def add_event(
-        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Optional[Sequence[int]] = None
+        self,
+        current_date: datetime.datetime,
+        next_date: Optional[datetime.datetime],
+        next_features: Optional[Sequence[int]] = None,
     ) -> int:
         if next_features is None:
             return 0
@@ -326,8 +339,8 @@ class MOTORTask(Task):
         assert ontology
         self.calculator = SurvivalCalculator(ontology, patient, self.pretraining_task_codes)
 
-        self.per_patient_censor_time = []
-        self.per_patient_time_sparse = {
+        self.per_patient_censor_time: List[float] = []
+        self.per_patient_time_sparse: Dict[str, List[float]] = {
             "data": [],
             "indices": [],
             "indptr": [0],
@@ -350,15 +363,18 @@ class MOTORTask(Task):
         self.censor_time.extend([self.per_patient_censor_time[i] for i in patient_label_offsets])
 
         for index in patient_label_offsets:
-            start = self.per_patient_time_sparse['indptr'][index]
-            end = self.per_patient_time_sparse['indptr'][index + 1]
+            start = int(self.per_patient_time_sparse["indptr"][index])
+            end = int(self.per_patient_time_sparse["indptr"][index + 1])
 
-            self.time_sparse['data'].extend(self.per_patient_time_sparse['data'][start:end])
-            self.time_sparse['indices'].extend(self.per_patient_time_sparse['indices'][start:end])
-            self.time_sparse['indptr'].append(len(self.time_sparse['indices']))
+            self.time_sparse["data"].extend(self.per_patient_time_sparse["data"][start:end])
+            self.time_sparse["indices"].extend(self.per_patient_time_sparse["indices"][start:end])
+            self.time_sparse["indptr"].append(len(self.time_sparse["indices"]))
 
     def add_event(
-        self, current_date: datetime.datetime, next_date: datetime.datetime, next_features: Sequence[int]
+        self,
+        current_date: datetime.datetime,
+        next_date: Optional[datetime.datetime],
+        next_features: Optional[Sequence[int]] = None,
     ) -> int:
         if not should_make_survival_prediction(current_date, next_date):
             return 0
