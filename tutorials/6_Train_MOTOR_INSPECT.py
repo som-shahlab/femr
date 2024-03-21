@@ -22,6 +22,8 @@ TARGET_DIR = 'trash/tutorial_6_INSEPCT'
 
 from_pretrained = True
 num_proc = 20
+import warnings
+warnings.filterwarnings("ignore", message="promote has been superseded by mode='default'.", category=FutureWarning, module="datasets")
 
 
 if not from_pretrained:
@@ -45,27 +47,32 @@ dataset = datasets.Dataset.from_parquet(parquet_folder)
 
 
 index = femr.index.PatientIndex(dataset, num_proc=num_proc)
-main_split = femr.splits.generate_hash_split(index.get_patient_ids(), 97, frac_test=0.15)
-
+# main_split = femr.splits.generate_hash_split(index.get_patient_ids(), 97, frac_test=0.15)
+inspect_split_csv = '/share/pi/nigam/projects/zphuo/repos/PE_3D_multimodal/training/trash/motor_model_022807/main_split_subset.csv'
+main_split = femr.splits.PatientSplit.load_from_csv(inspect_split_csv)
+main_dataset = main_split.split_dataset(dataset, index)
+train_dataset = main_dataset['train']
+valid_dataset = main_dataset['valid']
+test_dataset = main_dataset['test']
 
 # Note that we want to save this to the target directory since this is important information
 
-main_split.save_to_csv(os.path.join(TARGET_DIR, "motor_model", "main_split.csv"))
+# main_split.save_to_csv(os.path.join(TARGET_DIR, "motor_model", "main_split.csv"))
 
 import pandas as pd
-label_csv_subset = '/share/pi/nigam/projects/zphuo/data/PE/inspect/timelines_smallfiles_meds/cohort_0.2.0_master_file_anon_subset.csv'
-label_df = pd.read_csv(label_csv_subset)
-label_df = label_df[['patient_id', 'split', ]]
-inspect_split_csv = '/share/pi/nigam/projects/zphuo/repos/femr/tutorials/trash/tutorial_6_INSEPCT/motor_model/main_split.csv'
-label_df.to_csv(inspect_split_csv, index=False)
+# label_csv_subset = '/share/pi/nigam/projects/zphuo/data/PE/inspect/timelines_smallfiles_meds/cohort_0.2.0_master_file_anon_subset.csv'
+# label_df = pd.read_csv(label_csv_subset)
+# label_df = label_df[['patient_id', 'split', ]]
+# inspect_split_csv = '/share/pi/nigam/projects/zphuo/repos/femr/tutorials/trash/tutorial_6_INSEPCT/motor_model/main_split.csv'
+# label_df.to_csv(inspect_split_csv, index=False)
 
-train_split = femr.splits.generate_hash_split(main_split.train_patient_ids, 87, frac_test=0.15)
+# train_split = femr.splits.generate_hash_split(main_split.train_patient_ids, 87, frac_test=0.15)
 
-# print(train_split.train_patient_ids)
-# print(train_split.test_patient_ids)
+# # print(train_split.train_patient_ids)
+# # print(train_split.test_patient_ids)
 
-main_dataset = main_split.split_dataset(dataset, index)
-train_dataset = train_split.split_dataset(main_dataset['train'], femr.index.PatientIndex(main_dataset['train'], num_proc=num_proc))
+# main_dataset = main_split.split_dataset(dataset, index)
+# train_dataset = train_split.split_dataset(main_dataset['train'], femr.index.PatientIndex(main_dataset['train'], num_proc=num_proc))
 
 # print(train_dataset)
 

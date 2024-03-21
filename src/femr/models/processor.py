@@ -258,8 +258,8 @@ class FEMRBatchProcessor:
             functools.partial(map_length_stats, processor=self, max_length=max_length),
             agg_length_stats,
             num_proc=num_proc,
-            #batch_size=1_000,
-            batch_size=1,
+            batch_size=1_000,
+            # batch_size=1,
             with_indices=True,
         )
 
