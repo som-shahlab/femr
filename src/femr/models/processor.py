@@ -201,7 +201,7 @@ class BatchCreator:
 
                 per_patient_ages.append((event["time"] - birth) / datetime.timedelta(days=1))
                 per_patient_normalized_ages.append(self.tokenizer.normalize_age(event["time"] - birth))
-                per_patient_timestamps.append(event["time"].timestamp())
+                per_patient_timestamps.append(event["time"].replace(tzinfo=datetime.timezone.utc).timestamp())
 
                 last_time = event["time"]
 

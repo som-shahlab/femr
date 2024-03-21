@@ -303,12 +303,19 @@ class FEMRModel(transformers.PreTrainedModel):
         else:
             loss = 0
             features = features.reshape(-1, features.shape[-1])
-            features = features[batch["transformer"]["label_indices"], :]
-            result = {
-                "timestamps": batch["transformer"]["timestamps"][batch["transformer"]["label_indices"]],
-                "patient_ids": batch["patient_ids"][batch["transformer"]["label_indices"]],
-                "representations": features,
-            }
+            if 'task' in batch:
+                features = features[batch["transformer"]["label_indices"], :]
+                result = {
+                    "timestamps": batch["transformer"]["timestamps"][batch["transformer"]["label_indices"]],
+                    "patient_ids": batch["patient_ids"][batch["transformer"]["label_indices"]],
+                    "representations": features,
+                }
+            else:
+                result = {
+                    "timestamps": batch["transformer"]["timestamps"],
+                    "patient_ids": batch["patient_ids"],
+                    "representations": features,
+                }
 
             return loss, result
 
