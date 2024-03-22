@@ -78,5 +78,5 @@
     "n_layers": 2,
     "vocab_size": 128
   },
-  "transformers_version": "4.36.2"
+  "transformers_version": "4.39.0"
 }

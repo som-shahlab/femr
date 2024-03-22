@@ -329,6 +329,22 @@ def compute_features(
     device: Optional[torch.device] = None,
     ontology: Optional[femr.ontology.Ontology] = None,
 ) -> Dict[str, np.ndarray]:
+    """ "Compute features for a set of labels given a dataset and a model.
+
+    Arguments:
+        dataset: A HuggingFace dataset containing MEDS patients
+        model_path: A path to a saved pretrained model, including a saved tokenizer
+        labels: MEDS labels to compute features for
+        num_proc: The number of processors to use
+        tokens_per_batch: The maximum number of tokens per batch
+        device: Which type of compute to use
+        ontology: A FEMR ontology object, which is necessary for models that use a hierarchical tokenizer
+
+    Returns:
+        A dictionary of numpy arrays, with three keys, "patient_ids", "feature_times" and "features"
+         -  "patient_ids" and "feature_times" define the patient and time each feature refers to
+         -  "features" provides the representations at each patient id and feature time
+    """
     task = femr.models.tasks.LabeledPatientTask(labels)
 
     index = femr.index.PatientIndex(dataset, num_proc=num_proc)
