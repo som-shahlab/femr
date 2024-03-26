@@ -18,9 +18,12 @@ We recommend users start with our [tutorial folder](https://github.com/som-shahl
 
 # Installation
 
-FEMR can be installed with the simple command ```pip install femr```.
+```bash
+pip install femr
 
-If you are using deep learning, you need to also install xformers ```pip install xformers```.
+# If you are using deep learning, also run...
+pip install xformers
+```
 
 # Getting Started
 
