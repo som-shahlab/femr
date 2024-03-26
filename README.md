@@ -28,6 +28,36 @@ The first step of using **FEMR** is to convert your patient data into [MEDS](htt
 
 The best way to do this is with the [ETLs provided by MEDS](https://github.com/Medical-Event-Data-Standard/meds_etl).
 
+## OMOP Data
+
+If you have OMOP CDM formated data, follow these instructions:
+
+1. Download your OMOP dataset to `[PATH_TO_SOURCE_OMOP]`.
+2. Convert OMOP => MEDS using the following:
+```bash
+# Install MEDS Python packages
+pip install meds meds-etl
+
+# Convert OMOP => MEDS
+meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
+```
+3. Use HuggingFace's Datasets library to load our dataset in Python
+```python
+import datasets
+dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
+
+# Print dataset stats
+print(dataset)
+>>> Dataset({
+>>>   features: ['patient_id', 'events'],
+>>>   num_rows: 6732
+>>> })
+
+# Print number of events in first patient in dataset
+print(len(dataset[0]['events']))
+>>> 2287
+```
+
 # Development
 
 The following guides are for developers who want to contribute to **FEMR**.
