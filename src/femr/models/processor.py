@@ -264,7 +264,7 @@ class BatchCreator:
         # BUG: possible bug - if task is not none, why would we not populate task?
         # Q: where does label_indices come from?
         # this is created in BatchCreator.start_batch and updated in .add_patient
-        if self.task is not None: # and transformer["label_indices"].shape[0] > 0:
+        if self.task is not None and transformer["label_indices"].shape[0] > 0:
             final["task"] = self.task.get_batch_data()
             final["needs_exact"] = self.task.needs_exact()
         return final
