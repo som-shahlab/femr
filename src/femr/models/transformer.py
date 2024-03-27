@@ -184,6 +184,12 @@ class FEMRTransformer(nn.Module):
         self.layers = nn.ModuleList([FEMREncoderLayer(config) for _ in range(self.config.n_layers)])
 
     def forward(self, batch):
+        """
+        TODO: needs some documentation
+        
+        - what is the expected shape of batch["tokens"]?
+        - '' '' '' batch["normalized_ages"], etc...
+        """
         if not self.config.is_hierarchical:
             x = self.embed(batch["tokens"])
         else:
@@ -387,10 +393,11 @@ def compute_features(
     tokenizer = femr.models.tokenizer.FEMRTokenizer.from_pretrained(model_path, ontology=ontology)
     processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
 
+    # get a dataset that only includes patients with labels
     filtered_data = task.filter_dataset(dataset, index)
 
-    if device:
-        model = model.to(device)
+    # BUG fix: if device = 0 then model was not being moved to device
+    model = model.to(device)
 
     batches = processor.convert_dataset(
         filtered_data, tokens_per_batch=tokens_per_batch, min_samples_per_batch=1, num_proc=num_proc
@@ -398,7 +405,7 @@ def compute_features(
 
     # BUG: possible bug around here... batch being moved to device and then used with numpy functions?
     # issue: https://github.com/som-shahlab/femr/issues/184
-    batches.set_format("pt", device=device)
+    batches.set_format("pt", device=None)
 
     all_patient_ids = []
     all_feature_times = []
@@ -409,7 +416,7 @@ def compute_features(
         # print(f"num feature times processed: {num_feature_times_processed}")
         # print(f"batch (len={len(batch)}):")
         # # print(batch)
-        batch = processor.collate([batch])["batch"]
+        batch = processor.collate([batch])["batch"] #.to(device)
         with torch.no_grad():
             patient_ids, feature_times, representations = model(batch)
             all_patient_ids.append(patient_ids.cpu().numpy())

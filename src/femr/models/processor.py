@@ -19,9 +19,12 @@ import meds
 
 def map_length_stats(batch, indices, *, processor: FEMRBatchProcessor, max_length):
     """
-    construct a set of "lengths" for each patient in a batch. Each length is a tuple (patient_index, start_index, length), where...
+    construct a set of "lengths" for each patient in a batch. Each length is a tuple (patient_index, start_index, length), with:
+    - patient_index: the index of the patient in the dataset
+    - start_index: ...
+    - length: ...
 
-    if data["needs_exact"], then...
+    if data["needs_exact"], then every label needs to have a prediction. otherwise...
 
     <to be continued>
     """
@@ -71,7 +74,13 @@ class BatchCreator:
     Usage:
 
     after initializing the BatchCreator object you need to call start_batch() to initialize required fields.
+
     then call add_patient(...) to add patients to the batch.
+
+    each patient in a batch is represented by three integers:
+    - patient_id: patient ID from MEDS dataset
+    - offset: ...
+    - length: ...
 
     <to be continued>
     """
@@ -81,6 +90,13 @@ class BatchCreator:
         self.task = task
 
     def start_batch(self):
+        """
+        TODO: need to define each of the fields below, which are initialized as [] or [0]
+        - patient_ids: a list of patient ids in the batch?
+        - offsets: ...
+        - patient_lengths: ...
+        - tokens: list of 
+        """
         self.patient_ids = []
         self.offsets = []
         self.patient_lengths = []
@@ -108,12 +124,20 @@ class BatchCreator:
         TODO: this needs documentation. specifically:
         - describe logical flow
         - describe return value (and, when is return value None?)
+
+        TODO: Q: what is offset?
         """
         self.patient_ids.append(patient["patient_id"])
         self.offsets.append(offset)
 
         def process_patient_events():
-
+            """
+            this needs documentation. 
+            what is the logical flow? 
+            what is the intended return value?
+            why does this need to be a function?
+            """
+            
             # what is current_date?
             current_date = None
 
@@ -240,7 +264,7 @@ class BatchCreator:
         # BUG: possible bug - if task is not none, why would we not populate task?
         # Q: where does label_indices come from?
         # this is created in BatchCreator.start_batch and updated in .add_patient
-        if self.task is not None and transformer["label_indices"].shape[0] > 0:
+        if self.task is not None: # and transformer["label_indices"].shape[0] > 0:
             final["task"] = self.task.get_batch_data()
             final["needs_exact"] = self.task.needs_exact()
         return final
@@ -250,8 +274,9 @@ class BatchCreator:
 
         This is necessary as some tasks use sparse matrices that need to be postprocessed."""
 
-        batch["transformer"]["patient_lengths"] = np.array(batch["transformer"]["patient_lengths"])
-        assert isinstance(batch["transformer"]["patient_lengths"], np.ndarray)
+        # BUG: batch was on gpu already, so this was causing problems during inference? maybe during training this would not be an issue and we need this code
+        # batch["transformer"]["patient_lengths"] = np.array(batch["transformer"]["patient_lengths"])  # BUG?
+        # assert isinstance(batch["transformer"]["patient_lengths"], np.ndarray)
 
         # BUG: possible issue: is "task" not getting passed here, even if self.task is not None?
         if self.task is not None and "task" in batch:
@@ -288,10 +313,20 @@ def _add_dimension(data: Any) -> Any:
 
 
 class FEMRBatchProcessor:
+    """
+    TODO: needs documentation.
+
+    FEMRBatchProcessor object includes functions for creating batches from a single patient (convert_patient) or a dataset (convert_dataset). 
+    
+    The batching process is determined by a FEMRTokenizer and Task.
+
+    It looks like task is only passed to BatchCreator
+    """
     def __init__(self, tokenizer: femr.models.tokenizer.FEMRTokenizer, task: femr.models.tasks.Task = None):
         self.creator = BatchCreator(tokenizer, task)
 
     def convert_patient(self, patient, offset=0, max_patient_length=None, tensor_type=None, **formatter_kwargs):
+        """convert a single patient to a batch? why is this needed?"""
         self.creator.start_batch()
         self.creator.add_patient(patient, offset=offset, max_patient_length=max_patient_length)
         batch_data = self.creator.get_batch_data()

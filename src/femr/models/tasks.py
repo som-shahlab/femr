@@ -69,6 +69,7 @@ class LabeledPatientTask(Task):
         return femr.models.transformer.FEMRTaskConfig(task_type="labeled_patients")
 
     def filter_dataset(self, dataset: datasets.Dataset, index: femr.index.PatientIndex) -> datasets.Dataset:
+        """return a select on the dataset that only includes patients with labels"""
         indices = [index.get_index(patient_id) for patient_id in self.label_map]
         return dataset.select(indices)
 

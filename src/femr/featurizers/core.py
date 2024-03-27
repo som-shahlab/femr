@@ -263,7 +263,8 @@ class FeaturizerList:
         featurize_stats = femr.hf_utils.aggregate_over_dataset(
             dataset,
             functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
-            functools.partial(_preprocess_agg_func, label_map=label_map, featurizers=self.featurizers),
+            # functools.partial(_preprocess_agg_func, label_map=label_map, featurizers=self.featurizers),
+            _preprocess_agg_func,
             batch_size=1_000,
             num_proc=num_proc,
         )
@@ -305,7 +306,7 @@ class FeaturizerList:
         features = femr.hf_utils.aggregate_over_dataset(
             dataset,
             functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
-            functools.partial(_features_agg_func, label_map=label_map, featurizers=self.featurizers),
+            _features_agg_func,
             batch_size=1_000,
             num_proc=num_proc,
         )
@@ -326,6 +327,21 @@ class FeaturizerList:
 
 
 def join_labels(features: Mapping[str, np.array], labels: List[meds.Label]) -> Mapping[str, np.array]:
+    """
+    Combine a set of features with a list of labels for machine learning tasks.
+
+    This function ensures that the ordering of the labels matches the ordering of the fields of the features object.
+
+    This also checks whether each label has a feature set, and ensures that the feature time is prior to the prediction time.
+
+    TODO: define a container object for the features mapping, to enforce validation checks
+    
+    Returns: a dict with...
+    - 'boolean_values': list[bool]. values for each label
+    - 'patient_ids': list[int]. patient ids for each label
+    - 'times': list[datetime]. prediction time of each label
+    - 'features': array. feature vector
+    """
     labels = list(labels)
     labels.sort(key=lambda a: (a["patient_id"], a["prediction_time"]))
 
