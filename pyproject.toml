@@ -16,6 +16,7 @@ dependencies = [
     "nptyping == 2.4.1",
     "msgpack >= 1.0.5",
     "meds == 0.1.3",
+    "meds_etl == 0.0.1",
     "torch >= 2.1.2",
     "transformers >= 4.25",
     "datasets >= 2.15",
