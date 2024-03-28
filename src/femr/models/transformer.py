@@ -274,6 +274,11 @@ class MOTORTaskHead(nn.Module):
         survival_loss = torch.exp2(time_dependent_logits + batch["log_time"]).mean()
         event_loss = -math.log(2) * torch.where(batch["is_event"], time_dependent_logits, 0).mean()
 
+        if survival_loss == torch.inf:
+            print("WARNING: encountered torch.inf in survival_loss")
+        if event_loss == torch.inf:
+            print("WARNING: encountered torch.inf in event_loss")
+
         loss = survival_loss + event_loss
 
         if not return_logits:
