@@ -1,5 +1,8 @@
 import functools
+import json
 import pickle
+
+import meds
 
 
 def _agg_helper(*args, map_func):
@@ -36,3 +39,8 @@ def aggregate_over_dataset(dataset, map_func, agg_func, batch_size, num_proc, wi
             current = agg_func(current, fixed_stat)
 
     return current
+
+def dump_patient_to_json(patient: meds.Patient, path: str) -> None:
+    """Dump a patient to a human-readable JSON file, with pretty print."""
+    with open(path, "w") as f:
+        json.dump(patient, f, indent=2, default=str)
