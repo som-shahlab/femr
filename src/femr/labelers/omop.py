@@ -7,22 +7,9 @@ from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 import meds
 
-from femr.labelers.omop_inpatient import identity
 import femr.ontology
 
-from .core import TimeHorizon, TimeHorizonEventLabeler, get_death_concepts
-
-
-def get_visit_concepts() -> List[str]:
-    return ["Visit/IP", "Visit/OP"]
-
-
-def get_inpatient_admission_concepts() -> List[str]:
-    return ["Visit/IP"]
-
-
-def get_outpatient_visit_concepts() -> List[str]:
-    return ["Visit/OP"]
+from .core import Labeler, TimeHorizon, TimeHorizonEventLabeler, get_death_concepts, identity
 
 def does_exist_event_within_time_range(
     patient: meds.Patient, start: datetime.datetime, end: datetime.datetime, exclude_event_idxs: List[int] = []
@@ -36,76 +23,6 @@ def does_exist_event_within_time_range(
         if start <= e.start <= end:
             return True
     return False
-
-
-def get_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
-    return get_femr_codes(ontology, get_visit_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True)
-
-
-def get_inpatient_admission_codes(ontology: femr.ontology.Ontology) -> Set[str]:
-    # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return get_femr_codes(
-        ontology, get_inpatient_admission_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
-    )
-
-
-def get_outpatient_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
-    return get_femr_codes(
-        ontology, get_outpatient_visit_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
-    )
-
-
-def get_outpatient_visit_measurements(patient: meds.Patient, ontology: femr.ontology.Ontology) -> List[Tuple[datetime.datetime, meds.Measurement]]:
-    admission_codes: Set[str] = get_outpatient_visit_codes(ontology)
-    measurements: List[meds.Measurement] = []
-    for e in patient['events']:
-        for m in e["measurements"]:
-            if m['code'] in admission_codes and m['omop_table'] == "visit_occurrence":
-                # Error checking
-                if m['start'] is None or m['end'] is None:
-                    raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
-                elif m['start'] > m['end']:
-                    raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
-                # Drop single point in time events
-                if m['start'] == m['end']:
-                    continue
-                measurements.append((e['time'], m))
-    return measurements
-
-
-def get_inpatient_admission_measurements(patient: meds.Patient, 
-                                         ontology: femr.ontology.Ontology) -> List[Tuple[datetime.datetime, meds.Measurement]]:
-    admission_codes: Set[str] = get_inpatient_admission_codes(ontology)
-    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = []
-    for e in patient["events"]:
-        for m in e["measurements"]:
-            if m['code'] in admission_codes and m['metadata']['table'] == "visit_occurrence":
-                # Error checking
-                if e['time'] is None or m['metadata']['end'] is None:
-                    raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
-                elif e['time'] > m['metadata']['end']:
-                    raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
-                # Drop single point in time events
-                if e['time'] == m['metadata']['end']:
-                    continue
-                measurements.append((e['time'], m))
-    return measurements
-
-
-def get_inpatient_admission_discharge_times(
-    patient: meds.Patient, ontology: femr.ontology.Ontology
-) -> List[Tuple[datetime.datetime, datetime.datetime]]:
-    """Return a list of all admission/discharge times for this patient."""
-    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(patient, ontology)
-    times: List[Tuple[datetime.datetime, datetime.datetime]] = []
-    for (start, m) in measurements:
-        if m['metadata']['end'] is None:
-            raise RuntimeError(f"Event {m} cannot have `None` as its `end` attribute.")
-        if start > m['metadata']['end']:
-            raise RuntimeError(f"Event {m} cannot have `start` after `end`.")
-        times.append((start, m['metadata']['end']))
-    return times
-
 
 ##########################################################
 ##########################################################

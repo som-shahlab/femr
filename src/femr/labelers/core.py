@@ -14,7 +14,6 @@ import datasets
 import meds
 
 import femr.hf_utils
-from femr.labelers.omop import identity
 import femr.ontology
 
 ##########################################################
@@ -98,6 +97,7 @@ class Labeler(ABC):
         self,
         dataset: datasets.Dataset,
         num_proc: int = 1,
+        batch_size: int = 10_000,
     ) -> List[meds.Label]:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -113,7 +113,7 @@ class Labeler(ABC):
             dataset,
             functools.partial(_label_map_func, labeler=self),
             _label_agg_func,
-            batch_size=10_000,
+            batch_size=batch_size,
             num_proc=num_proc,
         )
 

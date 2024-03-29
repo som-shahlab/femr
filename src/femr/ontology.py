@@ -3,7 +3,7 @@ from __future__ import annotations
 import collections
 import functools
 import os
-from typing import Any, Dict, Iterable, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 import datasets
 import meds
@@ -49,7 +49,7 @@ class Ontology:
             .rows()
         )
 
-        concept_id_to_code_map = {}
+        concept_id_to_code_map = {} # [key] = concept_id from CONCEPT.csv, [value] = code from CONCEPT.csv
 
         non_standard_concepts = set()
 
@@ -75,8 +75,11 @@ class Ontology:
             .collect()
             .rows()
         ):
-            if concept_id_1 in non_standard_concepts:
-                self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
+            try:
+                if concept_id_1 in non_standard_concepts:
+                    self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
+            except Exception as e:
+                print(f"Concept ID 1: {concept_id_1} | Concept ID 2: {concept_id_2} | Is Concept ID 1 in `concept_id_to_code_map`? {concept_id_1 in concept_id_to_code_map} | Is Concept ID 2 in `concept_id_to_code_map`? {concept_id_2 in concept_id_to_code_map} | Exception: {e}. It seems that one of these codes is in your Athena Ontology's CONCEPT_RELATIONSHIP.csv but not in CONCEPT.csv")
 
         ancestor = pl.scan_csv(os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), separator="\t", infer_schema_length=0)
         ancestor = ancestor.filter(pl.col("min_levels_of_separation") == "1")
@@ -87,8 +90,11 @@ class Ontology:
             .collect()
             .rows()
         ):
-            self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
-
+            try:
+                self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
+            except Exception as e:
+                print(f"Concept ID: {concept_id} | Parent Concept ID: {parent_concept_id} | Is Concept ID in `concept_id_to_code_map`? {concept_id in concept_id_to_code_map} | Is Parent Concept ID in `concept_id_to_code_map`? {parent_concept_id in concept_id_to_code_map} | Exception: {e}.  It seems that one of these codes is in your Athena Ontology's CONCEPT_ANCESTOR.csv but not in CONCEPT.csv")
+                
         # Have to add after OMOP to overwrite ...
         for code, code_info in code_metadata.items():
             if code_info.get("description") is not None:
@@ -161,21 +167,32 @@ class Ontology:
         """Get the parents for a given code."""
         return self.parents_map.get(code, set())
 
-    def get_all_children(self, code: str) -> Set[str]:
-        """Get all children, including through the ontology."""
-        if code not in self.all_children_map:
-            result = {code}
-            for child in self.children_map.get(code, set()):
-                result |= self.get_all_children(child)
-            self.all_children_map[code] = result
-        return self.all_children_map[code]
+    def get_all_children(self, code: Union[str, List[str]]) -> Set[str]:
+        """Get all children for code(s), including through the ontology."""
+        if isinstance(code, list):
+            result = set()
+            for c in code:
+                result |= self.get_all_children(c)
+            return result
+        else:
+            if code not in self.all_children_map:
+                result = {code}
+                for child in self.children_map.get(code, set()):
+                    result |= self.get_all_children(child)
+                self.all_children_map[code] = result
+            return self.all_children_map[code]
 
-    def get_all_parents(self, code: str) -> Set[str]:
-        """Get all parents, including through the ontology."""
-        if code not in self.all_parents_map:
-            result = {code}
-            for parent in self.parents_map.get(code, set()):
-                result |= self.get_all_parents(parent)
-            self.all_parents_map[code] = result
-
-        return self.all_parents_map[code]
+    def get_all_parents(self, code: Union[str, List[str]]) -> Set[str]:
+        """Get all parents for code(s), including through the ontology."""
+        if isinstance(code, list):
+            result = set()
+            for c in code:
+                result |= self.get_all_parents(c)
+            return result
+        else:
+            if code not in self.all_parents_map:
+                result = {code}
+                for parent in self.parents_map.get(code, set()):
+                    result |= self.get_all_parents(parent)
+                self.all_parents_map[code] = result
+            return self.all_parents_map[code]

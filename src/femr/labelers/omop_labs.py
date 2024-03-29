@@ -13,8 +13,6 @@ from .core import (
     OMOPConceptCodeLabeler, 
 )
 
-from femr.labelers.omop import get_femr_codes
-
 ##########################################################
 ##########################################################
 # Labelers based on Lab Values.
@@ -47,11 +45,7 @@ class InstantLabValueLabeler(Labeler):
         ontology: femr.ontology.Ontology,
     ):
         self.ontology: femr.ontology.Ontology = ontology
-        self.outcome_codes: Set[str] = get_femr_codes(
-            ontology,
-            self.original_omop_concept_codes,
-            is_ontology_expansion=True,
-        )
+        self.outcome_codes: Set[str] = ontology.get_all_children(self.original_omop_concept_codes)
 
     def label(self, patient: meds.Patient, is_show_warnings: bool = False) -> List[meds.Label]:
         labels: List[meds.Label] = []
@@ -62,17 +56,16 @@ class InstantLabValueLabeler(Labeler):
             for m in e["measurements"]:
                 if m["code"] in self.outcome_codes:
                     # This is an outcome event
-                    if m['text_value'] is not None:
+                    if m['numeric_value'] is not None:
                         try:
                             # `e.unit` is string of form "mg/dL", "ounces", etc.
-                            # TODO -- where is e.value and e.unit stored?
-                            label: int = self.label_to_int(self.value_to_label(m['text_value'], m['metadata']['unit']))
+                            label: int = self.label_to_int(self.value_to_label(m['numeric_value'], m['metadata']['unit']))
                             prediction_time: datetime.datetime = e["time"] - datetime.timedelta(minutes=1)
                             labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_time, integer_value=label))
                         except Exception as exception:
                             if is_show_warnings:
                                 print(
-                                    f"Warning: Error parsing value='{m['text_value']}' with metadata='{m['metadata']}'"
+                                    f"Warning: Error parsing value='{m['numeric_value']}' with metadata='{m['metadata']}'"
                                     f" for code='{m['code']}' @ {e['time']} for patient_id='{patient['patient_id']}'"
                                     f" | Exception: {exception}"
                                 )
@@ -90,7 +83,7 @@ class InstantLabValueLabeler(Labeler):
         raise ValueError(f"Invalid label without a corresponding int: {label}")
 
     @abstractmethod
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
+    def value_to_label(self, raw_value: float, unit: Optional[str]) -> str:
         """Convert `value` to a string label: "mild", "moderate", "severe", or "normal".
         NOTE: Some units have the form 'mg/dL (See scan or EMR data for detail)', so you
         need to use `.startswith()` to check for the unit you want.

@@ -2,21 +2,89 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 import meds
 import pandas as pd
 
-from femr.labelers.omop import get_inpatient_admission_discharge_times, get_outpatient_visit_measurements
-from femr.labelers.omop_labs import InstantLabValueLabeler
 import femr.ontology
-
-from .core import (
+from femr.labelers.omop import WithinVisitLabeler
+from femr.labelers.omop_labs import InstantLabValueLabeler
+from femr.labelers.core import (
     TimeHorizon, 
     TimeHorizonEventLabeler, 
     Labeler, 
     move_datetime_to_end_of_day
 )
+
+
+def get_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
+    return ontology.get_all_children(get_inpatient_admission_codes().union(get_outpatient_visit_codes()))
+
+def get_inpatient_admission_codes(ontology: femr.ontology.Ontology) -> Set[str]:
+    # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
+    return {"Visit/IP", "Visit/ERIP", "Visit/ER", }
+
+def get_outpatient_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
+    # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
+    return {"Visit/OP", "Visit/OMOP4822036", "Visit/OMOP4822458", }
+
+def get_outpatient_visit_measurements(patient: meds.Patient, ontology: femr.ontology.Ontology) -> List[Tuple[datetime.datetime, meds.Measurement]]:
+    admission_codes: Set[str] = get_outpatient_visit_codes(ontology)
+    measurements: List[meds.Measurement] = []
+    for e in patient['events']:
+        for m in e["measurements"]:
+            if (
+                m['metadata']['table'] == "visit_occurrence"
+                and (m['code'] in admission_codes or len(ontology.get_parents(m['code']).intersection(admission_codes)) > 0)
+            ):
+                # Error checking
+                if m['start'] is None or m['end'] is None:
+                    raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
+                elif m['start'] > m['end']:
+                    raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
+                # Drop single point in time events
+                if m['start'] == m['end']:
+                    continue
+                measurements.append((e['time'], m))
+    return measurements
+
+
+def get_inpatient_admission_measurements(patient: meds.Patient, 
+                                         ontology: femr.ontology.Ontology) -> List[Tuple[datetime.datetime, meds.Measurement]]:
+    admission_codes: Set[str] = get_inpatient_admission_codes(ontology)
+    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = []
+    for e in patient["events"]:
+        for m in e["measurements"]:
+            if (
+                m['metadata']['table'] == "visit_occurrence"
+                and (m['code'] in admission_codes or len(ontology.get_parents(m['code']).intersection(admission_codes)) > 0)
+            ):
+                # Error checking
+                if e['time'] is None or m['metadata']['end'] is None:
+                    raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
+                elif e['time'] > m['metadata']['end']:
+                    raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
+                # Drop single point in time events
+                if e['time'] == m['metadata']['end']:
+                    continue
+                measurements.append((e['time'], m))
+    return measurements
+
+
+def get_inpatient_admission_discharge_times(
+    patient: meds.Patient, ontology: femr.ontology.Ontology
+) -> List[Tuple[datetime.datetime, datetime.datetime]]:
+    """Return a list of all admission/discharge times for this patient."""
+    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(patient, ontology)
+    times: List[Tuple[datetime.datetime, datetime.datetime]] = []
+    for (start, m) in measurements:
+        if m['metadata']['end'] is None:
+            raise RuntimeError(f"Event {m} cannot have `None` as its `end` attribute.")
+        if start > m['metadata']['end']:
+            raise RuntimeError(f"Event {m} cannot have `start` after `end`.")
+        times.append((start, m['metadata']['end']))
+    return times
 
 
 ##########################################################
@@ -170,10 +238,10 @@ class ThrombocytopeniaInstantLabValueLabeler(InstantLabValueLabeler):
         "LOINC/777-3",
     ]
 
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        if raw_value.lower() in ["normal", "adequate"]:
+    def value_to_label(self, value: Union[float, str], unit: Optional[str]) -> str:
+        if str(value).lower() in ["normal", "adequate"]:
             return "normal"
-        value = float(raw_value)
+        value = float(value)
         if value < 50:
             return "severe"
         elif value < 100:
@@ -195,10 +263,10 @@ class HyperkalemiaInstantLabValueLabeler(InstantLabValueLabeler):
         "LOINC/2823-3",
     ]
 
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        if raw_value.lower() in ["normal", "adequate"]:
+    def value_to_label(self, value: Union[float, str], unit: Optional[str]) -> str:
+        if str(value).lower() in ["normal", "adequate"]:
             return "normal"
-        value = float(raw_value)
+        value = float(value)
         if unit is not None:
             unit = unit.lower()
             if unit.startswith("mmol/l"):
@@ -236,10 +304,10 @@ class HypoglycemiaInstantLabValueLabeler(InstantLabValueLabeler):
         "LOINC/14749-6",
     ]
 
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        if raw_value.lower() in ["normal", "adequate"]:
+    def value_to_label(self, value: Union[float, str], unit: Optional[str]) -> str:
+        if str(value).lower() in ["normal", "adequate"]:
             return "normal"
-        value = float(raw_value)
+        value = float(value)
         if unit is not None:
             unit = unit.lower()
             if unit.startswith("mg/dl"):
@@ -269,10 +337,10 @@ class HyponatremiaInstantLabValueLabeler(InstantLabValueLabeler):
 
     original_omop_concept_codes = ["LOINC/LG11363-5", "LOINC/2951-2", "LOINC/2947-0"]
 
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        if raw_value.lower() in ["normal", "adequate"]:
+    def value_to_label(self, value: Union[float, str], unit: Optional[str]) -> str:
+        if str(value).lower() in ["normal", "adequate"]:
             return "normal"
-        value = float(raw_value)
+        value = float(value)
         if value < 125:
             return "severe"
         elif value < 130:
@@ -290,10 +358,10 @@ class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
         "LOINC/LP392452-1",
     ]
 
-    def value_to_label(self, raw_value: str, unit: Optional[str]) -> str:
-        if raw_value.lower() in ["normal", "adequate"]:
+    def value_to_label(self, value: Union[float, str], unit: Optional[str]) -> str:
+        if str(value).lower() in ["normal", "adequate"]:
             return "normal"
-        value = float(raw_value)
+        value = float(value)
         if unit is not None:
             unit = unit.lower()
             if unit.startswith("g/dl"):
