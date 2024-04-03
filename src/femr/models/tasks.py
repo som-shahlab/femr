@@ -279,6 +279,7 @@ class MOTORTask(Task):
         num_bins: int,
         final_layer_size: int,
         num_proc: int = 1,
+        batch_size: int = 100,
     ) -> MOTORTask:
         tasks = []
         for dict_entry in tokenizer.dictionary["vocab"]:
@@ -293,8 +294,8 @@ class MOTORTask(Task):
             dataset,
             functools.partial(_prefit_motor_map, tasks=tasks, ontology=tokenizer.ontology),
             _prefit_motor_agg,
-            1_000,
             num_proc=num_proc,
+            batch_size=batch_size,
         )
 
         time_bins = np.percentile(length_samples.samples, np.linspace(0, 100, num_bins + 1))

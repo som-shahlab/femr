@@ -24,6 +24,7 @@ def train_tokenizer(
     num_numeric: int = 1000,
     ontology: Optional[femr.ontology.Ontology] = None,
     num_proc: int = 1,
+    batch_size: int = 1000,
 ) -> FEMRTokenizer:
     """Train a FEMR tokenizer from the given dataset"""
     statistics = femr.hf_utils.aggregate_over_dataset(
@@ -33,7 +34,7 @@ def train_tokenizer(
         ),
         agg_statistics,
         num_proc=num_proc,
-        batch_size=1_000,
+        batch_size=batch_size,
     )
     return FEMRTokenizer(
         convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical, num_numeric, ontology), ontology
