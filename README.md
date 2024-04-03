@@ -65,16 +65,17 @@ If you are using the STARR-OMOP dataset from Stanford (which uses the OMOP CDM),
 1. Download your STARR-OMOP dataset to `[PATH_TO_SOURCE_OMOP]`.
 2. Convert STARR-OMOP => MEDS using the following:
 ```bash
-femr_stanford_omop_fixer [PATH_TO_SOURCE_OMOP] [PATH_TO_SOURCE_OMOP]
-
 # Convert OMOP => MEDS data format
 meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
+
+# Apply Stanford fixes
+femr_stanford_omop_fixer [PATH_TO_OUTPUT_MEDS] [PATH_TO_OUTPUT_MEDS]_new
 ```
 
 3. Use HuggingFace's Datasets library to load our dataset in Python
 ```bash
 import datasets
-dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
+dataset = datasets.Dataset.from_parquet([PATH_TO_OUTPUT_MEDS]_new + 'data/*')
 
 # Print dataset stats
 print(dataset)
