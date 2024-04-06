@@ -18,6 +18,55 @@ from femr.labelers.core import (
 )
 
 
+def get_icu_visit_detail_care_site_ids(ontology: femr.ontology.Ontology) -> Set[str]:
+    return ontology.get_all_children([
+        # All care sites with "ICU" (case insensitive) in the name
+        "528292",
+        "528612",
+        "528604",
+        "528623",
+        "528396",
+        "528377",
+        "528314",
+        "528478",
+        "528112",
+        "528024",
+        "527323",
+        "527858",
+    ])
+
+def get_icu_measurements(
+    patient: meds.Patient, ontology: femr.ontology.Ontology
+) -> List[Tuple[datetime.datetime, meds.Measurement]]:
+    """Return all ICU events for this patient.
+    """
+    icu_visit_detail_care_site_ids: Set[str] = get_icu_visit_detail_care_site_ids(ontology)
+    measurements: List[Tuple[datetime.datetime, meds.Measurement]]= []  # type: ignore
+    for idx, e in enumerate(patient['events']):
+        # `visit_detail` is more accurate + comprehensive than `visit_occurrence` for
+        #   ICU measurements for STARR OMOP for some reason
+        for m in e["measurements"]:
+            if (
+                m['metadata']['table'] == "visit_detail"
+                and 'care_site_id' in m['metadata']
+                and m['metadata']['care_site_id'] in icu_visit_detail_care_site_ids # no ontology expansion for ICU
+            ):
+                # Error checking
+                if isinstance(m['metadata']['end'], str):
+                    m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
+                if e['time'] is None or m['metadata']['end'] is None:
+                    raise RuntimeError(
+                        f"Event {e} for patient {patient['patient_id']} cannot have `None` as its `start` or `end` attribute."
+                    )
+                elif e['time'] > m['metadata']['end']:
+                    raise RuntimeError(f"Event {e} for patient {patient['patient_id']} cannot have `start` after `end`.")
+                # Drop single point in time measurements
+                if e['time'] == m['metadata']['end']:
+                    continue
+                measurements.append((e['time'], m))  # type: ignore
+    return measurements
+
+
 def get_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
     return ontology.get_all_children(get_inpatient_admission_codes().union(get_outpatient_visit_codes()))
 
@@ -35,16 +84,18 @@ def get_outpatient_visit_measurements(patient: meds.Patient, ontology: femr.onto
     for e in patient['events']:
         for m in e["measurements"]:
             if (
-                m['metadata']['table'] == "visit_occurrence"
+                m['metadata']['table'] == "visit"
                 and (m['code'] in admission_codes or len(ontology.get_parents(m['code']).intersection(admission_codes)) > 0)
             ):
+                if isinstance(m['metadata']['end'], str):
+                    m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
                 # Error checking
-                if m['start'] is None or m['end'] is None:
+                if e['time'] is None or m['metadata']['end'] is None:
                     raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
-                elif m['start'] > m['end']:
+                elif e['time'] > m['metadata']['end']:
                     raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
                 # Drop single point in time events
-                if m['start'] == m['end']:
+                if e['time'] == m['metadata']['end']:
                     continue
                 measurements.append((e['time'], m))
     return measurements
@@ -57,9 +108,11 @@ def get_inpatient_admission_measurements(patient: meds.Patient,
     for e in patient["events"]:
         for m in e["measurements"]:
             if (
-                m['metadata']['table'] == "visit_occurrence"
+                m['metadata']['table'] == "visit"
                 and (m['code'] in admission_codes or len(ontology.get_parents(m['code']).intersection(admission_codes)) > 0)
             ):
+                if isinstance(m['metadata']['end'], str):
+                    m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
                 # Error checking
                 if e['time'] is None or m['metadata']['end'] is None:
                     raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
@@ -79,6 +132,8 @@ def get_inpatient_admission_discharge_times(
     measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(patient, ontology)
     times: List[Tuple[datetime.datetime, datetime.datetime]] = []
     for (start, m) in measurements:
+        if isinstance(m['metadata']['end'], str):
+            m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
         if m['metadata']['end'] is None:
             raise RuntimeError(f"Event {m} cannot have `None` as its `end` attribute.")
         if start > m['metadata']['end']:
@@ -195,25 +250,27 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
 
     def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
         # Return the start times of all ICU admissions -- this is our outcome
-        return [e.start for e in get_icu_events(patient, self.ontology)]  # type: ignore
+        return [time for time, __ in get_icu_measurements(patient, self.ontology)]  # type: ignore
 
-    def get_visit_measurements(self, patient: meds.Patient) -> List[meds.Measurement]:
+    def get_visit_measurements(self, patient: meds.Patient) -> List[Tuple[datetime.datetime, meds.Measurement]]:
         """Return all inpatient visits where ICU transfer does not occur on the same day as admission."""
         # Get all inpatient visits -- each visit comprises a prediction (start, end) time horizon
-        all_visits: List[meds.Measurement] = get_outpatient_visit_measurements(patient, self.ontology)
+        measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(patient, self.ontology)
         # Exclude visits where ICU admission occurs on the same day as admission
         icu_transfer_dates: List[datetime.datetime] = [
             x.replace(hour=0, minute=0, second=0, microsecond=0) for x in self.get_outcome_times(patient)
         ]
-        valid_visits: List[meds.Measurement] = []
-        for start, visit in all_visits:
+        valid_visits: List[Tuple[datetime.datetime, meds.Measurement]] = []
+        for time, m in measurements:
             # If admission and discharge are on the same day, then ignore
-            if start.date() == visit['metadata']['end'].date():
+            if isinstance(m['metadata']['end'], str):
+                m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
+            if time.date() == m['metadata']['end'].date():
                 continue
             # If ICU transfer occurs on the same day as admission, then ignore
-            if start.replace(hour=0, minute=0, second=0, microsecond=0) in icu_transfer_dates:
+            if time.replace(hour=0, minute=0, second=0, microsecond=0) in icu_transfer_dates:
                 continue
-            valid_visits.append(visit)
+            valid_visits.append((time, m))
         return valid_visits
 
 
@@ -479,12 +536,6 @@ class LupusCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
 class AcuteMyocardialInfarctionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     # n = 21982
     root_concept_code = "SNOMED/57054005"
-
-
-class CTEPHCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
-    # n = 1433
-    root_concept_code = "SNOMED/233947005"
-
 
 class EssentialHypertensionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     # n = 4644483

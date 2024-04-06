@@ -84,6 +84,8 @@ def move_visit_start_to_first_event_start(patient: meds.Patient) -> meds.Patient
 
                 if measurement["metadata"].get("end") is not None:
                     # Reset the visit end to be ≥ the visit start
+                    if isinstance(measurement["metadata"]["end"], str):
+                        measurement["metadata"]["end"] = datetime.datetime.fromisoformat(measurement["metadata"]["end"])
                     measurement["metadata"]["end"] = max(event["time"], measurement["metadata"]["end"])
             else:
                 new_measurements.append(measurement)
@@ -103,6 +105,8 @@ def move_to_day_end(patient: meds.Patient) -> meds.Patient:
         event["time"] = _move_date_to_end(event["time"])
         for measurement in event["measurements"]:
             if measurement["metadata"].get("end") is not None:
+                if isinstance(measurement["metadata"]["end"], str):
+                    measurement["metadata"]["end"] = datetime.datetime.fromisoformat(measurement["metadata"]["end"])
                 measurement["metadata"]["end"] = _move_date_to_end(measurement["metadata"]["end"])
                 measurement["metadata"]["end"] = max(measurement["metadata"]["end"], event["time"])
 
@@ -128,7 +132,6 @@ def move_pre_birth(patient: meds.Patient) -> meds.Patient:
         for measurement in event["measurements"]:
             if measurement["code"] == meds.birth_code:
                 birth_date = event["time"]
-
     assert birth_date is not None
 
     new_events = []
@@ -141,6 +144,8 @@ def move_pre_birth(patient: meds.Patient) -> meds.Patient:
             event["time"] = birth_date
 
             for measurement in event["measurements"]:
+                if isinstance(measurement["metadata"]["end"], str):
+                    measurement["metadata"]["end"] = datetime.datetime.fromisoformat(measurement["metadata"]["end"])
                 if measurement["metadata"].get("end") is not None and measurement["metadata"]["end"] < birth_date:
                     measurement["metadata"]["end"] = birth_date
 
@@ -185,6 +190,8 @@ def move_billing_codes(patient: meds.Patient) -> meds.Patient:
 
             if measurement["metadata"].get("clarity_table") in ("lpch_pat_enc", "shc_pat_enc"):
                 if measurement["metadata"].get("end") is not None:
+                    if isinstance(measurement["metadata"]["end"], str):
+                        measurement["metadata"]["end"] = datetime.datetime.fromisoformat(measurement["metadata"]["end"])
                     if measurement["metadata"]["visit_id"] is None:
                         # Every event with an end time should have a visit ID associated with it
                         raise RuntimeError(f"Expected visit id for visit? {patient['patient_id']} {event}")
@@ -223,6 +230,8 @@ def move_billing_codes(patient: meds.Patient) -> meds.Patient:
 
                 # The end time for an event should be no later than its associated visit end time
                 if measurement["metadata"].get("end") is not None:
+                    if isinstance(measurement["metadata"]["end"], str):
+                        measurement["metadata"]["end"] = datetime.datetime.fromisoformat(measurement["metadata"]["end"])
                     measurement["metadata"]["end"] = max(measurement["metadata"]["end"], end_visit)
 
                 # The start time for an event should be no later than its associated visit end time

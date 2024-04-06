@@ -64,7 +64,7 @@ class WithinVisitLabeler(Labeler):
         return []
 
     @abstractmethod
-    def get_visit_measurements(self, patient: meds.Patient) -> List[meds.Measurement]:
+    def get_visit_measurements(self, patient: meds.Patient) -> List[Tuple[datetime.datetime, meds.Measurement]]:
         """Return a list of all visits we want to consider (useful for limiting to inpatient visits)."""
         return []
 
