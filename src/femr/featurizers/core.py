@@ -1,4 +1,5 @@
 """Core featurizer functionality, shared across Featurizers."""
+
 from __future__ import annotations
 
 import collections
