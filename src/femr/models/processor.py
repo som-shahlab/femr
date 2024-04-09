@@ -339,7 +339,7 @@ class FEMRBatchProcessor:
         assert len(batches) == 1, "Can only have one batch when collating"
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
-    def convert_dataset(self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1):
+    def convert_dataset(self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1, batch_size: int = 200):
         if isinstance(dataset, datasets.DatasetDict):
             return datasets.DatasetDict(
                 {
@@ -354,7 +354,7 @@ class FEMRBatchProcessor:
             functools.partial(map_length_stats, processor=self, max_length=max_length),
             agg_length_stats,
             num_proc=num_proc,
-            batch_size=1_000,
+            batch_size=batch_size,
             with_indices=True,
         )
 
