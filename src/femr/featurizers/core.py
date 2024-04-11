@@ -264,7 +264,7 @@ class FeaturizerList:
             dataset,
             functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
             _preprocess_agg_func,
-            batch_size=1_000,
+            batch_size=1,
             num_proc=num_proc,
         )
 
@@ -306,7 +306,7 @@ class FeaturizerList:
             dataset,
             functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
             _features_agg_func,
-            batch_size=1_000,
+            batch_size=1,
             num_proc=num_proc,
         )
 
