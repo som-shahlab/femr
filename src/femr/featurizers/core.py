@@ -309,11 +309,7 @@ class FeaturizerList:
             dataset,
             functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
             _features_agg_func,
-<<<<<<< HEAD
-            batch_size=1,
-=======
             batch_size=batch_size,
->>>>>>> main
             num_proc=num_proc,
         )
 
