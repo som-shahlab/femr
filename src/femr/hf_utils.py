@@ -40,6 +40,7 @@ def aggregate_over_dataset(dataset, map_func, agg_func, batch_size, num_proc, wi
 
     return current
 
+
 def dump_patient_to_json(patient: meds.Patient, path: str) -> None:
     """Dump a patient to a human-readable JSON file, with pretty print."""
     with open(path, "w") as f:

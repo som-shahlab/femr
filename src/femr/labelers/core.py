@@ -25,6 +25,7 @@ import femr.ontology
 ##########################################################
 ##########################################################
 
+
 def identity(x: Any) -> Any:
     return x
 
@@ -34,8 +35,10 @@ def get_death_concepts() -> List[str]:
         meds.death_code,
     ]
 
+
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
     return date.replace(hour=23, minute=59, second=0)
+
 
 ##########################################################
 ##########################################################
@@ -44,6 +47,7 @@ def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
 #
 ##########################################################
 ##########################################################
+
 
 @dataclass(frozen=True)
 class TimeHorizon:
@@ -121,6 +125,7 @@ class Labeler(ABC):
     def get_patient_start_end_times(patient):
         """Return the datetimes that we consider the (start, end) of this patient."""
         return (patient["events"][0]["time"], patient["events"][-1]["time"])
+
 
 ##########################################################
 # Specific Labeler Superclasses
@@ -320,7 +325,6 @@ class NLabelsPerPatientLabeler(Labeler):
         return n_labels
 
 
-
 class CodeLabeler(TimeHorizonEventLabeler):
     """Apply a label based on 1+ outcome_codes' occurrence(s) over a fixed time horizon."""
 
@@ -399,9 +403,9 @@ class OMOPConceptCodeLabeler(CodeLabeler):
             outcome_codes=outcome_codes,
             time_horizon=time_horizon,
             prediction_codes=prediction_codes,
-            prediction_time_adjustment_func=prediction_time_adjustment_func
-            if prediction_time_adjustment_func
-            else identity,
+            prediction_time_adjustment_func=(
+                prediction_time_adjustment_func if prediction_time_adjustment_func else identity
+            ),
         )
 
 
@@ -421,4 +425,3 @@ def compute_random_num(seed: int, num_1: int, num_2: int, modulus: int = 100):
         result = (result * 256 + hash_value[i]) % modulus
 
     return result
-

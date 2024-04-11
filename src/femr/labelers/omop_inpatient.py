@@ -1,4 +1,5 @@
 """Labeling functions for OMOP data based on lab values."""
+
 from __future__ import annotations
 
 import datetime
@@ -6,6 +7,7 @@ from abc import abstractmethod
 from typing import Any, Callable, List, Optional, Set
 
 import meds
+
 import femr.ontology
 
 from .core import Labeler, TimeHorizon, TimeHorizonEventLabeler, identity, move_datetime_to_end_of_day
@@ -59,8 +61,20 @@ class DummyAdmissionDischargeLabeler(Labeler):
     def label(self, patient: meds.Patient) -> List[meds.Label]:
         labels: List[meds.Label] = []
         for admission_time, discharge_time in get_inpatient_admission_discharge_times(patient, self.ontology):
-            labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=self.prediction_time_adjustment_func(admission_time), boolean_value=True))
-            labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=self.prediction_time_adjustment_func(discharge_time), boolean_value=True))
+            labels.append(
+                meds.Label(
+                    patient_id=patient["patient_id"],
+                    prediction_time=self.prediction_time_adjustment_func(admission_time),
+                    boolean_value=True,
+                )
+            )
+            labels.append(
+                meds.Label(
+                    patient_id=patient["patient_id"],
+                    prediction_time=self.prediction_time_adjustment_func(discharge_time),
+                    boolean_value=True,
+                )
+            )
         return labels
 
 
@@ -164,8 +178,13 @@ class InpatientLongAdmissionLabeler(Labeler):
             if death_times and prediction_time > min(death_times):
                 continue
 
-            labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_time, boolean_value=is_long_admission))
+            labels.append(
+                meds.Label(
+                    patient_id=patient["patient_id"], prediction_time=prediction_time, boolean_value=is_long_admission
+                )
+            )
         return labels
+
 
 class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
     """
@@ -237,6 +256,12 @@ class InpatientMortalityLabeler(WithinInpatientVisitLabeler):
                 )
             )
 
-            results.append(meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_start, boolean_value=is_outcome_occurs_in_time_horizon))
+            results.append(
+                meds.Label(
+                    patient_id=patient["patient_id"],
+                    prediction_time=prediction_start,
+                    boolean_value=is_outcome_occurs_in_time_horizon,
+                )
+            )
 
         return results
