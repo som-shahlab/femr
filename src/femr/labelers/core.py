@@ -1,4 +1,5 @@
 """Core labeling functionality/schemas, shared across all labeling functions."""
+
 from __future__ import annotations
 
 import datetime

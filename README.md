@@ -18,15 +18,75 @@ We recommend users start with our [tutorial folder](https://github.com/som-shahl
 
 # Installation
 
-FEMR can be installed with the simple command ```pip install femr```.
+```bash
+pip install femr
 
-If you are using deep learning, you need to also install xformers ```pip install xformers```.
-
+# If you are using deep learning, also run...
+pip install xformers
+```
 # Getting Started
 
 The first step of using **FEMR** is to convert your patient data into [MEDS](https://github.com/Medical-Event-Data-Standard), the standard input format expected by **FEMR** codebase.
 
 The best way to do this is with the [ETLs provided by MEDS](https://github.com/Medical-Event-Data-Standard/meds_etl).
+
+## OMOP Data
+
+If you have OMOP CDM formated data, follow these instructions:
+
+1. Download your OMOP dataset to `[PATH_TO_SOURCE_OMOP]`.
+2. Convert OMOP => MEDS using the following:
+```bash
+# Convert OMOP => MEDS data format
+meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
+```
+
+3. Use HuggingFace's Datasets library to load our dataset in Python
+```bash
+import datasets
+dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
+
+# Print dataset stats
+print(dataset)
+>>> Dataset({
+>>>   features: ['patient_id', 'events'],
+>>>   num_rows: 6732
+>>> })
+
+# Print number of events in first patient in dataset
+print(len(dataset[0]['events']))
+>>> 2287
+```
+
+## Stanford STARR-OMOP Data
+
+If you are using the STARR-OMOP dataset from Stanford (which uses the OMOP CDM), we add an initial Stanford-specific preprocessing step. Otherwise this should be identical to the **OMOP Data** section. Follow these instructions:
+
+1. Download your STARR-OMOP dataset to `[PATH_TO_SOURCE_OMOP]`.
+2. Convert STARR-OMOP => MEDS using the following:
+```bash
+femr_stanford_omop_fixer [PATH_TO_SOURCE_OMOP] [PATH_TO_SOURCE_OMOP]
+
+# Convert OMOP => MEDS data format
+meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
+```
+
+3. Use HuggingFace's Datasets library to load our dataset in Python
+```bash
+import datasets
+dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
+
+# Print dataset stats
+print(dataset)
+>>> Dataset({
+>>>   features: ['patient_id', 'events'],
+>>>   num_rows: 6732
+>>> })
+
+# Print number of events in first patient in dataset
+print(len(dataset[0]['events']))
+>>> 2287
+```
 
 # Development
 

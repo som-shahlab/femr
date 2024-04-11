@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import transformers
 import xformers.ops
 from torch import nn
+from tqdm import tqdm
 
 import femr.models.config
 import femr.models.processor
@@ -368,7 +369,7 @@ def compute_features(
     all_feature_times = []
     all_representations = []
 
-    for batch in batches:
+    for batch in tqdm(batches, total=len(batches)):
         batch = processor.collate([batch])["batch"]
         with torch.no_grad():
             _, result = model(batch, return_reprs=True)

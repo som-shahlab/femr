@@ -1,4 +1,5 @@
 """Core featurizer functionality, shared across Featurizers."""
+
 from __future__ import annotations
 
 import collections
@@ -242,6 +243,7 @@ class FeaturizerList:
         index: femr.index.PatientIndex,
         labels: List[meds.Label],
         num_proc: int = 1,
+        batch_size: int = 1000,
     ) -> None:
         """Preprocess `self.featurizers` on the provided set of labels."""
 
@@ -264,7 +266,7 @@ class FeaturizerList:
             dataset,
             functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
             _preprocess_agg_func,
-            batch_size=1,
+            batch_size=batch_size,
             num_proc=num_proc,
         )
 
@@ -279,6 +281,7 @@ class FeaturizerList:
         index: femr.index.PatientIndex,
         labels: List[meds.Label],
         num_proc: int = 1,
+        batch_size: int = 1000,
     ) -> Mapping[str, np.ndarray]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
@@ -306,7 +309,11 @@ class FeaturizerList:
             dataset,
             functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
             _features_agg_func,
+<<<<<<< HEAD
             batch_size=1,
+=======
+            batch_size=batch_size,
+>>>>>>> main
             num_proc=num_proc,
         )
 
