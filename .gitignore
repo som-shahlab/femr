@@ -8,3 +8,4 @@ ignore/*
 tutorials/trash
 tutorials/tmp_trainer
 _version.py
+.DS_Store
