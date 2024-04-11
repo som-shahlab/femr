@@ -1,4 +1,5 @@
 """EHRSHOT tasks from Wornow et al. 2023."""
+
 from __future__ import annotations
 
 import datetime
@@ -8,120 +9,131 @@ import meds
 import pandas as pd
 
 import femr.ontology
+from femr.labelers.core import Labeler, TimeHorizon, TimeHorizonEventLabeler, move_datetime_to_end_of_day
 from femr.labelers.omop import WithinVisitLabeler
 from femr.labelers.omop_labs import InstantLabValueLabeler
-from femr.labelers.core import (
-    TimeHorizon, 
-    TimeHorizonEventLabeler, 
-    Labeler, 
-    move_datetime_to_end_of_day
-)
 
 
 def get_icu_visit_detail_care_site_ids(ontology: femr.ontology.Ontology) -> Set[str]:
-    return ontology.get_all_children([
-        # All care sites with "ICU" (case insensitive) in the name
-        "528292",
-        "528612",
-        "528604",
-        "528623",
-        "528396",
-        "528377",
-        "528314",
-        "528478",
-        "528112",
-        "528024",
-        "527323",
-        "527858",
-    ])
+    return ontology.get_all_children(
+        [
+            # All care sites with "ICU" (case insensitive) in the name
+            "528292",
+            "528612",
+            "528604",
+            "528623",
+            "528396",
+            "528377",
+            "528314",
+            "528478",
+            "528112",
+            "528024",
+            "527323",
+            "527858",
+        ]
+    )
+
 
 def get_icu_measurements(
     patient: meds.Patient, ontology: femr.ontology.Ontology
 ) -> List[Tuple[datetime.datetime, meds.Measurement]]:
-    """Return all ICU events for this patient.
-    """
+    """Return all ICU events for this patient."""
     icu_visit_detail_care_site_ids: Set[str] = get_icu_visit_detail_care_site_ids(ontology)
-    measurements: List[Tuple[datetime.datetime, meds.Measurement]]= []  # type: ignore
-    for idx, e in enumerate(patient['events']):
+    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = []  # type: ignore
+    for idx, e in enumerate(patient["events"]):
         # `visit_detail` is more accurate + comprehensive than `visit_occurrence` for
         #   ICU measurements for STARR OMOP for some reason
         for m in e["measurements"]:
             if (
-                m['metadata']['table'] == "visit_detail"
-                and 'care_site_id' in m['metadata']
-                and m['metadata']['care_site_id'] in icu_visit_detail_care_site_ids # no ontology expansion for ICU
+                m["metadata"]["table"] == "visit_detail"
+                and "care_site_id" in m["metadata"]
+                and m["metadata"]["care_site_id"] in icu_visit_detail_care_site_ids  # no ontology expansion for ICU
             ):
                 # Error checking
-                if isinstance(m['metadata']['end'], str):
-                    m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
-                if e['time'] is None or m['metadata']['end'] is None:
+                if isinstance(m["metadata"]["end"], str):
+                    m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
+                if e["time"] is None or m["metadata"]["end"] is None:
                     raise RuntimeError(
                         f"Event {e} for patient {patient['patient_id']} cannot have `None` as its `start` or `end` attribute."
                     )
-                elif e['time'] > m['metadata']['end']:
-                    raise RuntimeError(f"Event {e} for patient {patient['patient_id']} cannot have `start` after `end`.")
+                elif e["time"] > m["metadata"]["end"]:
+                    raise RuntimeError(
+                        f"Event {e} for patient {patient['patient_id']} cannot have `start` after `end`."
+                    )
                 # Drop single point in time measurements
-                if e['time'] == m['metadata']['end']:
+                if e["time"] == m["metadata"]["end"]:
                     continue
-                measurements.append((e['time'], m))  # type: ignore
+                measurements.append((e["time"], m))  # type: ignore
     return measurements
 
 
 def get_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
     return ontology.get_all_children(get_inpatient_admission_codes().union(get_outpatient_visit_codes()))
 
+
 def get_inpatient_admission_codes(ontology: femr.ontology.Ontology) -> Set[str]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return {"Visit/IP", "Visit/ERIP", "Visit/ER", }
+    return {
+        "Visit/IP",
+        "Visit/ERIP",
+        "Visit/ER",
+    }
+
 
 def get_outpatient_visit_codes(ontology: femr.ontology.Ontology) -> Set[str]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
-    return {"Visit/OP", "Visit/OMOP4822036", "Visit/OMOP4822458", }
+    return {
+        "Visit/OP",
+        "Visit/OMOP4822036",
+        "Visit/OMOP4822458",
+    }
 
-def get_outpatient_visit_measurements(patient: meds.Patient, ontology: femr.ontology.Ontology) -> List[Tuple[datetime.datetime, meds.Measurement]]:
+
+def get_outpatient_visit_measurements(
+    patient: meds.Patient, ontology: femr.ontology.Ontology
+) -> List[Tuple[datetime.datetime, meds.Measurement]]:
     admission_codes: Set[str] = get_outpatient_visit_codes(ontology)
     measurements: List[meds.Measurement] = []
-    for e in patient['events']:
+    for e in patient["events"]:
         for m in e["measurements"]:
-            if (
-                m['metadata']['table'] == "visit"
-                and (m['code'] in admission_codes or len(ontology.get_parents(m['code']).intersection(admission_codes)) > 0)
+            if m["metadata"]["table"] == "visit" and (
+                m["code"] in admission_codes or len(ontology.get_parents(m["code"]).intersection(admission_codes)) > 0
             ):
-                if isinstance(m['metadata']['end'], str):
-                    m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
+                if isinstance(m["metadata"]["end"], str):
+                    m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
                 # Error checking
-                if e['time'] is None or m['metadata']['end'] is None:
+                if e["time"] is None or m["metadata"]["end"] is None:
                     raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
-                elif e['time'] > m['metadata']['end']:
+                elif e["time"] > m["metadata"]["end"]:
                     raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
                 # Drop single point in time events
-                if e['time'] == m['metadata']['end']:
+                if e["time"] == m["metadata"]["end"]:
                     continue
-                measurements.append((e['time'], m))
+                measurements.append((e["time"], m))
     return measurements
 
 
-def get_inpatient_admission_measurements(patient: meds.Patient, 
-                                         ontology: femr.ontology.Ontology) -> List[Tuple[datetime.datetime, meds.Measurement]]:
+def get_inpatient_admission_measurements(
+    patient: meds.Patient, ontology: femr.ontology.Ontology
+) -> List[Tuple[datetime.datetime, meds.Measurement]]:
     admission_codes: Set[str] = get_inpatient_admission_codes(ontology)
     measurements: List[Tuple[datetime.datetime, meds.Measurement]] = []
     for e in patient["events"]:
         for m in e["measurements"]:
-            if (
-                m['metadata']['table'] == "visit"
-                and (m['code'] in admission_codes or len(ontology.get_parents(m['code']).intersection(admission_codes)) > 0)
+            if m["metadata"]["table"] == "visit" and (
+                m["code"] in admission_codes or len(ontology.get_parents(m["code"]).intersection(admission_codes)) > 0
             ):
-                if isinstance(m['metadata']['end'], str):
-                    m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
+                if isinstance(m["metadata"]["end"], str):
+                    m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
                 # Error checking
-                if e['time'] is None or m['metadata']['end'] is None:
+                if e["time"] is None or m["metadata"]["end"] is None:
                     raise RuntimeError(f"Event {e} cannot have `None` as its `start` or `end` attribute.")
-                elif e['time'] > m['metadata']['end']:
+                elif e["time"] > m["metadata"]["end"]:
                     raise RuntimeError(f"Event {e} cannot have `start` after `end`.")
                 # Drop single point in time events
-                if e['time'] == m['metadata']['end']:
+                if e["time"] == m["metadata"]["end"]:
                     continue
-                measurements.append((e['time'], m))
+                measurements.append((e["time"], m))
     return measurements
 
 
@@ -129,16 +141,18 @@ def get_inpatient_admission_discharge_times(
     patient: meds.Patient, ontology: femr.ontology.Ontology
 ) -> List[Tuple[datetime.datetime, datetime.datetime]]:
     """Return a list of all admission/discharge times for this patient."""
-    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(patient, ontology)
+    measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(
+        patient, ontology
+    )
     times: List[Tuple[datetime.datetime, datetime.datetime]] = []
-    for (start, m) in measurements:
-        if isinstance(m['metadata']['end'], str):
-            m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
-        if m['metadata']['end'] is None:
+    for start, m in measurements:
+        if isinstance(m["metadata"]["end"], str):
+            m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
+        if m["metadata"]["end"] is None:
             raise RuntimeError(f"Event {m} cannot have `None` as its `end` attribute.")
-        if start > m['metadata']['end']:
+        if start > m["metadata"]["end"]:
             raise RuntimeError(f"Event {m} cannot have `start` after `end`.")
-        times.append((start, m['metadata']['end']))
+        times.append((start, m["metadata"]["end"]))
     return times
 
 
@@ -153,6 +167,7 @@ def get_inpatient_admission_discharge_times(
 # Scientific Reports. 2023.
 ##########################################################
 ##########################################################
+
 
 class Guo_LongLOSLabeler(Labeler):
     """Long LOS prediction task from Guo et al. 2023.
@@ -180,8 +195,13 @@ class Guo_LongLOSLabeler(Labeler):
                 continue
             is_long_admission: bool = (discharge_time - admission_time) >= self.long_time
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(admission_time)
-            labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_time, boolean_value=is_long_admission))
+            labels.append(
+                meds.Label(
+                    patient_id=patient["patient_id"], prediction_time=prediction_time, boolean_value=is_long_admission
+                )
+            )
         return labels
+
 
 class Guo_30DayReadmissionLabeler(TimeHorizonEventLabeler):
     """30-day readmissions prediction task from Guo et al. 2023.
@@ -255,7 +275,9 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
     def get_visit_measurements(self, patient: meds.Patient) -> List[Tuple[datetime.datetime, meds.Measurement]]:
         """Return all inpatient visits where ICU transfer does not occur on the same day as admission."""
         # Get all inpatient visits -- each visit comprises a prediction (start, end) time horizon
-        measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(patient, self.ontology)
+        measurements: List[Tuple[datetime.datetime, meds.Measurement]] = get_inpatient_admission_measurements(
+            patient, self.ontology
+        )
         # Exclude visits where ICU admission occurs on the same day as admission
         icu_transfer_dates: List[datetime.datetime] = [
             x.replace(hour=0, minute=0, second=0, microsecond=0) for x in self.get_outcome_times(patient)
@@ -263,9 +285,9 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
         valid_visits: List[Tuple[datetime.datetime, meds.Measurement]] = []
         for time, m in measurements:
             # If admission and discharge are on the same day, then ignore
-            if isinstance(m['metadata']['end'], str):
-                m['metadata']['end'] = datetime.datetime.fromisoformat(m['metadata']['end'])
-            if time.date() == m['metadata']['end'].date():
+            if isinstance(m["metadata"]["end"], str):
+                m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
+            if time.date() == m["metadata"]["end"].date():
                 continue
             # If ICU transfer occurs on the same day as admission, then ignore
             if time.replace(hour=0, minute=0, second=0, microsecond=0) in icu_transfer_dates:
@@ -284,6 +306,7 @@ class Guo_ICUAdmissionLabeler(WithinVisitLabeler):
 # NeurIPS (2023).
 ##########################################################
 ##########################################################
+
 
 class ThrombocytopeniaInstantLabValueLabeler(InstantLabValueLabeler):
     """lab-based definition for thrombocytopenia based on platelet count (10^9/L).
@@ -457,6 +480,7 @@ class AnemiaInstantLabValueLabeler(InstantLabValueLabeler):
 ##########################################################
 ##########################################################
 
+
 class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
     """Predict if patient will have their *first* diagnosis of `self.root_concept_code` in the next (1, 365) days.
 
@@ -502,10 +526,10 @@ class FirstDiagnosisTimeHorizonCodeLabeler(TimeHorizonEventLabeler):
     def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
         times: List[datetime.datetime] = []
-        for event in patient['events']:
-            for m in event['measurements']:
+        for event in patient["events"]:
+            for m in event["measurements"]:
                 if m["code"] in self.outcome_codes:
-                    times.append(event['time'])
+                    times.append(event["time"])
         return times
 
     def get_time_horizon(self) -> TimeHorizon:
@@ -537,6 +561,7 @@ class AcuteMyocardialInfarctionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler)
     # n = 21982
     root_concept_code = "SNOMED/57054005"
 
+
 class EssentialHypertensionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     # n = 4644483
     root_concept_code = "SNOMED/59621000"
@@ -545,7 +570,6 @@ class EssentialHypertensionCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
 class HyperlipidemiaCodeLabeler(FirstDiagnosisTimeHorizonCodeLabeler):
     # n = 3048320
     root_concept_code = "SNOMED/55822004"
-
 
 
 ##########################################################
@@ -613,6 +637,8 @@ class ChexpertLabeler(Labeler):
             bool_labels = row[CHEXPERT_LABELS].astype(int).to_list()
             label_string = "".join([str(x) for x in bool_labels])
             label_num: int = int(label_string, 2)
-            labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_time, integer_value=label_num))
+            labels.append(
+                meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_time, integer_value=label_num)
+            )
 
         return labels

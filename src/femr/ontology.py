@@ -49,7 +49,7 @@ class Ontology:
             .rows()
         )
 
-        concept_id_to_code_map = {} # [key] = concept_id from CONCEPT.csv, [value] = code from CONCEPT.csv
+        concept_id_to_code_map = {}  # [key] = concept_id from CONCEPT.csv, [value] = code from CONCEPT.csv
 
         non_standard_concepts = set()
 
@@ -79,7 +79,9 @@ class Ontology:
                 if concept_id_1 in non_standard_concepts:
                     self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
             except Exception as e:
-                print(f"Concept ID 1: {concept_id_1} | Concept ID 2: {concept_id_2} | Is Concept ID 1 in `concept_id_to_code_map`? {concept_id_1 in concept_id_to_code_map} | Is Concept ID 2 in `concept_id_to_code_map`? {concept_id_2 in concept_id_to_code_map} | Exception: {e}. It seems that one of these codes is in your Athena Ontology's CONCEPT_RELATIONSHIP.csv but not in CONCEPT.csv")
+                print(
+                    f"Concept ID 1: {concept_id_1} | Concept ID 2: {concept_id_2} | Is Concept ID 1 in `concept_id_to_code_map`? {concept_id_1 in concept_id_to_code_map} | Is Concept ID 2 in `concept_id_to_code_map`? {concept_id_2 in concept_id_to_code_map} | Exception: {e}. It seems that one of these codes is in your Athena Ontology's CONCEPT_RELATIONSHIP.csv but not in CONCEPT.csv"
+                )
 
         ancestor = pl.scan_csv(os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), separator="\t", infer_schema_length=0)
         ancestor = ancestor.filter(pl.col("min_levels_of_separation") == "1")
@@ -93,8 +95,10 @@ class Ontology:
             try:
                 self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
             except Exception as e:
-                print(f"Concept ID: {concept_id} | Parent Concept ID: {parent_concept_id} | Is Concept ID in `concept_id_to_code_map`? {concept_id in concept_id_to_code_map} | Is Parent Concept ID in `concept_id_to_code_map`? {parent_concept_id in concept_id_to_code_map} | Exception: {e}.  It seems that one of these codes is in your Athena Ontology's CONCEPT_ANCESTOR.csv but not in CONCEPT.csv")
-                
+                print(
+                    f"Concept ID: {concept_id} | Parent Concept ID: {parent_concept_id} | Is Concept ID in `concept_id_to_code_map`? {concept_id in concept_id_to_code_map} | Is Parent Concept ID in `concept_id_to_code_map`? {parent_concept_id in concept_id_to_code_map} | Exception: {e}.  It seems that one of these codes is in your Athena Ontology's CONCEPT_ANCESTOR.csv but not in CONCEPT.csv"
+                )
+
         # Have to add after OMOP to overwrite ...
         for code, code_info in code_metadata.items():
             if code_info.get("description") is not None:

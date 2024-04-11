@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
 import datetime
+from abc import abstractmethod
 from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 import meds
@@ -11,6 +11,7 @@ import meds
 import femr.ontology
 
 from .core import Labeler, TimeHorizon, TimeHorizonEventLabeler, get_death_concepts, identity
+
 
 def does_exist_event_within_time_range(
     patient: meds.Patient, start: datetime.datetime, end: datetime.datetime, exclude_event_idxs: List[int] = []
@@ -24,6 +25,7 @@ def does_exist_event_within_time_range(
         if start <= e.start <= end:
             return True
     return False
+
 
 ##########################################################
 ##########################################################
@@ -78,7 +80,9 @@ class WithinVisitLabeler(Labeler):
         prediction_start_times: List[datetime.datetime] = [
             self.visit_start_adjust_func(start) for start, visit in visits
         ]
-        prediction_end_times: List[datetime.datetime] = [self.visit_end_adjust_func(visit['metadata']['end']) for start, visit in visits]
+        prediction_end_times: List[datetime.datetime] = [
+            self.visit_end_adjust_func(visit["metadata"]["end"]) for start, visit in visits
+        ]
         outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
 
         # For each visit, check if there is an outcome which occurs within the (start, end) of the visit
@@ -143,12 +147,17 @@ class WithinVisitLabeler(Labeler):
             is_censored: bool = False
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(meds.Label(patient_id=patient['patient_id'], prediction_time=prediction_start, boolean_value=True))
+                results.append(
+                    meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_start, boolean_value=True)
+                )
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(meds.Label(patient_id=patient['patient_id'], prediction_time=prediction_start, boolean_value=False))
+                results.append(
+                    meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_start, boolean_value=False)
+                )
 
         return results
+
 
 class CodeLabeler(TimeHorizonEventLabeler):
     """Apply a label based on 1+ outcome_codes' occurrence(s) over a fixed time horizon."""

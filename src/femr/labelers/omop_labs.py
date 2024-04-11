@@ -1,4 +1,5 @@
 """Labeling functions for OMOP data based on lab values."""
+
 from __future__ import annotations
 
 import datetime
@@ -6,12 +7,10 @@ from abc import abstractmethod
 from typing import List, Optional, Set
 
 import meds
+
 import femr.ontology
 
-from .core import (
-    Labeler,
-    OMOPConceptCodeLabeler, 
-)
+from .core import Labeler, OMOPConceptCodeLabeler
 
 ##########################################################
 ##########################################################
@@ -56,12 +55,20 @@ class InstantLabValueLabeler(Labeler):
             for m in e["measurements"]:
                 if m["code"] in self.outcome_codes:
                     # This is an outcome event
-                    if m['numeric_value'] is not None:
+                    if m["numeric_value"] is not None:
                         try:
                             # `e.unit` is string of form "mg/dL", "ounces", etc.
-                            label: int = self.label_to_int(self.value_to_label(m['numeric_value'], m['metadata']['unit']))
+                            label: int = self.label_to_int(
+                                self.value_to_label(m["numeric_value"], m["metadata"]["unit"])
+                            )
                             prediction_time: datetime.datetime = e["time"] - datetime.timedelta(minutes=1)
-                            labels.append(meds.Label(patient_id=patient["patient_id"], prediction_time=prediction_time, integer_value=label))
+                            labels.append(
+                                meds.Label(
+                                    patient_id=patient["patient_id"],
+                                    prediction_time=prediction_time,
+                                    integer_value=label,
+                                )
+                            )
                         except Exception as exception:
                             if is_show_warnings:
                                 print(
