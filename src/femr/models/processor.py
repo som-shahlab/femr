@@ -95,7 +95,7 @@ class BatchCreator:
         - patient_ids: a list of patient ids in the batch?
         - offsets: ...
         - patient_lengths: ...
-        - tokens: list of 
+        - tokens: list of
         """
         self.patient_ids = []
         self.offsets = []
@@ -132,12 +132,12 @@ class BatchCreator:
 
         def process_patient_events():
             """
-            this needs documentation. 
-            what is the logical flow? 
+            this needs documentation.
+            what is the logical flow?
             what is the intended return value?
             why does this need to be a function?
             """
-            
+
             # what is current_date?
             current_date = None
 
@@ -151,15 +151,15 @@ class BatchCreator:
 
             birth = femr.pat_utils.get_patient_birthdate(patient)
             self.tokenizer.start_patient()  # <-- why???
-            
+
             # for all events in this patient's timeline...
             for event in patient["events"]:
 
                 # if we haven't processed events for this day, start collecting a new set of codes that have occured on this day
                 if event["time"].date() != current_date:
                     current_date = event["time"].date()
-                    
-                    # all codes we have seen on this day 
+
+                    # all codes we have seen on this day
                     codes_seen_today = set()
 
                 for measurement in event["measurements"]:
@@ -173,7 +173,7 @@ class BatchCreator:
                         continue
                     if all(feature in codes_seen_today for feature in features):
                         continue
-                    
+
                     # add all features to codes_seen_today.
                     # why use "|="? very exotic syntax
                     codes_seen_today |= set(features)
@@ -191,8 +191,8 @@ class BatchCreator:
                         # 1 - next_date is None, or the date is the same for current_date and next_date
                         # 2 - something about the "calculator" and function get_future_events_for_time
                         num_added = self.task.add_event(
-                            current_date=last_time, 
-                            next_date=event["time"], 
+                            current_date=last_time,
+                            next_date=event["time"],
                             next_features=features,  # <-- this is not used...
                         )
                         for _ in range(num_added):
@@ -316,12 +316,13 @@ class FEMRBatchProcessor:
     """
     TODO: needs documentation.
 
-    FEMRBatchProcessor object includes functions for creating batches from a single patient (convert_patient) or a dataset (convert_dataset). 
-    
+    FEMRBatchProcessor object includes functions for creating batches from a single patient (convert_patient) or a dataset (convert_dataset).
+
     The batching process is determined by a FEMRTokenizer and Task.
 
     It looks like task is only passed to BatchCreator
     """
+
     def __init__(self, tokenizer: femr.models.tokenizer.FEMRTokenizer, task: femr.models.tasks.Task = None):
         self.creator = BatchCreator(tokenizer, task)
 
@@ -339,7 +340,9 @@ class FEMRBatchProcessor:
         assert len(batches) == 1, "Can only have one batch when collating"
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
-    def convert_dataset(self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1, batch_size: int = 200):
+    def convert_dataset(
+        self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1, batch_size: int = 200
+    ):
         if isinstance(dataset, datasets.DatasetDict):
             return datasets.DatasetDict(
                 {
@@ -361,6 +364,80 @@ class FEMRBatchProcessor:
         lengths = np.concatenate(lengths)
 
         # this should have a seed
+        rng = np.random.default_rng(seed=0)
+        rng.shuffle(lengths)
+
+        current_batch_length = 0
+
+        batch_offsets = [0]
+
+        for i, length in enumerate(lengths[:, 2]):
+            if current_batch_length + length > tokens_per_batch:
+                batch_offsets.append(i)
+                current_batch_length = 0
+
+            current_batch_length += length
+
+        batch_offsets.append(len(lengths))
+
+        batches = list(zip(batch_offsets, batch_offsets[1:]))
+
+        split_batches = np.array_split(batches, num_proc)
+
+        final_batch_data = []
+
+        for batch_part in split_batches:
+            if len(batch_part) == 0:
+                continue
+            start = batch_part[0][0]
+            end = batch_part[-1][-1]
+            lengths_part = lengths[start:end, :]
+            offsets = [0] + [b - start for _, b in batch_part]
+
+            final_batch_data.append(
+                (
+                    lengths_part,
+                    np.array(offsets, dtype=np.int32),
+                )
+            )
+
+        print("Creating batches", len(batches))
+
+        batch_func = functools.partial(
+            _batch_generator,
+            creator=self.creator,
+            dataset=dataset,
+        )
+
+        batch_dataset = datasets.Dataset.from_generator(
+            batch_func,
+            gen_kwargs={
+                "batch_data": final_batch_data,
+            },
+            num_proc=num_proc,
+            writer_batch_size=8,
+        )
+
+        return batch_dataset
+
+    def calculate_lengths(self, dataset, max_length, num_proc, batch_size):
+        lengths = femr.hf_utils.aggregate_over_dataset(
+            dataset,
+            functools.partial(map_length_stats, processor=self, max_length=max_length),
+            agg_length_stats,
+            num_proc=num_proc,
+            batch_size=batch_size,
+            with_indices=True,
+        )
+        return np.concatenate(lengths)
+
+    def convert_dataset_from_lengths(
+        self, dataset, lengths, tokens_per_batch, num_proc
+    ):
+        """this is almost identical to convert_dataset(), with one main difference: this version takes "lengths" as an arg. """
+        if isinstance(dataset, datasets.DatasetDict):
+            raise Exception("not implemented")
+
         rng = np.random.default_rng(seed=0)
         rng.shuffle(lengths)
 
