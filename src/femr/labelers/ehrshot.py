@@ -76,7 +76,6 @@ def get_inpatient_admission_codes(ontology: femr.ontology.Ontology) -> Set[str]:
     return {
         "Visit/IP",
         "Visit/ERIP",
-        "Visit/ER",
     }
 
 
@@ -96,8 +95,9 @@ def get_outpatient_visit_measurements(
     measurements: List[meds.Measurement] = []
     for e in patient["events"]:
         for m in e["measurements"]:
-            if m["metadata"]["table"] == "visit" and (
-                m["code"] in admission_codes or len(ontology.get_parents(m["code"]).intersection(admission_codes)) > 0
+            if (
+                m["metadata"]["table"] == "visit"
+                and m["code"] in admission_codes
             ):
                 if isinstance(m["metadata"]["end"], str):
                     m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
@@ -120,8 +120,9 @@ def get_inpatient_admission_measurements(
     measurements: List[Tuple[datetime.datetime, meds.Measurement]] = []
     for e in patient["events"]:
         for m in e["measurements"]:
-            if m["metadata"]["table"] == "visit" and (
-                m["code"] in admission_codes or len(ontology.get_parents(m["code"]).intersection(admission_codes)) > 0
+            if (
+                m["metadata"]["table"] == "visit" 
+                and m["code"] in admission_codes
             ):
                 if isinstance(m["metadata"]["end"], str):
                     m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
