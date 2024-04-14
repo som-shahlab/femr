@@ -16,11 +16,12 @@ from femr.transforms.stanford import (
     move_to_day_end,
     move_visit_start_to_first_event_start,
     switch_to_icd10cm,
+    join_consecutive_day_visits,
 )
 
 
 def _is_visit_measurement(e: meds.Measurement) -> bool:
-    return e["metadata"]["table"] == "visit_occurrence"
+    return e["metadata"]["table"] == "visit"
 
 
 def _get_stanford_transformations() -> Callable[[meds.Patient], meds.Patient]:
@@ -42,6 +43,7 @@ def _get_stanford_transformations() -> Callable[[meds.Patient], meds.Patient]:
             # If we ever remove or revisit visit_id, we would want to revisit this
             do_not_apply_to_filter=_is_visit_measurement,
         ),
+        join_consecutive_day_visits,
     ]
 
     return lambda patient: functools.reduce(lambda r, f: f(r), transforms, patient)
