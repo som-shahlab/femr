@@ -163,51 +163,62 @@ def join_consecutive_day_visits(patient: meds.Patient) -> meds.Patient:
     current_visit_end: datetime.datetime = None
     old_visit_id_2_new_visit_id: Dict[int, int] = {}
     for e_idx, event in enumerate(patient["events"]):
-        for m_idx, m in enumerate(event['measurements']):
-            if m['metadata']['visit_id'] is not None and m['metadata']['table'] == 'visit':
+        for m_idx, m in enumerate(event["measurements"]):
+            if m["metadata"]["visit_id"] is not None and m["metadata"]["table"] == "visit":
                 # Found visit measurement
-                m_end = datetime.datetime.fromisoformat(m['metadata']['end']) if isinstance(m['metadata']['end'], str) else m['metadata']['end']
+                m_end = (
+                    datetime.datetime.fromisoformat(m["metadata"]["end"])
+                    if isinstance(m["metadata"]["end"], str)
+                    else m["metadata"]["end"]
+                )
                 if current_visit_id is None:
                     # Start a new visit
-                    current_visit_id = m['metadata']['visit_id']
+                    current_visit_id = m["metadata"]["visit_id"]
                     current_visit_end = m_end
-                elif m['metadata']['visit_id'] == current_visit_id:
+                elif m["metadata"]["visit_id"] == current_visit_id:
                     # Same visit, so update its end time
                     current_visit_end = max(m_end, current_visit_end)
-                elif m['metadata']['visit_id'] in old_visit_id_2_new_visit_id:
+                elif m["metadata"]["visit_id"] in old_visit_id_2_new_visit_id:
                     # We have already merged this visit, so update its end time
                     current_visit_end = max(m_end, current_visit_end)
                 else:
-                    if (event['time'] - current_visit_end).days <= 1:
+                    if (event["time"] - current_visit_end).days <= 1:
                         # Merge the two visits
                         current_visit_end = max(m_end, current_visit_end)
                     else:
                         # Start a new visit
-                        current_visit_id = m['metadata']['visit_id']
+                        current_visit_id = m["metadata"]["visit_id"]
                         current_visit_end = m_end
-                old_visit_id_2_new_visit_id[m['metadata']['visit_id']] = {
-                    'visit_id' : current_visit_id,
-                    'end' : current_visit_end,
+                old_visit_id_2_new_visit_id[m["metadata"]["visit_id"]] = {
+                    "visit_id": current_visit_id,
+                    "end": current_visit_end,
                 }
     drop_idxs: List[int] = []
     events = []
     for e_idx, event in enumerate(patient["events"]):
-        for m_idx, m in enumerate(event['measurements']):
-            if m['metadata']['visit_id']:
-                if m['metadata']['table'] == 'visit':
+        for m_idx, m in enumerate(event["measurements"]):
+            if m["metadata"]["visit_id"]:
+                if m["metadata"]["table"] == "visit":
                     # If this is a visit event, update its end time and delete (if not original visit_id)
-                    patient['events'][e_idx]['measurements'][m_idx]['metadata']['end'] = old_visit_id_2_new_visit_id[m['metadata']['visit_id']]['end']
-                    if old_visit_id_2_new_visit_id[m['metadata']['visit_id']]['visit_id'] != m['metadata']['visit_id']:
+                    patient["events"][e_idx]["measurements"][m_idx]["metadata"]["end"] = old_visit_id_2_new_visit_id[
+                        m["metadata"]["visit_id"]
+                    ]["end"]
+                    if old_visit_id_2_new_visit_id[m["metadata"]["visit_id"]]["visit_id"] != m["metadata"]["visit_id"]:
                         drop_idxs.append(m_idx)
                 else:
                     # Update the visit_id
-                    patient['events'][e_idx]['measurements'][m_idx]['metadata']['visit_id'] = old_visit_id_2_new_visit_id[m['metadata']['visit_id']]['visit_id']
-        events.append({
-            'time' : event['time'],
-            'measurements' : [m for m_idx, m in enumerate(event['measurements']) if m_idx not in drop_idxs],
-        })
-    patient['events'] = events
+                    patient["events"][e_idx]["measurements"][m_idx]["metadata"]["visit_id"] = (
+                        old_visit_id_2_new_visit_id[m["metadata"]["visit_id"]]["visit_id"]
+                    )
+        events.append(
+            {
+                "time": event["time"],
+                "measurements": [m for m_idx, m in enumerate(event["measurements"]) if m_idx not in drop_idxs],
+            }
+        )
+    patient["events"] = events
     return patient
+
 
 def move_billing_codes(patient: meds.Patient) -> meds.Patient:
     """Move billing codes to the end of each visit.

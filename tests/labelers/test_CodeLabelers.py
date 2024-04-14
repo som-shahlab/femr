@@ -6,12 +6,8 @@ from typing import List, Set
 from femr_test_tools import EventsWithLabels, run_test_for_labeler
 
 from femr.labelers import TimeHorizon
-from femr.labelers.omop import (
-    CodeLabeler,
-    LupusCodeLabeler,
-    MortalityCodeLabeler,
-    OMOPConceptCodeLabeler,
-)
+from femr.labelers.omop import CodeLabeler, LupusCodeLabeler, MortalityCodeLabeler, OMOPConceptCodeLabeler
+
 # from femr.labelers.ehrshot import (
 #     AnemiaCodeLabeler,
 #     HyperkalemiaCodeLabeler,
