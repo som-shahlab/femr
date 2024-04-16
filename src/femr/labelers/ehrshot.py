@@ -95,10 +95,7 @@ def get_outpatient_visit_measurements(
     measurements: List[meds.Measurement] = []
     for e in patient["events"]:
         for m in e["measurements"]:
-            if (
-                m["metadata"]["table"] == "visit"
-                and m["code"] in admission_codes
-            ):
+            if m["metadata"]["table"] == "visit" and m["code"] in admission_codes:
                 if isinstance(m["metadata"]["end"], str):
                     m["metadata"]["end"] = datetime.datetime.fromisoformat(m["metadata"]["end"])
                 # Error checking

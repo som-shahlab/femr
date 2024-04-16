@@ -12,12 +12,12 @@ import meds
 
 from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
+    join_consecutive_day_visits,
     move_billing_codes,
     move_pre_birth,
     move_to_day_end,
     move_visit_start_to_first_event_start,
     switch_to_icd10cm,
-    join_consecutive_day_visits,
 )
 
 

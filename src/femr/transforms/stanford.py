@@ -181,10 +181,14 @@ def join_consecutive_day_visits(patient: meds.Patient) -> meds.Patient:
         for m_idx, m in enumerate(event['measurements']):
             if m['metadata']['visit_id'] is not None and m['metadata']['table'] in ['visit', 'visit_detail']:
                 # Found visit measurement
-                m_end = datetime.datetime.fromisoformat(m['metadata']['end']) if isinstance(m['metadata']['end'], str) else m['metadata']['end']
+                m_end = (
+                    datetime.datetime.fromisoformat(m["metadata"]["end"])
+                    if isinstance(m["metadata"]["end"], str)
+                    else m["metadata"]["end"]
+                )
                 if current_visit_id is None:
                     # Start a new visit
-                    current_visit_id = m['metadata']['visit_id']
+                    current_visit_id = m["metadata"]["visit_id"]
                     current_visit_end = m_end
                     current_visit_code = m['code']
                 elif m['metadata']['visit_id'] == current_visit_id:
@@ -196,13 +200,13 @@ def join_consecutive_day_visits(patient: meds.Patient) -> meds.Patient:
                     current_visit_end = max(m_end, current_visit_end)
                     current_visit_code = select_code(current_visit_code, m['code'])
                 else:
-                    if (event['time'] - current_visit_end).days <= 1:
+                    if (event["time"] - current_visit_end).days <= 1:
                         # Merge the two visits
                         current_visit_end = max(m_end, current_visit_end)
                         current_visit_code = select_code(current_visit_code, m['code'])
                     else:
                         # Start a new visit
-                        current_visit_id = m['metadata']['visit_id']
+                        current_visit_id = m["metadata"]["visit_id"]
                         current_visit_end = m_end
                         current_visit_code = m['code']
                 # NOTE: Need to update both this visit_id and the current_visit_id
@@ -237,6 +241,7 @@ def join_consecutive_day_visits(patient: meds.Patient) -> meds.Patient:
         })
     patient['events'] = events
     return patient
+
 
 def move_billing_codes(patient: meds.Patient) -> meds.Patient:
     """Move billing codes to the end of each visit.
