@@ -4,6 +4,7 @@ import argparse
 import functools
 import json
 import os
+import shutil
 from typing import Callable, Sequence
 
 import datasets
@@ -45,7 +46,7 @@ def _get_stanford_transformations() -> Callable[[meds.Patient], meds.Patient]:
         ),
         join_consecutive_day_visits,
     ]
-
+    
     return lambda patient: functools.reduce(lambda r, f: f(r), transforms, patient)
 
 
@@ -74,11 +75,13 @@ def femr_stanford_omop_fixer_program() -> None:
 
     args = parser.parse_args()
 
+    if os.path.exists(args.target_dataset):
+        shutil.rmtree(args.target_dataset)
     os.mkdir(args.target_dataset)
 
     dataset = datasets.Dataset.from_parquet(os.path.join(args.source_dataset, "data", "*"))
-
-    fixed_patient = dataset.map(_get_stanford_transformations(), num_proc=args.num_proc)
+    
+    fixed_patient = dataset.map(_get_stanford_transformations(), num_proc=args.num_proc, load_from_cache_file=False)
 
     os.mkdir(os.path.join(args.target_dataset, "data"))
     fixed_patient.to_parquet(os.path.join(args.target_dataset, "data", "data.parquet"))
@@ -92,3 +95,6 @@ def femr_stanford_omop_fixer_program() -> None:
 
     with open(os.path.join(args.target_dataset, "metadata.json"), "w") as f:
         json.dump(metadata, f)
+
+if __name__ == '__main__':
+    femr_stanford_omop_fixer_program()

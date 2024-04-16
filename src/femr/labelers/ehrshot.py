@@ -121,7 +121,7 @@ def get_inpatient_admission_measurements(
     for e in patient["events"]:
         for m in e["measurements"]:
             if (
-                m["metadata"]["table"] == "visit" 
+                m["metadata"]["table"] == "visit"
                 and m["code"] in admission_codes
             ):
                 if isinstance(m["metadata"]["end"], str):
