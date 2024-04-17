@@ -363,7 +363,7 @@ def compute_features(
         filtered_data, tokens_per_batch=tokens_per_batch, min_patients_per_batch=1, num_proc=num_proc
     )
 
-    batches.set_format("pt", device=device)
+    batches.set_format("pt")
 
     all_patient_ids = []
     all_feature_times = []
@@ -371,6 +371,15 @@ def compute_features(
 
     for batch in tqdm(batches, total=len(batches)):
         batch = processor.collate([batch])["batch"]
+
+        # Move to device
+        for key, val in batch.items():
+            if isinstance(val, torch.Tensor):
+                batch[key] = batch[key].to(device)
+        for key, val in batch['transformer'].items():
+            if isinstance(val, torch.Tensor):
+                batch['transformer'][key] = batch['transformer'][key].to(device)
+
         with torch.no_grad():
             _, result = model(batch, return_reprs=True)
             all_patient_ids.append(result["patient_ids"].cpu().numpy())
