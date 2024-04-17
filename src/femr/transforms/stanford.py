@@ -235,6 +235,8 @@ def join_consecutive_day_visits(patient: meds.Patient) -> meds.Patient:
                     # Update the visit_id
                     m['metadata']['visit_id'] = old_visit_id_2_new_visit_id[m['metadata']['visit_id']]['visit_id']
                     measurements.append(m)
+            else:
+                measurements.append(m)
         events.append({
             'time' : event['time'],
             'measurements' : measurements,
