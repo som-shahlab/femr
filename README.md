@@ -75,7 +75,7 @@ femr_stanford_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS]
 3. Use HuggingFace's Datasets library to load our dataset in Python
 ```bash
 import datasets
-dataset = datasets.Dataset.from_parquet([PATH_TO_OUTPUT_MEDS] + 'data/*')
+dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
 
 # Print dataset stats
 print(dataset)
