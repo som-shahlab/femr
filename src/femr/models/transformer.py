@@ -376,9 +376,9 @@ def compute_features(
         for key, val in batch.items():
             if isinstance(val, torch.Tensor):
                 batch[key] = batch[key].to(device)
-        for key, val in batch['transformer'].items():
+        for key, val in batch["transformer"].items():
             if isinstance(val, torch.Tensor):
-                batch['transformer'][key] = batch['transformer'][key].to(device)
+                batch["transformer"][key] = batch["transformer"][key].to(device)
 
         with torch.no_grad():
             _, result = model(batch, return_reprs=True)
