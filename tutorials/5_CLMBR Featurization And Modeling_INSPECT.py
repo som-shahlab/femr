@@ -5,6 +5,15 @@
 # 
 # We can use a trained CLMBR model to generate features and then use those features in a logistic regression model.
 
+import warnings
+
+# Suppress specific FutureWarning from awswrangler module
+warnings.filterwarnings("ignore", message="promote has been superseded by mode='default'.", category=FutureWarning, module="pyarrow")
+warnings.filterwarnings("ignore", message="promote has been superseded by mode='default'.", category=FutureWarning, module="datasets")
+from sklearn.exceptions import ConvergenceWarning
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+warnings.filterwarnings("ignore", message="The max_iter was reached which means the coef_ did not converge")
+
 import shutil
 import os
 
@@ -101,6 +110,7 @@ for k, v in features.items():
 
 import femr.featurizers
 print('joining features and labels...')
+import pdb; pdb.set_trace()
 features_and_labels = femr.featurizers.join_labels(features, labels)
 
 for k, v in features_and_labels.items():
