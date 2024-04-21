@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import bisect
 import collections
+import datetime
 import functools
 import math
-import datetime
 import os
 from typing import Any, Dict, Mapping, Optional, Set, Union
 
+import meds
 import msgpack
 import numpy as np
 import transformers
 
 import femr.hf_utils
 import femr.stat_utils
-import meds
 
 
 def train_tokenizer(
@@ -97,8 +97,6 @@ def map_statistics(
         pat_numeric_samples = []
         for event in events:
             for measurement in event["measurements"]:
-                if measurement["code"] == meds.birth_code:
-                    continue
                 if event["time"] != birth_date:
                     age_stats.add(weight, (event["time"] - birth_date).total_seconds())
                 if not is_hierarchical:
@@ -247,12 +245,6 @@ def convert_statistics_to_msgpack(
                 }
                 vocab.append(entry)
 
-    entry = {
-        "type": "code",
-        "code_string": meds.birth_code,
-        "weight": -1,
-    }
-    vocab.append(entry)
     vocab.sort(key=lambda a: a["weight"])
     vocab = vocab[:vocab_size]
 
@@ -400,6 +392,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
 
     def get_feature_codes(self, time: datetime.datetime, measurement: meds.Measurement):
         if self.is_hierarchical:
+            assert self.ontology is not None
             codes = [
                 self.code_lookup[parent]
                 for parent in self.ontology.get_all_parents(measurement["code"])

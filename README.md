@@ -20,6 +20,8 @@ We recommend users start with our [tutorial folder](https://github.com/som-shahl
 
 FEMR can be installed with the simple command ```pip install femr```.
 
+If you are using deep learning, you need to also install xformers ```pip install xformers```.
+
 # Getting Started
 
 The first step of using **FEMR** is to convert your patient data into [MEDS](https://github.com/Medical-Event-Data-Standard), the standard input format expected by **FEMR** codebase.
