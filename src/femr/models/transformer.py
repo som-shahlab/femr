@@ -172,7 +172,7 @@ class LabeledPatientTaskHead(nn.Module):
 
 
 class CLMBRTaskHead(nn.Module):
-    def __init__(self, hidden_size: int, clmbr_vocab_size: int):
+    def __init__(self, hidden_size: int, clmbr_vocab_size: int, **kwargs):
         super().__init__()
 
         self.final_layer = nn.Linear(hidden_size, clmbr_vocab_size)
