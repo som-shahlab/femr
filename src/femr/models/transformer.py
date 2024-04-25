@@ -5,14 +5,12 @@ import math
 from typing import Any, Dict, TypeVar
 
 import datasets
-import flash_attn
 import torch
 import torch.nn.functional as F
 import transformers
 from einops import rearrange, repeat
 from torch import nn
 
-import femr.models.flash_attention
 import femr.models.rmsnorm
 
 
@@ -90,7 +88,12 @@ class FEMREncoderLayer(nn.Module):
         k = apply_rotary_pos_emb(qkv[:, :, 1, :, :], pos_embed)
         v = qkv[:, :, 2, :, :]
 
-        attn = femr.models.flash_attention.flash_attention_wrapper(q, k, v, self.config.attention_width)
+        attn = femr.models.xformers.memory_efficient_attention_wrapper(
+            q.unsqueeze(0),
+            k.unsqueeze(0),
+            v.unsqueeze(0),
+            attn_bias=None,
+        )
 
         attn = attn.reshape(x.shape)
 
