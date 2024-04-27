@@ -4,7 +4,7 @@ import csv
 import dataclasses
 import hashlib
 import struct
-from typing import List
+from typing import Callable, List
 
 import datasets
 
@@ -66,6 +66,33 @@ def generate_hash_split(patient_ids: List[int], seed: int, frac_test: float = 0.
         # Take the modulus
         result = hash_int % (2**16)
         if result <= frac_test * (2**16):
+            test_patient_ids.append(patient_id)
+        else:
+            train_patient_ids.append(patient_id)
+
+    return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids)
+
+
+def generate_split(patient_ids: List[int], is_test_set_fn: Callable[[int], bool]) -> PatientSplit:
+    """Generates a patient split based on a user-defined function.
+
+    This function categorizes each patient ID as either 'test' or 'train' based on
+    the user-defined function's return value.
+
+    Args:
+        patient_ids (List[int]): A list of patient IDs.
+        is_test_set_fn (Callable[[int], bool]): A function that takes a patient ID
+            and returns True if it belongs to the test set, otherwise False.
+
+    Returns:
+        PatientSplit: A dataclass instance containing lists of train and test patient IDs.
+
+    """
+    train_patient_ids: List[int] = []
+    test_patient_ids: List[int] = []
+
+    for patient_id in patient_ids:
+        if is_test_set_fn(patient_id):
             test_patient_ids.append(patient_id)
         else:
             train_patient_ids.append(patient_id)
