@@ -239,11 +239,13 @@ def join_consecutive_day_visits(patient: meds.Patient) -> meds.Patient:
                     measurements.append(m)
             else:
                 measurements.append(m)
-        events.append({
-            'time' : event['time'],
-            'measurements' : measurements,
-        })
-    patient['events'] = events
+        events.append(
+            {
+                "time": event["time"],
+                "measurements": measurements,
+            }
+        )
+    patient["events"] = events
     return patient
 
 
