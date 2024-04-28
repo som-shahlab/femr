@@ -21,8 +21,12 @@ We recommend users start with our [tutorial folder](https://github.com/som-shahl
 ```bash
 pip install femr
 
-# If you are using deep learning, also run...
+# If you are using deep learning, you also need to install xformers
+#
+# Note that xformers has some known issues with MacOS.
+# If you are using MacOS you might also need to install llvm. See https://stackoverflow.com/questions/60005176/how-to-deal-with-clang-error-unsupported-option-fopenmp-on-travis
 pip install xformers
+
 ```
 # Getting Started
 
@@ -65,10 +69,11 @@ If you are using the STARR-OMOP dataset from Stanford (which uses the OMOP CDM),
 1. Download your STARR-OMOP dataset to `[PATH_TO_SOURCE_OMOP]`.
 2. Convert STARR-OMOP => MEDS using the following:
 ```bash
-femr_stanford_omop_fixer [PATH_TO_SOURCE_OMOP] [PATH_TO_SOURCE_OMOP]
-
 # Convert OMOP => MEDS data format
-meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
+meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]_raw
+
+# Apply Stanford fixes
+femr_stanford_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS]
 ```
 
 3. Use HuggingFace's Datasets library to load our dataset in Python

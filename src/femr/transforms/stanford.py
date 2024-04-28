@@ -41,7 +41,7 @@ def move_visit_start_to_first_event_start(patient: meds.Patient) -> meds.Patient
     # Find the stated start time for each visit
     for event in patient["events"]:
         for measurement in event["measurements"]:
-            if measurement["metadata"]["table"] == "visit_occurrence":
+            if measurement["metadata"]["table"] == "visit":
                 if (
                     measurement["metadata"]["visit_id"] in visit_starts
                     and visit_starts[measurement["metadata"]["visit_id"]] != event["time"]
@@ -72,7 +72,7 @@ def move_visit_start_to_first_event_start(patient: meds.Patient) -> meds.Patient
     for event in patient["events"]:
         new_measurements = []
         for measurement in event["measurements"]:
-            if measurement["metadata"]["table"] == "visit_occurrence":
+            if measurement["metadata"]["table"] == "visit":
                 # Triggers if there is a non-visit event associated with the visit ID that has
                 # start time strictly after the recorded visit start
                 if measurement["metadata"]["visit_id"] in first_event_starts:
