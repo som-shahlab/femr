@@ -66,7 +66,7 @@ def test_move_visit_start_ignores_other_visits() -> None:
                     {
                         "code": 4567,
                         "metadata": {
-                            "table": "visit_occurrence",
+                            "table": "visit",
                             "visit_id": 9999,
                         },
                     }
@@ -102,7 +102,7 @@ def test_move_visit_start_ignores_other_visits() -> None:
                     {
                         "code": 4567,
                         "metadata": {
-                            "table": "visit_occurrence",
+                            "table": "visit",
                             "visit_id": 9999,
                         },
                     }
@@ -128,7 +128,7 @@ def test_move_visit_start_minute_after_midnight() -> None:
             {
                 "time": datetime.datetime(1999, 7, 2),
                 "measurements": [
-                    {"code": 3456, "metadata": {"visit_id": 9999, "table": "visit_occurrence"}},
+                    {"code": 3456, "metadata": {"visit_id": 9999, "table": "visit"}},
                     {"code": 1234, "metadata": {"visit_id": 9999}},
                 ],
             },
@@ -152,7 +152,7 @@ def test_move_visit_start_minute_after_midnight() -> None:
             },
             {
                 "time": datetime.datetime(1999, 7, 2, 0, 1),
-                "measurements": [{"code": 3456, "metadata": {"visit_id": 9999, "table": "visit_occurrence"}}],
+                "measurements": [{"code": 3456, "metadata": {"visit_id": 9999, "table": "visit"}}],
             },
             {
                 "time": datetime.datetime(1999, 7, 2, 0, 1),
@@ -179,7 +179,7 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
                 "time": datetime.datetime(1999, 7, 2),
                 "measurements": [
                     {"code": 1234, "metadata": {"visit_id": 9999}},
-                    {"code": 3456, "metadata": {"visit_id": 9999, "table": "visit_occurrence"}},
+                    {"code": 3456, "metadata": {"visit_id": 9999, "table": "visit"}},
                     {"code": 2345, "metadata": {"visit_id": 9999}},
                 ],
             },
@@ -195,7 +195,7 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
                 "time": datetime.datetime(1999, 7, 2),
                 "measurements": [
                     {"code": 1234, "metadata": {"visit_id": 9999}},
-                    {"code": 3456, "metadata": {"visit_id": 9999, "table": "visit_occurrence"}},
+                    {"code": 3456, "metadata": {"visit_id": 9999, "table": "visit"}},
                     {"code": 2345, "metadata": {"visit_id": 9999}},
                 ],
             }
