@@ -22,8 +22,8 @@ We recommend users start with our [tutorial folder](https://github.com/som-shahl
 pip install femr
 
 # If you are using deep learning, you also need to install xformers
-# 
-# Note that xformers has some known issues with MacOS. 
+#
+# Note that xformers has some known issues with MacOS.
 # If you are using MacOS you might also need to install llvm. See https://stackoverflow.com/questions/60005176/how-to-deal-with-clang-error-unsupported-option-fopenmp-on-travis
 pip install xformers
 

@@ -20,7 +20,7 @@ from femr.transforms.stanford import (
 
 
 def _is_visit_measurement(e: meds.Measurement) -> bool:
-    return e["metadata"]["table"] == "visit_occurrence"
+    return e["metadata"]["table"] == "visit"
 
 
 def _get_stanford_transformations() -> Callable[[meds.Patient], meds.Patient]:
