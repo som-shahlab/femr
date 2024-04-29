@@ -219,29 +219,25 @@ def move_billing_codes(patient: RawPatient) -> RawPatient:
 
     return patient
 
-def select_code(current_code: str, new_code: str) -> str:
+def select_concept_id(current_concept_id: int, new_concept_id: int) -> int:
     # Prefer "Visit/ERIP" > "Visit/IP" > "Visit/OP" > "Visit/" > everything else
-    if current_code == "Visit/ERIP" or new_code == "Visit/ERIP":
-        return "Visit/ERIP"
-    elif current_code == "Visit/IP" or new_code == "Visit/IP":
-        return "Visit/IP"
-    elif current_code == "Visit/OP" or new_code == "Visit/OP":
-        return "Visit/OP"
-    elif current_code.startswith("Visit/"):
-        return current_code
-    elif new_code.startswith("Visit/"):
-        return new_code
+    if current_concept_id == 262 or new_concept_id == 262:
+        return 262 # "Visit/ERIP"
+    elif current_concept_id == 9201 or new_concept_id == 9201:
+        return 9201 # "Visit/IP"
+    elif current_concept_id == 9202 or new_concept_id == 9202:
+        return 9202 # "Visit/OP"
     else:
-        return current_code
+        return current_concept_id
 
 def join_consecutive_day_visits(patient: RawPatient) -> RawPatient:
     """If two visits are on consecutive days, merge them into one visit"""
     current_visit_id: int = None
     current_visit_end: datetime.datetime = None
-    current_visit_code: str = None
+    current_visit_concept_id: str = None
     old_visit_id_2_new_visit_id: Dict[int, int] = {}
     for event in patient.events:
-        if event.visit_id is not None and event.omop_table in ["visit", "visit_detail"]:
+        if event.visit_id is not None and event.omop_table in ["visit", "visit_occurrence", "visit_detail"]:
             # Found visit measurement
             m_end = (
                 datetime.datetime.fromisoformat(event.end)
@@ -252,43 +248,43 @@ def join_consecutive_day_visits(patient: RawPatient) -> RawPatient:
                 # Start a new visit
                 current_visit_id = event.visit_id
                 current_visit_end = m_end
-                current_visit_code = event.code
+                current_visit_concept_id = event.concept_id
             elif event.visit_id == current_visit_id:
                 # Same visit, so update its end time
                 current_visit_end = max(m_end, current_visit_end)
-                current_visit_code = select_code(current_visit_code, event.code)
+                current_visit_concept_id = select_concept_id(current_visit_concept_id, event.concept_id)
             elif event.visit_id in old_visit_id_2_new_visit_id:
                 # We have already merged this visit, so update its end time
                 current_visit_end = max(m_end, current_visit_end)
-                current_visit_code = select_code(current_visit_code, event.code)
+                current_visit_concept_id = select_concept_id(current_visit_concept_id, event.concept_id)
             else:
                 if (event.start - current_visit_end).days <= 1:
                     # Merge the two visits
                     current_visit_end = max(m_end, current_visit_end)
-                    current_visit_code = select_code(current_visit_code, event.code)
+                    current_visit_concept_id = select_concept_id(current_visit_concept_id, event.concept_id)
                 else:
                     # Start a new visit
                     current_visit_id = event.visit_id
                     current_visit_end = m_end
-                    current_visit_code = event.code
+                    current_visit_concept_id = event.concept_id
             # NOTE: Need to update both this visit_id and the current_visit_id
             old_visit_id_2_new_visit_id[event.visit_id] = {
                 "visit_id": current_visit_id,
                 "end": current_visit_end,
-                "code": current_visit_code,
+                "concept_id": current_visit_concept_id,
             }
             old_visit_id_2_new_visit_id[current_visit_id] = {
                 "visit_id": current_visit_id,
                 "end": current_visit_end,
-                "code": current_visit_code,
+                "concept_id": current_visit_concept_id,
             }
     events = []
     for event in patient.events:
         if event.visit_id:
-            if event.omop_table == "visit":
+            if event.omop_table == "visit_occurrence":
                 # If this is a visit event, update its end time and delete (if not original visit_id)
                 event.end = old_visit_id_2_new_visit_id[event.visit_id]["end"]
-                event.code = old_visit_id_2_new_visit_id[event.visit_id]["code"]
+                event.concept_id = old_visit_id_2_new_visit_id[event.visit_id]["concept_id"]
                 if old_visit_id_2_new_visit_id[event.visit_id]["visit_id"] == event.visit_id:
                     events.append(event)
             else:

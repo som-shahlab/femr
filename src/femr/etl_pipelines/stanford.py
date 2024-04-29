@@ -25,7 +25,6 @@ from femr.transforms.stanford import (
 def _is_visit_event(e: RawEvent) -> bool:
     return e.omop_table == "visit_occurrence"
 
-
 def _get_stanford_transformations() -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
@@ -171,3 +170,6 @@ def etl_starr_omop_program() -> None:
     except Exception as e:
         rootLogger.critical(e, exc_info=True)
         raise e
+
+if __name__ == '__main__':
+    etl_starr_omop_program()
