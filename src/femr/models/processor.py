@@ -121,6 +121,10 @@ class BatchCreator:
 
     def add_patient(self, patient: meds.Patient, offset, max_patient_length=None):
         """
+
+        NOTES:
+        - patient is a row of the arrow dataset, in the meds.Patient schema
+
         TODO: this needs documentation. specifically:
         - describe logical flow
         - describe return value (and, when is return value None?)
@@ -222,6 +226,7 @@ class BatchCreator:
             return last_time
 
         start_index = len(self.ages)
+
         final_time = process_patient_events()
 
         if self.task is not None and final_time is not None:
@@ -238,7 +243,7 @@ class BatchCreator:
             token_dtype = np.int32
 
         transformer = {
-            "valid_tokens": np.array(self.valid_tokens),
+            "valid_tokens": np.array(self.valid_tokens),  # it appears that valid_tokens is never used
             "ages": np.array(self.ages, dtype=np.float32),
             "normalized_ages": np.array(self.normalized_ages, dtype=np.float16),
             "timestamps": np.array(self.timestamps, dtype=np.int64),
@@ -341,7 +346,7 @@ class FEMRBatchProcessor:
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
     def convert_dataset(
-        self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1, batch_size: int = 200
+        self, dataset, tokens_per_batch: int, min_samples_per_batch: int = 4, num_proc: int = 1, batch_size: int = 200, cache_dir=None, writer_batch_size=8,
     ):
         if isinstance(dataset, datasets.DatasetDict):
             return datasets.DatasetDict(
@@ -411,85 +416,86 @@ class FEMRBatchProcessor:
 
         batch_dataset = datasets.Dataset.from_generator(
             batch_func,
+            cache_dir=cache_dir,
             gen_kwargs={
                 "batch_data": final_batch_data,
             },
             num_proc=num_proc,
-            writer_batch_size=8,
+            writer_batch_size=writer_batch_size,
         )
 
         return batch_dataset
 
-    def calculate_lengths(self, dataset, max_length, num_proc, batch_size):
-        lengths = femr.hf_utils.aggregate_over_dataset(
-            dataset,
-            functools.partial(map_length_stats, processor=self, max_length=max_length),
-            agg_length_stats,
-            num_proc=num_proc,
-            batch_size=batch_size,
-            with_indices=True,
-        )
-        return np.concatenate(lengths)
+    # def calculate_lengths(self, dataset, max_length, num_proc, batch_size):
+    #     lengths = femr.hf_utils.aggregate_over_dataset(
+    #         dataset,
+    #         functools.partial(map_length_stats, processor=self, max_length=max_length),
+    #         agg_length_stats,
+    #         num_proc=num_proc,
+    #         batch_size=batch_size,
+    #         with_indices=True,
+    #     )
+    #     return np.concatenate(lengths)
 
-    def convert_dataset_from_lengths(
-        self, dataset, lengths, tokens_per_batch, num_proc
-    ):
-        """this is almost identical to convert_dataset(), with one main difference: this version takes "lengths" as an arg. """
-        if isinstance(dataset, datasets.DatasetDict):
-            raise Exception("not implemented")
+    # def convert_dataset_from_lengths(
+    #     self, dataset, lengths, tokens_per_batch, num_proc
+    # ):
+    #     """this is almost identical to convert_dataset(), with one main difference: this version takes "lengths" as an arg. """
+    #     if isinstance(dataset, datasets.DatasetDict):
+    #         raise Exception("not implemented")
 
-        rng = np.random.default_rng(seed=0)
-        rng.shuffle(lengths)
+    #     rng = np.random.default_rng(seed=0)
+    #     rng.shuffle(lengths)
 
-        current_batch_length = 0
+    #     current_batch_length = 0
 
-        batch_offsets = [0]
+    #     batch_offsets = [0]
 
-        for i, length in enumerate(lengths[:, 2]):
-            if current_batch_length + length > tokens_per_batch:
-                batch_offsets.append(i)
-                current_batch_length = 0
+    #     for i, length in enumerate(lengths[:, 2]):
+    #         if current_batch_length + length > tokens_per_batch:
+    #             batch_offsets.append(i)
+    #             current_batch_length = 0
 
-            current_batch_length += length
+    #         current_batch_length += length
 
-        batch_offsets.append(len(lengths))
+    #     batch_offsets.append(len(lengths))
 
-        batches = list(zip(batch_offsets, batch_offsets[1:]))
+    #     batches = list(zip(batch_offsets, batch_offsets[1:]))
 
-        split_batches = np.array_split(batches, num_proc)
+    #     split_batches = np.array_split(batches, num_proc)
 
-        final_batch_data = []
+    #     final_batch_data = []
 
-        for batch_part in split_batches:
-            if len(batch_part) == 0:
-                continue
-            start = batch_part[0][0]
-            end = batch_part[-1][-1]
-            lengths_part = lengths[start:end, :]
-            offsets = [0] + [b - start for _, b in batch_part]
+    #     for batch_part in split_batches:
+    #         if len(batch_part) == 0:
+    #             continue
+    #         start = batch_part[0][0]
+    #         end = batch_part[-1][-1]
+    #         lengths_part = lengths[start:end, :]
+    #         offsets = [0] + [b - start for _, b in batch_part]
 
-            final_batch_data.append(
-                (
-                    lengths_part,
-                    np.array(offsets, dtype=np.int32),
-                )
-            )
+    #         final_batch_data.append(
+    #             (
+    #                 lengths_part,
+    #                 np.array(offsets, dtype=np.int32),
+    #             )
+    #         )
 
-        print("Creating batches", len(batches))
+    #     print("Creating batches", len(batches))
 
-        batch_func = functools.partial(
-            _batch_generator,
-            creator=self.creator,
-            dataset=dataset,
-        )
+    #     batch_func = functools.partial(
+    #         _batch_generator,
+    #         creator=self.creator,
+    #         dataset=dataset,
+    #     )
 
-        batch_dataset = datasets.Dataset.from_generator(
-            batch_func,
-            gen_kwargs={
-                "batch_data": final_batch_data,
-            },
-            num_proc=num_proc,
-            writer_batch_size=8,
-        )
+    #     batch_dataset = datasets.Dataset.from_generator(
+    #         batch_func,
+    #         gen_kwargs={
+    #             "batch_data": final_batch_data,
+    #         },
+    #         num_proc=num_proc,
+    #         writer_batch_size=8,
+    #     )
 
-        return batch_dataset
+    #     return batch_dataset
