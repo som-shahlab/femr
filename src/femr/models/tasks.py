@@ -394,6 +394,7 @@ class MOTORTask(Task):
         num_tasks = len(self.pretraining_task_info)
         num_indices = len(batch["censor_time"])
 
+        # ???
         def h(a):
             shape = (num_indices, num_tasks)
             a = {k: v.numpy() for k, v in batch[a].items()}
@@ -414,11 +415,22 @@ class MOTORTask(Task):
 
             return arr
 
+        # iterate over all time bins. the first time bin is always 0 and the last always inf
         for i, (start, end) in enumerate(zip(self.time_bins, self.time_bins[1:])):
+
+            # this is the amount of time spent in this bin, up to the censor time
             censor_time_in_bin = torch.unsqueeze(torch.clip(batch["censor_time"] - start, 0, float(end - start)), -1)
+
+            # this is the amount of time spent in this bin, up to the event time
             event_time_in_bin = torch.clip(time - start, 0, float(end - start))
+
+            # ...
             time_in_bin = torch.where(is_event_global, event_time_in_bin, censor_time_in_bin)
+
+            # take the log of the time in bin...
             log_time[i, :] = inf_log(time_in_bin)
+
+            # True if the event occurs in the bin and False otherwise
             is_event[i, :] = is_event_global & (start <= time) & (time < end)
 
         log_time = torch.transpose(log_time, 0, 1).contiguous()
