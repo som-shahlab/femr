@@ -1,40 +1,14 @@
 """Labeling functions for OMOP data."""
 from __future__ import annotations
 
-import collections
 import datetime
-import multiprocessing
-import warnings
 from abc import abstractmethod
 from collections import deque
-from datetime import timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-import numpy as np
-import pandas as pd
-
 from .. import Event, Patient
-from ..datasets import PatientDatabase
 from ..extension import datasets as extension_datasets
-from .core import Label, LabeledPatients, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
-
-CHEXPERT_LABELS = [
-    "No Finding",
-    "Enlarged Cardiomediastinum",
-    "Cardiomegaly",
-    "Lung Lesion",
-    "Lung Opacity",
-    "Edema",
-    "Consolidation",
-    "Pneumonia",
-    "Atelectasis",
-    "Pneumothorax",
-    "Pleural Effusion",
-    "Pleural Other",
-    "Fracture",
-    "Support Devices",
-]
-
+from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabeler
 
 def identity(x: Any) -> Any:
     return x
@@ -45,11 +19,11 @@ def get_visit_concepts() -> List[str]:
 
 
 def get_inpatient_admission_concepts() -> List[str]:
-    return ["Visit/IP"]
+    return ["Visit/IP", "Visit/ERIP"]
 
 
 def get_outpatient_visit_concepts() -> List[str]:
-    return ["Visit/OP"]
+    return ["Visit/OP", "Visit/OMOP4822036", "Visit/OMOP4822458"]
 
 
 def get_death_concepts() -> List[str]:
@@ -57,37 +31,22 @@ def get_death_concepts() -> List[str]:
         "Condition Type/OMOP4822053",
     ]
 
-
 def get_icu_visit_detail_concepts() -> List[str]:
     return [
         # All care sites with "ICU" (case insensitive) in the name
-        "CARE_SITE/7928450",
-        "CARE_SITE/7930385",
-        "CARE_SITE/7930600",
-        "CARE_SITE/7928852",
-        "CARE_SITE/7928619",
-        "CARE_SITE/7929727",
-        "CARE_SITE/7928675",
-        "CARE_SITE/7930225",
-        "CARE_SITE/7928759",
-        "CARE_SITE/7928227",
-        "CARE_SITE/7928810",
-        "CARE_SITE/7929179",
-        "CARE_SITE/7928650",
-        "CARE_SITE/7929351",
-        "CARE_SITE/7928457",
-        "CARE_SITE/7928195",
-        "CARE_SITE/7930681",
-        "CARE_SITE/7930670",
-        "CARE_SITE/7930176",
-        "CARE_SITE/7931420",
-        "CARE_SITE/7929149",
-        "CARE_SITE/7930857",
-        "CARE_SITE/7931186",
-        "CARE_SITE/7930934",
-        "CARE_SITE/7930924",
+        "CARE_SITE/528292",
+        "CARE_SITE/528612",
+        "CARE_SITE/528604",
+        "CARE_SITE/528623",
+        "CARE_SITE/528396",
+        "CARE_SITE/528377",
+        "CARE_SITE/528314",
+        "CARE_SITE/528478",
+        "CARE_SITE/528112",
+        "CARE_SITE/528024",
+        "CARE_SITE/527323",
+        "CARE_SITE/527858",
     ]
-
 
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:
     return date.replace(hour=23, minute=59, second=59)
@@ -142,7 +101,6 @@ def get_icu_visit_detail_codes(ontology: extension_datasets.Ontology) -> Set[int
         ontology, get_icu_visit_detail_concepts(), is_ontology_expansion=True, is_silent_not_found_error=True
     )
 
-
 def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[int]:
     # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
     return get_femr_codes(
@@ -151,6 +109,7 @@ def get_inpatient_admission_codes(ontology: extension_datasets.Ontology) -> Set[
 
 
 def get_outpatient_visit_codes(ontology: extension_datasets.Ontology) -> Set[int]:
+    # Don't get children here b/c it adds noise (i.e. "Medicare Specialty/AO")
     return get_femr_codes(
         ontology, get_outpatient_visit_concepts(), is_ontology_expansion=False, is_silent_not_found_error=True
     )
@@ -584,155 +543,6 @@ class HighHbA1cCodeLabeler(Labeler):
 
     def get_labeler_type(self) -> LabelType:
         return "boolean"
-
-
-##########################################################
-##########################################################
-# CheXpert
-##########################################################
-##########################################################
-
-
-def chexpert_apply_labeling_function(args: Tuple[Any, str, str, List[int], Optional[int]]) -> Dict[int, List[Label]]:
-    """Apply a labeling function to the set of patients included in `patient_ids`.
-    Gets called as a parallelized subprocess of the .apply() method of `Labeler`."""
-    labeling_function: Any = args[0]
-    path_to_chexpert_csv: str = args[1]
-    path_to_patient_database: str = args[2]
-    patient_ids: List[int] = args[3]
-    num_labels: Optional[int] = args[4]
-
-    chexpert_df = pd.read_csv(path_to_chexpert_csv, sep="\t")
-    patients = PatientDatabase(path_to_patient_database)
-
-    chexpert_df[CHEXPERT_LABELS] = (chexpert_df[CHEXPERT_LABELS] == 1) * 1
-
-    patients_to_labels: Dict[int, List[Label]] = {}
-    for patient_id in patient_ids:
-        patient: Patient = patients[patient_id]  # type: ignore
-        patient_df = chexpert_df[chexpert_df["patient_id"] == patient_id]
-
-        if num_labels is not None and num_labels < len(patient_df):
-            patient_df = patient_df.sample(n=num_labels, random_state=0)
-        labels: List[Label] = labeling_function.label(patient, patient_df)
-        patients_to_labels[patient_id] = labels
-
-    return patients_to_labels
-
-
-class ChexpertLabeler(Labeler):
-    """CheXpert labeler.
-
-    Multi-label classification task of patient's radiology reports.
-    Make prediction 24 hours before radiology note is recorded.
-
-    Excludes:
-        - Radiology reports that are written <=24 hours of a patient's first event (i.e. `patient.events[0].start`)
-    """
-
-    def __init__(
-        self,
-        path_to_chexpert_csv: str,
-    ):
-        self.path_to_chexpert_csv = path_to_chexpert_csv
-
-    def get_patient_start_end_times(self, patient: Patient) -> Tuple[datetime.datetime, datetime.datetime]:
-        """Return the (start, end) of the patient timeline.
-
-        Returns:
-            Tuple[datetime.datetime, datetime.datetime]: (start, end)
-        """
-        return (patient.events[0].start, patient.events[-1].start)
-
-    def get_outcome_times(self, patient: Patient) -> List[datetime.datetime]:
-        """Return a list of all times when the patient has a radiology report"""
-
-        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
-
-        patient_df = chexpert_df.sort_values(by=["start"], ascending=True)
-
-        start_time, _ = self.get_patient_start_end_times(patient)
-
-        outcome_times = []
-        for idx, row in patient_df.iterrows():
-            label_time = row["start"]
-            label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
-            prediction_time = label_time - timedelta(hours=24)
-
-            if prediction_time <= start_time:
-                continue
-            outcome_times.append(label_time)
-
-        return outcome_times
-
-    def get_prediction_times(self, patient: Patient) -> List[datetime.datetime]:
-        outcome_times = self.get_outcome_times(patient)
-        return [outcome_time - timedelta(hours=24) for outcome_time in outcome_times]
-
-    def get_labeler_type(self) -> LabelType:
-        return "categorical"
-
-    def label(self, patient: Patient, patient_df: pd.DataFrame) -> List[Label]:
-        labels: List[Label] = []
-
-        patient_df = patient_df.sort_values(by=["start"], ascending=True)
-        start_time, _ = self.get_patient_start_end_times(patient)
-
-        for idx, row in patient_df.iterrows():
-            label_time = row["start"]
-            label_time = datetime.datetime.strptime(label_time, "%Y-%m-%d %H:%M:%S")
-            prediction_time = label_time - timedelta(days=1)
-
-            if prediction_time <= start_time:
-                continue
-
-            bool_labels = row[CHEXPERT_LABELS].astype(int).to_list()
-            label_string = "".join([str(x) for x in bool_labels])
-            label_num = int(label_string, 2)
-            labels.append(Label(time=prediction_time, value=label_num))
-
-        return labels
-
-    def apply(
-        self,
-        path_to_patient_database: str,
-        num_threads: int = 1,
-        num_patients: Optional[int] = None,
-        num_labels: Optional[int] = None,
-    ) -> LabeledPatients:
-        """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
-
-        Args:
-            path_to_patient_database (str, optional): Path to `PatientDatabase` on disk.
-                Must be specified if `patients = None`
-            num_threads (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
-            num_patients (Optional[int], optional): Number of patients to process - useful for debugging.
-                If specified, will take the first `num_patients` in the provided `PatientDatabase` / `patients` list.
-                If None, use all patients.
-
-        Returns:
-            LabeledPatients: Maps patients to labels
-        """
-        # Split patient IDs across parallelized processes
-        chexpert_df = pd.read_csv(self.path_to_chexpert_csv, sep="\t")
-        pids = list(chexpert_df["patient_id"].unique())
-
-        if num_patients is not None:
-            pids = pids[:num_patients]
-
-        pid_parts = np.array_split(pids, num_threads)
-
-        # Multiprocessing
-        tasks = [
-            (self, self.path_to_chexpert_csv, path_to_patient_database, pid_part, num_labels) for pid_part in pid_parts
-        ]
-
-        with multiprocessing.Pool(num_threads) as pool:
-            results: List[Dict[int, List[Label]]] = list(pool.imap(chexpert_apply_labeling_function, tasks))
-
-        # Join results and return
-        patients_to_labels: Dict[int, List[Label]] = dict(collections.ChainMap(*results))
-        return LabeledPatients(patients_to_labels, self.get_labeler_type())
 
 
 if __name__ == "__main__":

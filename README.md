@@ -30,7 +30,7 @@ pip install femr_oldcpu
 Note that CUDA-enabled **FEMR** requires jax in order to function.
 
 ```bash
-pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade "jax[cuda11_pip]==0.4.8" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 pip install "femr_cuda[models]"
 ```
 
