@@ -43,7 +43,6 @@ def _get_stanford_transformations() -> Sequence[Callable[[RawPatient], Optional[
             # If we ever remove or revisit visit_id, we would want to revisit this
             do_not_apply_to_filter=_is_visit_event,
         ),
-        join_consecutive_day_visits,
     ]
 
     return transforms

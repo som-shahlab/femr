@@ -237,7 +237,9 @@ def join_consecutive_day_visits(patient: RawPatient) -> RawPatient:
     current_visit_concept_id: str = None
     old_visit_id_2_new_visit_id: Dict[int, int] = {}
     for event in patient.events:
-        if event.visit_id is not None and event.omop_table in ["visit", "visit_occurrence", "visit_detail"]:
+        if event.visit_id is not None and event.omop_table in ["visit", "visit_occurrence", ]:
+            # TODO -- uncomment below line to return to "vanilla" extract -- use above line for "no_visit_detail_merge" extract
+        # if event.visit_id is not None and event.omop_table in ["visit", "visit_occurrence", "visit_detail"]:
             # Found visit measurement
             m_end = (
                 datetime.datetime.fromisoformat(event.end)
