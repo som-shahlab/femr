@@ -13,18 +13,14 @@ from .core import Label, Labeler, LabelType, TimeHorizon, TimeHorizonEventLabele
 def identity(x: Any) -> Any:
     return x
 
-
-def get_visit_concepts() -> List[str]:
-    return ["Visit/IP", "Visit/OP"]
-
-
 def get_inpatient_admission_concepts() -> List[str]:
-    return ["Visit/IP", "Visit/ERIP"]
-
+    return ["Visit/IP"] #, "Visit/ERIP"]
 
 def get_outpatient_visit_concepts() -> List[str]:
-    return ["Visit/OP", "Visit/OMOP4822036", "Visit/OMOP4822458"]
+    return ["Visit/OP"] #, "Visit/OMOP4822036", "Visit/OMOP4822458"]
 
+def get_visit_concepts() -> List[str]:
+    return get_inpatient_admission_concepts() + get_outpatient_visit_concepts()
 
 def get_death_concepts() -> List[str]:
     return [
@@ -34,18 +30,16 @@ def get_death_concepts() -> List[str]:
 def get_icu_visit_detail_concepts() -> List[str]:
     return [
         # All care sites with "ICU" (case insensitive) in the name
-        "CARE_SITE/528292",
-        "CARE_SITE/528612",
-        "CARE_SITE/528604",
-        "CARE_SITE/528623",
-        "CARE_SITE/528396",
-        "CARE_SITE/528377",
-        "CARE_SITE/528314",
-        "CARE_SITE/528478",
-        "CARE_SITE/528112",
-        "CARE_SITE/528024",
-        "CARE_SITE/527323",
-        "CARE_SITE/527858",
+        "CARE_SITE/530146",
+        "CARE_SITE/529829",
+        "CARE_SITE/529538",
+        "CARE_SITE/529980",
+        "CARE_SITE/529805",
+        "CARE_SITE/529553",
+        "CARE_SITE/529431",
+        "CARE_SITE/529620",
+        "CARE_SITE/530429",
+        "CARE_SITE/530697",
     ]
 
 def move_datetime_to_end_of_day(date: datetime.datetime) -> datetime.datetime:

@@ -25,7 +25,7 @@ from femr.transforms.stanford import (
 def _is_visit_event(e: RawEvent) -> bool:
     return e.omop_table == "visit_occurrence"
 
-def _get_stanford_transformations() -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
+def _get_stanford_transformations(is_join_visits: bool = False) -> Sequence[Callable[[RawPatient], Optional[RawPatient]]]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
     transforms: Sequence[Callable[[RawPatient], Optional[RawPatient]]] = [
@@ -44,6 +44,9 @@ def _get_stanford_transformations() -> Sequence[Callable[[RawPatient], Optional[
             do_not_apply_to_filter=_is_visit_event,
         ),
     ]
+    
+    if is_join_visits:
+        transforms += [ join_consecutive_day_visits ]
 
     return transforms
 
@@ -76,6 +79,13 @@ def etl_starr_omop_program() -> None:
         type=int,
         help="The number of threads to use",
         default=1,
+    )
+    
+    parser.add_argument(
+        "--is_join_visits",
+        action="store_true",
+        help="If set, then run the `join_consecutive_day_visits` transform (used for EHRSHOTv2024)",
+        default=False,
     )
 
     args = parser.parse_args()
@@ -143,7 +153,7 @@ def etl_starr_omop_program() -> None:
             rootLogger.info("Appling transformations")
             patient_collection = patient_collection.transform(
                 cleaned_patients_dir,
-                _get_stanford_transformations(),
+                _get_stanford_transformations(args.is_join_visits),
                 num_threads=args.num_threads,
                 stats_dict=stats_dict,
             )
