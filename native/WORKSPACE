@@ -50,7 +50,7 @@ pybind11_bazel_version = "2.12.0"
 http_archive(
   name = "pybind11_bazel",
   strip_prefix = "pybind11_bazel-" + pybind11_bazel_version,
-  urls = ["https://github.com/pybind/pybind11_bazel/archive/v" + pybind11_bazel_version + ".tar.gz"],,
+  urls = ["https://github.com/pybind/pybind11_bazel/archive/v" + pybind11_bazel_version + ".tar.gz"],
 )
 
 pybind11_version = 'fab1eebe2c4c52e0abac249f3d058787bc83b5ec'
