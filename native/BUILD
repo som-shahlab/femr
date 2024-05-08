@@ -367,7 +367,6 @@ pybind_library(
     ],
 )
 
-
 pybind_extension(
     name="extension",
     srcs=[
@@ -379,6 +378,10 @@ pybind_extension(
         ":dataloader_extension",
         ":metrics_extension",
     ],
+    linkopts = select({
+        "@platforms//os:macos": ["-undefined", "dynamic_lookup"],
+        "//conditions:default": [],
+    }),
 )
 
 py_test(
