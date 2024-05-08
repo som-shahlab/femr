@@ -45,13 +45,12 @@ cc_library(
 """,
 )
 
-pybind11_bazel_version = "5a8209f6ddcc848272e27a36a5fc2b79e7438374"
+pybind11_bazel_version = "2.12.0"
 
 http_archive(
   name = "pybind11_bazel",
   strip_prefix = "pybind11_bazel-" + pybind11_bazel_version,
-  urls = ["https://github.com/Lalaland/pybind11_bazel/archive/" + pybind11_bazel_version + ".tar.gz"],
-  sha256 = "cc9bd704ec128049f6b0c7a64313a690a3f53dac2f040e9d00d87cf33d45d9c1",
+  urls = ["https://github.com/pybind/pybind11_bazel/archive/v" + pybind11_bazel_version + ".tar.gz"],,
 )
 
 pybind11_version = 'fab1eebe2c4c52e0abac249f3d058787bc83b5ec'
