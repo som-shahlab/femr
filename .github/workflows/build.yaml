@@ -1,0 +1,91 @@
+name: Build wheels
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  build_wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: ["ubuntu-latest", "macos-12"]
+        python-version: ["3.10"]
+        version: ["cpu", "cuda", "old_cpu"]
+        exclude:
+          - os: macos-12
+            version: cuda
+          - os: macos-12
+            version: old_cpu
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Build wheels cpu linux
+      uses: pypa/cibuildwheel@v2.12.2
+      if: matrix.version == 'cpu' && matrix.os == 'ubuntu-latest'
+      env:
+        CIBW_BEFORE_ALL_LINUX: bash build/linux_setup.sh
+        CIBW_ARCHS_LINUX: x86_64
+        CIBW_SKIP: '*-musllinux_*'
+
+    - name: Build wheels old cpu linux
+      uses: pypa/cibuildwheel@v2.12.2
+      if: matrix.version == 'old_cpu' && matrix.os == 'ubuntu-latest'
+      env:
+        CIBW_ENVIRONMENT: DISABLE_CPU_ARCH=1
+        CIBW_BEFORE_ALL_LINUX: bash build/linux_setup_old.sh
+        CIBW_ARCHS_LINUX: x86_64
+        CIBW_SKIP: '*-musllinux_*'
+
+    - name: Build wheels cpu mac
+      uses: pypa/cibuildwheel@v2.12.2
+      if: matrix.version == 'cpu' && matrix.os == 'macos-12'
+      env:
+        CIBW_ENVIRONMENT: MACOSX_DEPLOYMENT_TARGET=10.14
+        CIBW_ARCHS_MACOS: x86_64 arm64
+
+    - name: Build wheels cuda
+      uses: pypa/cibuildwheel@v2.12.2
+      if: matrix.version == 'cuda'
+      env:
+        CIBW_ENVIRONMENT: PATH=$PATH:/usr/local/cuda/bin
+        CIBW_BEFORE_ALL_LINUX: bash build/linux_setup_cuda.sh
+        CIBW_ARCHS_LINUX: x86_64
+        CIBW_SKIP: '*-musllinux_*'
+
+    - uses: actions/upload-artifact@v3
+      with:
+        path: ./wheelhouse/*.whl
+
+  make_sdist:
+    name: Make SDist
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build SDist
+      run: pipx run build --sdist
+
+    - uses: actions/upload-artifact@v3
+      with:
+        path: dist/*.tar.gz
+
+  upload_all:
+    needs: [build_wheels, make_sdist]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: artifact
+        path: dist
+
+    - uses: pypa/gh-action-pypi-publish@v1.5.0
+      with:
+        user: __token__
+        password: ${{ secrets.pypi_token }}
