@@ -32,6 +32,8 @@ pip install -e .
 
 ## Generating extract
 
+#### EHRSHOT-2023
+
 ```bash
 # Set up environment variables
 #   Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
@@ -53,4 +55,30 @@ python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATI
 
 # Run actual FEMR extraction
 etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10
+```
+
+
+#### EHRSHOT-2024
+
+```bash
+# Set up environment variables
+#   Path to a folder containing your raw STARR-OMOP download, generated via `tools.stanford.download_bigquery.py`
+export OMOP_SOURCE=/path/to/omop/folder...
+#   Path to any arbitrary folder where you want to store your FEMR extract
+export EXTRACT_DESTINATION=/path/to/femr/extract/folder...
+#   Path to any arbitrary folder where you want to store your FEMR extract logs
+export EXTRACT_LOGS=/path/to/femr/extract/logs...
+
+# Do some data preprocessing with Stanford-specific helper scripts
+#   GZIP decompression
+gunzip $OMOP_SOURCE/**/*.csv.gz
+#   Apply zstd compression
+zstd -1 --rm $OMOP_SOURCE/**/*.csv
+#   Extract data from flowsheets
+python tools/stanford/flowsheet_cleaner.py --num_threads 5 $OMOP_SOURCE "${EXTRACT_DESTINATION}_flowsheets"
+#   Normalize visits
+python tools/omop/normalize_visit_detail.py --num_threads 5 "${EXTRACT_DESTINATION}_flowsheets" "${EXTRACT_DESTINATION}_flowsheets_detail"
+
+# Run actual FEMR extraction
+etl_stanford_omop "${EXTRACT_DESTINATION}_flowsheets_detail" $EXTRACT_DESTINATION $EXTRACT_LOGS --num_threads 10 --is_join_visits
 ```
