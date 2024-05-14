@@ -17,11 +17,18 @@ from .utils import OnlineStatistics
 
 
 def get_patient_birthdate(patient: meds.Patient) -> datetime.datetime:
+    print(patient['patient_id'], '-----------')
+    # for e in patient["events"]:
+    #     for m in e["measurements"]:
+    #         print(m)
+    #         break
+    #     break
+        
     for e in patient["events"]:
         for m in e["measurements"]:
             if m["code"] == meds.birth_code:
                 return e["time"]
-    raise ValueError("Couldn't find patient birthdate -- Patient has no events")
+    raise ValueError(f"Couldn't find patient {patient['patient_id']} birthdate -- Patient has no events")
 
 
 class AgeFeaturizer(Featurizer):
