@@ -17,13 +17,6 @@ from .utils import OnlineStatistics
 
 
 def get_patient_birthdate(patient: meds.Patient) -> datetime.datetime:
-    print(patient['patient_id'], '-----------')
-    # for e in patient["events"]:
-    #     for m in e["measurements"]:
-    #         print(m)
-    #         break
-    #     break
-        
     for e in patient["events"]:
         for m in e["measurements"]:
             if m["code"] == meds.birth_code:
