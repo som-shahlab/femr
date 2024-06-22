@@ -407,4 +407,4 @@ class MOTORTask(Task):
         log_time = torch.transpose(log_time, 0, 1).contiguous()
         is_event = torch.transpose(is_event, 0, 1).contiguous()
 
-        return {"is_event": is_event, "log_time": log_time}
+        return {"is_event": is_event, "log_time": log_time, "time": time}
