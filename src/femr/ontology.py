@@ -5,11 +5,10 @@ import functools
 import os
 from typing import Any, Dict, Iterable, Optional, Set
 
-import datasets
 import meds
 import polars as pl
 
-import femr.hf_utils
+import femr.mr
 
 
 def _get_all_codes_map(batch) -> Set[str]:
@@ -17,7 +16,7 @@ def _get_all_codes_map(batch) -> Set[str]:
     for events in batch["events"]:
         for event in events:
             for measurement in event["measurements"]:
-                result.add(measurement["code"])
+                result.add(event.code)
     return result
 
 

@@ -6,7 +6,6 @@ import json
 import os
 from typing import Callable, Sequence
 
-import datasets
 import meds
 
 from femr.transforms import delta_encode, remove_nones
@@ -19,14 +18,14 @@ from femr.transforms.stanford import (
 )
 
 
-def _is_visit_measurement(e: meds.Measurement) -> bool:
+def _is_visit_measurement(e: meds_reader.Event) -> bool:
     return e["metadata"]["table"] == "visit"
 
 
-def _get_stanford_transformations() -> Callable[[meds.Patient], meds.Patient]:
+def _get_stanford_transformations() -> Callable[[meds_reader.Patient], meds_reader.Patient]:
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
-    transforms: Sequence[Callable[[meds.Patient], meds.Patient]] = [
+    transforms: Sequence[Callable[[meds_reader.Patient], meds_reader.Patient]] = [
         move_pre_birth,
         move_visit_start_to_first_event_start,
         move_to_day_end,

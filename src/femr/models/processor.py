@@ -5,7 +5,6 @@ import datetime
 import functools
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-import datasets
 import meds
 import numpy as np
 import torch.utils.data
@@ -114,7 +113,7 @@ class BatchCreator:
         if self.task is not None:
             self.task.start_batch()
 
-    def add_patient(self, patient: meds.Patient, offset: int = 0, max_length: Optional[int] = None):
+    def add_patient(self, patient: meds_reader.Patient, offset: int = 0, max_length: Optional[int] = None):
         """Add a patient to the current batch.
 
         Note that the two optional parameters are used to add a subset of a patient to a batch.
@@ -163,15 +162,15 @@ class BatchCreator:
         birth = femr.pat_utils.get_patient_birthdate(patient)
         self.tokenizer.start_patient()
 
-        for event in patient["events"]:
+        for event in patient.events:
             # We want to avoid duplicate codes in the same day, so we maintain codes_seen_today
-            if event["time"].date() != current_date:
-                current_date = event["time"].date()
+            if event.time.date() != current_date:
+                current_date = event.time.date()
                 codes_seen_today = set()
 
             for measurement in event["measurements"]:
                 # Get features and weights for the current event
-                features, weights = self.tokenizer.get_feature_codes(event["time"], measurement)
+                features, weights = self.tokenizer.get_feature_codes(event.time, measurement)
 
                 # Ignore events with no features
                 if len(features) == 0:
@@ -186,7 +185,7 @@ class BatchCreator:
                 if (self.task is not None) and (last_time is not None):
                     # Now we have to consider whether or not to have labels for this time step
                     # The add_event function returns how many labels to assign for this time
-                    num_added = self.task.add_event(last_time, event["time"], features)
+                    num_added = self.task.add_event(last_time, event.time, features)
                     for _ in range(num_added):
                         per_patient_label_indices.append(len(per_patient_ages) - 1)
 
@@ -199,11 +198,11 @@ class BatchCreator:
                     per_patient_hierarchical_weights.extend(weights)
                     per_patient_token_indices.append(len(per_patient_hierarchical_tokens))
 
-                per_patient_ages.append((event["time"] - birth) / datetime.timedelta(days=1))
-                per_patient_normalized_ages.append(self.tokenizer.normalize_age(event["time"] - birth))
-                per_patient_timestamps.append(event["time"].replace(tzinfo=datetime.timezone.utc).timestamp())
+                per_patient_ages.append((event.time - birth) / datetime.timedelta(days=1))
+                per_patient_normalized_ages.append(self.tokenizer.normalize_age(event.time - birth))
+                per_patient_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
 
-                last_time = event["time"]
+                last_time = event.time
 
         if self.task is not None and last_time is not None:
             num_added = self.task.add_event(last_time, None, None)
@@ -224,7 +223,7 @@ class BatchCreator:
 
         # Let's add the constants first
         self.valid_tokens.extend([True] * length_to_add)
-        self.patient_ids.extend([patient["patient_id"]] * length_to_add)
+        self.patient_ids.extend([patient.patient_id] * length_to_add)
         self.offsets.append(offset)
         self.patient_lengths.append(length_to_add)
 
@@ -363,7 +362,7 @@ class FEMRBatchProcessor:
 
     def convert_patient(
         self,
-        patient: meds.Patient,
+        patient: meds_reader.Patient,
         offset: int = 0,
         max_length: Optional[int] = None,
         tensor_type=None,

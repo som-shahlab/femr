@@ -16,10 +16,10 @@ class DummyTokenizer:
         pass
 
     def get_feature_codes(self, time, measurement):
-        if measurement["code"] == "SNOMED/184099003":
+        if event.code == "SNOMED/184099003":
             return [1], None
         else:
-            return [int(measurement["code"])], None
+            return [int(event.code)], None
 
     def normalize_age(self, age):
         return 0.5

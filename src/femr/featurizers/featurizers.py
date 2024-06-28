@@ -8,20 +8,14 @@ from collections import defaultdict, deque
 from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Tuple
 
 import meds
+import meds_reader
 import numpy as np
 
 import femr.ontology
 
+from ..pat_utils import get_patient_birthdate
 from .core import ColumnValue, Featurizer
 from .utils import OnlineStatistics
-
-
-def get_patient_birthdate(patient: meds.Patient) -> datetime.datetime:
-    for e in patient["events"]:
-        for m in e["measurements"]:
-            if m["code"] == meds.birth_code:
-                return e["time"]
-    raise ValueError("Couldn't find patient birthdate -- Patient has no events")
 
 
 class AgeFeaturizer(Featurizer):
@@ -42,7 +36,7 @@ class AgeFeaturizer(Featurizer):
         return 1
 
     def generate_preprocess_data(
-        self, patients: List[meds.Patient], label_map: Mapping[int, List[meds.Label]]
+        self, patients: Iterator[meds_reader.Patient], label_map: Mapping[int, List[meds.Label]]
     ) -> OnlineStatistics:
         """Save the age of this patient (in years) at each label, to use for normalization."""
         if not self.is_needs_preprocessing():
@@ -54,7 +48,7 @@ class AgeFeaturizer(Featurizer):
             patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
             assert patient_birth_date, "Patients must have a birth date"
 
-            for label in label_map[patient["patient_id"]]:
+            for label in label_map[patient.patient_id]:
                 age_in_yrs: float = (label["prediction_time"] - patient_birth_date).days / 365
                 age_statistics.add(age_in_yrs)
 
@@ -62,10 +56,11 @@ class AgeFeaturizer(Featurizer):
 
     def encorperate_prepreprocessed_data(self, data_elements: List[OnlineStatistics]) -> None:
         self.age_statistics = OnlineStatistics.merge(data_elements)
+        print("What", self.age_statistics, data_elements)
 
     def featurize(
         self,
-        patient: meds.Patient,
+        patient: meds_reader.Patient,
         labels: List[meds.Label],
     ) -> List[List[ColumnValue]]:
         """Return the age of the patient at each label.
@@ -154,13 +149,13 @@ class ReservoirSampler:
 
 
 def exclusion_helper(
-    measurement: meds.Measurement, fallback_function: Callable[[meds.Measurement], bool], excluded_codes_set: Set[str]
+    event: meds_reader.Event, fallback_function: Callable[[meds_reader.Event], bool], excluded_codes_set: Set[str]
 ) -> bool:
     if excluded_codes_set is not None:
-        if measurement["code"] in excluded_codes_set:
+        if event.code in excluded_codes_set:
             return True
     if fallback_function is not None:
-        return fallback_function(measurement)
+        return fallback_function(event)
 
     return False
 
@@ -177,7 +172,7 @@ class CountFeaturizer(Featurizer):
         ontology: Optional[femr.ontology.Ontology] = None,
         is_ontology_expansion: bool = False,
         excluded_codes: Iterable[str] = [],
-        excluded_event_filter: Optional[Callable[[meds.Measurement], bool]] = None,
+        excluded_event_filter: Optional[Callable[[meds_reader.Event], bool]] = None,
         time_bins: Optional[List[datetime.timedelta]] = None,
         numeric_value_decile: bool = False,
         string_value_combination: bool = False,
@@ -244,24 +239,26 @@ class CountFeaturizer(Featurizer):
         else:
             yield code
 
-    def get_columns(self, measurement: meds.Measurement) -> Iterator[int]:
-        if measurement.get("text_value"):
-            k = (measurement["code"], measurement["text_value"][: self.characters_for_string_values])
+    def get_columns(self, event: meds_reader.Event) -> Iterator[int]:
+        if event.text_value is not None:
+            k = (event.code, event.text_value[: self.characters_for_string_values])
             if k in self.code_string_to_column_index:
                 yield self.code_string_to_column_index[k]
-        elif measurement.get("numeric_value"):
-            if measurement["code"] in self.code_value_to_column_index:
-                column, quantiles = self.code_value_to_column_index[measurement["code"]]
+        elif event.numeric_value is not None:
+            if event.code in self.code_value_to_column_index:
+                column, quantiles = self.code_value_to_column_index[event.code]
                 for i, (start, end) in enumerate(zip(quantiles, quantiles[1:])):
-                    if start <= measurement["numeric_value"] < end:
+                    if start <= event.numeric_value < end:
                         yield i + column
         else:
-            for code in self.get_codes(measurement["code"]):
+            for code in self.get_codes(event.code):
                 # If we haven't seen this code before, then add it to our list of included codes
                 if code in self.code_to_column_index:
                     yield self.code_to_column_index[code]
 
-    def generate_preprocess_data(self, patients: List[meds.Patient], label_map: Mapping[int, List[meds.Label]]) -> Any:
+    def generate_preprocess_data(
+        self, patients: Iterator[meds_reader.Patient], label_map: Mapping[int, List[meds.Label]]
+    ) -> Any:
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
         This function performs that preprocessing on the given patients and labels, and returns some intermediate state.
@@ -276,24 +273,21 @@ class CountFeaturizer(Featurizer):
         )
 
         for patient in patients:
-            for event in patient["events"]:
-                for measurement in event["measurements"]:
-                    # Check for excluded events
-                    if self.excluded_event_filter is not None and self.excluded_event_filter(measurement):
-                        continue
+            for event in patient.events:
+                # Check for excluded events
+                if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                    continue
 
-                    if measurement.get("text_value"):
-                        if self.string_value_combination:
-                            observed_string_value[
-                                (measurement["code"], measurement["text_value"][: self.characters_for_string_values])
-                            ] += 1
-                    elif measurement.get("numeric_value"):
-                        if self.numeric_value_decile:
-                            observed_numeric_value[measurement["code"]].add(measurement["numeric_value"])
-                    else:
-                        for code in self.get_codes(measurement["code"]):
-                            # If we haven't seen this code before, then add it to our list of included codes
-                            observed_codes.add(code)
+                if event.text_value is not None:
+                    if self.string_value_combination:
+                        observed_string_value[(event.code, event.text_value[: self.characters_for_string_values])] += 1
+                elif event.numeric_value is not None:
+                    if self.numeric_value_decile:
+                        observed_numeric_value[event.code].add(event.numeric_value)
+                else:
+                    for code in self.get_codes(event.code):
+                        # If we haven't seen this code before, then add it to our list of included codes
+                        observed_codes.add(code)
 
         return {
             "observed_codes": observed_codes,
@@ -350,7 +344,7 @@ class CountFeaturizer(Featurizer):
 
     def featurize(
         self,
-        patient: meds.Patient,
+        patient: meds_reader.Patient,
         labels: List[meds.Label],
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
@@ -362,8 +356,8 @@ class CountFeaturizer(Featurizer):
             code_counter: Dict[int, int] = defaultdict(int)
 
             label_idx = 0
-            for event in patient["events"]:
-                while event["time"] > labels[label_idx]["prediction_time"]:
+            for event in patient.events:
+                while event.time > labels[label_idx]["prediction_time"]:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
                     all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
@@ -373,12 +367,11 @@ class CountFeaturizer(Featurizer):
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
-                for measurement in event["measurements"]:
-                    if self.excluded_event_filter is not None and self.excluded_event_filter(measurement):
-                        continue
+                if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                    continue
 
-                    for column_idx in self.get_columns(measurement):
-                        code_counter[column_idx] += 1
+                for column_idx in self.get_columns(event):
+                    code_counter[column_idx] += 1
 
             # For all labels that occur past the last event, add all
             # events' total counts as these labels' feature values (basically,
@@ -399,8 +392,8 @@ class CountFeaturizer(Featurizer):
             }
 
             label_idx = 0
-            for event in patient["events"]:
-                while event["time"] > labels[label_idx]["prediction_time"]:
+            for event in patient.events:
+                while event.time > labels[label_idx]["prediction_time"]:
                     _reshuffle_count_time_bins(
                         time_bins,
                         codes_per_bin,
@@ -426,13 +419,12 @@ class CountFeaturizer(Featurizer):
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
 
-                for measurement in event["measurements"]:
-                    if self.excluded_event_filter is not None and self.excluded_event_filter(measurement):
-                        continue
+                if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                    continue
 
-                    for column_idx in self.get_columns(measurement):
-                        codes_per_bin[0].append((column_idx, event["time"]))
-                        code_counts_per_bin[0][column_idx] += 1
+                for column_idx in self.get_columns(event):
+                    codes_per_bin[0].append((column_idx, event.time))
+                    code_counts_per_bin[0][column_idx] += 1
 
             for label in labels[label_idx:]:
                 _reshuffle_count_time_bins(

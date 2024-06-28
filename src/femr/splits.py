@@ -6,8 +6,6 @@ import hashlib
 import struct
 from typing import List
 
-import datasets
-
 import femr.index
 
 
@@ -37,16 +35,6 @@ class PatientSplit:
                     test_patient_ids.append(int(row["patient_id"]))
 
         return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids)
-
-    def split_dataset(self, dataset: datasets.Dataset, index: femr.index.PatientIndex) -> datasets.DatasetDict:
-        train_indices = [index.get_index(patient_id) for patient_id in self.train_patient_ids]
-        test_indices = [index.get_index(patient_id) for patient_id in self.test_patient_ids]
-        return datasets.DatasetDict(
-            {
-                "train": dataset.select(train_indices),
-                "test": dataset.select(test_indices),
-            }
-        )
 
 
 def generate_hash_split(patient_ids: List[int], seed: int, frac_test: float = 0.15) -> PatientSplit:

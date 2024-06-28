@@ -3,10 +3,11 @@ from typing import Any, List, Mapping, cast
 
 import femr_test_tools
 import meds
+import meds_reader
 import scipy.sparse
 
 import femr
-import femr.index
+import femr.mr
 from femr.featurizers import FeaturizerList
 from femr.featurizers.featurizers import AgeFeaturizer, CountFeaturizer
 from femr.labelers import TimeHorizon
@@ -30,11 +31,11 @@ def test_age_featurizer() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
-    index = femr.index.PatientIndex(dataset)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    patient: meds.Patient = dataset[0]
+    patient: meds_reader.Patient = dataset[0]
     labels = labeler.label(patient)
     featurizer = AgeFeaturizer(is_normalize=False)
     patient_features = featurizer.featurize(patient, labels)
@@ -43,12 +44,12 @@ def test_age_featurizer() -> None:
     assert patient_features[1] == [(0, 17.767123287671232)]
     assert patient_features[-1] == [(0, 20.46027397260274)]
 
-    all_labels = labeler.apply(dataset)
+    all_labels = labeler.apply(pool)
 
     featurizer = AgeFeaturizer(is_normalize=True)
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+    featurizer_list.preprocess_featurizers(pool, all_labels)
+    featurized_patients = featurizer_list.featurize(pool, all_labels)
 
     _assert_featurized_patients_structure(all_labels, featurized_patients)
 
@@ -57,14 +58,14 @@ def test_count_featurizer() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
-    index = femr.index.PatientIndex(dataset)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    patient: meds.Patient = dataset[0]
+    patient: meds_reader.Patient = dataset[0]
     labels = labeler.label(patient)
     featurizer = CountFeaturizer()
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -88,12 +89,12 @@ def test_count_featurizer() -> None:
         ("2", 4),
     }
 
-    all_labels = labeler.apply(dataset)
+    all_labels = labeler.apply(pool)
 
     featurizer = CountFeaturizer()
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+    featurizer_list.preprocess_featurizers(pool, all_labels)
+    featurized_patients = featurizer_list.featurize(pool, all_labels)
 
     _assert_featurized_patients_structure(all_labels, featurized_patients)
 
@@ -102,11 +103,11 @@ def test_count_featurizer_with_ontology() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
-    index = femr.index.PatientIndex(dataset)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    patient: meds.Patient = dataset[0]
+    patient: meds_reader.Patient = dataset[0]
     labels = labeler.label(patient)
 
     class DummyOntology:
@@ -117,7 +118,7 @@ def test_count_featurizer_with_ontology() -> None:
                 return {code}
 
     featurizer = CountFeaturizer(is_ontology_expansion=True, ontology=cast(femr.ontology.Ontology, DummyOntology()))
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -144,12 +145,12 @@ def test_count_featurizer_with_ontology() -> None:
         ("2", 4),
     }
 
-    all_labels = labeler.apply(dataset)
+    all_labels = labeler.apply(pool)
 
     featurizer = CountFeaturizer(is_ontology_expansion=True, ontology=cast(femr.ontology.Ontology, DummyOntology()))
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+    featurizer_list.preprocess_featurizers(pool, all_labels)
+    featurized_patients = featurizer_list.featurize(pool, all_labels)
 
     _assert_featurized_patients_structure(all_labels, featurized_patients)
 
@@ -158,14 +159,14 @@ def test_count_featurizer_with_values() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
-    index = femr.index.PatientIndex(dataset)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    patient: meds.Patient = dataset[0]
+    patient: meds_reader.Patient = dataset[0]
     labels = labeler.label(patient)
     featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -196,12 +197,12 @@ def test_count_featurizer_with_values() -> None:
         ("1 test_value", 2),
     }
 
-    all_labels = labeler.apply(dataset)
+    all_labels = labeler.apply(pool)
 
     featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+    featurizer_list.preprocess_featurizers(pool, all_labels)
+    featurized_patients = featurizer_list.featurize(pool, all_labels)
 
     _assert_featurized_patients_structure(all_labels, featurized_patients)
 
@@ -210,29 +211,30 @@ def test_count_featurizer_exclude_filter() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    patient: meds.Patient = dataset[0]
+    patient: meds_reader.Patient = dataset[0]
     labels = labeler.label(patient)
 
     # Test filtering all codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: True)
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     assert featurizer.get_num_columns() == 0
 
     # Test filtering no codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: False)
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     assert featurizer.get_num_columns() == 4
 
     # Test filtering single code
-    featurizer = CountFeaturizer(excluded_event_filter=lambda e: e["code"] == "3")
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    featurizer = CountFeaturizer(excluded_event_filter=lambda e: e.code == "3")
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     assert featurizer.get_num_columns() == 3
@@ -242,11 +244,11 @@ def test_count_bins_featurizer() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
-    index = femr.index.PatientIndex(dataset)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    patient: meds.Patient = dataset[0]
+    patient: meds_reader.Patient = dataset[0]
     labels = labeler.label(patient)
     time_bins = [
         datetime.timedelta(days=90),
@@ -256,7 +258,7 @@ def test_count_bins_featurizer() -> None:
     featurizer = CountFeaturizer(
         time_bins=time_bins,
     )
-    data = featurizer.generate_preprocess_data([patient], {patient["patient_id"]: labels})
+    data = featurizer.generate_preprocess_data([patient], {patient.patient_id: labels})
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -283,7 +285,7 @@ def test_count_bins_featurizer() -> None:
         ("3_70000 days, 0:00:00", 2),
     }
 
-    all_labels = labeler.apply(dataset)
+    all_labels = labeler.apply(pool)
 
     time_bins = [
         datetime.timedelta(days=90),
@@ -294,8 +296,8 @@ def test_count_bins_featurizer() -> None:
         time_bins=time_bins,
     )
     featurizer_list = FeaturizerList([featurizer])
-    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+    featurizer_list.preprocess_featurizers(pool, all_labels)
+    featurized_patients = featurizer_list.featurize(pool, all_labels)
 
     _assert_featurized_patients_structure(all_labels, featurized_patients)
 
@@ -304,16 +306,16 @@ def test_complete_featurization() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 
     dataset = femr_test_tools.create_patients_dataset(100)
-    index = femr.index.PatientIndex(dataset)
+    pool = femr.mr.Pool(dataset, num_threads=1)
 
     labeler = CodeLabeler(["2"], time_horizon, ["3"])
 
-    all_labels = labeler.apply(dataset)
+    all_labels = labeler.apply(pool)
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
     age_featurizer_list = FeaturizerList([age_featurizer])
-    age_featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    age_featurized_patients = age_featurizer_list.featurize(dataset, index, all_labels)
+    age_featurizer_list.preprocess_featurizers(pool, all_labels)
+    age_featurized_patients = age_featurizer_list.featurize(pool, all_labels)
 
     time_bins = [
         datetime.timedelta(days=90),
@@ -322,8 +324,8 @@ def test_complete_featurization() -> None:
     ]
     count_featurizer = CountFeaturizer(time_bins=time_bins)
     count_featurizer_list = FeaturizerList([count_featurizer])
-    count_featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    count_featurized_patients = count_featurizer_list.featurize(dataset, index, all_labels)
+    count_featurizer_list.preprocess_featurizers(pool, all_labels)
+    count_featurized_patients = count_featurizer_list.featurize(pool, all_labels)
 
     age_featurizer = AgeFeaturizer(is_normalize=True)
     time_bins = [
@@ -333,8 +335,8 @@ def test_complete_featurization() -> None:
     ]
     count_featurizer = CountFeaturizer(time_bins=time_bins)
     featurizer_list = FeaturizerList([age_featurizer, count_featurizer])
-    featurizer_list.preprocess_featurizers(dataset, index, all_labels)
-    featurized_patients = featurizer_list.featurize(dataset, index, all_labels)
+    featurizer_list.preprocess_featurizers(pool, all_labels)
+    featurized_patients = featurizer_list.featurize(pool, all_labels)
 
     assert featurized_patients["patient_ids"].shape == count_featurized_patients["patient_ids"].shape
 

@@ -8,6 +8,7 @@ import warnings
 from typing import List
 
 import meds
+import meds_reader
 from femr_test_tools import EventsWithLabels, run_test_for_labeler
 
 from femr.labelers import TimeHorizon, TimeHorizonEventLabeler
@@ -24,18 +25,17 @@ class DummyLabeler(TimeHorizonEventLabeler):
     def allow_same_time_labels(self) -> bool:
         return self.allow_same_time
 
-    def get_prediction_times(self, patient: meds.Patient) -> List[datetime.datetime]:
-        return sorted(list({e["time"] for e in patient["events"]}))
+    def get_prediction_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
+        return sorted(list({e.time for e in patient.events}))
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
-    def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
+    def get_outcome_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
         times: List[datetime.datetime] = []
-        for e in patient["events"]:
-            for m in e["measurements"]:
-                if m["code"] in self.outcome_codes:
-                    times.append(e["time"])
+        for e in patient.events:
+            if e.code in self.outcome_codes:
+                times.append(e.time)
         return times
 
 

@@ -97,27 +97,27 @@ def map_statistics(
         pat_numeric_samples = []
         for event in events:
             for measurement in event["measurements"]:
-                if event["time"] != birth_date:
-                    age_stats.add(weight, (event["time"] - birth_date).total_seconds())
+                if event.time != birth_date:
+                    age_stats.add(weight, (event.time - birth_date).total_seconds())
                 if not is_hierarchical:
                     assert numeric_samples_by_lab is not None
-                    if measurement["numeric_value"] is not None:
-                        numeric_samples_by_lab[measurement["code"]].add(measurement["numeric_value"], weight)
-                    elif measurement["text_value"] is not None:
-                        text_counts[(measurement["code"], measurement["text_value"])] += weight
+                    if event.numeric_value is not None:
+                        numeric_samples_by_lab[event.code].add(event.numeric_value, weight)
+                    elif event.text_value is not None:
+                        text_counts[(event.code, event.text_value)] += weight
                     else:
-                        code_counts[measurement["code"]] += weight
+                        code_counts[event.code] += weight
                 else:
-                    code_set.add(measurement["code"])
+                    code_set.add(event.code)
 
-                    if measurement["text_value"] is not None and measurement["text_value"] != "":
-                        text_set.add(measurement["text_value"])
+                    if event.text_value is not None and event.text_value != "":
+                        text_set.add(event.text_value)
 
                     if measurement.get("metadata") and normalize_unit(measurement["metadata"].get("unit")) is not None:
                         text_set.add(normalize_unit(measurement["metadata"]["unit"]))
 
-                    if measurement["numeric_value"] is not None:
-                        pat_numeric_samples.append(measurement["numeric_value"])
+                    if event.numeric_value is not None:
+                        pat_numeric_samples.append(event.numeric_value)
 
         if is_hierarchical:
             assert numeric_samples is not None
@@ -391,7 +391,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         pass
 
     def get_feature_codes(
-        self, _time: datetime.datetime, measurement: meds.Measurement
+        self, _time: datetime.datetime, measurement: meds_reader.Event
     ) -> Tuple[List[int], Optional[List[float]]]:
         """Get codes for the provided measurement and time"""
 
@@ -400,7 +400,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             assert self.ontology is not None
             codes = [
                 self.code_lookup[parent]
-                for parent in self.ontology.get_all_parents(measurement["code"])
+                for parent in self.ontology.get_all_parents(event.code)
                 if parent in self.code_lookup
             ]
             weights = [1 / len(codes) for _ in codes]
@@ -410,10 +410,10 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                     codes.append(value)
                     weights.append(1)
             if measurement.get("numeric_value") is not None and len(self.numeric_indices) > 0:
-                codes.append(self.numeric_indices[bisect.bisect(self.numeric_values, measurement["numeric_value"])])
+                codes.append(self.numeric_indices[bisect.bisect(self.numeric_values, event.numeric_value)])
                 weights.append(1)
             if measurement.get("text_value") is not None:
-                value = self.string_lookup.get(measurement["text_value"])
+                value = self.string_lookup.get(event.text_value)
                 if value is not None:
                     codes.append(value)
                     weights.append(1)
@@ -421,19 +421,19 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
             return codes, weights
         else:
             if measurement.get("numeric_value") is not None:
-                for start, end, i in self.numeric_lookup.get(measurement["code"], []):
-                    if start <= measurement["numeric_value"] < end:
+                for start, end, i in self.numeric_lookup.get(event.code, []):
+                    if start <= event.numeric_value < end:
                         return [i], None
                 else:
                     return [], None
             elif measurement.get("text_value") is not None:
-                value = self.string_lookup.get((measurement["code"], measurement["text_value"]))
+                value = self.string_lookup.get((event.code, event.text_value))
                 if value is not None:
                     return [value], None
                 else:
                     return [], None
             else:
-                value = self.code_lookup.get(measurement["code"])
+                value = self.code_lookup.get(event.code)
                 if value is not None:
                     return [value], None
                 else:

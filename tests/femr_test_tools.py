@@ -1,9 +1,13 @@
+from __future__ import annotations
+
+import dataclasses
 import datetime
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union, cast
 
-import datasets
 import meds
+import meds_reader
 
+import femr.mr
 from femr.labelers import Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
@@ -30,27 +34,57 @@ NUM_EVENTS = len(DUMMY_EVENTS)
 NUM_PATIENTS = 10
 
 
-def create_patients_dataset(num_patients: int, events: List[Tuple[Tuple, int, Any]] = DUMMY_EVENTS) -> datasets.Dataset:
+@dataclasses.dataclass
+class DummyEvent:
+    time: datetime.datetime
+    code: str
+    text_value: Optional[str] = None
+    numeric_value: Optional[float] = None
+    visit_id: Optional[int] = None
+    table: Optional[str] = None
+    clarity_table: Optional[str] = None
+    end: Optional[datetime.datetime] = None
+
+    def __getattr__(self, name: str) -> Any:
+        return None
+
+
+@dataclasses.dataclass
+class DummyPatient:
+    patient_id: int
+    events: Sequence[DummyEvent]
+
+
+class DummyDatabase(dict):
+    pass
+
+
+def create_patients_dataset(
+    num_patients: int, events: List[Tuple[Tuple, Any, Any]] = DUMMY_EVENTS
+) -> meds_reader.PatientDatabase:
     """Creates a list of patients, each with the same events contained in `events`"""
 
-    converted_events: List[meds.Event] = []
+    converted_events: List[DummyEvent] = []
 
     for event in events:
         if isinstance(event[1], int):
             code = str(event[1])
         else:
             code = event[1]
-        if event[2] is None:
-            val = {}
-        elif isinstance(event[2], str):
-            val = {"text_value": event[2]}
-        else:
-            val = {"numeric_value": event[2]}
-        converted_events.append({"time": datetime.datetime(*event[0]), "measurements": [{"code": code, **val}]})
 
-    return datasets.Dataset.from_dict(
-        {"patient_id": list(range(num_patients)), "events": [converted_events for _ in range(num_patients)]}
+        dummy_event = DummyEvent(time=datetime.datetime(*event[0]), code=code)
+
+        if isinstance(event[2], str):
+            dummy_event.text_value = event[2]
+        else:
+            dummy_event.numeric_value = event[2]
+
+        converted_events.append(dummy_event)
+
+    result = DummyDatabase(
+        (patient_id, DummyPatient(patient_id, converted_events)) for patient_id in range(num_patients)
     )
+    return cast(meds_reader.PatientDatabase, result)
 
 
 def assert_labels_are_accurate(
@@ -82,21 +116,22 @@ def run_test_for_labeler(
     true_prediction_times: Optional[List[datetime.datetime]] = None,
     help_text: str = "",
 ) -> None:
-    patients: datasets.Database = create_patients_dataset(10, [x[0] for x in events_with_labels])
-    true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
-        (datetime.datetime(*x[0][0]), x[1]) for x in events_with_labels if isinstance(x[1], bool)
-    ]
-    if true_prediction_times is not None:
-        # If manually specified prediction times, adjust labels from occurring at `event.start`
-        # e.g. we may make predictions at `event.end` or `event.start + 1 day`
-        true_labels = [(tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)]
-    labeled_patients: List[meds.Label] = labeler.apply(patients)
+    patients: meds_reader.PatientDatabase = create_patients_dataset(10, [x[0] for x in events_with_labels])
+    with femr.mr.Pool(patients, num_threads=1) as pool:
+        true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
+            (datetime.datetime(*x[0][0]), x[1]) for x in events_with_labels if isinstance(x[1], bool)
+        ]
+        if true_prediction_times is not None:
+            # If manually specified prediction times, adjust labels from occurring at `event.start`
+            # e.g. we may make predictions at `event.end` or `event.start + 1 day`
+            true_labels = [(tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)]
+        labeled_patients: List[meds.Label] = labeler.apply(pool)
 
-    # Check accuracy of Labels
-    for patient in patients:
-        assert_labels_are_accurate(
-            labeled_patients,
-            patient["patient_id"],
-            true_labels,
-            help_text=help_text,
-        )
+        # Check accuracy of Labels
+        for patient_id in patients:
+            assert_labels_are_accurate(
+                labeled_patients,
+                patient_id,
+                true_labels,
+                help_text=help_text,
+            )

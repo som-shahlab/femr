@@ -6,6 +6,7 @@ import datetime
 from typing import Any, Callable, List, Optional
 
 import meds
+import meds_reader
 
 import femr.ontology
 
@@ -59,32 +60,30 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
 
-    def get_prediction_times(self, patient: meds.Patient) -> List[datetime.datetime]:
+    def get_prediction_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
         as the time to make a prediction. Default to all events whose `code` is in `self.prediction_codes`."""
         times: List[datetime.datetime] = []
         last_time = None
-        for e in patient["events"]:
-            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(e["time"])
+        for e in patient.events:
+            prediction_time: datetime.datetime = self.prediction_time_adjustment_func(e.time)
 
-            for m in e["measurements"]:
-                if ((self.prediction_codes is None) or (m["code"] in self.prediction_codes)) and (
-                    last_time != prediction_time
-                ):
-                    times.append(prediction_time)
-                    last_time = prediction_time
+            if ((self.prediction_codes is None) or (e.code in self.prediction_codes)) and (
+                last_time != prediction_time
+            ):
+                times.append(prediction_time)
+                last_time = prediction_time
         return times
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
-    def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
+    def get_outcome_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
         """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
         times: List[datetime.datetime] = []
-        for event in patient["events"]:
-            for measurement in event["measurements"]:
-                if measurement["code"] in self.outcome_codes:
-                    times.append(event["time"])
+        for event in patient.events:
+            if event.code in self.outcome_codes:
+                times.append(event.time)
         return times
 
     def allow_same_time_labels(self) -> bool:

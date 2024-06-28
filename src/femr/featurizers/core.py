@@ -6,14 +6,14 @@ import collections
 import datetime
 import functools
 from abc import ABC, abstractmethod
-from typing import Any, List, Mapping, NamedTuple, TypeVar
+from typing import Any, Iterator, List, Mapping, NamedTuple, TypeVar
 
-import datasets
 import meds
+import meds_reader
 import numpy as np
 import scipy.sparse
 
-import femr.index
+import femr.mr
 import femr.ontology
 
 
@@ -28,28 +28,18 @@ class ColumnValue(NamedTuple):
 
 
 def _preprocess_map_func(
-    batch, *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
+    patients: Iterator[meds_reader.Patient], *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
 ) -> List[List[Any]]:
-    patients: List[meds.Patient] = [
-        {"patient_id": patient_id, "events": events} for patient_id, events in zip(batch["patient_id"], batch["events"])
-    ]
-
     result = []
+    patients_list = list(patients)
     for featurizer in featurizers:
-        result.append([featurizer.generate_preprocess_data(patients, label_map)])
+        result.append(featurizer.generate_preprocess_data(iter(patients_list), label_map))
 
     return result
 
 
-def _preprocess_agg_func(first: List[List[Any]], second: List[List[Any]]) -> List[List[Any]]:
-    for a, b in zip(first, second):
-        a.extend(b)
-
-    return first
-
-
 def _features_map_func(
-    batch, *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
+    patients: Iterator[meds_reader.Patient], *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
 ) -> Mapping[str, Any]:
     # Construct CSR sparse matrix
     #   non-zero entries in sparse matrix
@@ -62,14 +52,13 @@ def _features_map_func(
     patient_ids: List[int] = []
     feature_times: List[datetime.datetime] = []
 
-    for patient_id, events in zip(batch["patient_id"], batch["events"]):
-        patient: meds.Patient = {"patient_id": patient_id, "events": events}
-        labels = label_map[patient_id]
+    for patient in patients:
+        labels = label_map[patient.patient_id]
 
         assert len(labels) != 0, "Must have at least one label per patient processed"
 
         for label in labels:
-            patient_ids.append(patient_id)
+            patient_ids.append(patient.patient_id)
             feature_times.append(label["prediction_time"])
 
         # For each Featurizer, apply it to this Patient...
@@ -78,7 +67,7 @@ def _features_map_func(
             features: List[List[ColumnValue]] = featurizer.featurize(patient, labels)
             assert len(features) == len(labels), (
                 f"The featurizer `{featurizer}` didn't generate a set of features for "
-                f"every label for patient {patient_id} ({len(features)} != {len(labels)})"
+                f"every label for patient {patient.patient_id} ({len(features)} != {len(labels)})"
             )
             for a, b in zip(features_per_label, features):
                 a.append(b)
@@ -93,7 +82,7 @@ def _features_map_func(
                 for column, value in feature_columns:
                     assert 0 <= column < featurizer.get_num_columns(), (
                         f"The featurizer {featurizer} provided an out of bounds column for "
-                        f"{column} on patient {patient_id} ({column} must be between 0 and "
+                        f"{column} on patient {patient.patient_id} ({column} must be between 0 and "
                         f"{featurizer.get_num_columns()})"
                     )
                     indices.append(column_offset + column)
@@ -126,7 +115,7 @@ def _features_map_func(
     np_patient_ids: np.ndarray = np.array(patient_ids, dtype=np.int64)
     np_feature_times: np.ndarray = np.array(feature_times, dtype="datetime64[us]")
 
-    return {"patient_ids": [np_patient_ids], "feature_times": [np_feature_times], "features": [data_matrix]}
+    return {"patient_ids": np_patient_ids, "feature_times": np_feature_times, "features": data_matrix}
 
 
 def _features_agg_func(first_result: Any, second_result: Any) -> Any:
@@ -142,7 +131,9 @@ class Featurizer(ABC):
     A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
     """
 
-    def generate_preprocess_data(self, patients: List[meds.Patient], label_map: Mapping[int, List[meds.Label]]) -> Any:
+    def generate_preprocess_data(
+        self, patients: Iterator[meds_reader.Patient], label_map: Mapping[int, List[meds.Label]]
+    ) -> Any:
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
         This function performs that preprocessing on the given patients and labels, and returns some state.
@@ -169,7 +160,7 @@ class Featurizer(ABC):
     @abstractmethod
     def featurize(
         self,
-        patient: meds.Patient,
+        patient: meds_reader.Patient,
         labels: List[meds.Label],
     ) -> List[List[ColumnValue]]:
         """Featurize the patient such that each label in `labels` has an associated list of features.
@@ -239,11 +230,8 @@ class FeaturizerList:
 
     def preprocess_featurizers(
         self,
-        dataset: datasets.Dataset,
-        index: femr.index.PatientIndex,
+        pool: femr.mr.Pool,
         labels: List[meds.Label],
-        num_proc: int = 1,
-        batch_size: int = 1000,
     ) -> None:
         """Preprocess `self.featurizers` on the provided set of labels."""
 
@@ -259,16 +247,14 @@ class FeaturizerList:
         # Split patients across multiple threads
         patient_ids: List[int] = sorted(list({label["patient_id"] for label in labels}))
 
-        dataset = index.filter_dataset(dataset, patient_ids)
+        featurize_stats: List[List[Any]] = [[] for _ in self.featurizers]
 
-        # Preprocess in parallel
-        featurize_stats = femr.hf_utils.aggregate_over_dataset(
-            dataset,
+        for chunk_stats in pool.map(
             functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers),
-            _preprocess_agg_func,
-            batch_size=batch_size,
-            num_proc=num_proc,
-        )
+            patient_ids=patient_ids,
+        ):
+            for a, b in zip(featurize_stats, chunk_stats):
+                a.append(b)
 
         # Aggregate featurizers
         for featurizer, featurizer_stat in zip(self.featurizers, featurize_stats):
@@ -277,11 +263,8 @@ class FeaturizerList:
 
     def featurize(
         self,
-        dataset: datasets.Dataset,
-        index: femr.index.PatientIndex,
+        pool: femr.mr.Pool,
         labels: List[meds.Label],
-        num_proc: int = 1,
-        batch_size: int = 1000,
     ) -> Mapping[str, np.ndarray]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
@@ -303,15 +286,13 @@ class FeaturizerList:
         # Split patients across multiple threads
         patient_ids: List[int] = sorted(list({label["patient_id"] for label in labels}))
 
-        dataset = index.filter_dataset(dataset, patient_ids)
+        features = collections.defaultdict(list)
 
-        features = femr.hf_utils.aggregate_over_dataset(
-            dataset,
-            functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers),
-            _features_agg_func,
-            batch_size=batch_size,
-            num_proc=num_proc,
-        )
+        for feat_chunk in pool.map(
+            functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers), patient_ids
+        ):
+            for k, v in feat_chunk.items():
+                features[k].append(v)
 
         result = {k: np.concatenate(features[k]) for k in ("patient_ids", "feature_times")}
 
@@ -328,7 +309,7 @@ class FeaturizerList:
         raise IndexError(f"Column index '{column_idx}' out of bounds for this FeaturizerList")
 
 
-def join_labels(features: Mapping[str, np.array], labels: List[meds.Label]) -> Mapping[str, np.array]:
+def join_labels(features: Mapping[str, np.ndarray], labels: List[meds.Label]) -> Mapping[str, np.ndarray]:
     labels = list(labels)
     labels.sort(key=lambda a: (a["patient_id"], a["prediction_time"]))
 

@@ -5,7 +5,6 @@ import os
 import pickle
 import random
 
-import datasets
 import jsonschema
 import meds
 import pyarrow
@@ -54,7 +53,7 @@ def get_random_patient(patient_id):
                 code = code[:3] + "." + code[3:]
         current_date = current_date + datetime.timedelta(days=random.randint(1, 100))
         code = code_cat + "/" + code
-        patient["events"].append({"time": current_date, "measurements": [{"code": code}]})
+        patient.events.append({"time": current_date, "measurements": [{"code": code}]})
 
     return patient
 
@@ -63,7 +62,7 @@ patients = []
 for i in range(200):
     patients.append(get_random_patient(i))
 
-patient_schema = meds.patient_schema()
+patient_schema = meds_reader.Patient_schema()
 
 patient_table = pyarrow.Table.from_pylist(patients, patient_schema)
 

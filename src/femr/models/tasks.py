@@ -6,7 +6,6 @@ import datetime
 import functools
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-import datasets
 import meds
 import numpy as np
 import scipy.sparse
@@ -29,7 +28,7 @@ class Task(abc.ABC):
     def start_batch(self) -> None: ...
 
     @abc.abstractmethod
-    def start_patient(self, patient: meds.Patient, ontology: Optional[femr.ontology.Ontology]) -> None: ...
+    def start_patient(self, patient: meds_reader.Patient, ontology: Optional[femr.ontology.Ontology]) -> None: ...
 
     @abc.abstractmethod
     def add_patient_labels(self, patient_label_offsets: List[int]) -> None: ...
@@ -72,8 +71,8 @@ class LabeledPatientTask(Task):
         indices = [index.get_index(patient_id) for patient_id in self.label_map]
         return dataset.select(indices)
 
-    def start_patient(self, patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
-        self.current_labels = self.label_map[patient["patient_id"]]
+    def start_patient(self, patient: meds_reader.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
+        self.current_labels = self.label_map[patient.patient_id]
         self.current_label_index = 0
 
     def needs_exact(self) -> bool:
@@ -133,7 +132,7 @@ class CLMBRTask(Task):
             task_type="clmbr", task_kwargs=dict(clmbr_vocab_size=self.clmbr_vocab_size)
         )
 
-    def start_patient(self, _patient: meds.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
+    def start_patient(self, _patient: meds_reader.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
         self.per_patient_batch_labels: List[int] = []
 
     def needs_exact(self) -> bool:
@@ -182,22 +181,22 @@ def should_make_survival_prediction(current_date: datetime.datetime, next_date: 
 
 class SurvivalCalculator:
     def __init__(
-        self, ontology: femr.ontology.Ontology, patient: meds.Patient, code_whitelist: Optional[Set[str]] = None
+        self, ontology: femr.ontology.Ontology, patient: meds_reader.Patient, code_whitelist: Optional[Set[str]] = None
     ):
         self.survival_events = []
-        self.final_date = patient["events"][-1]["time"]
+        self.final_date = patient.events[-1]["time"]
         self.future_times = collections.defaultdict(list)
 
-        for event in patient["events"]:
+        for event in patient.events:
             codes = set()
             for measurement in event["measurements"]:
-                for parent in ontology.get_all_parents(measurement["code"]):
+                for parent in ontology.get_all_parents(event.code):
                     if code_whitelist is None or parent in code_whitelist:
                         codes.add(parent)
 
             for code in codes:
-                self.future_times[code].append(event["time"])
-                self.survival_events.append((code, event["time"]))
+                self.future_times[code].append(event.time)
+                self.survival_events.append((code, event.time))
 
         for v in self.future_times.values():
             v.reverse()
@@ -232,11 +231,11 @@ def _prefit_motor_map(batch, *, tasks: List[str], ontology: femr.ontology.Ontolo
 
         birth = femr.pat_utils.get_patient_birthdate(patient)
 
-        for event, next_event in zip(patient["events"], patient["events"][1:]):
-            if (event["time"] - birth).days <= 1:
+        for event, next_event in zip(patient.events, patient.events[1:]):
+            if (event.time - birth).days <= 1:
                 continue
-            if should_make_survival_prediction(event["time"], next_event["time"]):
-                censor_time, tte = calculator.get_future_events_for_time(event["time"])
+            if should_make_survival_prediction(event.time, next_event.time):
+                censor_time, tte = calculator.get_future_events_for_time(event.time)
 
                 for i, task in enumerate(tasks):
                     if task in tte:
@@ -328,7 +327,7 @@ class MOTORTask(Task):
             ),
         )
 
-    def start_patient(self, patient: meds.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
+    def start_patient(self, patient: meds_reader.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
         assert ontology
         self.calculator = SurvivalCalculator(ontology, patient, self.pretraining_task_codes)
 

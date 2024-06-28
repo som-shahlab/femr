@@ -5,16 +5,17 @@ from __future__ import annotations
 import datetime
 import functools
 import hashlib
+import itertools
 import struct
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple
 
-import datasets
 import meds
+import meds_reader
 
-import femr.hf_utils
+import femr.mr
 
 
 @dataclass(frozen=True)
@@ -25,17 +26,11 @@ class TimeHorizon:
     end: datetime.timedelta | None  # If NONE, then infinite time horizon
 
 
-def _label_map_func(batch, *, labeler: Labeler) -> List[meds.Label]:
+def _label_map_func(patients: Iterator[meds_reader.Patient], *, labeler: Labeler) -> List[meds.Label]:
     result = []
-    for patient_id, events in zip(batch["patient_id"], batch["events"]):
-        result.extend(labeler.label({"patient_id": patient_id, "events": events}))
+    for patient in patients:
+        result.extend(labeler.label(patient))
     return result
-
-
-def _label_agg_func(first_labels: List[meds.Label], second_labels: List[meds.Label]):
-    first_labels.extend(second_labels)
-
-    return first_labels
 
 
 class Labeler(ABC):
@@ -53,7 +48,7 @@ class Labeler(ABC):
     """
 
     @abstractmethod
-    def label(self, patient: meds.Patient) -> List[meds.Label]:
+    def label(self, patient: meds_reader.Patient) -> List[meds.Label]:
         """Apply every label that is applicable to the provided patient.
 
         This is only called once per patient.
@@ -68,27 +63,19 @@ class Labeler(ABC):
 
     def apply(
         self,
-        dataset: datasets.Dataset,
-        num_proc: int = 1,
-        batch_size: int = 10_000,
+        pool: femr.mr.Pool,
     ) -> List[meds.Label]:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
         Args:
-            dataset (datasets.Dataset): A HuggingFace Dataset with meds.Patient objects to be labeled.
+            dataset (datasets.Dataset): A HuggingFace Dataset with meds_reader.Patient objects to be labeled.
             num_proc (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
 
         Returns:
             A list of labels
         """
 
-        return femr.hf_utils.aggregate_over_dataset(
-            dataset,
-            functools.partial(_label_map_func, labeler=self),
-            _label_agg_func,
-            batch_size=batch_size,
-            num_proc=num_proc,
-        )
+        return list(itertools.chain.from_iterable(pool.map(functools.partial(_label_map_func, labeler=self))))
 
 
 ##########################################################
@@ -118,7 +105,7 @@ class TimeHorizonEventLabeler(Labeler):
         pass
 
     @abstractmethod
-    def get_outcome_times(self, patient: meds.Patient) -> List[datetime.datetime]:
+    def get_outcome_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes that the event of interest "occurs".
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
@@ -166,22 +153,22 @@ class TimeHorizonEventLabeler(Labeler):
         pass
 
     @abstractmethod
-    def get_prediction_times(self, patient: meds.Patient) -> List[datetime.datetime]:
+    def get_prediction_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes at which we'll make a prediction.
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
         """
         pass
 
-    def get_patient_start_end_times(self, patient: meds.Patient) -> Tuple[datetime.datetime, datetime.datetime]:
+    def get_patient_start_end_times(self, patient: meds_reader.Patient) -> Tuple[datetime.datetime, datetime.datetime]:
         """Return the datetimes that we consider the (start, end) of this patient."""
-        return (patient["events"][0]["time"], patient["events"][-1]["time"])
+        return (patient.events[0].time, patient.events[-1].time)
 
     def allow_same_time_labels(self) -> bool:
         """Whether or not to allow labels with events at the same time as prediction"""
         return True
 
-    def label(self, patient: meds.Patient) -> List[meds.Label]:
+    def label(self, patient: meds_reader.Patient) -> List[meds.Label]:
         """Return a list of Labels for an individual patient.
 
         Assumes that events in `patient['events']` are already sorted in chronologically
@@ -193,7 +180,7 @@ class TimeHorizonEventLabeler(Labeler):
         Returns:
             List[Label]: A list containing a label for each datetime returned by `get_prediction_times()`
         """
-        if len(patient["events"]) == 0:
+        if len(patient.events) == 0:
             return []
 
         __, end_time = self.get_patient_start_end_times(patient)
@@ -254,10 +241,10 @@ class TimeHorizonEventLabeler(Labeler):
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(meds.Label(patient_id=patient["patient_id"], prediction_time=time, boolean_value=True))
+                results.append(meds.Label(patient_id=patient.patient_id, prediction_time=time, boolean_value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(meds.Label(patient_id=patient["patient_id"], prediction_time=time, boolean_value=False))
+                results.append(meds.Label(patient_id=patient.patient_id, prediction_time=time, boolean_value=False))
             elif is_censored:
                 # Censored => None
                 pass
@@ -273,14 +260,14 @@ class NLabelsPerPatientLabeler(Labeler):
         self.num_labels: int = num_labels  # number of labels per patient
         self.seed: int = seed
 
-    def label(self, patient: meds.Patient) -> List[meds.Label]:
+    def label(self, patient: meds_reader.Patient) -> List[meds.Label]:
         labels: List[meds.Label] = self.labeler.label(patient)
         if len(labels) <= self.num_labels:
             return labels
         elif self.num_labels == -1:
             return labels
         hash_to_label_list: List[Tuple[int, int, meds.Label]] = [
-            (i, compute_random_num(self.seed, patient["patient_id"], i), labels[i]) for i in range(len(labels))
+            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))
         ]
         hash_to_label_list.sort(key=lambda a: a[1])
         n_hash_to_label_list: List[Tuple[int, int, meds.Label]] = hash_to_label_list[: self.num_labels]
