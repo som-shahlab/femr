@@ -4,15 +4,16 @@ import abc
 import collections
 import datetime
 import functools
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
 import meds
+import meds_reader
 import numpy as np
 import scipy.sparse
 import torch
 
-import femr.index
 import femr.models.config
+import femr.ontology
 import femr.pat_utils
 import femr.stat_utils
 
@@ -66,10 +67,6 @@ class LabeledPatientTask(Task):
 
     def get_task_config(self) -> femr.models.config.FEMRTaskConfig:
         return femr.models.config.FEMRTaskConfig(task_type="labeled_patients")
-
-    def filter_dataset(self, dataset: datasets.Dataset, index: femr.index.PatientIndex) -> datasets.Dataset:
-        indices = [index.get_index(patient_id) for patient_id in self.label_map]
-        return dataset.select(indices)
 
     def start_patient(self, patient: meds_reader.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
         self.current_labels = self.label_map[patient.patient_id]
@@ -184,15 +181,14 @@ class SurvivalCalculator:
         self, ontology: femr.ontology.Ontology, patient: meds_reader.Patient, code_whitelist: Optional[Set[str]] = None
     ):
         self.survival_events = []
-        self.final_date = patient.events[-1]["time"]
+        self.final_date = patient.events[-1].time
         self.future_times = collections.defaultdict(list)
 
         for event in patient.events:
             codes = set()
-            for measurement in event["measurements"]:
-                for parent in ontology.get_all_parents(event.code):
-                    if code_whitelist is None or parent in code_whitelist:
-                        codes.add(parent)
+            for parent in ontology.get_all_parents(event.code):
+                if code_whitelist is None or parent in code_whitelist:
+                    codes.add(parent)
 
             for code in codes:
                 self.future_times[code].append(event.time)
@@ -219,14 +215,14 @@ class SurvivalCalculator:
         return (delta, {k: v[-1] - time for k, v in self.future_times.items()})
 
 
-def _prefit_motor_map(batch, *, tasks: List[str], ontology: femr.ontology.Ontology) -> Any:
+def _prefit_motor_map(
+    patients: Iterator[meds_reader.Patient], *, tasks: List[str], ontology: femr.ontology.Ontology
+) -> Any:
     task_time_stats: List[Any] = [[0, 0, femr.stat_utils.OnlineStatistics()] for _ in range(len(tasks))]
     event_times = femr.stat_utils.ReservoirSampler(100_000)
     task_set = set(tasks)
 
-    for patient_id, events in zip(batch["patient_id"], batch["events"]):
-        patient = {"patient_id": patient_id, "events": events}
-
+    for patient in patients:
         calculator = SurvivalCalculator(ontology, patient, task_set)
 
         birth = femr.pat_utils.get_patient_birthdate(patient)
@@ -268,7 +264,7 @@ class MOTORTask(Task):
     @classmethod
     def fit_pretraining_task_info(
         cls,
-        dataset: datasets.Dataset,
+        db: meds_reader.PatientDatabase,
         tokenizer: femr.models.tokenizer.FEMRTokenizer,
         num_tasks: int,
         num_bins: int,
@@ -284,12 +280,8 @@ class MOTORTask(Task):
 
         assert len(tasks) == num_tasks, "Could not find enough tasks in the provided tokenizer"
 
-        length_samples, stats = femr.hf_utils.aggregate_over_dataset(
-            dataset,
-            functools.partial(_prefit_motor_map, tasks=tasks, ontology=tokenizer.ontology),
-            _prefit_motor_agg,
-            1_000,
-            num_proc=num_proc,
+        length_samples, stats = functools.reduce(
+            _prefit_motor_agg, db.map(functools.partial(_prefit_motor_map, tasks=tasks, ontology=tokenizer.ontology))
         )
 
         time_bins = np.percentile(length_samples.samples, np.linspace(0, 100, num_bins + 1))

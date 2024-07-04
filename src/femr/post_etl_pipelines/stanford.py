@@ -7,6 +7,7 @@ import os
 from typing import Callable, Sequence
 
 import meds
+import meds_reader
 
 from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
@@ -19,7 +20,7 @@ from femr.transforms.stanford import (
 
 
 def _is_visit_measurement(e: meds_reader.Event) -> bool:
-    return e["metadata"]["table"] == "visit"
+    return e.table == "visit"
 
 
 def _get_stanford_transformations() -> Callable[[meds_reader.Patient], meds_reader.Patient]:

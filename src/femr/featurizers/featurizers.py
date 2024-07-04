@@ -35,28 +35,22 @@ class AgeFeaturizer(Featurizer):
     def get_num_columns(self) -> int:
         return 1
 
-    def generate_preprocess_data(
-        self, patients: Iterator[meds_reader.Patient], label_map: Mapping[int, List[meds.Label]]
+    def get_initial_preprocess_data(self) -> OnlineStatistics:
+        return OnlineStatistics()
+
+    def add_preprocess_data(
+        self, age_statistics: OnlineStatistics, patient: meds_reader.Patient, label_map: Mapping[int, List[meds.Label]]
     ) -> OnlineStatistics:
         """Save the age of this patient (in years) at each label, to use for normalization."""
-        if not self.is_needs_preprocessing():
-            return OnlineStatistics()
+        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
+        assert patient_birth_date, "Patients must have a birth date"
 
-        age_statistics: OnlineStatistics = OnlineStatistics()
-
-        for patient in patients:
-            patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
-            assert patient_birth_date, "Patients must have a birth date"
-
-            for label in label_map[patient.patient_id]:
-                age_in_yrs: float = (label["prediction_time"] - patient_birth_date).days / 365
-                age_statistics.add(age_in_yrs)
-
-        return age_statistics
+        for label in label_map[patient.patient_id]:
+            age_in_yrs: float = (label["prediction_time"] - patient_birth_date).days / 365
+            age_statistics.add(age_in_yrs)
 
     def encorperate_prepreprocessed_data(self, data_elements: List[OnlineStatistics]) -> None:
         self.age_statistics = OnlineStatistics.merge(data_elements)
-        print("What", self.age_statistics, data_elements)
 
     def featurize(
         self,
@@ -256,8 +250,15 @@ class CountFeaturizer(Featurizer):
                 if code in self.code_to_column_index:
                     yield self.code_to_column_index[code]
 
-    def generate_preprocess_data(
-        self, patients: Iterator[meds_reader.Patient], label_map: Mapping[int, List[meds.Label]]
+    def get_initial_preprocess_data(self) -> Any:
+        return {
+            "observed_codes": set(),
+            "observed_string_value": collections.defaultdict(int),
+            "observed_numeric_value": collections.defaultdict(functools.partial(ReservoirSampler, 10000, 100)),
+        }
+
+    def add_preprocess_data(
+        self, data: Any, patient: meds_reader.Patient, label_map: Mapping[int, List[meds.Label]]
     ) -> Any:
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
@@ -266,34 +267,25 @@ class CountFeaturizer(Featurizer):
 
         Note that this function shouldn't mutate the Featurizer as it will be sharded.
         """
-        observed_codes: Set[str] = set()
-        observed_string_value: Dict[Tuple[str, str], int] = collections.defaultdict(int)
-        observed_numeric_value: Dict[str, ReservoirSampler] = collections.defaultdict(
-            functools.partial(ReservoirSampler, 10000, 100)
-        )
+        observed_codes: Set[str] = data["observed_codes"]
+        observed_string_value: Dict[Tuple[str, str], int] = data["observed_string_value"]
+        observed_numeric_value: Dict[str, ReservoirSampler] = data["observed_numeric_value"]
 
-        for patient in patients:
-            for event in patient.events:
-                # Check for excluded events
-                if self.excluded_event_filter is not None and self.excluded_event_filter(event):
-                    continue
+        for event in patient.events:
+            # Check for excluded events
+            if self.excluded_event_filter is not None and self.excluded_event_filter(event):
+                continue
 
-                if event.text_value is not None:
-                    if self.string_value_combination:
-                        observed_string_value[(event.code, event.text_value[: self.characters_for_string_values])] += 1
-                elif event.numeric_value is not None:
-                    if self.numeric_value_decile:
-                        observed_numeric_value[event.code].add(event.numeric_value)
-                else:
-                    for code in self.get_codes(event.code):
-                        # If we haven't seen this code before, then add it to our list of included codes
-                        observed_codes.add(code)
-
-        return {
-            "observed_codes": observed_codes,
-            "observed_string_value": observed_string_value,
-            "observed_numeric_value": observed_numeric_value,
-        }
+            if event.text_value is not None:
+                if self.string_value_combination:
+                    observed_string_value[(event.code, event.text_value[: self.characters_for_string_values])] += 1
+            elif event.numeric_value is not None:
+                if self.numeric_value_decile:
+                    observed_numeric_value[event.code].add(event.numeric_value)
+            else:
+                for code in self.get_codes(event.code):
+                    # If we haven't seen this code before, then add it to our list of included codes
+                    observed_codes.add(code)
 
     def encorperate_prepreprocessed_data(self, data_elements: List[Any]) -> None:
         """

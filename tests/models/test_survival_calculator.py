@@ -1,6 +1,8 @@
 import datetime
 from typing import Set
 
+from femr_test_tools import DummyEvent, DummyPatient
+
 import femr.models.tasks
 
 
@@ -13,35 +15,15 @@ class DummyOntology:
 
 
 def test_calculator():
-    patient = {
-        "patient_id": 100,
-        "events": [
-            {
-                "time": datetime.datetime(1990, 1, 10),
-                "measurements": [
-                    {"code": "1"},
-                ],
-            },
-            {
-                "time": datetime.datetime(1990, 1, 20),
-                "measurements": [
-                    {"code": "2"},
-                ],
-            },
-            {
-                "time": datetime.datetime(1990, 1, 25),
-                "measurements": [
-                    {"code": "3"},
-                ],
-            },
-            {
-                "time": datetime.datetime(1990, 1, 25),
-                "measurements": [
-                    {"code": "1"},
-                ],
-            },
+    patient = DummyPatient(
+        patient_id=100,
+        events=[
+            DummyEvent(time=datetime.datetime(1990, 1, 10), code="1"),
+            DummyEvent(time=datetime.datetime(1990, 1, 20), code="2"),
+            DummyEvent(time=datetime.datetime(1990, 1, 25), code="3"),
+            DummyEvent(time=datetime.datetime(1990, 1, 25), code="1"),
         ],
-    }
+    )
 
     calculator = femr.models.tasks.SurvivalCalculator(DummyOntology(), patient)
 

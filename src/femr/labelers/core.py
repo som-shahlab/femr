@@ -15,8 +15,6 @@ from typing import Iterator, List, Optional, Tuple
 import meds
 import meds_reader
 
-import femr.mr
-
 
 @dataclass(frozen=True)
 class TimeHorizon:
@@ -63,7 +61,7 @@ class Labeler(ABC):
 
     def apply(
         self,
-        pool: femr.mr.Pool,
+        db: meds_reader.PatientDatabase,
     ) -> List[meds.Label]:
         """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
 
@@ -75,7 +73,7 @@ class Labeler(ABC):
             A list of labels
         """
 
-        return list(itertools.chain.from_iterable(pool.map(functools.partial(_label_map_func, labeler=self))))
+        return list(itertools.chain.from_iterable(db.map(functools.partial(_label_map_func, labeler=self))))
 
 
 ##########################################################

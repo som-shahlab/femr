@@ -15,7 +15,7 @@ class DummyTokenizer:
     def start_patient(self):
         pass
 
-    def get_feature_codes(self, time, measurement):
+    def get_feature_codes(self, event):
         if event.code == "SNOMED/184099003":
             return [1], None
         else:

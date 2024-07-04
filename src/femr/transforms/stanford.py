@@ -1,3 +1,5 @@
+# mypy: disable-error-code="attr-defined"
+
 """Transforms that are unique to STARR OMOP."""
 
 import datetime
@@ -158,7 +160,7 @@ def move_billing_codes(patient: meds_reader.Patient) -> meds_reader.Patient:
             if event.end is not None:
                 if event.visit_id is None:
                     # Every event with an end time should have a visit ID associated with it
-                    raise RuntimeError(f"Expected visit id for visit? {patient['patient_id']} {event}")
+                    raise RuntimeError(f"Expected visit id for visit? {patient.patient_id} {event}")
                 if end_visits.get(event.visit_id, event.end) != event.end:
                     # Every event associated with a visit should have an end time that matches the visit end time
                     # Also the end times of all events associated with a visit should have the same end time

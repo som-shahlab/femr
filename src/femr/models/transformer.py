@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import collections
+import datetime
 import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import meds
+import meds_reader
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -282,6 +284,8 @@ class FEMRModel(transformers.PreTrainedModel):
             return LabeledPatientTaskHead(hidden_size, **task_kwargs)
         elif task_type == "motor":
             return MOTORTaskHead(hidden_size, **task_kwargs)
+        else:
+            raise RuntimeError("Could not determine head for task " + task_type)
 
     def forward(self, batch: Mapping[str, Any], return_loss=True, return_logits=False, return_reprs=False):
         # Need a return_loss parameter for transformers.Trainer to work properly
@@ -321,7 +325,7 @@ class FEMRModel(transformers.PreTrainedModel):
 
 
 def compute_features(
-    dataset: datasets.Dataset,
+    db: meds_reader.PatientDatabase,
     model_path: str,
     labels: List[meds.Label],
     num_proc: int = 1,
@@ -347,13 +351,11 @@ def compute_features(
     """
     task = femr.models.tasks.LabeledPatientTask(labels)
 
-    index = femr.index.PatientIndex(dataset, num_proc=num_proc)
-
     model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
     tokenizer = femr.models.tokenizer.FEMRTokenizer.from_pretrained(model_path, ontology=ontology)
     processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
 
-    filtered_data = task.filter_dataset(dataset, index)
+    filtered_data = db.filter(list(task.label_map.keys()))
 
     if device:
         model = model.to(device)

@@ -3,26 +3,19 @@ from __future__ import annotations
 import collections
 import functools
 import os
-from typing import Any, Dict, Iterable, Optional, Set
+from typing import Any, Dict, Iterable, Iterator, Optional, Set
 
 import meds
+import meds_reader
 import polars as pl
 
-import femr.mr
 
-
-def _get_all_codes_map(batch) -> Set[str]:
+def _get_all_codes_map(patients: Iterator[meds_reader.Patient]) -> Set[str]:
     result = set()
-    for events in batch["events"]:
-        for event in events:
-            for measurement in event["measurements"]:
-                result.add(event.code)
+    for patient in patients:
+        for event in patient.events:
+            result.add(event.code)
     return result
-
-
-def _get_all_codes_agg(first: Set[str], second: Set[str]) -> Set[str]:
-    first |= second
-    return first
 
 
 class Ontology:
@@ -105,18 +98,13 @@ class Ontology:
 
     def prune_to_dataset(
         self,
-        dataset: datasets.Dataset,
-        num_proc: int = 1,
+        data_pool: meds_reader.PatientDatabase,
         prune_all_descriptions: bool = False,
         remove_ontologies: Set[str] = set(),
     ) -> None:
-        valid_codes = femr.hf_utils.aggregate_over_dataset(
-            dataset,
-            functools.partial(_get_all_codes_map),
-            _get_all_codes_agg,
-            num_proc=num_proc,
-            batch_size=1_000,
-        )
+        valid_codes = set()
+        for chunk_codes in data_pool.map(_get_all_codes_map):
+            valid_codes |= chunk_codes
 
         if prune_all_descriptions:
             self.description_map = {}

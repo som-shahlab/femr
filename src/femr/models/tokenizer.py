@@ -6,35 +6,39 @@ import datetime
 import functools
 import math
 import os
-from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple, Union
 
 import meds
+import meds_reader
 import msgpack
 import numpy as np
 import transformers
 
-import femr.hf_utils
+import femr.ontology
 import femr.stat_utils
 
 
 def train_tokenizer(
-    dataset,
+    db: meds_reader.PatientDatabase,
     vocab_size: int,
     is_hierarchical: bool = False,
     num_numeric: int = 1000,
     ontology: Optional[femr.ontology.Ontology] = None,
-    num_proc: int = 1,
 ) -> FEMRTokenizer:
     """Train a FEMR tokenizer from the given dataset"""
-    statistics = femr.hf_utils.aggregate_over_dataset(
-        dataset,
-        functools.partial(
-            map_statistics, num_patients=len(dataset), is_hierarchical=is_hierarchical, ontology=ontology
-        ),
+
+    statistics = functools.reduce(
         agg_statistics,
-        num_proc=num_proc,
-        batch_size=1_000,
+        db.map(
+            functools.partial(
+                map_statistics,
+                num_patients=len(db),
+                is_hierarchical=is_hierarchical,
+                ontology=ontology,
+            )
+        ),
     )
+
     return FEMRTokenizer(
         convert_statistics_to_msgpack(statistics, vocab_size, is_hierarchical, num_numeric, ontology), ontology
     )
@@ -64,7 +68,12 @@ def normalize_unit(unit):
 
 
 def map_statistics(
-    batch, *, num_patients: int, is_hierarchical: bool, frac_values=0.05, ontology: Optional[femr.ontology.Ontology]
+    patients: Iterator[meds_reader.Patient],
+    *,
+    num_patients: int,
+    is_hierarchical: bool,
+    frac_values=0.05,
+    ontology: Optional[femr.ontology.Ontology],
 ) -> Mapping[str, Any]:
     age_stats = femr.stat_utils.OnlineStatistics()
     code_counts: Dict[str, float] = collections.defaultdict(float)
@@ -81,43 +90,39 @@ def map_statistics(
 
     text_counts: Dict[Any, float] = collections.defaultdict(float)
 
-    for events in batch["events"]:
-        total_events = 0
-        for event in events:
-            for measurement in event["measurements"]:
-                total_events += 1
+    for patient in patients:
+        total_events = len(patient.events)
 
         if total_events == 0:
             continue
 
         weight = 1.0 / (num_patients * total_events)
-        birth_date = events[0]["time"]
+        birth_date = patient.events[0].time
         code_set = set()
         text_set = set()
         pat_numeric_samples = []
-        for event in events:
-            for measurement in event["measurements"]:
-                if event.time != birth_date:
-                    age_stats.add(weight, (event.time - birth_date).total_seconds())
-                if not is_hierarchical:
-                    assert numeric_samples_by_lab is not None
-                    if event.numeric_value is not None:
-                        numeric_samples_by_lab[event.code].add(event.numeric_value, weight)
-                    elif event.text_value is not None:
-                        text_counts[(event.code, event.text_value)] += weight
-                    else:
-                        code_counts[event.code] += weight
+        for event in patient.events:
+            if event.time != birth_date:
+                age_stats.add(weight, (event.time - birth_date).total_seconds())
+            if not is_hierarchical:
+                assert numeric_samples_by_lab is not None
+                if event.numeric_value is not None:
+                    numeric_samples_by_lab[event.code].add(event.numeric_value, weight)
+                elif event.text_value is not None:
+                    text_counts[(event.code, event.text_value)] += weight
                 else:
-                    code_set.add(event.code)
+                    code_counts[event.code] += weight
+            else:
+                code_set.add(event.code)
 
-                    if event.text_value is not None and event.text_value != "":
-                        text_set.add(event.text_value)
+                if event.text_value is not None and event.text_value != "":
+                    text_set.add(event.text_value)
 
-                    if measurement.get("metadata") and normalize_unit(measurement["metadata"].get("unit")) is not None:
-                        text_set.add(normalize_unit(measurement["metadata"]["unit"]))
+                if getattr(event, "unit", None) is not None:
+                    text_set.add(normalize_unit(event.unit))
 
-                    if event.numeric_value is not None:
-                        pat_numeric_samples.append(event.numeric_value)
+                if event.numeric_value is not None:
+                    pat_numeric_samples.append(event.numeric_value)
 
         if is_hierarchical:
             assert numeric_samples is not None
@@ -390,9 +395,7 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
         # This is currently a null-op, but is required for cost featurization
         pass
 
-    def get_feature_codes(
-        self, _time: datetime.datetime, measurement: meds_reader.Event
-    ) -> Tuple[List[int], Optional[List[float]]]:
+    def get_feature_codes(self, event: meds_reader.Event) -> Tuple[List[int], Optional[List[float]]]:
         """Get codes for the provided measurement and time"""
 
         # Note that time is currently not used in this code, but it is required for cost featurization
@@ -404,15 +407,15 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                 if parent in self.code_lookup
             ]
             weights = [1 / len(codes) for _ in codes]
-            if measurement.get("metadata") and normalize_unit(measurement["metadata"].get("unit")) is not None:
-                value = self.string_lookup.get(normalize_unit(measurement["metadata"]["unit"]))
+            if getattr(event, "unit", None) is not None:
+                value = self.string_lookup.get(normalize_unit(event.unit))
                 if value is not None:
                     codes.append(value)
                     weights.append(1)
-            if measurement.get("numeric_value") is not None and len(self.numeric_indices) > 0:
+            if event.numeric_value is not None and len(self.numeric_indices) > 0:
                 codes.append(self.numeric_indices[bisect.bisect(self.numeric_values, event.numeric_value)])
                 weights.append(1)
-            if measurement.get("text_value") is not None:
+            if event.text_value is not None:
                 value = self.string_lookup.get(event.text_value)
                 if value is not None:
                     codes.append(value)
@@ -420,13 +423,13 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
 
             return codes, weights
         else:
-            if measurement.get("numeric_value") is not None:
+            if event.numeric_value is not None:
                 for start, end, i in self.numeric_lookup.get(event.code, []):
                     if start <= event.numeric_value < end:
                         return [i], None
                 else:
                     return [], None
-            elif measurement.get("text_value") is not None:
+            elif event.text_value is not None:
                 value = self.string_lookup.get((event.code, event.text_value))
                 if value is not None:
                     return [value], None

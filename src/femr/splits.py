@@ -6,8 +6,6 @@ import hashlib
 import struct
 from typing import List
 
-import femr.index
-
 
 @dataclasses.dataclass
 class PatientSplit:

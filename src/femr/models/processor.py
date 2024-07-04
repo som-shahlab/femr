@@ -3,18 +3,21 @@ from __future__ import annotations
 import collections
 import datetime
 import functools
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+import datasets
 import meds
+import meds_reader
 import numpy as np
 import torch.utils.data
 
-import femr.hf_utils
 import femr.models.tokenizer
 import femr.pat_utils
 
 
-def map_preliminary_batch_stats(batch, indices, *, processor: FEMRBatchProcessor, max_length: int):
+def map_preliminary_batch_stats(
+    patients: Iterable[meds_reader.Patient], *, processor: FEMRBatchProcessor, max_length: int
+):
     """
     This function creates preliminary batch statistics, to be used for final batching.
 
@@ -39,11 +42,7 @@ def map_preliminary_batch_stats(batch, indices, *, processor: FEMRBatchProcessor
     """
     lengths = []
 
-    for patient_index, patient_id, events in zip(indices, batch["patient_id"], batch["events"]):
-        patient = {
-            "patient_id": patient_id,
-            "events": events,
-        }
+    for patient in patients:
         data = processor.convert_patient(patient)
 
         # There are no labels for this patient
@@ -57,28 +56,21 @@ def map_preliminary_batch_stats(batch, indices, *, processor: FEMRBatchProcessor
             for label_index in data["transformer"]["label_indices"]:
                 if (label_index - current_start + 1) >= max_length:
                     if current_start != current_end:
-                        lengths.append((patient_index, current_start, current_end - current_start + 1))
+                        lengths.append((patient.patient_id, current_start, current_end - current_start + 1))
                     current_start = label_index - max_length + 1
                     current_end = label_index
                 else:
                     current_end = label_index
 
-            lengths.append((patient_index, current_start, current_end - current_start + 1))
+            lengths.append((patient.patient_id, current_start, current_end - current_start + 1))
         else:
             last_index = data["transformer"]["label_indices"][-1]
             length = min(max_length, last_index + 1)
-            lengths.append((patient_index, last_index + 1 - length, length))
+            lengths.append((patient.patient_id, last_index + 1 - length, length))
     if len(lengths) > 0:
-        return [np.array(lengths, dtype=np.int64)]
+        return np.array(lengths, dtype=np.int64)
     else:
-        return []
-
-
-def agg_preliminary_batch_stats(lengths1, lengths2):
-    """Aggregate preliminary length statistics from the map_preliminary_batch_stats"""
-    lengths1.extend(lengths2)
-
-    return lengths1
+        return np.zeros(shape=(0, 3), dtype=np.int64)
 
 
 class BatchCreator:
@@ -168,41 +160,40 @@ class BatchCreator:
                 current_date = event.time.date()
                 codes_seen_today = set()
 
-            for measurement in event["measurements"]:
-                # Get features and weights for the current event
-                features, weights = self.tokenizer.get_feature_codes(event.time, measurement)
+            # Get features and weights for the current event
+            features, weights = self.tokenizer.get_feature_codes(event)
 
-                # Ignore events with no features
-                if len(features) == 0:
-                    continue
+            # Ignore events with no features
+            if len(features) == 0:
+                continue
 
-                # Ignore events where all features have already occurred
-                if all(feature in codes_seen_today for feature in features):
-                    continue
+            # Ignore events where all features have already occurred
+            if all(feature in codes_seen_today for feature in features):
+                continue
 
-                codes_seen_today |= set(features)
+            codes_seen_today |= set(features)
 
-                if (self.task is not None) and (last_time is not None):
-                    # Now we have to consider whether or not to have labels for this time step
-                    # The add_event function returns how many labels to assign for this time
-                    num_added = self.task.add_event(last_time, event.time, features)
-                    for _ in range(num_added):
-                        per_patient_label_indices.append(len(per_patient_ages) - 1)
+            if (self.task is not None) and (last_time is not None):
+                # Now we have to consider whether or not to have labels for this time step
+                # The add_event function returns how many labels to assign for this time
+                num_added = self.task.add_event(last_time, event.time, features)
+                for _ in range(num_added):
+                    per_patient_label_indices.append(len(per_patient_ages) - 1)
 
-                if not self.tokenizer.is_hierarchical:
-                    assert len(features) == 1
-                    per_patient_tokens.append(features[0])
-                else:
-                    assert weights is not None
-                    per_patient_hierarchical_tokens.extend(features)
-                    per_patient_hierarchical_weights.extend(weights)
-                    per_patient_token_indices.append(len(per_patient_hierarchical_tokens))
+            if not self.tokenizer.is_hierarchical:
+                assert len(features) == 1
+                per_patient_tokens.append(features[0])
+            else:
+                assert weights is not None
+                per_patient_hierarchical_tokens.extend(features)
+                per_patient_hierarchical_weights.extend(weights)
+                per_patient_token_indices.append(len(per_patient_hierarchical_tokens))
 
-                per_patient_ages.append((event.time - birth) / datetime.timedelta(days=1))
-                per_patient_normalized_ages.append(self.tokenizer.normalize_age(event.time - birth))
-                per_patient_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
+            per_patient_ages.append((event.time - birth) / datetime.timedelta(days=1))
+            per_patient_normalized_ages.append(self.tokenizer.normalize_age(event.time - birth))
+            per_patient_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
 
-                last_time = event.time
+            last_time = event.time
 
         if self.task is not None and last_time is not None:
             num_added = self.task.add_event(last_time, None, None)
@@ -327,18 +318,19 @@ class BatchCreator:
         return batch
 
 
-def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: BatchCreator, dataset: datasets.Dataset):
-    for lengths, offsets in batch_data:
-        offsets = list(offsets)
-        for start, end in zip(offsets, offsets[1:]):
-            creator.start_batch()
-            for patient_index, offset, length in lengths[start:end, :]:
-                creator.add_patient(dataset[patient_index.item()], offset, length)
+def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: BatchCreator, path_to_database: str):
+    with meds_reader.PatientDatabase(path_to_database) as database:
+        for lengths, offsets in batch_data:
+            offsets = list(offsets)
+            for start, end in zip(offsets, offsets[1:]):
+                creator.start_batch()
+                for patient_index, offset, length in lengths[start:end, :]:
+                    creator.add_patient(database[patient_index.item()], offset, length)
 
-            result = creator.get_batch_data()
-            assert "task" in result, f"No task present in {lengths[start:end,:]}"
+                result = creator.get_batch_data()
+                assert "task" in result, f"No task present in {lengths[start:end,:]}"
 
-            yield result
+                yield result
 
 
 def _add_dimension(data: Any) -> Any:
@@ -399,7 +391,9 @@ class FEMRBatchProcessor:
         assert len(batches) == 1, "Can only have one batch when collating"
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
-    def convert_dataset(self, dataset, tokens_per_batch: int, min_patients_per_batch: int = 4, num_proc: int = 1):
+    def convert_dataset(
+        self, db: meds_reader.PatientDatabase, tokens_per_batch: int, min_patients_per_batch: int = 4, num_proc: int = 1
+    ):
         """Convert an entire dataset to batches.
 
         Arguments:
@@ -411,25 +405,16 @@ class FEMRBatchProcessor:
         Returns:
             A huggingface dataset object containing batches
         """
-        if isinstance(dataset, datasets.DatasetDict):
-            return datasets.DatasetDict(
-                {
-                    k: self.convert_dataset(v, tokens_per_batch, min_patients_per_batch, num_proc)
-                    for k, v in dataset.items()
-                }
-            )
 
         max_length = tokens_per_batch // min_patients_per_batch
-        lengths = femr.hf_utils.aggregate_over_dataset(
-            dataset,
-            functools.partial(map_preliminary_batch_stats, processor=self, max_length=max_length),
-            agg_preliminary_batch_stats,
-            num_proc=num_proc,
-            batch_size=1_000,
-            with_indices=True,
+
+        length_chunks = tuple(
+            db.map(
+                functools.partial(map_preliminary_batch_stats, processor=self, max_length=max_length),
+            )
         )
 
-        lengths = np.concatenate(lengths)
+        lengths = np.concatenate(length_chunks)
 
         rng = np.random.default_rng()
         rng.shuffle(lengths)
@@ -468,12 +453,10 @@ class FEMRBatchProcessor:
                 )
             )
 
-        print("Creating batches", len(batches))
-
         batch_func = functools.partial(
             _batch_generator,
             creator=self.creator,
-            dataset=dataset,
+            path_to_database=db.path_to_database,
         )
 
         batch_dataset = datasets.Dataset.from_generator(
