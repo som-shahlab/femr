@@ -323,6 +323,18 @@ class FEMRModel(transformers.PreTrainedModel):
 
             return loss, result
 
+def to_device(data: Any, device: torch.device) -> Any:
+    if isinstance(data, collections.abc.Mapping):
+        return {k: to_device(v, device) for k, v in data.items()}
+    elif isinstance(data, torch.Tensor):
+        return data.to(device, non_blocking=True)
+    elif isinstance(data, np.ndarray):
+        return data
+    elif isinstance(data, (int, float, np.number, np.bool_)):
+        return data
+    else:
+        raise RuntimeError("Could not move item of type " + str(type(data)))
+
 
 def compute_features(
     db: meds_reader.PatientDatabase,
@@ -360,35 +372,36 @@ def compute_features(
     if device:
         model = model.to(device)
 
+    cpu_device = torch.device('cpu')
+
     batches = processor.convert_dataset(
         filtered_data, tokens_per_batch=tokens_per_batch, min_patients_per_batch=1, num_proc=num_proc
     )
 
     batches.set_format("pt")
 
+    loader = torch.utils.data.DataLoader(batches, num_workers=num_proc, pin_memory=True, collate_fn=processor.collate)
+
     all_patient_ids = []
     all_feature_times = []
     all_representations = []
 
-    for batch in tqdm(batches, total=len(batches)):
-        batch = processor.collate([batch])["batch"]
+    with torch.no_grad():
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            for batch in tqdm(loader):
+                if device:
+                    batch = to_device(batch, device)
+                _, result = model(**batch, return_reprs=True)
+                all_patient_ids.append(result["patient_ids"].to(cpu_device, non_blocking=True))
+                all_feature_times.append(result["timestamps"].to(cpu_device, non_blocking=True))
+                all_representations.append(result["representations"].to(cpu_device, non_blocking=True))
 
-        # Move to device
-        for key, val in batch.items():
-            if isinstance(val, torch.Tensor):
-                batch[key] = batch[key].to(device)
-        for key, val in batch["transformer"].items():
-            if isinstance(val, torch.Tensor):
-                batch["transformer"][key] = batch["transformer"][key].to(device)
-
-        with torch.no_grad():
-            _, result = model(batch, return_reprs=True)
-            all_patient_ids.append(result["patient_ids"].cpu().numpy())
-            all_feature_times.append(result["timestamps"].cpu().numpy())
-            all_representations.append(result["representations"].cpu().numpy())
+    all_patient_ids = torch.concatenate(all_patient_ids).numpy()
+    all_feature_times = torch.concatenate(all_feature_times).numpy()
+    all_representations = torch.concatenate(all_representations).numpy()
 
     return {
-        "patient_ids": np.concatenate(all_patient_ids),
-        "feature_times": np.concatenate(all_feature_times).astype("datetime64[s]"),
-        "features": np.concatenate(all_representations),
+        "patient_ids": all_patient_ids,
+        "feature_times": all_feature_times.astype("datetime64[s]"),
+        "features": all_representations,
     }

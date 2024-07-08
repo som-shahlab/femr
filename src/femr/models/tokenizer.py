@@ -235,7 +235,7 @@ def convert_statistics_to_msgpack(
         if len(numeric_samples) > 0:
             assert num_numeric >= 1
 
-            samples = sorted(list(set(np.percentile(numeric_samples, np.linspace(0, 1, num=num_numeric + 1)))))
+            samples = sorted(list(set(np.quantile(numeric_samples, np.linspace(0, 1, num=num_numeric + 1)))))
             samples[0] = float("-inf")
             samples[-1] = float("inf")
 

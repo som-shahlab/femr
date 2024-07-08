@@ -430,9 +430,11 @@ class FEMRBatchProcessor:
 
             current_batch_length += length
 
+
         batch_offsets.append(len(lengths))
 
         batches = list(zip(batch_offsets, batch_offsets[1:]))
+        print("Got batches", len(batches))
 
         split_batches = np.array_split(batches, num_proc)
 
