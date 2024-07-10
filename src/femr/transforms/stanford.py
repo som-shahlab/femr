@@ -6,7 +6,7 @@ import datetime
 from typing import Dict, List, Tuple
 
 import meds
-import meds_reader
+import meds_reader.transform
 
 
 def _move_date_to_end(
@@ -18,7 +18,9 @@ def _move_date_to_end(
         return d
 
 
-def move_visit_start_to_first_event_start(patient: meds_reader.Patient) -> meds_reader.Patient:
+def move_visit_start_to_first_event_start(
+    patient: meds_reader.transform.MutablePatient,
+) -> meds_reader.transform.MutablePatient:
     """Assign visit start times to equal start time of first event in visit
 
     This function assigns the start time associated with each visit to be
@@ -78,7 +80,7 @@ def move_visit_start_to_first_event_start(patient: meds_reader.Patient) -> meds_
     return patient
 
 
-def move_to_day_end(patient: meds_reader.Patient) -> meds_reader.Patient:
+def move_to_day_end(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
     """We assume that everything coded at midnight should actually be moved to the end of the day."""
     for event in patient.events:
         event.time = _move_date_to_end(event.time)
@@ -91,7 +93,7 @@ def move_to_day_end(patient: meds_reader.Patient) -> meds_reader.Patient:
     return patient
 
 
-def switch_to_icd10cm(patient: meds_reader.Patient) -> meds_reader.Patient:
+def switch_to_icd10cm(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
     """Switch from ICD10 to ICD10CM."""
     for event in patient.events:
         if event.code.startswith("ICD10/"):
@@ -100,7 +102,7 @@ def switch_to_icd10cm(patient: meds_reader.Patient) -> meds_reader.Patient:
     return patient
 
 
-def move_pre_birth(patient: meds_reader.Patient) -> meds_reader.Patient:
+def move_pre_birth(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
     """Move all events to after the birth of a patient."""
     birth_date = None
     for event in patient.events:
@@ -129,7 +131,7 @@ def move_pre_birth(patient: meds_reader.Patient) -> meds_reader.Patient:
     return patient
 
 
-def move_billing_codes(patient: meds_reader.Patient) -> meds_reader.Patient:
+def move_billing_codes(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
     """Move billing codes to the end of each visit.
 
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.

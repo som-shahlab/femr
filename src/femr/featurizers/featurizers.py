@@ -40,7 +40,7 @@ class AgeFeaturizer(Featurizer):
 
     def add_preprocess_data(
         self, age_statistics: OnlineStatistics, patient: meds_reader.Patient, label_map: Mapping[int, List[meds.Label]]
-    ) -> OnlineStatistics:
+    ):
         """Save the age of this patient (in years) at each label, to use for normalization."""
         patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
         assert patient_birth_date, "Patients must have a birth date"

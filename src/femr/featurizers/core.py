@@ -43,7 +43,7 @@ def _features_map_func(
     # Construct CSR sparse matrix
     #   non-zero entries in sparse matrix
     data_and_indices = np.zeros((1024, 2), np.float64)
-    data_and_indices_arrays = []
+    data_and_indices_arrays: List[np.ndarray] = []
 
     current_index = 0
 

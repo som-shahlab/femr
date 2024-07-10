@@ -8,6 +8,7 @@ from typing import Callable, Sequence
 
 import meds
 import meds_reader
+import meds_reader.transform
 
 from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
@@ -23,10 +24,12 @@ def _is_visit_measurement(e: meds_reader.Event) -> bool:
     return e.table == "visit"
 
 
-def _get_stanford_transformations() -> Callable[[meds_reader.Patient], meds_reader.Patient]:
+def _get_stanford_transformations() -> (
+    Callable[[meds_reader.transform.MutablePatient], meds_reader.transform.MutablePatient]
+):
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
-    transforms: Sequence[Callable[[meds_reader.Patient], meds_reader.Patient]] = [
+    transforms: Sequence[Callable[[meds_reader.transform.MutablePatient], meds_reader.transform.MutablePatient]] = [
         move_pre_birth,
         move_visit_start_to_first_event_start,
         move_to_day_end,
@@ -72,16 +75,11 @@ def femr_stanford_omop_fixer_program() -> None:
 
     args = parser.parse_args()
 
-    os.mkdir(args.target_dataset)
+    meds_reader.transform.transform_meds_dataset(
+        args.source_dataset, args.target_dataset, _get_stanford_transformations(), num_threads=args.num_proc
+    )
 
-    dataset = datasets.Dataset.from_parquet(os.path.join(args.source_dataset, "data", "*"))
-
-    fixed_patient = dataset.map(_get_stanford_transformations(), num_proc=args.num_proc)
-
-    os.mkdir(os.path.join(args.target_dataset, "data"))
-    fixed_patient.to_parquet(os.path.join(args.target_dataset, "data", "data.parquet"))
-
-    with open(os.path.join(args.source_dataset, "metadata.json")) as f:
+    with open(os.path.join(args.target_dataset, "metadata.json")) as f:
         metadata = json.load(f)
 
     # Let's mark that we modified this dataset

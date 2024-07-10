@@ -5,12 +5,13 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import meds
 import meds_reader
+import meds_reader.transform
 
 
 def remove_nones(
-    patient: meds_reader.Patient,
+    patient: meds_reader.transform.MutablePatient,
     do_not_apply_to_filter: Optional[Callable[[meds_reader.Event], bool]] = None,
-) -> meds_reader.Patient:
+) -> meds_reader.transform.MutablePatient:
     """Remove duplicate codes w/in same day if duplicate code has None value.
 
     There is no point having a NONE value in a timeline when we have an actual value within the same day.
@@ -25,7 +26,7 @@ def remove_nones(
         if any(v is not None for v in value):
             has_value.add((event.code, event.time.date()))
 
-    new_events: List[meds_reader.Event] = []
+    new_events: List[meds_reader.transform.MutableEvent] = []
     for event in patient.events:
         value = (event.numeric_value, event.text_value)
         if (
@@ -45,9 +46,9 @@ def remove_nones(
 
 
 def delta_encode(
-    patient: meds_reader.Patient,
+    patient: meds_reader.transform.MutablePatient,
     do_not_apply_to_filter: Optional[Callable[[meds_reader.Event], bool]] = None,
-) -> meds_reader.Patient:
+) -> meds_reader.transform.MutablePatient:
     """Delta encodes the patient.
 
     The idea behind delta encoding is that if we get duplicate values within a short amount of time
@@ -59,7 +60,7 @@ def delta_encode(
 
     last_value: Dict[Tuple[str, datetime.date], Any] = {}
 
-    new_events: List[meds_reader.Event] = []
+    new_events: List[meds_reader.transform.MutableEvent] = []
     for event in patient.events:
         key = (event.code, event.time.date())
         value = (event.numeric_value, event.text_value)
@@ -74,7 +75,7 @@ def delta_encode(
     return patient
 
 
-def fix_events(patient: meds_reader.Patient) -> meds_reader.Patient:
+def fix_events(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
     """After a series of transformations, sometimes the patient structure gets a bit messed up.
     The usual issues are either duplicate event times or missorted events.
 
