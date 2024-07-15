@@ -136,22 +136,24 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
     assert move_visit_start_to_first_event_start(patient) == patient
 
 
+import meds_reader.transform
+
 def test_move_to_day_end() -> None:
-    patient = DummyPatient(
+    patient = meds_reader.transform.MutablePatient(
         patient_id=123,
         events=[
-            DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
-            DummyEvent(time=datetime.datetime(1999, 7, 2, 12), code="4321"),
-            DummyEvent(time=datetime.datetime(1999, 7, 9), code=meds.birth_code),
+            meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
+            meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2, 12), code="4321"),
+            meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 9), code=meds.birth_code),
         ],
     )
 
-    expected = DummyPatient(
+    expected = meds_reader.transform.MutablePatient(
         patient_id=123,
         events=[
-            DummyEvent(time=datetime.datetime(1999, 7, 2, 12), code="4321"),
-            DummyEvent(time=datetime.datetime(1999, 7, 2, 23, 59), code="1234"),
-            DummyEvent(time=datetime.datetime(1999, 7, 9, 23, 59), code=meds.birth_code),
+            meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2, 12), code="4321"),
+            meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2, 23, 59), code="1234"),
+            meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 9, 23, 59), code=meds.birth_code),
         ],
     )
 
