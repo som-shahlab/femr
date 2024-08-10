@@ -3,7 +3,7 @@
 """Transforms that are unique to STARR OMOP."""
 
 import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import meds
 import meds_reader.transform

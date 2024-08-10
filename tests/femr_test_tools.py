@@ -61,7 +61,7 @@ class DummyDatabase(dict):
     def map(
         self,
         map_func,
-    ) -> Iterator[A]:
+    ) -> Any:
         return [map_func(self.values())]
 
 

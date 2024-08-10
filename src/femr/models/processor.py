@@ -6,7 +6,6 @@ import functools
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import datasets
-import meds
 import meds_reader
 import numpy as np
 import torch.utils.data
@@ -328,7 +327,7 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
                     creator.add_patient(database[patient_index.item()], offset, length)
 
                 result = creator.get_batch_data()
-                assert "task" in result, f"No task present in {lengths[start:end,:]}"
+                assert "task" in result, f"No task present in {lengths[start:end, :]}"
 
                 yield result
 
@@ -429,7 +428,6 @@ class FEMRBatchProcessor:
                 current_batch_length = 0
 
             current_batch_length += length
-
 
         batch_offsets.append(len(lengths))
 

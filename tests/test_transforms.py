@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 
 import meds
+import meds_reader.transform
 from femr_test_tools import DummyEvent, DummyPatient
 
 from femr.transforms import delta_encode, remove_nones
@@ -135,8 +136,6 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
 
     assert move_visit_start_to_first_event_start(patient) == patient
 
-
-import meds_reader.transform
 
 def test_move_to_day_end() -> None:
     patient = meds_reader.transform.MutablePatient(

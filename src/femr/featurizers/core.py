@@ -13,8 +13,6 @@ import meds_reader
 import numpy as np
 import scipy.sparse
 
-import femr.ontology
-
 
 class ColumnValue(NamedTuple):
     """A value for a particular column
@@ -340,9 +338,10 @@ def join_labels(features: Mapping[str, np.ndarray], labels: List[meds.Label]) ->
             and features["patient_ids"][order[feature_index]] == label["patient_id"]
             and features["feature_times"][order[feature_index]] <= label["prediction_time"]
         )
-        assert (
-            is_valid
-        ), f'{feature_index} {label} {features["patient_ids"][order[feature_index]]} {features["feature_times"][order[feature_index]]}'
+        assert is_valid, (
+            f'{feature_index} {label} {features["patient_ids"][order[feature_index]]} '
+            + f'{features["feature_times"][order[feature_index]]}'
+        )
         indices.append(order[feature_index])
         label_values.append(label["boolean_value"])
 

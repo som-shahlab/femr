@@ -8,7 +8,6 @@ import math
 import os
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple, Union
 
-import meds
 import meds_reader
 import msgpack
 import numpy as np

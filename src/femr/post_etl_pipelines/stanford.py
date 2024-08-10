@@ -6,7 +6,6 @@ import json
 import os
 from typing import Callable, Sequence
 
-import meds
 import meds_reader
 import meds_reader.transform
 
@@ -23,23 +22,26 @@ from femr.transforms.stanford import (
 def _is_visit_measurement(e: meds_reader.Event) -> bool:
     return e.table == "visit"
 
+
 def _apply_transformations(patient, *, transforms):
     for transform in transforms:
         patient = transform(patient)
     return patient
 
+
 def _remove_flowsheets(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
     """Flowsheets in STARR-OMOP have known timing bugs, making them unsuitable for use as either features or labels.
-    
+
     TODO: Investigate them so we can add them back as features
     """
     new_events = []
     for event in patient.events:
-        if event.code != 'STANFORD_OBS/Flowsheet':
+        if event.code != "STANFORD_OBS/Flowsheet":
             new_events.append(event)
 
     patient.events = new_events
     return patient
+
 
 def _get_stanford_transformations() -> (
     Callable[[meds_reader.transform.MutablePatient], meds_reader.transform.MutablePatient]
@@ -66,6 +68,7 @@ def _get_stanford_transformations() -> (
     ]
 
     return functools.partial(_apply_transformations, transforms=transforms)
+
 
 def femr_stanford_omop_fixer_program() -> None:
     """Extract data from an Stanford STARR-OMOP v5 source to create a femr PatientDatabase."""

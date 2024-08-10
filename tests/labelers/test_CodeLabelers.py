@@ -2,6 +2,8 @@ import datetime
 import pathlib
 from typing import List, Set
 
+import meds
+
 # Needed to import `tools` for local testing
 from femr_test_tools import EventsWithLabels, run_test_for_labeler
 
@@ -273,14 +275,14 @@ def test_MortalityCodeLabeler() -> None:
         (((1995, 1, 3), 0, 34.5), False),
         (((2000, 1, 1), 1, "test_value"), True),
         (((2000, 1, 5), 2, 1), True),
-        (((2000, 6, 5), "SNOMED/419620001", True), "skip"),
+        (((2000, 6, 5), meds.death_code, True), "skip"),
         (((2005, 2, 5), 2, None), False),
         (((2005, 7, 5), 2, None), False),
         (((2010, 10, 5), 1, None), False),
         (((2015, 2, 5, 0), 2, None), False),
         (((2015, 7, 5, 0), 0, None), True),
         (((2015, 11, 5, 10, 10), 2, None), True),
-        (((2015, 11, 15, 11), "SNOMED/419620001", None), "skip"),
+        (((2015, 11, 15, 11), meds.death_code, None), "skip"),
         (((2020, 1, 1), 2, None), "out of range"),
         (((2020, 3, 1, 10, 10, 10), 2, None), "out of range"),
     ]

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import collections
-import functools
 import os
 from typing import Any, Dict, Iterable, Iterator, Optional, Set
 
-import meds
 import meds_reader
 import polars as pl
 
@@ -19,7 +17,7 @@ def _get_all_codes_map(patients: Iterator[meds_reader.Patient]) -> Set[str]:
 
 
 class Ontology:
-    def __init__(self, athena_path: str, code_metadata_path: str):
+    def __init__(self, athena_path: str, code_metadata_path: Optional[str] = None):
         """Create an Ontology from an Athena download and an optional meds Code Metadata structure.
 
         NOTE: This is an expensive operation.
@@ -81,17 +79,20 @@ class Ontology:
         ):
             self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
 
-        code_metadata = pl.scan_parquet(code_metadata_path)
-        code_metadat_items = code_metadata.select(pl.col('code'), pl.col('description'), pl.col('parent_codes')).collect().to_dicts()
+        if code_metadata_path is not None:
+            code_metadata = pl.scan_parquet(code_metadata_path)
+            code_metadat_items = (
+                code_metadata.select(pl.col("code"), pl.col("description"), pl.col("parent_codes")).collect().to_dicts()
+            )
 
-        # Have to add after OMOP to overwrite ...
-        for code_info in code_metadat_items:
-            code = code_info.get('code')
-            if code is not None:
-                if code_info.get("description") is not None:
-                    self.description_map[code] = code_info["description"]
-                if code_info.get("parent_codes") is not None:
-                    self.parents_map[code] = set(i for i in code_info["parent_codes"] if i is not None)
+            # Have to add after OMOP to overwrite ...
+            for code_info in code_metadat_items:
+                code = code_info.get("code")
+                if code is not None:
+                    if code_info.get("description") is not None:
+                        self.description_map[code] = code_info["description"]
+                    if code_info.get("parent_codes") is not None:
+                        self.parents_map[code] = set(i for i in code_info["parent_codes"] if i is not None)
 
         self.children_map = collections.defaultdict(set)
         for code, parents in self.parents_map.items():
@@ -167,7 +168,6 @@ class Ontology:
         for code in codes:
             result |= self.get_all_children(code)
         return result
-
 
     def get_all_parents(self, code: str) -> Set[str]:
         """Get all parents, including through the ontology."""

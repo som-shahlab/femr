@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import collections
-import datetime
 import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -323,6 +322,7 @@ class FEMRModel(transformers.PreTrainedModel):
 
             return loss, result
 
+
 def to_device(data: Any, device: torch.device) -> Any:
     if isinstance(data, collections.abc.Mapping):
         return {k: to_device(v, device) for k, v in data.items()}
@@ -372,7 +372,7 @@ def compute_features(
     if device:
         model = model.to(device)
 
-    cpu_device = torch.device('cpu')
+    cpu_device = torch.device("cpu")
 
     batches = processor.convert_dataset(
         filtered_data, tokens_per_batch=tokens_per_batch, min_patients_per_batch=1, num_proc=num_proc
@@ -396,12 +396,12 @@ def compute_features(
                 all_feature_times.append(result["timestamps"].to(cpu_device, non_blocking=True))
                 all_representations.append(result["representations"].to(cpu_device, non_blocking=True))
 
-    all_patient_ids = torch.concatenate(all_patient_ids).numpy()
-    all_feature_times = torch.concatenate(all_feature_times).numpy()
-    all_representations = torch.concatenate(all_representations).numpy()
+    all_patient_ids_np = torch.concatenate(all_patient_ids).numpy()
+    all_feature_times_np = torch.concatenate(all_feature_times).numpy()
+    all_representations_np = torch.concatenate(all_representations).numpy()
 
     return {
-        "patient_ids": all_patient_ids,
-        "feature_times": all_feature_times.astype("datetime64[s]"),
-        "features": all_representations,
+        "patient_ids": all_patient_ids_np,
+        "feature_times": all_feature_times_np.astype("datetime64[s]"),
+        "features": all_representations_np,
     }

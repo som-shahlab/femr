@@ -2,6 +2,10 @@
 
 import pathlib
 
+import meds
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 import femr.ontology
 
 
@@ -129,11 +133,14 @@ def test_only_athena(tmp_path: pathlib.Path) -> None:
 def test_athena_and_custom(tmp_path: pathlib.Path) -> None:
     fake_athena = create_fake_athena(tmp_path)
 
-    code_metadata = {
-        "CUSTOM/CustomDiabetes": {"description": "A nice diabetes code", "parent_codes": ["ICD10CM/E11.3211"]}
-    }
+    code_metadata = [
+        {"code": "CUSTOM/CustomDiabetes", "description": "A nice diabetes code", "parent_codes": ["ICD10CM/E11.3211"]}
+    ]
 
-    ontology = femr.ontology.Ontology(str(fake_athena), code_metadata)
+    table = pa.Table.from_pylist(code_metadata, schema=meds.code_metadata_schema())
+    pq.write_table(table, tmp_path / "codes.parquet")
+
+    ontology = femr.ontology.Ontology(str(fake_athena), str(tmp_path / "codes.parquet"))
 
     assert ontology.get_description("CUSTOM/CustomDiabetes") == "A nice diabetes code"
     assert ontology.get_all_parents("CUSTOM/CustomDiabetes") == {

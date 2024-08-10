@@ -73,16 +73,16 @@ def test_count_featurizer() -> None:
     simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
 
     assert simple_patient_features[0] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 1),
     }
     assert simple_patient_features[1] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 2),
         ("2", 2),
     }
     assert simple_patient_features[2] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 3),
         ("2", 4),
     }
@@ -109,7 +109,7 @@ def test_count_featurizer_with_ontology() -> None:
 
     class DummyOntology:
         def get_all_parents(self, code):
-            if code in ("2", "SNOMED/184099003"):
+            if code in ("2", meds.birth_code):
                 return {"parent", code}
             else:
                 return {code}
@@ -126,18 +126,18 @@ def test_count_featurizer_with_ontology() -> None:
     simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
 
     assert simple_patient_features[0] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 1),
         ("parent", 1),
     }
     assert simple_patient_features[1] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 2),
         ("2", 2),
         ("parent", 3),
     }
     assert simple_patient_features[2] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("parent", 5),
         ("3", 3),
         ("2", 4),
@@ -174,21 +174,21 @@ def test_count_featurizer_with_values() -> None:
     simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
 
     assert simple_patient_features[0] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 1),
         ("2 [1.0, inf)", 1),
         ("1 test_value", 2),
     }
 
     assert simple_patient_features[1] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 2),
         ("2", 2),
         ("2 [1.0, inf)", 1),
         ("1 test_value", 2),
     }
     assert simple_patient_features[2] == {
-        ("SNOMED/184099003", 1),
+        (meds.birth_code, 1),
         ("3", 3),
         ("2", 4),
         ("2 [1.0, inf)", 1),
@@ -268,19 +268,19 @@ def test_count_bins_featurizer() -> None:
     simple_patient_features = [{(featurizer.get_column_name(v.column), v.value) for v in a} for a in patient_features]
 
     assert simple_patient_features[0] == {
-        ("SNOMED/184099003_70000 days, 0:00:00", 1),
+        (meds.birth_code + "_70000 days, 0:00:00", 1),
         ("3_90 days, 0:00:00", 1),
     }
     assert simple_patient_features[1] == {
         ("3_90 days, 0:00:00", 1),
-        ("SNOMED/184099003_70000 days, 0:00:00", 1),
+        (meds.birth_code + "_70000 days, 0:00:00", 1),
         ("3_70000 days, 0:00:00", 1),
         ("2_70000 days, 0:00:00", 2),
     }
     assert simple_patient_features[2] == {
         ("2_70000 days, 0:00:00", 2),
         ("2_90 days, 0:00:00", 2),
-        ("SNOMED/184099003_70000 days, 0:00:00", 1),
+        (meds.birth_code + "_70000 days, 0:00:00", 1),
         ("3_90 days, 0:00:00", 1),
         ("3_70000 days, 0:00:00", 2),
     }

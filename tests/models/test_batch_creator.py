@@ -1,5 +1,6 @@
 import datetime
 
+import meds
 from femr_test_tools import create_patients_dataset
 
 import femr.models.processor
@@ -16,7 +17,7 @@ class DummyTokenizer:
         pass
 
     def get_feature_codes(self, event):
-        if event.code == "SNOMED/184099003":
+        if event.code == meds.birth_code:
             return [1], None
         else:
             return [int(event.code)], None
