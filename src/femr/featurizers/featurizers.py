@@ -349,7 +349,7 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                while event.time > labels[label_idx]["prediction_time"]:
+                while event.time is not None and event.time > labels[label_idx]["prediction_time"]:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
                     all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
@@ -385,7 +385,7 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                while event.time > labels[label_idx]["prediction_time"]:
+                while event.time is not None and event.time > labels[label_idx]["prediction_time"]:
                     _reshuffle_count_time_bins(
                         time_bins,
                         codes_per_bin,

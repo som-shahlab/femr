@@ -96,12 +96,12 @@ def femr_stanford_omop_fixer_program() -> None:
         args.source_dataset, args.target_dataset, _get_stanford_transformations(), num_threads=args.num_proc
     )
 
-    with open(os.path.join(args.target_dataset, "metadata.json")) as f:
+    with open(os.path.join(args.target_dataset, "metadata/dataset.json")) as f:
         metadata = json.load(f)
 
     # Let's mark that we modified this dataset
     metadata["post_etl_name"] = "femr_stanford_omop_fixer"
     metadata["post_etl_version"] = "0.1"
 
-    with open(os.path.join(args.target_dataset, "metadata.json"), "w") as f:
+    with open(os.path.join(args.target_dataset, "metadata/dataset.json"), "w") as f:
         json.dump(metadata, f)
