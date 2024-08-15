@@ -1,9 +1,10 @@
 import datetime
-from typing import Any, List, Mapping, cast
+from typing import Any, Mapping, cast
 
 import femr_test_tools
 import meds
 import meds_reader
+import pandas as pd
 import scipy.sparse
 
 import femr
@@ -13,7 +14,7 @@ from femr.labelers import TimeHorizon
 from femr.labelers.omop import CodeLabeler
 
 
-def _assert_featurized_patients_structure(labels: List[meds.Label], features: Mapping[str, Any]):
+def _assert_featurized_patients_structure(labels: pd.DataFrame, features: Mapping[str, Any]):
     assert features["features"].dtype == "float32"
     assert features["patient_ids"].dtype == "int64"
     assert features["feature_times"].dtype == "datetime64[us]"
@@ -22,8 +23,10 @@ def _assert_featurized_patients_structure(labels: List[meds.Label], features: Ma
     assert features["patient_ids"].shape[0] == len(labels)
     assert features["features"].shape[0] == len(labels)
 
-    assert sorted(list(features["patient_ids"])) == sorted(list(label["patient_id"] for label in labels))
-    assert sorted(list(features["feature_times"])) == sorted(list(label["prediction_time"] for label in labels))
+    assert sorted(list(features["patient_ids"])) == sorted(list(label.patient_id for label in labels.itertuples()))
+    assert sorted(list(features["feature_times"])) == sorted(
+        list(label.prediction_time for label in labels.itertuples())
+    )
 
 
 def test_age_featurizer() -> None:
@@ -63,7 +66,7 @@ def test_count_featurizer() -> None:
     labels = labeler.label(patient)
     featurizer = CountFeaturizer()
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -116,7 +119,7 @@ def test_count_featurizer_with_ontology() -> None:
 
     featurizer = CountFeaturizer(is_ontology_expansion=True, ontology=cast(femr.ontology.Ontology, DummyOntology()))
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -164,7 +167,7 @@ def test_count_featurizer_with_values() -> None:
     labels = labeler.label(patient)
     featurizer = CountFeaturizer(numeric_value_decile=True, string_value_combination=True)
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)
@@ -218,7 +221,7 @@ def test_count_featurizer_exclude_filter() -> None:
     # Test filtering all codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: True)
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     assert featurizer.get_num_columns() == 0
@@ -226,7 +229,7 @@ def test_count_featurizer_exclude_filter() -> None:
     # Test filtering no codes
     featurizer = CountFeaturizer(excluded_event_filter=lambda _: False)
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     assert featurizer.get_num_columns() == 4
@@ -234,7 +237,7 @@ def test_count_featurizer_exclude_filter() -> None:
     # Test filtering single code
     featurizer = CountFeaturizer(excluded_event_filter=lambda e: e.code == "3")
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     assert featurizer.get_num_columns() == 3
@@ -258,7 +261,7 @@ def test_count_bins_featurizer() -> None:
         time_bins=time_bins,
     )
     data = featurizer.get_initial_preprocess_data()
-    featurizer.add_preprocess_data(data, patient, {patient.patient_id: labels})
+    featurizer.add_preprocess_data(data, patient, labels)
     featurizer.encorperate_prepreprocessed_data([data])
 
     patient_features = featurizer.featurize(patient, labels)

@@ -5,12 +5,12 @@ import datetime
 import functools
 import random
 from collections import defaultdict, deque
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
-import meds
 import meds_reader
 import numpy as np
 
+import femr.labelers
 import femr.ontology
 
 from ..pat_utils import get_patient_birthdate
@@ -39,14 +39,14 @@ class AgeFeaturizer(Featurizer):
         return OnlineStatistics()
 
     def add_preprocess_data(
-        self, age_statistics: OnlineStatistics, patient: meds_reader.Patient, label_map: Mapping[int, List[meds.Label]]
+        self, age_statistics: OnlineStatistics, patient: meds_reader.Patient, labels: Sequence[femr.labelers.Label]
     ):
         """Save the age of this patient (in years) at each label, to use for normalization."""
         patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
         assert patient_birth_date, "Patients must have a birth date"
 
-        for label in label_map[patient.patient_id]:
-            age_in_yrs: float = (label["prediction_time"] - patient_birth_date).days / 365
+        for label in labels:
+            age_in_yrs: float = (label.prediction_time - patient_birth_date).days / 365
             age_statistics.add(age_in_yrs)
 
     def encorperate_prepreprocessed_data(self, data_elements: List[OnlineStatistics]) -> None:
@@ -55,7 +55,7 @@ class AgeFeaturizer(Featurizer):
     def featurize(
         self,
         patient: meds_reader.Patient,
-        labels: List[meds.Label],
+        labels: Sequence[femr.labelers.Label],
     ) -> List[List[ColumnValue]]:
         """Return the age of the patient at each label.
         If `is_normalize`, then normalize each label's age across all patient's ages across all their labels."""
@@ -68,7 +68,7 @@ class AgeFeaturizer(Featurizer):
             return all_columns
 
         for label in labels:
-            age_in_yrs: float = (label["prediction_time"] - patient_birth_date).days / 365
+            age_in_yrs: float = (label.prediction_time - patient_birth_date).days / 365
             if self.is_normalize:
                 assert self.age_statistics is not None
                 # age = (age - mean(ages)) / std(ages)
@@ -91,7 +91,7 @@ def _reshuffle_count_time_bins(
     time_bins: List[datetime.timedelta],
     codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]],
     code_counts_per_bin: Dict[int, Dict[int, int]],
-    label: meds.Label,
+    label: femr.labelers.Label,
 ):
     # From closest bin to prediction time -> farthest bin
     for bin_idx, bin_end in enumerate(time_bins):
@@ -100,7 +100,7 @@ def _reshuffle_count_time_bins(
             # from the currently processed label)
             oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
 
-            if (label["prediction_time"] - oldest_event_start) <= bin_end:
+            if (label.prediction_time - oldest_event_start) <= bin_end:
                 # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
                 # bin to our label's prediction time, so all events will be within this bin,
                 # so we don't have to worry about shifting events into farther bins (as the code
@@ -258,7 +258,7 @@ class CountFeaturizer(Featurizer):
         }
 
     def add_preprocess_data(
-        self, data: Any, patient: meds_reader.Patient, label_map: Mapping[int, List[meds.Label]]
+        self, data: Any, patient: meds_reader.Patient, labels: Sequence[femr.labelers.Label]
     ) -> Any:
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
@@ -337,7 +337,7 @@ class CountFeaturizer(Featurizer):
     def featurize(
         self,
         patient: meds_reader.Patient,
-        labels: List[meds.Label],
+        labels: Sequence[femr.labelers.Label],
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
@@ -349,7 +349,7 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                while event.time is not None and event.time > labels[label_idx]["prediction_time"]:
+                while event.time is not None and event.time > labels[label_idx].prediction_time:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
                     all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
@@ -385,7 +385,7 @@ class CountFeaturizer(Featurizer):
 
             label_idx = 0
             for event in patient.events:
-                while event.time is not None and event.time > labels[label_idx]["prediction_time"]:
+                while event.time is not None and event.time > labels[label_idx].prediction_time:
                     _reshuffle_count_time_bins(
                         time_bins,
                         codes_per_bin,

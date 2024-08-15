@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import collections
 import dataclasses
 import datetime
 from typing import Any, List, Optional, Sequence, Tuple, Union, cast
 
 import meds
 import meds_reader
+import pandas as pd
 
-from femr.labelers import Labeler
+from femr.labelers import Label, Labeler
 
 # 2nd elem of tuple -- 'skip' means no label, None means censored
 EventsWithLabels = List[Tuple[Tuple[Tuple, int, Any], Union[bool, str]]]
@@ -64,6 +66,18 @@ class DummyDatabase(dict):
     ) -> Any:
         return [map_func(self.values())]
 
+    def map_with_data(self, map_func, data, assume_sorted) -> Any:
+        entries = collections.defaultdict(list)
+
+        for row in data.itertuples():
+            entries[row.patient_id].append(row)
+
+        temp = []
+        for k, v in entries.items():
+            temp.append((self[k], v))
+
+        return [map_func(temp)]
+
 
 def create_patients_dataset(
     num_patients: int, events: List[Tuple[Tuple, Any, Any]] = DUMMY_EVENTS
@@ -94,13 +108,13 @@ def create_patients_dataset(
 
 
 def assert_labels_are_accurate(
-    labeled_patients: List[meds.Label],
+    labeled_patients: pd.DataFrame,
     patient_id: int,
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]],
     help_text: str = "",
 ):
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
-    generated_labels: List[meds.Label] = [a for a in labeled_patients if a["patient_id"] == patient_id]
+    generated_labels: List[Label] = [a for a in labeled_patients.itertuples() if a.patient_id == patient_id]
     # Check that length of lists of labels are the same
 
     assert len(generated_labels) == len(
@@ -108,7 +122,7 @@ def assert_labels_are_accurate(
     ), f"len(generated): {len(generated_labels)} != len(expected): {len(true_labels)} | {help_text}"
     # Check that value of labels are the same
     for idx, (label, true_label) in enumerate(zip(generated_labels, true_labels)):
-        assert label["boolean_value"] == true_label[1] and label["prediction_time"] == true_label[0], (
+        assert label.boolean_value == true_label[1] and label.prediction_time == true_label[0], (
             f"patient_id={patient_id}, label_idx={idx}, label={label}  |  "
             f"{label} (Assigned) != {true_label} (Expected)  |  "
             f"{help_text}"

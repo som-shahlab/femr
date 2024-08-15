@@ -6,12 +6,14 @@ import collections
 import datetime
 import functools
 from abc import ABC, abstractmethod
-from typing import Any, Iterator, List, Mapping, NamedTuple, TypeVar
+from typing import Any, Iterator, List, Mapping, NamedTuple, Sequence, Tuple, TypeVar
 
-import meds
 import meds_reader
 import numpy as np
+import pandas as pd
 import scipy.sparse
+
+import femr.labelers
 
 
 class ColumnValue(NamedTuple):
@@ -25,18 +27,21 @@ class ColumnValue(NamedTuple):
 
 
 def _preprocess_map_func(
-    patients: Iterator[meds_reader.Patient], *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
+    patients_and_labels: Iterator[Tuple[meds_reader.Patient, Sequence[femr.labelers.Label]]],
+    featurizers: List[Featurizer],
 ) -> List[List[Any]]:
     initial_data = [featurizer.get_initial_preprocess_data() for featurizer in featurizers]
-    for patient in patients:
+    for patient, labels in patients_and_labels:
         for data, featurizer in zip(initial_data, featurizers):
-            featurizer.add_preprocess_data(data, patient, label_map)
+            featurizer.add_preprocess_data(data, patient, labels)
 
     return initial_data
 
 
 def _features_map_func(
-    patients: Iterator[meds_reader.Patient], *, label_map: Mapping[int, List[meds.Label]], featurizers: List[Featurizer]
+    patients_and_labels: Iterator[Tuple[meds_reader.Patient, Sequence[femr.labelers.Label]]],
+    *,
+    featurizers: List[Featurizer],
 ) -> Mapping[str, Any]:
     # Construct CSR sparse matrix
     #   non-zero entries in sparse matrix
@@ -51,14 +56,12 @@ def _features_map_func(
     patient_ids: List[int] = []
     feature_times: List[datetime.datetime] = []
 
-    for patient in patients:
-        labels = label_map[patient.patient_id]
-
+    for patient, labels in patients_and_labels:
         assert len(labels) != 0, "Must have at least one label per patient processed"
 
         for label in labels:
             patient_ids.append(patient.patient_id)
-            feature_times.append(label["prediction_time"])
+            feature_times.append(label.prediction_time)
 
         # For each Featurizer, apply it to this Patient...
         features_per_label: List[List[List[ColumnValue]]] = [[] for _ in range(len(labels))]
@@ -140,7 +143,7 @@ class Featurizer(ABC):
         """
         pass
 
-    def add_preprocess_data(self, data: Any, patient: meds_reader.Patient, label_map: Mapping[int, List[meds.Label]]):
+    def add_preprocess_data(self, data: Any, patient: meds_reader.Patient, labels: Sequence[femr.labelers.Label]):
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
         This function performs that preprocessing on the given patients and labels, and returns some state.
@@ -168,7 +171,7 @@ class Featurizer(ABC):
     def featurize(
         self,
         patient: meds_reader.Patient,
-        labels: List[meds.Label],
+        labels: Sequence[femr.labelers.Label],
     ) -> List[List[ColumnValue]]:
         """Featurize the patient such that each label in `labels` has an associated list of features.
 
@@ -238,7 +241,7 @@ class FeaturizerList:
     def preprocess_featurizers(
         self,
         db: meds_reader.PatientDatabase,
-        labels: List[meds.Label],
+        labels: pd.DataFrame,
     ) -> None:
         """Preprocess `self.featurizers` on the provided set of labels."""
 
@@ -247,17 +250,13 @@ class FeaturizerList:
         if not any_needs_preprocessing:
             return
 
-        label_map = collections.defaultdict(list)
-
-        for label in labels:
-            label_map[label["patient_id"]].append(label)
         # Split patients across multiple threads
-        patient_ids: List[int] = list({label["patient_id"] for label in labels})
-
         featurize_stats: List[List[Any]] = [[] for _ in self.featurizers]
 
-        for chunk_stats in db.filter(patient_ids).map(
-            functools.partial(_preprocess_map_func, label_map=label_map, featurizers=self.featurizers)
+        for chunk_stats in db.map_with_data(
+            functools.partial(_preprocess_map_func, featurizers=self.featurizers),
+            labels,
+            assume_sorted=True,
         ):
             for a, b in zip(featurize_stats, chunk_stats):
                 a.append(b)
@@ -270,7 +269,7 @@ class FeaturizerList:
     def featurize(
         self,
         db: meds_reader.PatientDatabase,
-        labels: List[meds.Label],
+        labels: pd.DataFrame,
     ) -> Mapping[str, np.ndarray]:
         """
         Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
@@ -285,17 +284,12 @@ class FeaturizerList:
                 label_values is a list of boolean values representing the labels for each row in the matrix.
                 labeling_time is a list of labeling/prediction time for each row.
         """
-        label_map = collections.defaultdict(list)
-
-        for label in labels:
-            label_map[label["patient_id"]].append(label)
-        # Split patients across multiple threads
-        patient_ids: List[int] = sorted(list({label["patient_id"] for label in labels}))
-
         features = collections.defaultdict(list)
 
-        for feat_chunk in db.filter(patient_ids).map(
-            functools.partial(_features_map_func, label_map=label_map, featurizers=self.featurizers)
+        for feat_chunk in db.map_with_data(
+            functools.partial(_features_map_func, featurizers=self.featurizers),
+            labels,
+            assume_sorted=True,
         ):
             for k, v in feat_chunk.items():
                 features[k].append(v)
@@ -315,10 +309,7 @@ class FeaturizerList:
         raise IndexError(f"Column index '{column_idx}' out of bounds for this FeaturizerList")
 
 
-def join_labels(features: Mapping[str, np.ndarray], labels: List[meds.Label]) -> Mapping[str, np.ndarray]:
-    labels = list(labels)
-    labels.sort(key=lambda a: (a["patient_id"], a["prediction_time"]))
-
+def join_labels(features: Mapping[str, np.ndarray], labels: pd.DataFrame) -> Mapping[str, np.ndarray]:
     indices = []
     label_values = []
 
@@ -326,24 +317,24 @@ def join_labels(features: Mapping[str, np.ndarray], labels: List[meds.Label]) ->
 
     feature_index = 0
 
-    for label in labels:
+    for label in labels.itertuples():
         while (
             (feature_index + 1) < len(order)
-            and features["patient_ids"][order[feature_index + 1]] <= label["patient_id"]
-            and features["feature_times"][order[feature_index + 1]] <= label["prediction_time"]
+            and features["patient_ids"][order[feature_index + 1]] <= label.patient_id
+            and features["feature_times"][order[feature_index + 1]] <= label.prediction_time
         ):
             feature_index += 1
         is_valid = (
             feature_index < len(order)
-            and features["patient_ids"][order[feature_index]] == label["patient_id"]
-            and features["feature_times"][order[feature_index]] <= label["prediction_time"]
+            and features["patient_ids"][order[feature_index]] == label.patient_id
+            and features["feature_times"][order[feature_index]] <= label.prediction_time
         )
         assert is_valid, (
             f'{feature_index} {label} {features["patient_ids"][order[feature_index]]} '
             + f'{features["feature_times"][order[feature_index]]}'
         )
         indices.append(order[feature_index])
-        label_values.append(label["boolean_value"])
+        label_values.append(label.boolean_value)
 
     return {
         "boolean_values": np.array(label_values),

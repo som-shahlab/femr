@@ -21,6 +21,9 @@ dependencies = [
     "datasets >= 2.15",
     "polars >= 0.20",
     "dill >= 0.3.7",
+    "pandas >= 2.2",
+    "pandas-stubs >= 2.2",
+    "types-tqdm >= 4.60.0",
 ]
 requires-python=">3.9"
 dynamic = ["version"]
