@@ -69,7 +69,7 @@ class DummyDatabase(dict):
     def map_with_data(self, map_func, data, assume_sorted) -> Any:
         entries = collections.defaultdict(list)
 
-        for row in data.itertuples():
+        for row in data.itertuples(index=False):
             entries[row.patient_id].append(row)
 
         temp = []
@@ -114,7 +114,7 @@ def assert_labels_are_accurate(
     help_text: str = "",
 ):
     """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
-    generated_labels: List[Label] = [a for a in labeled_patients.itertuples() if a.patient_id == patient_id]
+    generated_labels: List[Label] = [a for a in labeled_patients.itertuples(index=False) if a.patient_id == patient_id]
     # Check that length of lists of labels are the same
 
     assert len(generated_labels) == len(

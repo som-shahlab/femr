@@ -23,9 +23,11 @@ def _assert_featurized_patients_structure(labels: pd.DataFrame, features: Mappin
     assert features["patient_ids"].shape[0] == len(labels)
     assert features["features"].shape[0] == len(labels)
 
-    assert sorted(list(features["patient_ids"])) == sorted(list(label.patient_id for label in labels.itertuples()))
+    assert sorted(list(features["patient_ids"])) == sorted(
+        list(label.patient_id for label in labels.itertuples(index=False))
+    )
     assert sorted(list(features["feature_times"])) == sorted(
-        list(label.prediction_time for label in labels.itertuples())
+        list(label.prediction_time for label in labels.itertuples(index=False))
     )
 
 

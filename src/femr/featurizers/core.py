@@ -317,7 +317,7 @@ def join_labels(features: Mapping[str, np.ndarray], labels: pd.DataFrame) -> Map
 
     feature_index = 0
 
-    for label in labels.itertuples():
+    for label in labels.itertuples(index=False):
         while (
             (feature_index + 1) < len(order)
             and features["patient_ids"][order[feature_index + 1]] <= label.patient_id
