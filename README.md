@@ -9,8 +9,8 @@ The currently supported foundation models are [CLMBR](https://arxiv.org/pdf/2001
 
 **FEMR** helps users:
 1. [Use ontologies to better understand / featurize medical codes](http://github.com/som-shahlab/femr/blob/main/tutorials/1_Ontology.ipynb)
-2. [Algorithmically label patient records based on structured data](https://github.com/som-shahlab/femr/blob/main/tutorials/2_Labeling.ipynb)
-3. [Generate tabular features from patient timelines for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Count%20Featurization%20And%20Modeling.ipynb)
+2. [Algorithmically label subject records based on structured data](https://github.com/som-shahlab/femr/blob/main/tutorials/2_Labeling.ipynb)
+3. [Generate tabular features from subject timelines for use with traditional gradient boosted tree models](https://github.com/som-shahlab/femr/blob/main/tutorials/3_Count%20Featurization%20And%20Modeling.ipynb)
 4. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/4_Train%20CLMBR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/5_CLMBR%20Featurization%20And%20Modeling.ipynb) CLMBR-derived models for binary classification and prediction tasks.
 5. [Train](https://github.com/som-shahlab/femr/blob/main/tutorials/6_Train%20MOTOR.ipynb) and [finetune](https://github.com/som-shahlab/femr/blob/main/tutorials/7_MOTOR%20Featurization%20And%20Modeling.ipynb) MOTOR-derived models for binary classification and prediction tasks.
 
@@ -30,7 +30,7 @@ pip install xformers
 ```
 # Getting Started
 
-The first step of using **FEMR** is to convert your patient data into [MEDS](https://github.com/Medical-Event-Data-Standard), the standard input format expected by **FEMR** codebase.
+The first step of using **FEMR** is to convert your subject data into [MEDS](https://github.com/Medical-Event-Data-Standard), the standard input format expected by **FEMR** codebase.
 
 **Note: FEMR currently only supports MEDS v1, so you will need to install MEDS v1 versions of packages. Aka pip install meds-etl==0.1.1**
 
@@ -56,11 +56,11 @@ dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
 # Print dataset stats
 print(dataset)
 >>> Dataset({
->>>   features: ['patient_id', 'events'],
+>>>   features: ['subject_id', 'events'],
 >>>   num_rows: 6732
 >>> })
 
-# Print number of events in first patient in dataset
+# Print number of events in first subject in dataset
 print(len(dataset[0]['events']))
 >>> 2287
 ```
@@ -87,11 +87,11 @@ dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
 # Print dataset stats
 print(dataset)
 >>> Dataset({
->>>   features: ['patient_id', 'events'],
+>>>   features: ['subject_id', 'events'],
 >>>   num_rows: 6732
 >>> })
 
-# Print number of events in first patient in dataset
+# Print number of events in first subject in dataset
 print(len(dataset[0]['events']))
 >>> 2287
 ```

@@ -15,36 +15,36 @@ import femr.pat_utils
 
 
 def map_preliminary_batch_stats(
-    patients: Iterable[meds_reader.Patient], *, processor: FEMRBatchProcessor, max_length: int
+    subjects: Iterable[meds_reader.Subject], *, processor: FEMRBatchProcessor, max_length: int
 ):
     """
     This function creates preliminary batch statistics, to be used for final batching.
 
-    The overall problem this is trying to solve is that Patient records can be very long, so
-    when we featurize patients we actually featurize subsequences of patients.
+    The overall problem this is trying to solve is that Subject records can be very long, so
+    when we featurize subjects we actually featurize subsequences of subjects.
 
-    AKA every patient in a batch is actually (patient_id, start_index, length), which
-    specifies a subsequence of the patient.
+    AKA every subject in a batch is actually (subject_id, start_index, length), which
+    specifies a subsequence of the subject.
 
-    The trickiness becomes when a particular patient has multiple labels, some
+    The trickiness becomes when a particular subject has multiple labels, some
     of which will require multiple subsequences.
 
-    The goal of this function is to compute the list [(patient_id, start_index, length)] such
+    The goal of this function is to compute the list [(subject_id, start_index, length)] such
     that every label is covered by at least one batch. Note that some labels will be covered multiple times.
 
     Note that there is a special setting for tasks that don't need exact labeling
     (needs_exact in tasks.py returns False).
 
-    For these patients we only generate one tuple for them, and drop some labels.
+    For these subjects we only generate one tuple for them, and drop some labels.
 
-    Later code will then take [(patient_id, start_index, length)], and create actual batches.
+    Later code will then take [(subject_id, start_index, length)], and create actual batches.
     """
     lengths = []
 
-    for patient in patients:
-        data = processor.convert_patient(patient)
+    for subject in subjects:
+        data = processor.convert_subject(subject)
 
-        # There are no labels for this patient
+        # There are no labels for this subject
         if data["transformer"]["label_indices"].shape[0] == 0:
             continue
 
@@ -55,17 +55,17 @@ def map_preliminary_batch_stats(
             for label_index in data["transformer"]["label_indices"]:
                 if (label_index - current_start + 1) >= max_length:
                     if current_start != current_end:
-                        lengths.append((patient.patient_id, current_start, current_end - current_start + 1))
+                        lengths.append((subject.subject_id, current_start, current_end - current_start + 1))
                     current_start = label_index - max_length + 1
                     current_end = label_index
                 else:
                     current_end = label_index
 
-            lengths.append((patient.patient_id, current_start, current_end - current_start + 1))
+            lengths.append((subject.subject_id, current_start, current_end - current_start + 1))
         else:
             last_index = data["transformer"]["label_indices"][-1]
             length = min(max_length, last_index + 1)
-            lengths.append((patient.patient_id, last_index + 1 - length, length))
+            lengths.append((subject.subject_id, last_index + 1 - length, length))
     if len(lengths) > 0:
         return np.array(lengths, dtype=np.int64)
     else:
@@ -73,7 +73,7 @@ def map_preliminary_batch_stats(
 
 
 class BatchCreator:
-    """The BatchCreator is designed to generate batches from patient data."""
+    """The BatchCreator is designed to generate batches from subject data."""
 
     def __init__(self, tokenizer: femr.models.tokenizer.FEMRTokenizer, task: Optional[femr.models.tasks.Task] = None):
         """Initialize a BatchCreator, with a tokenizer, and optionally a task."""
@@ -82,9 +82,9 @@ class BatchCreator:
 
     def start_batch(self):
         """Start a batch."""
-        self.patient_ids = []
+        self.subject_ids = []
         self.offsets = []
-        self.patient_lengths = []
+        self.subject_lengths = []
 
         if not self.tokenizer.is_hierarchical:
             self.tokens = []
@@ -104,17 +104,17 @@ class BatchCreator:
         if self.task is not None:
             self.task.start_batch()
 
-    def add_patient(self, patient: meds_reader.Patient, offset: int = 0, max_length: Optional[int] = None):
-        """Add a patient to the current batch.
+    def add_subject(self, subject: meds_reader.Subject, offset: int = 0, max_length: Optional[int] = None):
+        """Add a subject to the current batch.
 
-        Note that the two optional parameters are used to add a subset of a patient to a batch.
+        Note that the two optional parameters are used to add a subset of a subject to a batch.
 
         It is generally recommended to never manually use offset or max_length as
         you should rely on FEMRBatchProcessor.convert_dataset.
 
         Arguments:
-            patient: The patient to add.
-            offset: The offset into the patient to featurize.
+            subject: The subject to add.
+            offset: The offset into the subject to featurize.
             max_length: The maximum length of the batch sequence. There is no max when left at None.
 
         """
@@ -122,41 +122,45 @@ class BatchCreator:
         last_time = None
 
         # The overall algorithm here is a bit complex
-        # First we featurize the entire patient
-        # Then we slice the patient indices according to offset and max_length
+        # First we featurize the entire subject
+        # Then we slice the subject indices according to offset and max_length
 
-        # These are the indices of the labels into the patient vectors
-        per_patient_label_indices = []
+        # These are the indices of the labels into the subject vectors
+        per_subject_label_indices = []
 
-        # The ages at each index for the patient
-        per_patient_ages = []
+        # The ages at each index for the subject
+        per_subject_ages = []
 
-        # The normalized age at index for the patient
-        per_patient_normalized_ages = []
+        # The normalized age at index for the subject
+        per_subject_normalized_ages = []
 
-        # The timestamps at each index for the patient
-        per_patient_timestamps = []
+        # The timestamps at each index for the subject
+        per_subject_timestamps = []
 
         # For a regular tokenizer, we just have tokens
-        per_patient_tokens = []
+        per_subject_tokens = []
 
         # For a hierarchical tokenizer, we have a more complex setup
         # These are designed to match the inputs required for an EmbeddingBag.
         # See PyTorch's EmbeddingBag documentation to understand what these mean.
-        per_patient_hierarchical_tokens: List[int] = []
-        per_patient_hierarchical_weights: List[float] = []
-        per_patient_token_indices: List[int] = [0]
+        per_subject_hierarchical_tokens: List[int] = []
+        per_subject_hierarchical_weights: List[float] = []
+        per_subject_token_indices: List[int] = [0]
 
         if self.task is not None:
-            self.task.start_patient(patient, self.tokenizer.ontology)
+            self.task.start_subject(subject, self.tokenizer.ontology)
 
-        birth = femr.pat_utils.get_patient_birthdate(patient)
-        self.tokenizer.start_patient()
+        birth = femr.pat_utils.get_subject_birthdate(subject)
+        self.tokenizer.start_subject()
 
-        for event in patient.events:
+        for event in subject.events:
+            if event.time is None:
+                event_time = birth
+            else:
+                event_time = event.time
             # We want to avoid duplicate codes in the same day, so we maintain codes_seen_today
-            if event.time.date() != current_date:
-                current_date = event.time.date()
+            if event_time.date() != current_date:
+                current_date = event_time.date()
                 codes_seen_today = set()
 
             # Get features and weights for the current event
@@ -175,35 +179,35 @@ class BatchCreator:
             if (self.task is not None) and (last_time is not None):
                 # Now we have to consider whether or not to have labels for this time step
                 # The add_event function returns how many labels to assign for this time
-                num_added = self.task.add_event(last_time, event.time, features)
+                num_added = self.task.add_event(last_time, event_time, features)
                 for _ in range(num_added):
-                    per_patient_label_indices.append(len(per_patient_ages) - 1)
+                    per_subject_label_indices.append(len(per_subject_ages) - 1)
 
             if not self.tokenizer.is_hierarchical:
                 assert len(features) == 1
-                per_patient_tokens.append(features[0])
+                per_subject_tokens.append(features[0])
             else:
                 assert weights is not None
-                per_patient_hierarchical_tokens.extend(features)
-                per_patient_hierarchical_weights.extend(weights)
-                per_patient_token_indices.append(len(per_patient_hierarchical_tokens))
+                per_subject_hierarchical_tokens.extend(features)
+                per_subject_hierarchical_weights.extend(weights)
+                per_subject_token_indices.append(len(per_subject_hierarchical_tokens))
 
-            per_patient_ages.append((event.time - birth) / datetime.timedelta(days=1))
-            per_patient_normalized_ages.append(self.tokenizer.normalize_age(event.time - birth))
-            per_patient_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
+            per_subject_ages.append((event_time - birth) / datetime.timedelta(days=1))
+            per_subject_normalized_ages.append(self.tokenizer.normalize_age(event_time - birth))
+            per_subject_timestamps.append(event_time.replace(tzinfo=datetime.timezone.utc).timestamp())
 
-            last_time = event.time
+            last_time = event_time
 
         if self.task is not None and last_time is not None:
             num_added = self.task.add_event(last_time, None, None)
             for _ in range(num_added):
-                per_patient_label_indices.append(len(per_patient_ages) - 1)
+                per_subject_label_indices.append(len(per_subject_ages) - 1)
 
-        # Now we want to actually add the patient data to the batch.
+        # Now we want to actually add the subject data to the batch.
         # This will involve some clever slicing.
 
         # First, let's get the length we are adding
-        length_found = len(per_patient_ages)
+        length_found = len(per_subject_ages)
         if max_length is not None:
             length_to_add = min(length_found - offset, max_length)
         else:
@@ -213,41 +217,41 @@ class BatchCreator:
 
         # Let's add the constants first
         self.valid_tokens.extend([True] * length_to_add)
-        self.patient_ids.extend([patient.patient_id] * length_to_add)
+        self.subject_ids.extend([subject.subject_id] * length_to_add)
         self.offsets.append(offset)
-        self.patient_lengths.append(length_to_add)
+        self.subject_lengths.append(length_to_add)
 
         # Ages, normalized ages and timestamps are also easy to add
-        self.ages.extend(per_patient_ages[offset : offset + length_to_add])
-        self.normalized_ages.extend(per_patient_normalized_ages[offset : offset + length_to_add])
-        self.timestamps.extend(per_patient_timestamps[offset : offset + length_to_add])
+        self.ages.extend(per_subject_ages[offset : offset + length_to_add])
+        self.normalized_ages.extend(per_subject_normalized_ages[offset : offset + length_to_add])
+        self.timestamps.extend(per_subject_timestamps[offset : offset + length_to_add])
 
         if not self.tokenizer.is_hierarchical:
             # Easy for simple tokenizer
-            self.tokens.extend(per_patient_tokens[offset : offset + length_to_add])
+            self.tokens.extend(per_subject_tokens[offset : offset + length_to_add])
         else:
             # Hierarchical tokenizer is more complex since we have to shift the indices as well
             # Remember, these arrays are all designed for PyTorch EmbeddingBag
 
             # We need to get the start and end at a particular offset
-            internal_start = per_patient_token_indices[offset]
-            internal_end = per_patient_token_indices[offset + length_to_add]
+            internal_start = per_subject_token_indices[offset]
+            internal_end = per_subject_token_indices[offset + length_to_add]
 
             # We need to offset the token indices to account for the existing tokens
             self.token_indices.extend(
                 [
                     len(self.hierarchical_tokens) - internal_start + value
-                    for value in per_patient_token_indices[offset + 1 : offset + length_to_add + 1]
+                    for value in per_subject_token_indices[offset + 1 : offset + length_to_add + 1]
                 ]
             )
 
-            self.hierarchical_tokens.extend(per_patient_hierarchical_tokens[internal_start:internal_end])
-            self.hierarchical_weights.extend(per_patient_hierarchical_weights[internal_start:internal_end])
+            self.hierarchical_tokens.extend(per_subject_hierarchical_tokens[internal_start:internal_end])
+            self.hierarchical_weights.extend(per_subject_hierarchical_weights[internal_start:internal_end])
 
         # The label indices are also a bit tricky as they have to be offset accordingly.
         # We also need to collect good labels that should be sent to the final numpy arrays.
         labels_to_add = []
-        for i, label_index in enumerate(per_patient_label_indices):
+        for i, label_index in enumerate(per_subject_label_indices):
             corrected_label = label_index - offset
 
             if 0 <= corrected_label < length_to_add:
@@ -255,7 +259,7 @@ class BatchCreator:
                 self.label_indices.append(start_index + corrected_label)
 
         if self.task is not None:
-            self.task.add_patient_labels(labels_to_add)
+            self.task.add_subject_labels(labels_to_add)
 
     def get_batch_data(self):
         """Convert the batch to numpy arrays. The data structure is defined inline in this function."""
@@ -267,14 +271,14 @@ class BatchCreator:
         transformer = {
             # Whether or not the token is valid at this index
             "valid_tokens": np.array(self.valid_tokens),
-            # The age of the patient in days at this index
+            # The age of the subject in days at this index
             "ages": np.array(self.ages, dtype=np.float32),
             # The normalized ages at this index
             "normalized_ages": np.array(self.normalized_ages, dtype=np.float16),
             # The timestamp (in seconds) at this index
             "timestamps": np.array(self.timestamps, dtype=np.int64),
-            # The length of the patient
-            "patient_lengths": np.array(self.patient_lengths, dtype=np.int32),
+            # The length of the subject
+            "subject_lengths": np.array(self.subject_lengths, dtype=np.int32),
             # The indices of the labels
             "label_indices": np.array(self.label_indices, dtype=np.int32),
         }
@@ -290,9 +294,9 @@ class BatchCreator:
 
         # Some general metadata
         final = {
-            "num_patients": len(self.patient_lengths),
+            "num_subjects": len(self.subject_lengths),
             "num_indices": len(self.label_indices),
-            "patient_ids": np.array(self.patient_ids, dtype=np.int64),
+            "subject_ids": np.array(self.subject_ids, dtype=np.int64),
             "offsets": np.array(self.offsets, dtype=np.int32),
             "transformer": transformer,
         }
@@ -308,8 +312,8 @@ class BatchCreator:
 
         This is necessary as some tasks use sparse matrices that need to be postprocessed."""
 
-        batch["transformer"]["patient_lengths"] = np.array(batch["transformer"]["patient_lengths"])
-        assert isinstance(batch["transformer"]["patient_lengths"], np.ndarray)
+        batch["transformer"]["subject_lengths"] = np.array(batch["transformer"]["subject_lengths"])
+        assert isinstance(batch["transformer"]["subject_lengths"], np.ndarray)
 
         if self.task is not None and "task" in batch:
             batch["task"] = self.task.cleanup(batch["task"])
@@ -318,13 +322,13 @@ class BatchCreator:
 
 
 def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: BatchCreator, path_to_database: str):
-    with meds_reader.PatientDatabase(path_to_database) as database:
+    with meds_reader.SubjectDatabase(path_to_database) as database:
         for lengths, offsets in batch_data:
             offsets = list(offsets)
             for start, end in zip(offsets, offsets[1:]):
                 creator.start_batch()
-                for patient_index, offset, length in lengths[start:end, :]:
-                    creator.add_patient(database[patient_index.item()], offset, length)
+                for subject_index, offset, length in lengths[start:end, :]:
+                    creator.add_subject(database[subject_index.item()], offset, length)
 
                 result = creator.get_batch_data()
                 assert "task" in result, f"No task present in {lengths[start:end, :]}"
@@ -351,25 +355,25 @@ class FEMRBatchProcessor:
     def __init__(self, tokenizer, task=None):
         self.creator = BatchCreator(tokenizer, task)
 
-    def convert_patient(
+    def convert_subject(
         self,
-        patient: meds_reader.Patient,
+        subject: meds_reader.Subject,
         offset: int = 0,
         max_length: Optional[int] = None,
         tensor_type=None,
         **formatter_kwargs,
     ):
-        """Convert a single patient to a batch.
+        """Convert a single subject to a batch.
 
-        Note that this can also convert parts of a patient to a batch using the offset and max_length parameters.
-        This is useful for processing long patients.
+        Note that this can also convert parts of a subject to a batch using the offset and max_length parameters.
+        This is useful for processing long subjects.
 
         NOTE: This function is primarily for debugging purposes. It is
         recommended to use convert_dataset for maximum correctness and efficiency.
 
         Arguments:
-            patient: The patient to convert
-            offset: The integer offset into the patient to convert
+            subject: The subject to convert
+            offset: The integer offset into the subject to convert
             max_length: The maximum length to convert
             tensor_type: The dataset to return
             formatter_kwargs: Arguments for a datasets formatter when converting datatypes
@@ -378,7 +382,7 @@ class FEMRBatchProcessor:
             A batch, ready to be fed into a FEMR transformer model
         """
         self.creator.start_batch()
-        self.creator.add_patient(patient, offset=offset, max_length=max_length)
+        self.creator.add_subject(subject, offset=offset, max_length=max_length)
         batch_data = self.creator.get_batch_data()
         if tensor_type is not None:
             formatter = datasets.formatting.get_formatter(tensor_type, **formatter_kwargs)
@@ -391,21 +395,21 @@ class FEMRBatchProcessor:
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
     def convert_dataset(
-        self, db: meds_reader.PatientDatabase, tokens_per_batch: int, min_patients_per_batch: int = 4, num_proc: int = 1
+        self, db: meds_reader.SubjectDatabase, tokens_per_batch: int, min_subjects_per_batch: int = 4, num_proc: int = 1
     ):
         """Convert an entire dataset to batches.
 
         Arguments:
-            dataset: A huggingface dataset containing MEDS patients
+            dataset: A huggingface dataset containing MEDS subjects
             tokens_per_batch: The number of tokens allowed per batch
-            min_patients_per_batch: The minimum number of patients per batch
+            min_subjects_per_batch: The minimum number of subjects per batch
             num_proc: The number of processers to use when converting
 
         Returns:
             A huggingface dataset object containing batches
         """
 
-        max_length = tokens_per_batch // min_patients_per_batch
+        max_length = tokens_per_batch // min_subjects_per_batch
 
         length_chunks = tuple(
             db.map(

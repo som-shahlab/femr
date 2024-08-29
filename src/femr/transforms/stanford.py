@@ -19,8 +19,8 @@ def _move_date_to_end(
 
 
 def move_visit_start_to_first_event_start(
-    patient: meds_reader.transform.MutablePatient,
-) -> meds_reader.transform.MutablePatient:
+    subject: meds_reader.transform.MutableSubject,
+) -> meds_reader.transform.MutableSubject:
     """Assign visit start times to equal start time of first event in visit
 
     This function assigns the start time associated with each visit to be
@@ -44,16 +44,16 @@ def move_visit_start_to_first_event_start(
     visit_starts: Dict[int, datetime.datetime] = {}
 
     # Find the stated start time for each visit
-    for event in patient.events:
+    for event in subject.events:
         if event.table == "visit":
             if event.visit_id in visit_starts and visit_starts[event.visit_id] != event.time:
                 raise RuntimeError(
-                    f"Multiple visit events with visit ID {event.visit_id} " + f" for patient ID {patient.patient_id}"
+                    f"Multiple visit events with visit ID {event.visit_id} " + f" for subject ID {subject.subject_id}"
                 )
             visit_starts[event.visit_id] = event.time
 
     # Find the minimum start time over all non-visit events associated with each visit
-    for event in patient.events:
+    for event in subject.events:
         if event.visit_id is not None:
             # Only trigger for non-visit events with start time after associated visit start
             # Note: ignores non-visit events starting same time as visit (i.e., at midnight)
@@ -64,7 +64,7 @@ def move_visit_start_to_first_event_start(
                 )
 
     # Assign visit start times to be same as first non-visit event with same visit ID
-    for event in patient.events:
+    for event in subject.events:
         if event.table == "visit":
             # Triggers if there is a non-visit event associated with the visit ID that has
             # start time strictly after the recorded visit start
@@ -75,44 +75,44 @@ def move_visit_start_to_first_event_start(
                 # Reset the visit end to be ≥ the visit start
                 event.end = max(event.time, event.end)
 
-    patient.events.sort(key=lambda a: a.time)
+    subject.events.sort(key=lambda a: a.time)
 
-    return patient
+    return subject
 
 
-def move_to_day_end(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
+def move_to_day_end(subject: meds_reader.transform.MutableSubject) -> meds_reader.transform.MutableSubject:
     """We assume that everything coded at midnight should actually be moved to the end of the day."""
-    for event in patient.events:
+    for event in subject.events:
         event.time = _move_date_to_end(event.time)
         if event.end is not None:
             event.end = _move_date_to_end(event.end)
             event.end = max(event.end, event.time)
 
-    patient.events.sort(key=lambda a: a.time)
+    subject.events.sort(key=lambda a: a.time)
 
-    return patient
+    return subject
 
 
-def switch_to_icd10cm(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
+def switch_to_icd10cm(subject: meds_reader.transform.MutableSubject) -> meds_reader.transform.MutableSubject:
     """Switch from ICD10 to ICD10CM."""
-    for event in patient.events:
+    for event in subject.events:
         if event.code.startswith("ICD10/"):
             event.code = event.code.replace("ICD10/", "ICD10CM/", 1)
 
-    return patient
+    return subject
 
 
-def move_pre_birth(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
-    """Move all events to after the birth of a patient."""
+def move_pre_birth(subject: meds_reader.transform.MutableSubject) -> meds_reader.transform.MutableSubject:
+    """Move all events to after the birth of a subject."""
     birth_date = None
-    for event in patient.events:
+    for event in subject.events:
         if event.code == meds.birth_code:
             birth_date = event.time
 
     assert birth_date is not None
 
     new_events = []
-    for event in patient.events:
+    for event in subject.events:
         if event.time < birth_date:
             delta = birth_date - event.time
             if delta > datetime.timedelta(days=30):
@@ -125,13 +125,13 @@ def move_pre_birth(patient: meds_reader.transform.MutablePatient) -> meds_reader
 
         new_events.append(event)
 
-    patient.events = new_events
-    patient.events.sort(key=lambda a: a.time)
+    subject.events = new_events
+    subject.events.sort(key=lambda a: a.time)
 
-    return patient
+    return subject
 
 
-def move_billing_codes(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
+def move_billing_codes(subject: meds_reader.transform.MutableSubject) -> meds_reader.transform.MutableSubject:
     """Move billing codes to the end of each visit.
 
     One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
@@ -149,7 +149,7 @@ def move_billing_codes(patient: meds_reader.transform.MutablePatient) -> meds_re
 
     all_billing_codes = {(prefix + "_" + billing_code) for billing_code in billing_codes for prefix in ["shc", "lpch"]}
 
-    for event in patient.events:
+    for event in subject.events:
         # For events that share the same code/start time, we find the lowest visit ID
         if event.clarity_table in all_billing_codes and event.visit_id is not None:
             key = (event.time, event.code)
@@ -162,14 +162,14 @@ def move_billing_codes(patient: meds_reader.transform.MutablePatient) -> meds_re
             if event.end is not None:
                 if event.visit_id is None:
                     # Every event with an end time should have a visit ID associated with it
-                    raise RuntimeError(f"Expected visit id for visit? {patient.patient_id} {event}")
+                    raise RuntimeError(f"Expected visit id for visit? {subject.subject_id} {event}")
                 if end_visits.get(event.visit_id, event.end) != event.end:
                     # Every event associated with a visit should have an end time that matches the visit end time
                     # Also the end times of all events associated with a visit should have the same end time
                     raise RuntimeError(f"Multiple end visits? {end_visits.get(event.visit_id)} {event}")
                 end_visits[event.visit_id] = event.end
 
-    for event in patient.events:
+    for event in subject.events:
         if event.clarity_table in all_billing_codes:
             key = (event.time, event.code)
             if event.visit_id != lowest_visit.get(key, None):
@@ -185,7 +185,7 @@ def move_billing_codes(patient: meds_reader.transform.MutablePatient) -> meds_re
 
             end_visit = end_visits.get(event.visit_id)
             if end_visit is None:
-                raise RuntimeError(f"Expected visit end for code {patient.patient_id} {event} {patient}")
+                raise RuntimeError(f"Expected visit end for code {subject.subject_id} {event} {subject}")
 
             # The end time for an event should be no later than its associated visit end time
             if event.end is not None:
@@ -194,6 +194,6 @@ def move_billing_codes(patient: meds_reader.transform.MutablePatient) -> meds_re
             # The start time for an event should be no later than its associated visit end time
             event.time = max(event.time, end_visit)
 
-    patient.events.sort(key=lambda a: a.time)
+    subject.events.sort(key=lambda a: a.time)
 
-    return patient
+    return subject

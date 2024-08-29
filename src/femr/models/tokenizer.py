@@ -15,10 +15,11 @@ import transformers
 
 import femr.ontology
 import femr.stat_utils
+import femr.pat_utils
 
 
 def train_tokenizer(
-    db: meds_reader.PatientDatabase,
+    db: meds_reader.SubjectDatabase,
     vocab_size: int,
     is_hierarchical: bool = False,
     num_numeric: int = 1000,
@@ -31,7 +32,7 @@ def train_tokenizer(
         db.map(
             functools.partial(
                 map_statistics,
-                num_patients=len(db),
+                num_subjects=len(db),
                 is_hierarchical=is_hierarchical,
                 ontology=ontology,
             )
@@ -65,11 +66,20 @@ def normalize_unit(unit):
     else:
         return None
 
+def is_close_float(t, f):
+    if f is None:
+        return False
+    try:
+        v = float(t)
+        return math.abs(f - v) < 0.01 * f
+    except:
+        return False
+
 
 def map_statistics(
-    patients: Iterator[meds_reader.Patient],
+    subjects: Iterator[meds_reader.Subject],
     *,
-    num_patients: int,
+    num_subjects: int,
     is_hierarchical: bool,
     frac_values=0.05,
     ontology: Optional[femr.ontology.Ontology],
@@ -89,19 +99,19 @@ def map_statistics(
 
     text_counts: Dict[Any, float] = collections.defaultdict(float)
 
-    for patient in patients:
-        total_events = len(patient.events)
+    for subject in subjects:
+        total_events = len(subject.events)
 
         if total_events == 0:
             continue
 
-        weight = 1.0 / (num_patients * total_events)
-        birth_date = patient.events[0].time
+        weight = 1.0 / (num_subjects * total_events)
+        birth_date = femr.pat_utils.get_subject_birthdate(subject)
         code_set = set()
         text_set = set()
         pat_numeric_samples = []
-        for event in patient.events:
-            if event.time != birth_date:
+        for event in subject.events:
+            if event.time is not None and event.time != birth_date:
                 age_stats.add(weight, (event.time - birth_date).total_seconds())
             if not is_hierarchical:
                 assert numeric_samples_by_lab is not None
@@ -115,7 +125,8 @@ def map_statistics(
                 code_set.add(event.code)
 
                 if event.text_value is not None and event.text_value != "":
-                    text_set.add(event.text_value)
+                    if not is_close_float(event.text_value, event.numeric_value):
+                        text_set.add(event.text_value)
 
                 if getattr(event, "unit", None) is not None:
                     text_set.add(normalize_unit(event.unit))
@@ -131,13 +142,13 @@ def map_statistics(
                 final_codes |= ontology.get_all_parents(code)
 
             for code in final_codes:
-                code_counts[code] += 1 / num_patients
+                code_counts[code] += 1 / num_subjects
 
             for text in text_set:
-                text_counts[text] += 1 / num_patients
+                text_counts[text] += 1 / num_subjects
 
             for value in pat_numeric_samples:
-                numeric_samples.add(value, 1 / (num_patients * len(pat_numeric_samples)))
+                numeric_samples.add(value, 1 / (num_subjects * len(pat_numeric_samples)))
 
     return {
         "age_stats": age_stats,
@@ -388,8 +399,8 @@ class FEMRTokenizer(transformers.utils.PushToHubMixin):
                 token=kwargs.get("token"),
             )
 
-    def start_patient(self):
-        """Compute per-patient statistics that are required to generate features."""
+    def start_subject(self):
+        """Compute per-subject statistics that are required to generate features."""
 
         # This is currently a null-op, but is required for cost featurization
         pass

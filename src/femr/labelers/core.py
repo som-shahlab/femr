@@ -18,7 +18,7 @@ import pandas as pd
 
 # A more efficient copy of the MEDS label type definition
 class Label(NamedTuple):
-    patient_id: int
+    subject_id: int
     prediction_time: datetime.datetime
 
     boolean_value: bool
@@ -32,9 +32,9 @@ class TimeHorizon:
     end: datetime.timedelta | None  # If NONE, then infinite time horizon
 
 
-def _label_map_func(patients: Iterator[meds_reader.Patient], *, labeler: Labeler) -> pd.DataFrame:
-    data = itertools.chain.from_iterable(labeler.label(patient) for patient in patients)
-    final = pd.DataFrame.from_records(data, columns=Label._fields).sort_values(by=["patient_id", "prediction_time"])
+def _label_map_func(subjects: Iterator[meds_reader.Subject], *, labeler: Labeler) -> pd.DataFrame:
+    data = itertools.chain.from_iterable(labeler.label(subject) for subject in subjects)
+    final = pd.DataFrame.from_records(data, columns=Label._fields)
     final["prediction_time"] = final["prediction_time"].astype("datetime64[us]")
     return final
 
@@ -42,39 +42,39 @@ def _label_map_func(patients: Iterator[meds_reader.Patient], *, labeler: Labeler
 class Labeler(ABC):
     """An interface for labeling functions.
 
-    A labeling function applies a label to a specific datetime in a given patient's timeline.
-    It can be thought of as generating the following list given a specific patient:
-        [(patient ID, datetime_1, label_1), (patient ID, datetime_2, label_2), ... ]
+    A labeling function applies a label to a specific datetime in a given subject's timeline.
+    It can be thought of as generating the following list given a specific subject:
+        [(subject ID, datetime_1, label_1), (subject ID, datetime_2, label_2), ... ]
     Usage:
     ```
         labeling_function: Labeler = Labeler(...)
-        patients: Sequence[Patient] = ...
-        labels: LabeledPatient = labeling_function.apply(patients)
+        subjects: Sequence[Subject] = ...
+        labels: LabeledSubject = labeling_function.apply(subjects)
     ```
     """
 
     @abstractmethod
-    def label(self, patient: meds_reader.Patient) -> List[Label]:
-        """Apply every label that is applicable to the provided patient.
+    def label(self, subject: meds_reader.Subject) -> List[Label]:
+        """Apply every label that is applicable to the provided subject.
 
-        This is only called once per patient.
+        This is only called once per subject.
 
         Args:
-            patient (Patient): A patient object
+            subject (Subject): A subject object
 
         Returns:
-            List[Label]: A list of :class:`Label` containing every label for the given patient
+            List[Label]: A list of :class:`Label` containing every label for the given subject
         """
         pass
 
     def apply(
         self,
-        db: meds_reader.PatientDatabase,
+        db: meds_reader.SubjectDatabase,
     ) -> pd.DataFrame:
-        """Apply the `label()` function one-by-one to each Patient in a sequence of Patients.
+        """Apply the `label()` function one-by-one to each Subject in a sequence of Subjects.
 
         Args:
-            dataset (datasets.Dataset): A HuggingFace Dataset with meds_reader.Patient objects to be labeled.
+            dataset (datasets.Dataset): A HuggingFace Dataset with meds_reader.Subject objects to be labeled.
             num_proc (int, optional): Number of CPU threads to parallelize across. Defaults to 1.
 
         Returns:
@@ -82,7 +82,10 @@ class Labeler(ABC):
         """
 
         # TODO: Cast the schema properly
-        return pd.concat(db.map(functools.partial(_label_map_func, labeler=self)), ignore_index=True)
+        result = pd.concat(db.map(functools.partial(_label_map_func, labeler=self)), ignore_index=True)
+        result.sort_values(by=["subject_id", "prediction_time"], inplace=True)
+
+        return result
 
 
 ##########################################################
@@ -100,7 +103,7 @@ class TimeHorizonEventLabeler(Labeler):
     time horizon (i.e. `TimeHorizon`). It is a boolean event that is TRUE if the event of interest
     occurs within that time horizon, and FALSE if it doesn't occur by the end of the time horizon.
 
-    No labels are generated if the patient record is "censored" before the end of the horizon.
+    No labels are generated if the subject record is "censored" before the end of the horizon.
 
     You are required to implement three methods:
         get_outcome_times() for defining the datetimes of the event of interset
@@ -112,13 +115,13 @@ class TimeHorizonEventLabeler(Labeler):
         pass
 
     @abstractmethod
-    def get_outcome_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
+    def get_outcome_times(self, subject: meds_reader.Subject) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes that the event of interest "occurs".
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
 
         Args:
-            patient (Patient): A patient object
+            subject (Subject): A subject object
 
         Returns:
             List[datetime.datetime]: A list of datetimes, one corresponding to an occurrence of the outcome
@@ -141,7 +144,7 @@ class TimeHorizonEventLabeler(Labeler):
             (A,B) is your time horizon (given by `get_time_horizon()`)
             O is an outcome (given by `get_outcome_times()`)
 
-            Then given a patient timeline:
+            Then given a subject timeline:
                 X-----(X+A)------(X+B)------
 
 
@@ -160,39 +163,39 @@ class TimeHorizonEventLabeler(Labeler):
         pass
 
     @abstractmethod
-    def get_prediction_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
+    def get_prediction_times(self, subject: meds_reader.Subject) -> List[datetime.datetime]:
         """Return a sorted list containing the datetimes at which we'll make a prediction.
 
         IMPORTANT: Must be sorted ascending (i.e. start -> end of timeline)
         """
         pass
 
-    def get_patient_start_end_times(self, patient: meds_reader.Patient) -> Tuple[datetime.datetime, datetime.datetime]:
-        """Return the datetimes that we consider the (start, end) of this patient."""
-        return (patient.events[0].time, patient.events[-1].time)
+    def get_subject_start_end_times(self, subject: meds_reader.Subject) -> Tuple[datetime.datetime, datetime.datetime]:
+        """Return the datetimes that we consider the (start, end) of this subject."""
+        return (subject.events[0].time, subject.events[-1].time)
 
     def allow_same_time_labels(self) -> bool:
         """Whether or not to allow labels with events at the same time as prediction"""
         return True
 
-    def label(self, patient: meds_reader.Patient) -> List[Label]:
-        """Return a list of Labels for an individual patient.
+    def label(self, subject: meds_reader.Subject) -> List[Label]:
+        """Return a list of Labels for an individual subject.
 
-        Assumes that events in `patient['events']` are already sorted in chronologically
+        Assumes that events in `subject['events']` are already sorted in chronologically
         ascending order (i.e. start -> end).
 
         Args:
-            patient (Patient): A patient object
+            subject (Subject): A subject object
 
         Returns:
             List[Label]: A list containing a label for each datetime returned by `get_prediction_times()`
         """
-        if len(patient.events) == 0:
+        if len(subject.events) == 0:
             return []
 
-        __, end_time = self.get_patient_start_end_times(patient)
-        outcome_times: List[datetime.datetime] = self.get_outcome_times(patient)
-        prediction_times: List[datetime.datetime] = self.get_prediction_times(patient)
+        __, end_time = self.get_subject_start_end_times(subject)
+        outcome_times: List[datetime.datetime] = self.get_outcome_times(subject)
+        prediction_times: List[datetime.datetime] = self.get_prediction_times(subject)
         time_horizon: TimeHorizon = self.get_time_horizon()
 
         # Get (start, end) of time horizon. If end is None, then it's infinite (set timedelta to max)
@@ -242,16 +245,16 @@ class TimeHorizonEventLabeler(Labeler):
                     or outcome_times[curr_outcome_idx] <= time + time_horizon_end
                 )
             )
-            # TRUE if patient is censored (i.e. timeline ends BEFORE this time horizon ends,
-            # so we don't know if the outcome happened after the patient timeline ends)
+            # TRUE if subject is censored (i.e. timeline ends BEFORE this time horizon ends,
+            # so we don't know if the outcome happened after the subject timeline ends)
             # If infinite time horizon labeler, then assume no censoring
             is_censored: bool = end_time < time + time_horizon_end if (time_horizon_end is not None) else False
 
             if is_outcome_occurs_in_time_horizon:
-                results.append(Label(patient_id=patient.patient_id, prediction_time=time, boolean_value=True))
+                results.append(Label(subject_id=subject.subject_id, prediction_time=time, boolean_value=True))
             elif not is_censored:
                 # Not censored + no outcome => FALSE
-                results.append(Label(patient_id=patient.patient_id, prediction_time=time, boolean_value=False))
+                results.append(Label(subject_id=subject.subject_id, prediction_time=time, boolean_value=False))
             elif is_censored:
                 # Censored => None
                 pass
@@ -259,22 +262,22 @@ class TimeHorizonEventLabeler(Labeler):
         return results
 
 
-class NLabelsPerPatientLabeler(Labeler):
-    """Restricts `self.labeler` to returning a max of `self.k` labels per patient."""
+class NLabelsPerSubjectLabeler(Labeler):
+    """Restricts `self.labeler` to returning a max of `self.k` labels per subject."""
 
     def __init__(self, labeler: Labeler, num_labels: int = 1, seed: int = 1):
         self.labeler: Labeler = labeler
-        self.num_labels: int = num_labels  # number of labels per patient
+        self.num_labels: int = num_labels  # number of labels per subject
         self.seed: int = seed
 
-    def label(self, patient: meds_reader.Patient) -> List[Label]:
-        labels: List[Label] = self.labeler.label(patient)
+    def label(self, subject: meds_reader.Subject) -> List[Label]:
+        labels: List[Label] = self.labeler.label(subject)
         if len(labels) <= self.num_labels:
             return labels
         elif self.num_labels == -1:
             return labels
         hash_to_label_list: List[Tuple[int, int, Label]] = [
-            (i, compute_random_num(self.seed, patient.patient_id, i), labels[i]) for i in range(len(labels))
+            (i, compute_random_num(self.seed, subject.subject_id, i), labels[i]) for i in range(len(labels))
         ]
         hash_to_label_list.sort(key=lambda a: a[1])
         n_hash_to_label_list: List[Tuple[int, int, Label]] = hash_to_label_list[: self.num_labels]

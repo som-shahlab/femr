@@ -11,6 +11,7 @@ import meds_reader
 import numpy as np
 import scipy.sparse
 import torch
+import warnings
 
 import femr.models.config
 import femr.ontology
@@ -29,10 +30,10 @@ class Task(abc.ABC):
     def start_batch(self) -> None: ...
 
     @abc.abstractmethod
-    def start_patient(self, patient: meds_reader.Patient, ontology: Optional[femr.ontology.Ontology]) -> None: ...
+    def start_subject(self, subject: meds_reader.Subject, ontology: Optional[femr.ontology.Ontology]) -> None: ...
 
     @abc.abstractmethod
-    def add_patient_labels(self, patient_label_offsets: List[int]) -> None: ...
+    def add_subject_labels(self, subject_label_offsets: List[int]) -> None: ...
 
     @abc.abstractmethod
     def needs_exact(self) -> bool: ...
@@ -52,34 +53,34 @@ class Task(abc.ABC):
         return batch
 
 
-class LabeledPatientTask(Task):
+class LabeledSubjectTask(Task):
     def __init__(self, labels: Sequence[meds.Label]):
         super().__init__()
 
         self.label_map: Mapping[int, Any] = collections.defaultdict(list)
         for label in labels:
-            row_without_patient_id = dict(label)
-            del row_without_patient_id["patient_id"]
-            self.label_map[label["patient_id"]].append(row_without_patient_id)
+            row_without_subject_id = dict(label)
+            del row_without_subject_id["subject_id"]
+            self.label_map[label["subject_id"]].append(row_without_subject_id)
 
         for k, v in self.label_map.items():
             v.sort(key=lambda a: a["prediction_time"])
 
     def get_task_config(self) -> femr.models.config.FEMRTaskConfig:
-        return femr.models.config.FEMRTaskConfig(task_type="labeled_patients")
+        return femr.models.config.FEMRTaskConfig(task_type="labeled_subjects")
 
-    def start_patient(self, patient: meds_reader.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
-        self.current_labels = self.label_map[patient.patient_id]
+    def start_subject(self, subject: meds_reader.Subject, _ontology: Optional[femr.ontology.Ontology]) -> None:
+        self.current_labels = self.label_map[subject.subject_id]
         self.current_label_index = 0
 
     def needs_exact(self) -> bool:
         return True
 
     def start_batch(self) -> None:
-        """LabeledPatientTask currently has no per label state."""
+        """LabeledSubjectTask currently has no per label state."""
         pass
 
-    def add_patient_labels(self, _patient_label_offsets: List[int]) -> None:
+    def add_subject_labels(self, _subject_label_offsets: List[int]) -> None:
         """As there is no per label state, this is ignored"""
         pass
 
@@ -129,8 +130,8 @@ class CLMBRTask(Task):
             task_type="clmbr", task_kwargs=dict(clmbr_vocab_size=self.clmbr_vocab_size)
         )
 
-    def start_patient(self, _patient: meds_reader.Patient, _ontology: Optional[femr.ontology.Ontology]) -> None:
-        self.per_patient_batch_labels: List[int] = []
+    def start_subject(self, _subject: meds_reader.Subject, _ontology: Optional[femr.ontology.Ontology]) -> None:
+        self.per_subject_batch_labels: List[int] = []
 
     def needs_exact(self) -> bool:
         return False
@@ -138,8 +139,8 @@ class CLMBRTask(Task):
     def start_batch(self) -> None:
         self.batch_labels: List[int] = []
 
-    def add_patient_labels(self, patient_label_offsets: List[int]) -> None:
-        self.batch_labels.extend([self.per_patient_batch_labels[i] for i in patient_label_offsets])
+    def add_subject_labels(self, subject_label_offsets: List[int]) -> None:
+        self.batch_labels.extend([self.per_subject_batch_labels[i] for i in subject_label_offsets])
 
     def add_event(
         self,
@@ -158,7 +159,7 @@ class CLMBRTask(Task):
         if next_feature >= self.clmbr_vocab_size:
             return 0
 
-        self.per_patient_batch_labels.append(next_feature)
+        self.per_subject_batch_labels.append(next_feature)
 
         return 1
 
@@ -178,13 +179,15 @@ def should_make_survival_prediction(current_date: datetime.datetime, next_date: 
 
 class SurvivalCalculator:
     def __init__(
-        self, ontology: femr.ontology.Ontology, patient: meds_reader.Patient, code_whitelist: Optional[Set[str]] = None
+        self, ontology: femr.ontology.Ontology, subject: meds_reader.Subject, code_whitelist: Optional[Set[str]] = None
     ):
         self.survival_events = []
-        self.final_date = patient.events[-1].time
+        self.final_date = subject.events[-1].time
         self.future_times = collections.defaultdict(list)
 
-        for event in patient.events:
+        for event in subject.events:
+            if event.time is None:
+                continue
             codes = set()
             for parent in ontology.get_all_parents(event.code):
                 if code_whitelist is None or parent in code_whitelist:
@@ -216,19 +219,19 @@ class SurvivalCalculator:
 
 
 def _prefit_motor_map(
-    patients: Iterator[meds_reader.Patient], *, tasks: List[str], ontology: femr.ontology.Ontology
+    subjects: Iterator[meds_reader.Subject], *, tasks: List[str], ontology: femr.ontology.Ontology
 ) -> Any:
     task_time_stats: List[Any] = [[0, 0, femr.stat_utils.OnlineStatistics()] for _ in range(len(tasks))]
     event_times = femr.stat_utils.ReservoirSampler(100_000)
     task_set = set(tasks)
 
-    for patient in patients:
-        calculator = SurvivalCalculator(ontology, patient, task_set)
+    for subject in subjects:
+        calculator = SurvivalCalculator(ontology, subject, task_set)
 
-        birth = femr.pat_utils.get_patient_birthdate(patient)
+        birth = femr.pat_utils.get_subject_birthdate(subject)
 
-        for event, next_event in zip(patient.events, patient.events[1:]):
-            if (event.time - birth).days <= 1:
+        for event, next_event in zip(subject.events, subject.events[1:]):
+            if (event.time is None) or ((event.time - birth).days <= 1):
                 continue
             if should_make_survival_prediction(event.time, next_event.time):
                 censor_time, tte = calculator.get_future_events_for_time(event.time)
@@ -264,7 +267,7 @@ class MOTORTask(Task):
     @classmethod
     def fit_pretraining_task_info(
         cls,
-        db: meds_reader.PatientDatabase,
+        db: meds_reader.SubjectDatabase,
         tokenizer: femr.models.tokenizer.FEMRTokenizer,
         num_tasks: int,
         num_bins: int,
@@ -278,7 +281,8 @@ class MOTORTask(Task):
                 if len(tasks) == num_tasks:
                     break
 
-        assert len(tasks) == num_tasks, "Could not find enough tasks in the provided tokenizer"
+        if len(tasks) < num_tasks:
+            warnings.warn(f"Could not find enough tasks in the provided tokenizer {len(tasks)}", warnings.Warning)
 
         length_samples, stats = functools.reduce(
             _prefit_motor_agg, db.map(functools.partial(_prefit_motor_map, tasks=tasks, ontology=tokenizer.ontology))
@@ -319,12 +323,12 @@ class MOTORTask(Task):
             ),
         )
 
-    def start_patient(self, patient: meds_reader.Patient, ontology: Optional[femr.ontology.Ontology]) -> None:
+    def start_subject(self, subject: meds_reader.Subject, ontology: Optional[femr.ontology.Ontology]) -> None:
         assert ontology
-        self.calculator = SurvivalCalculator(ontology, patient, self.pretraining_task_codes)
+        self.calculator = SurvivalCalculator(ontology, subject, self.pretraining_task_codes)
 
-        self.per_patient_censor_time: List[float] = []
-        self.per_patient_time_sparse: Dict[str, List[float]] = {
+        self.per_subject_censor_time: List[float] = []
+        self.per_subject_time_sparse: Dict[str, List[float]] = {
             "data": [],
             "indices": [],
             "indptr": [0],
@@ -342,16 +346,16 @@ class MOTORTask(Task):
             "indptr": [0],
         }
 
-    def add_patient_labels(self, patient_label_offsets: List[int]) -> None:
-        """Add per-patient labels to the global task labels."""
-        self.censor_time.extend([self.per_patient_censor_time[i] for i in patient_label_offsets])
+    def add_subject_labels(self, subject_label_offsets: List[int]) -> None:
+        """Add per-subject labels to the global task labels."""
+        self.censor_time.extend([self.per_subject_censor_time[i] for i in subject_label_offsets])
 
-        for index in patient_label_offsets:
-            start = int(self.per_patient_time_sparse["indptr"][index])
-            end = int(self.per_patient_time_sparse["indptr"][index + 1])
+        for index in subject_label_offsets:
+            start = int(self.per_subject_time_sparse["indptr"][index])
+            end = int(self.per_subject_time_sparse["indptr"][index + 1])
 
-            self.time_sparse["data"].extend(self.per_patient_time_sparse["data"][start:end])
-            self.time_sparse["indices"].extend(self.per_patient_time_sparse["indices"][start:end])
+            self.time_sparse["data"].extend(self.per_subject_time_sparse["data"][start:end])
+            self.time_sparse["indices"].extend(self.per_subject_time_sparse["indices"][start:end])
             self.time_sparse["indptr"].append(len(self.time_sparse["indices"]))
 
     def add_event(
@@ -369,16 +373,16 @@ class MOTORTask(Task):
             return 0
 
         censor_seconds = censor_time.total_seconds()
-        self.per_patient_censor_time.append(censor_seconds)
+        self.per_subject_censor_time.append(censor_seconds)
 
         for event_name, time in tte.items():
             j = self.task_to_index_map[event_name]
             seconds = time.total_seconds()
 
-            self.per_patient_time_sparse["data"].append(seconds)
-            self.per_patient_time_sparse["indices"].append(j)
+            self.per_subject_time_sparse["data"].append(seconds)
+            self.per_subject_time_sparse["indices"].append(j)
 
-        self.per_patient_time_sparse["indptr"].append(len(self.per_patient_time_sparse["data"]))
+        self.per_subject_time_sparse["indptr"].append(len(self.per_subject_time_sparse["data"]))
 
         return 1
 

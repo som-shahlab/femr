@@ -4,7 +4,7 @@ import datetime
 
 import meds
 import meds_reader.transform
-from femr_test_tools import DummyEvent, DummyPatient
+from femr_test_tools import DummyEvent, DummySubject
 
 from femr.transforms import delta_encode, remove_nones
 from femr.transforms.stanford import (
@@ -16,8 +16,8 @@ from femr.transforms.stanford import (
 
 
 def test_pre_birth() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
             DummyEvent(time=datetime.datetime(1999, 7, 9), code=meds.birth_code),
@@ -25,8 +25,8 @@ def test_pre_birth() -> None:
         ],
     )
 
-    expected = DummyPatient(
-        patient_id=123,
+    expected = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 9), code="1234"),
             DummyEvent(time=datetime.datetime(1999, 7, 9), code=meds.birth_code),
@@ -34,12 +34,12 @@ def test_pre_birth() -> None:
         ],
     )
 
-    assert move_pre_birth(patient) == expected
+    assert move_pre_birth(subject) == expected
 
 
 def test_move_visit_start_ignores_other_visits() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             # A non-visit event with no explicit start time
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234", visit_id=9999),
@@ -67,8 +67,8 @@ def test_move_visit_start_ignores_other_visits() -> None:
 
     # Note that events are implicitly sorted first by start time, then by code:
     # https://github.com/som-shahlab/femr/blob/main/src/femr/__init__.py#L69
-    expected = DummyPatient(
-        patient_id=123,
+    expected = DummySubject(
+        subject_id=123,
         events=[
             # A non-visit event with no explicit start time
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234", visit_id=9999),
@@ -94,12 +94,12 @@ def test_move_visit_start_ignores_other_visits() -> None:
         ],
     )
 
-    assert move_visit_start_to_first_event_start(patient) == expected
+    assert move_visit_start_to_first_event_start(subject) == expected
 
 
 def test_move_visit_start_minute_after_midnight() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="3456", visit_id=9999, table="visit"),
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234", visit_id=9999),
@@ -108,8 +108,8 @@ def test_move_visit_start_minute_after_midnight() -> None:
         ],
     )
 
-    expected = DummyPatient(
-        patient_id=123,
+    expected = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234", visit_id=9999),
             DummyEvent(time=datetime.datetime(1999, 7, 2, 0, 1), code="3456", visit_id=9999, table="visit"),
@@ -118,12 +118,12 @@ def test_move_visit_start_minute_after_midnight() -> None:
         ],
     )
 
-    assert move_visit_start_to_first_event_start(patient) == expected
+    assert move_visit_start_to_first_event_start(subject) == expected
 
 
 def test_move_visit_start_doesnt_move_without_event() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234", visit_id=9999),
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="3456", visit_id=9999, table="visit"),
@@ -134,12 +134,12 @@ def test_move_visit_start_doesnt_move_without_event() -> None:
     # None of the non-visit events have start time > '00:00:00' so visit event
     # start time is unchanged, though order changes based on code under resort.
 
-    assert move_visit_start_to_first_event_start(patient) == patient
+    assert move_visit_start_to_first_event_start(subject) == subject
 
 
 def test_move_to_day_end() -> None:
-    patient = meds_reader.transform.MutablePatient(
-        patient_id=123,
+    subject = meds_reader.transform.MutableSubject(
+        subject_id=123,
         events=[
             meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
             meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2, 12), code="4321"),
@@ -147,8 +147,8 @@ def test_move_to_day_end() -> None:
         ],
     )
 
-    expected = meds_reader.transform.MutablePatient(
-        patient_id=123,
+    expected = meds_reader.transform.MutableSubject(
+        subject_id=123,
         events=[
             meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2, 12), code="4321"),
             meds_reader.transform.MutableEvent(time=datetime.datetime(1999, 7, 2, 23, 59), code="1234"),
@@ -156,12 +156,12 @@ def test_move_to_day_end() -> None:
         ],
     )
 
-    assert move_to_day_end(patient) == expected
+    assert move_to_day_end(subject) == expected
 
 
 def test_remove_nones() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234"),  # No value, to be removed
             DummyEvent(time=datetime.datetime(1999, 7, 2, 12), code="1234", numeric_value=3),
@@ -169,20 +169,20 @@ def test_remove_nones() -> None:
         ],
     )
 
-    expected = DummyPatient(
-        patient_id=123,
+    expected = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2, 12), code="1234", numeric_value=3),
             DummyEvent(time=datetime.datetime(1999, 7, 9), code=meds.birth_code),
         ],
     )
 
-    assert remove_nones(patient) == expected
+    assert remove_nones(subject) == expected
 
 
 def test_delta_encode() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
@@ -193,8 +193,8 @@ def test_delta_encode() -> None:
         ],
     )
 
-    expected = DummyPatient(
-        patient_id=123,
+    expected = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(time=datetime.datetime(1999, 7, 2), code="1234"),
             DummyEvent(time=datetime.datetime(1999, 7, 2, 12), code="1234", numeric_value=3),
@@ -203,12 +203,12 @@ def test_delta_encode() -> None:
         ],
     )
 
-    assert delta_encode(patient) == expected
+    assert delta_encode(subject) == expected
 
 
 def test_move_billing_codes() -> None:
-    patient = DummyPatient(
-        patient_id=123,
+    subject = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(
                 time=datetime.datetime(1999, 7, 2, 0, 0),
@@ -231,8 +231,8 @@ def test_move_billing_codes() -> None:
         ],
     )
 
-    expected = DummyPatient(
-        patient_id=123,
+    expected = DummySubject(
+        subject_id=123,
         events=[
             DummyEvent(
                 time=datetime.datetime(1999, 7, 2, 0, 0),
@@ -255,4 +255,4 @@ def test_move_billing_codes() -> None:
         ],
     )
 
-    assert move_billing_codes(patient) == expected
+    assert move_billing_codes(subject) == expected

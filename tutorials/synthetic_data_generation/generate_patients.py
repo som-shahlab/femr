@@ -16,14 +16,14 @@ import femr.transforms
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(prog="generate_patients", description="Create synthetic data")
+    parser = argparse.ArgumentParser(prog="generate_subjects", description="Create synthetic data")
     parser.add_argument("athena", type=str)
     parser.add_argument("destination", type=str)
     args = parser.parse_args()
 
     random.seed(4533)
 
-    def get_random_patient(patient_id):
+    def get_random_subject(subject_id):
         epoch = datetime.datetime(1990, 1, 1)
         birth = epoch + datetime.timedelta(days=random.randint(100, 1000))
         current_date = birth
@@ -31,15 +31,15 @@ if __name__ == "__main__":
         gender = "Gender/" + random.choice(["F", "M"])
         race = "Race/" + random.choice(["White", "Non-White"])
 
-        patient = {
-            "patient_id": patient_id,
+        subject = {
+            "subject_id": subject_id,
             "events": [],
         }
 
         birth_codes = [meds.birth_code, gender, race]
 
         for birth_code in birth_codes:
-            patient["events"].append({"time": birth, "code": birth_code})
+            subject["events"].append({"time": birth, "code": birth_code})
 
         code_cats = ["ICD9CM", "RxNorm"]
         for code in range(random.randint(1, 10 + (20 if gender == "Gender/F" else 0))):
@@ -52,21 +52,21 @@ if __name__ == "__main__":
                     code = code[:3] + "." + code[3:]
             current_date = current_date + datetime.timedelta(days=random.randint(1, 100))
             code = code_cat + "/" + code
-            patient["events"].append({"time": current_date, "code": code})
+            subject["events"].append({"time": current_date, "code": code})
 
-        return patient
+        return subject
 
-    patients = []
+    subjects = []
     for i in range(200):
-        patients.append(get_random_patient(i))
+        subjects.append(get_random_subject(i))
 
-    patient_schema = meds.schema.patient_schema()
+    subject_schema = meds.schema.subject_schema()
 
-    patient_table = pyarrow.Table.from_pylist(patients, patient_schema)
+    subject_table = pyarrow.Table.from_pylist(subjects, subject_schema)
 
     os.makedirs(os.path.join(args.destination, "data"), exist_ok=True)
 
-    pyarrow.parquet.write_table(patient_table, os.path.join(args.destination, "data", "patients.parquet"))
+    pyarrow.parquet.write_table(subject_table, os.path.join(args.destination, "data", "subjects.parquet"))
 
     metadata = {
         "dataset_name": "femr synthetic datata",
@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     print("Opening database")
 
-    with meds_reader.PatientDatabase(args.destination + "_meds", num_threads=6) as database:
+    with meds_reader.SubjectDatabase(args.destination + "_meds", num_threads=6) as database:
         print("Creating ontology")
         ontology = femr.ontology.Ontology(args.athena)
 

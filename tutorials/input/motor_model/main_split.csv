@@ -1,4 +1,4 @@
-patient_id,split_name
+subject_id,split_name
 0,train
 1,train
 2,train

@@ -8,10 +8,10 @@ import meds_reader
 import polars as pl
 
 
-def _get_all_codes_map(patients: Iterator[meds_reader.Patient]) -> Set[str]:
+def _get_all_codes_map(subjects: Iterator[meds_reader.Subject]) -> Set[str]:
     result = set()
-    for patient in patients:
-        for event in patient.events:
+    for subject in subjects:
+        for event in subject.events:
             result.add(event.code)
     return result
 
@@ -104,7 +104,7 @@ class Ontology:
 
     def prune_to_dataset(
         self,
-        data_pool: meds_reader.PatientDatabase,
+        data_pool: meds_reader.SubjectDatabase,
         prune_all_descriptions: bool = False,
         remove_ontologies: Set[str] = set(),
     ) -> None:

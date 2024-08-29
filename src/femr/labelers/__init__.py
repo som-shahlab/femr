@@ -1,4 +1,4 @@
-"""A module for generating labels on patient timelines."""
+"""A module for generating labels on subject timelines."""
 
 from __future__ import annotations
 

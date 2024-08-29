@@ -13,7 +13,7 @@ import numpy as np
 import femr.labelers
 import femr.ontology
 
-from ..pat_utils import get_patient_birthdate
+from ..pat_utils import get_subject_birthdate
 from .core import ColumnValue, Featurizer
 from .utils import OnlineStatistics
 
@@ -26,7 +26,7 @@ class AgeFeaturizer(Featurizer):
     def __init__(self, is_normalize: bool = True):
         """
         Args:
-            is_normalize (bool, optional): If TRUE, then normalize a patient's age at each
+            is_normalize (bool, optional): If TRUE, then normalize a subject's age at each
             label across their ages at all labels. Defaults to True.
         """
         self.is_normalize: bool = is_normalize
@@ -39,14 +39,14 @@ class AgeFeaturizer(Featurizer):
         return OnlineStatistics()
 
     def add_preprocess_data(
-        self, age_statistics: OnlineStatistics, patient: meds_reader.Patient, labels: Sequence[femr.labelers.Label]
+        self, age_statistics: OnlineStatistics, subject: meds_reader.Subject, labels: Sequence[femr.labelers.Label]
     ):
-        """Save the age of this patient (in years) at each label, to use for normalization."""
-        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
-        assert patient_birth_date, "Patients must have a birth date"
+        """Save the age of this subject (in years) at each label, to use for normalization."""
+        subject_birth_date: Optional[datetime.datetime] = get_subject_birthdate(subject)
+        assert subject_birth_date, "Subjects must have a birth date"
 
         for label in labels:
-            age_in_yrs: float = (label.prediction_time - patient_birth_date).days / 365
+            age_in_yrs: float = (label.prediction_time - subject_birth_date).days / 365
             age_statistics.add(age_in_yrs)
 
     def encorperate_prepreprocessed_data(self, data_elements: List[OnlineStatistics]) -> None:
@@ -54,21 +54,21 @@ class AgeFeaturizer(Featurizer):
 
     def featurize(
         self,
-        patient: meds_reader.Patient,
+        subject: meds_reader.Subject,
         labels: Sequence[femr.labelers.Label],
     ) -> List[List[ColumnValue]]:
-        """Return the age of the patient at each label.
-        If `is_normalize`, then normalize each label's age across all patient's ages across all their labels."""
+        """Return the age of the subject at each label.
+        If `is_normalize`, then normalize each label's age across all subject's ages across all their labels."""
         all_columns: List[List[ColumnValue]] = []
         # Outer list is per label
         # Inner list is the list of features for that label
 
-        patient_birth_date: Optional[datetime.datetime] = get_patient_birthdate(patient)
-        if not patient_birth_date:
+        subject_birth_date: Optional[datetime.datetime] = get_subject_birthdate(subject)
+        if not subject_birth_date:
             return all_columns
 
         for label in labels:
-            age_in_yrs: float = (label.prediction_time - patient_birth_date).days / 365
+            age_in_yrs: float = (label.prediction_time - subject_birth_date).days / 365
             if self.is_normalize:
                 assert self.age_statistics is not None
                 # age = (age - mean(ages)) / std(ages)
@@ -96,7 +96,7 @@ def _reshuffle_count_time_bins(
     # From closest bin to prediction time -> farthest bin
     for bin_idx, bin_end in enumerate(time_bins):
         while len(codes_per_bin[bin_idx]) > 0:
-            # Get the least recently added event (i.e. farthest back in patient's timeline
+            # Get the least recently added event (i.e. farthest back in subject's timeline
             # from the currently processed label)
             oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
 
@@ -157,7 +157,7 @@ def exclusion_helper(
 class CountFeaturizer(Featurizer):
     """
     Produces one column per each diagnosis code, procedure code, and prescription code.
-    The value in each column is the count of how many times that code appears in the patient record
+    The value in each column is the count of how many times that code appears in the subject record
     before the corresponding label.
     """
 
@@ -190,7 +190,7 @@ class CountFeaturizer(Featurizer):
                 These timedeltas should be positive values, and will be internally converted to negative values
 
                 If last value is `None`, then the last bucket will be from the penultimate value in `time_bins` to the
-                    start of the patient's first event.
+                    start of the subject's first event.
 
                 Examples:
                     `time_bins = [
@@ -258,11 +258,11 @@ class CountFeaturizer(Featurizer):
         }
 
     def add_preprocess_data(
-        self, data: Any, patient: meds_reader.Patient, labels: Sequence[femr.labelers.Label]
+        self, data: Any, subject: meds_reader.Subject, labels: Sequence[femr.labelers.Label]
     ) -> Any:
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
-        This function performs that preprocessing on the given patients and labels, and returns some intermediate state.
+        This function performs that preprocessing on the given subjects and labels, and returns some intermediate state.
         That state is concatinated across the entire database, and then passed to encorperate_preprocessed_data.
 
         Note that this function shouldn't mutate the Featurizer as it will be sharded.
@@ -271,7 +271,7 @@ class CountFeaturizer(Featurizer):
         observed_string_value: Dict[Tuple[str, str], int] = data["observed_string_value"]
         observed_numeric_value: Dict[str, ReservoirSampler] = data["observed_numeric_value"]
 
-        for event in patient.events:
+        for event in subject.events:
             # Check for excluded events
             if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                 continue
@@ -336,25 +336,25 @@ class CountFeaturizer(Featurizer):
 
     def featurize(
         self,
-        patient: meds_reader.Patient,
+        subject: meds_reader.Subject,
         labels: Sequence[femr.labelers.Label],
     ) -> List[List[ColumnValue]]:
         all_columns: List[List[ColumnValue]] = []
 
         if self.time_bins is None:
-            # Count the number of times each code appears in the patient's timeline
+            # Count the number of times each code appears in the subject's timeline
             # [key] = column idx
             # [value] = count of occurrences of events with that code (up to the label at `label_idx`)
             code_counter: Dict[int, int] = defaultdict(int)
 
             label_idx = 0
-            for event in patient.events:
+            for event in subject.events:
                 while event.time is not None and event.time > labels[label_idx].prediction_time:
                     label_idx += 1
                     # Create all features for label at index `label_idx`
                     all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
                     if label_idx >= len(labels):
-                        # We've reached the end of the labels for this patient,
+                        # We've reached the end of the labels for this subject,
                         # so no point in continuing to count events past this point.
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns
@@ -384,7 +384,7 @@ class CountFeaturizer(Featurizer):
             }
 
             label_idx = 0
-            for event in patient.events:
+            for event in subject.events:
                 while event.time is not None and event.time > labels[label_idx].prediction_time:
                     _reshuffle_count_time_bins(
                         time_bins,
@@ -406,7 +406,7 @@ class CountFeaturizer(Featurizer):
                     )
 
                     if label_idx >= len(labels):
-                        # We've reached the end of the labels for this patient,
+                        # We've reached the end of the labels for this subject,
                         # so no point in continuing to count events past this point.
                         # Instead, we just return the counts of all events up to this point.
                         return all_columns

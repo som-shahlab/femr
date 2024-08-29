@@ -1,7 +1,7 @@
 import datetime
 from typing import Set
 
-from femr_test_tools import DummyEvent, DummyPatient
+from femr_test_tools import DummyEvent, DummySubject
 
 import femr.models.tasks
 
@@ -15,8 +15,8 @@ class DummyOntology:
 
 
 def test_calculator():
-    patient = DummyPatient(
-        patient_id=100,
+    subject = DummySubject(
+        subject_id=100,
         events=[
             DummyEvent(time=datetime.datetime(1990, 1, 10), code="1"),
             DummyEvent(time=datetime.datetime(1990, 1, 20), code="2"),
@@ -25,7 +25,7 @@ def test_calculator():
         ],
     )
 
-    calculator = femr.models.tasks.SurvivalCalculator(DummyOntology(), patient)
+    calculator = femr.models.tasks.SurvivalCalculator(DummyOntology(), subject)
 
     assert calculator.get_future_events_for_time(datetime.datetime(1990, 1, 1)) == (
         datetime.timedelta(days=24),

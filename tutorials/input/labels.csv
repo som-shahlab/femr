@@ -1,4 +1,4 @@
-"patient_id","prediction_time","boolean_value"
+"subject_id","prediction_time","boolean_value"
 0,1992-01-25 00:00:00.000000,false
 1,1990-11-05 00:00:00.000000,true
 2,1992-05-12 00:00:00.000000,true

@@ -27,19 +27,19 @@ class ColumnValue(NamedTuple):
 
 
 def _preprocess_map_func(
-    patients_and_labels: Iterator[Tuple[meds_reader.Patient, Sequence[femr.labelers.Label]]],
+    subjects_and_labels: Iterator[Tuple[meds_reader.Subject, Sequence[femr.labelers.Label]]],
     featurizers: List[Featurizer],
 ) -> List[List[Any]]:
     initial_data = [featurizer.get_initial_preprocess_data() for featurizer in featurizers]
-    for patient, labels in patients_and_labels:
+    for subject, labels in subjects_and_labels:
         for data, featurizer in zip(initial_data, featurizers):
-            featurizer.add_preprocess_data(data, patient, labels)
+            featurizer.add_preprocess_data(data, subject, labels)
 
     return initial_data
 
 
 def _features_map_func(
-    patients_and_labels: Iterator[Tuple[meds_reader.Patient, Sequence[femr.labelers.Label]]],
+    subjects_and_labels: Iterator[Tuple[meds_reader.Subject, Sequence[femr.labelers.Label]]],
     *,
     featurizers: List[Featurizer],
 ) -> Mapping[str, Any]:
@@ -53,23 +53,23 @@ def _features_map_func(
     #   maps each element in `data` and `indices` to the rows of the sparse matrix
     indptr: List[int] = []
 
-    patient_ids: List[int] = []
+    subject_ids: List[int] = []
     feature_times: List[datetime.datetime] = []
 
-    for patient, labels in patients_and_labels:
-        assert len(labels) != 0, "Must have at least one label per patient processed"
+    for subject, labels in subjects_and_labels:
+        assert len(labels) != 0, "Must have at least one label per subject processed"
 
         for label in labels:
-            patient_ids.append(patient.patient_id)
+            subject_ids.append(subject.subject_id)
             feature_times.append(label.prediction_time)
 
-        # For each Featurizer, apply it to this Patient...
+        # For each Featurizer, apply it to this Subject...
         features_per_label: List[List[List[ColumnValue]]] = [[] for _ in range(len(labels))]
         for featurizer in featurizers:
-            features: List[List[ColumnValue]] = featurizer.featurize(patient, labels)
+            features: List[List[ColumnValue]] = featurizer.featurize(subject, labels)
             assert len(features) == len(labels), (
                 f"The featurizer `{featurizer}` didn't generate a set of features for "
-                f"every label for patient {patient.patient_id} ({len(features)} != {len(labels)})"
+                f"every label for subject {subject.subject_id} ({len(features)} != {len(labels)})"
             )
             for a, b in zip(features_per_label, features):
                 a.append(b)
@@ -84,7 +84,7 @@ def _features_map_func(
                 for column, value in feature_columns:
                     assert 0 <= column < featurizer.get_num_columns(), (
                         f"The featurizer {featurizer} provided an out of bounds column for "
-                        f"{column} on patient {patient.patient_id} ({column} must be between 0 and "
+                        f"{column} on subject {subject.subject_id} ({column} must be between 0 and "
                         f"{featurizer.get_num_columns()})"
                     )
                     data_and_indices[current_index, 0] = value
@@ -102,7 +102,7 @@ def _features_map_func(
     # Need one last `indptr` for end of last row in CSR sparse matrix
     indptr.append(current_index + len(data_and_indices_arrays) * 1024)
 
-    # n_rows = number of Labels across all Patients
+    # n_rows = number of Labels across all Subjects
     total_rows: int = len(indptr) - 1
     # n_cols = sum of number of columns output by each Featurizer
     total_columns: int = sum(x.get_num_columns() for x in featurizers)
@@ -125,14 +125,14 @@ def _features_map_func(
     ), f"`data` should have equal shape as `indices`, but instead have {np_data.shape} != {np_indices.shape}"
     data_matrix = scipy.sparse.csr_matrix((np_data, np_indices, np_indptr), shape=(total_rows, total_columns))
 
-    np_patient_ids: np.ndarray = np.array(patient_ids, dtype=np.int64)
+    np_subject_ids: np.ndarray = np.array(subject_ids, dtype=np.int64)
     np_feature_times: np.ndarray = np.array(feature_times, dtype="datetime64[us]")
 
-    return {"patient_ids": np_patient_ids, "feature_times": np_feature_times, "features": data_matrix}
+    return {"subject_ids": np_subject_ids, "feature_times": np_feature_times, "features": data_matrix}
 
 
 class Featurizer(ABC):
-    """A Featurizer takes a Patient and a list of Labels, then returns a row for each timepoint.
+    """A Featurizer takes a Subject and a list of Labels, then returns a row for each timepoint.
     Featurizers must be preprocessed before they are used to compute normalization statistics.
     A sparse representation named ColumnValue is used to represent the values returned by a Featurizer.
     """
@@ -143,10 +143,10 @@ class Featurizer(ABC):
         """
         pass
 
-    def add_preprocess_data(self, data: Any, patient: meds_reader.Patient, labels: Sequence[femr.labelers.Label]):
+    def add_preprocess_data(self, data: Any, subject: meds_reader.Subject, labels: Sequence[femr.labelers.Label]):
         """
         Some featurizers need to do some preprocessing in order to prepare for featurization.
-        This function performs that preprocessing on the given patients and labels, and returns some state.
+        This function performs that preprocessing on the given subjects and labels, and returns some state.
         That state is concatinated across the entire database,
             and then passed to encorperate_preprocessed_data.
 
@@ -170,10 +170,10 @@ class Featurizer(ABC):
     @abstractmethod
     def featurize(
         self,
-        patient: meds_reader.Patient,
+        subject: meds_reader.Subject,
         labels: Sequence[femr.labelers.Label],
     ) -> List[List[ColumnValue]]:
-        """Featurize the patient such that each label in `labels` has an associated list of features.
+        """Featurize the subject such that each label in `labels` has an associated list of features.
 
         Example:
             return [
@@ -190,7 +190,7 @@ class Featurizer(ABC):
         Label and each (sparse) column is a feature
 
         Args:
-            patient (Patient): A patient to featurize.
+            subject (Subject): A subject to featurize.
             labels (List[Label]): We will generate features for each Label in `labels`.
             ontology (Optional[Ontology]): Ontology for Event codes.
 
@@ -225,7 +225,7 @@ FeaturizerType = TypeVar("FeaturizerType", bound=Featurizer)
 class FeaturizerList:
     """
     FeaturizerList consists of a list of Featurizers that will be used to (sequentially)
-    featurize Patients based on their Labels.
+    featurize Subjects based on their Labels.
 
     It enables preprocessing of featurizers, featurization, and column name extraction.
     """
@@ -234,13 +234,13 @@ class FeaturizerList:
         """Create a `FeaturizerList` from a sequence of featurizers.
 
         Args:
-            featurizers (List[Featurizer]): The featurizers to use for featurizing patients.
+            featurizers (List[Featurizer]): The featurizers to use for featurizing subjects.
         """
         self.featurizers: List[Featurizer] = featurizers
 
     def preprocess_featurizers(
         self,
-        db: meds_reader.PatientDatabase,
+        db: meds_reader.SubjectDatabase,
         labels: pd.DataFrame,
     ) -> None:
         """Preprocess `self.featurizers` on the provided set of labels."""
@@ -250,7 +250,7 @@ class FeaturizerList:
         if not any_needs_preprocessing:
             return
 
-        # Split patients across multiple threads
+        # Split subjects across multiple threads
         featurize_stats: List[List[Any]] = [[] for _ in self.featurizers]
 
         for chunk_stats in db.map_with_data(
@@ -268,19 +268,19 @@ class FeaturizerList:
 
     def featurize(
         self,
-        db: meds_reader.PatientDatabase,
+        db: meds_reader.SubjectDatabase,
         labels: pd.DataFrame,
     ) -> Mapping[str, np.ndarray]:
         """
-        Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each patient.
+        Apply a list of Featurizers (in sequence) to obtain a feature matrix for each Label for each subject.
 
         Args:
-            database_path (str): Path to `PatientDatabase` on disk
+            database_path (str): Path to `SubjectDatabase` on disk
 
         Returns:
-            This returns a tuple (data_matrix, labels, patient_ids, labeling_time).
+            This returns a tuple (data_matrix, labels, subject_ids, labeling_time).
                 data_matrix is a sparse matrix of all the features of all the featurizers.
-                label_pids is a list of the patient ids for each row.
+                label_pids is a list of the subject ids for each row.
                 label_values is a list of boolean values representing the labels for each row in the matrix.
                 labeling_time is a list of labeling/prediction time for each row.
         """
@@ -294,7 +294,7 @@ class FeaturizerList:
             for k, v in feat_chunk.items():
                 features[k].append(v)
 
-        result = {k: np.concatenate(features[k]) for k in ("patient_ids", "feature_times")}
+        result = {k: np.concatenate(features[k]) for k in ("subject_ids", "feature_times")}
 
         result["features"] = scipy.sparse.vstack(features["features"])
 
@@ -313,24 +313,24 @@ def join_labels(features: Mapping[str, np.ndarray], labels: pd.DataFrame) -> Map
     indices = []
     label_values = []
 
-    order = np.lexsort((features["feature_times"], features["patient_ids"]))
+    order = np.lexsort((features["feature_times"], features["subject_ids"]))
 
     feature_index = 0
 
     for label in labels.itertuples(index=False):
         while (
             (feature_index + 1) < len(order)
-            and features["patient_ids"][order[feature_index + 1]] <= label.patient_id
+            and features["subject_ids"][order[feature_index + 1]] <= label.subject_id
             and features["feature_times"][order[feature_index + 1]] <= label.prediction_time
         ):
             feature_index += 1
         is_valid = (
             feature_index < len(order)
-            and features["patient_ids"][order[feature_index]] == label.patient_id
+            and features["subject_ids"][order[feature_index]] == label.subject_id
             and features["feature_times"][order[feature_index]] <= label.prediction_time
         )
         assert is_valid, (
-            f'{feature_index} {label} {features["patient_ids"][order[feature_index]]} '
+            f'{feature_index} {label} {features["subject_ids"][order[feature_index]]} '
             + f'{features["feature_times"][order[feature_index]]}'
         )
         indices.append(order[feature_index])
@@ -338,7 +338,7 @@ def join_labels(features: Mapping[str, np.ndarray], labels: pd.DataFrame) -> Map
 
     return {
         "boolean_values": np.array(label_values),
-        "patient_ids": features["patient_ids"][indices],
+        "subject_ids": features["subject_ids"][indices],
         "times": features["feature_times"][indices],
         "features": features["features"][indices, :],
     }

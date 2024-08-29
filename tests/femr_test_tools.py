@@ -51,14 +51,14 @@ class DummyEvent:
 
 
 @dataclasses.dataclass
-class DummyPatient:
-    patient_id: int
+class DummySubject:
+    subject_id: int
     events: Sequence[DummyEvent]
 
 
 class DummyDatabase(dict):
-    def filter(self, patient_ids):
-        return DummyDatabase({p: self[p] for p in patient_ids})
+    def filter(self, subject_ids):
+        return DummyDatabase({p: self[p] for p in subject_ids})
 
     def map(
         self,
@@ -70,7 +70,7 @@ class DummyDatabase(dict):
         entries = collections.defaultdict(list)
 
         for row in data.itertuples(index=False):
-            entries[row.patient_id].append(row)
+            entries[row.subject_id].append(row)
 
         temp = []
         for k, v in entries.items():
@@ -79,10 +79,10 @@ class DummyDatabase(dict):
         return [map_func(temp)]
 
 
-def create_patients_dataset(
-    num_patients: int, events: List[Tuple[Tuple, Any, Any]] = DUMMY_EVENTS
-) -> meds_reader.PatientDatabase:
-    """Creates a list of patients, each with the same events contained in `events`"""
+def create_subjects_dataset(
+    num_subjects: int, events: List[Tuple[Tuple, Any, Any]] = DUMMY_EVENTS
+) -> meds_reader.SubjectDatabase:
+    """Creates a list of subjects, each with the same events contained in `events`"""
 
     converted_events: List[DummyEvent] = []
 
@@ -102,19 +102,19 @@ def create_patients_dataset(
         converted_events.append(dummy_event)
 
     result = DummyDatabase(
-        (patient_id, DummyPatient(patient_id, converted_events)) for patient_id in range(num_patients)
+        (subject_id, DummySubject(subject_id, converted_events)) for subject_id in range(num_subjects)
     )
-    return cast(meds_reader.PatientDatabase, result)
+    return cast(meds_reader.SubjectDatabase, result)
 
 
 def assert_labels_are_accurate(
-    labeled_patients: pd.DataFrame,
-    patient_id: int,
+    labeled_subjects: pd.DataFrame,
+    subject_id: int,
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]],
     help_text: str = "",
 ):
-    """Passes if the labels in `labeled_patients` for `patient_id` exactly match the labels in `true_labels`."""
-    generated_labels: List[Label] = [a for a in labeled_patients.itertuples(index=False) if a.patient_id == patient_id]
+    """Passes if the labels in `labeled_subjects` for `subject_id` exactly match the labels in `true_labels`."""
+    generated_labels: List[Label] = [a for a in labeled_subjects.itertuples(index=False) if a.subject_id == subject_id]
     # Check that length of lists of labels are the same
 
     assert len(generated_labels) == len(
@@ -123,7 +123,7 @@ def assert_labels_are_accurate(
     # Check that value of labels are the same
     for idx, (label, true_label) in enumerate(zip(generated_labels, true_labels)):
         assert label.boolean_value == true_label[1] and label.prediction_time == true_label[0], (
-            f"patient_id={patient_id}, label_idx={idx}, label={label}  |  "
+            f"subject_id={subject_id}, label_idx={idx}, label={label}  |  "
             f"{label} (Assigned) != {true_label} (Expected)  |  "
             f"{help_text}"
         )
@@ -136,7 +136,7 @@ def run_test_for_labeler(
     true_prediction_times: Optional[List[datetime.datetime]] = None,
     help_text: str = "",
 ) -> None:
-    patients: meds_reader.PatientDatabase = create_patients_dataset(10, [x[0] for x in events_with_labels])
+    subjects: meds_reader.SubjectDatabase = create_subjects_dataset(10, [x[0] for x in events_with_labels])
 
     true_labels: List[Tuple[datetime.datetime, Optional[bool]]] = [
         (datetime.datetime(*x[0][0]), x[1]) for x in events_with_labels if isinstance(x[1], bool)
@@ -145,13 +145,13 @@ def run_test_for_labeler(
         # If manually specified prediction times, adjust labels from occurring at `event.start`
         # e.g. we may make predictions at `event.end` or `event.start + 1 day`
         true_labels = [(tp, tl[1]) for (tl, tp) in zip(true_labels, true_prediction_times)]
-    labeled_patients: List[meds.Label] = labeler.apply(patients)
+    labeled_subjects: List[meds.Label] = labeler.apply(subjects)
 
     # Check accuracy of Labels
-    for patient_id in patients:
+    for subject_id in subjects:
         assert_labels_are_accurate(
-            labeled_patients,
-            patient_id,
+            labeled_subjects,
+            subject_id,
             true_labels,
             help_text=help_text,
         )

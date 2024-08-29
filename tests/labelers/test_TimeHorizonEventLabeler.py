@@ -25,22 +25,22 @@ class DummyLabeler(TimeHorizonEventLabeler):
     def allow_same_time_labels(self) -> bool:
         return self.allow_same_time
 
-    def get_prediction_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
-        return sorted(list({e.time for e in patient.events}))
+    def get_prediction_times(self, subject: meds_reader.Subject) -> List[datetime.datetime]:
+        return sorted(list({e.time for e in subject.events}))
 
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
-    def get_outcome_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
+    def get_outcome_times(self, subject: meds_reader.Subject) -> List[datetime.datetime]:
         times: List[datetime.datetime] = []
-        for e in patient.events:
+        for e in subject.events:
             if e.code in self.outcome_codes:
                 times.append(e.time)
         return times
 
 
 def test_no_outcomes(tmp_path: pathlib.Path):
-    # No outcomes occur in this patient's timeline
+    # No outcomes occur in this subject's timeline
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
     labeler = DummyLabeler([100], time_horizon)
     events_with_labels: EventsWithLabels = [

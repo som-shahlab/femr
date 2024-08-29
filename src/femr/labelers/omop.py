@@ -60,12 +60,12 @@ class CodeLabeler(TimeHorizonEventLabeler):
         self.prediction_codes: Optional[List[str]] = prediction_codes
         self.prediction_time_adjustment_func: Callable = prediction_time_adjustment_func
 
-    def get_prediction_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
+    def get_prediction_times(self, subject: meds_reader.Subject) -> List[datetime.datetime]:
         """Return each event's start time (possibly modified by prediction_time_adjustment_func)
         as the time to make a prediction. Default to all events whose `code` is in `self.prediction_codes`."""
         times: List[datetime.datetime] = []
         last_time = None
-        for e in patient.events:
+        for e in subject.events:
             prediction_time: datetime.datetime = self.prediction_time_adjustment_func(e.time)
 
             if ((self.prediction_codes is None) or (e.code in self.prediction_codes)) and (
@@ -78,10 +78,10 @@ class CodeLabeler(TimeHorizonEventLabeler):
     def get_time_horizon(self) -> TimeHorizon:
         return self.time_horizon
 
-    def get_outcome_times(self, patient: meds_reader.Patient) -> List[datetime.datetime]:
-        """Return the start times of this patient's events whose `code` is in `self.outcome_codes`."""
+    def get_outcome_times(self, subject: meds_reader.Subject) -> List[datetime.datetime]:
+        """Return the start times of this subject's events whose `code` is in `self.outcome_codes`."""
         times: List[datetime.datetime] = []
-        for event in patient.events:
+        for event in subject.events:
             if event.code in self.outcome_codes:
                 times.append(event.time)
         return times
@@ -125,7 +125,7 @@ class OMOPConceptCodeLabeler(CodeLabeler):
 
 
 class MortalityCodeLabeler(CodeLabeler):
-    """Apply a label for whether or not a patient dies within the `time_horizon`.
+    """Apply a label for whether or not a subject dies within the `time_horizon`.
     Make prediction at admission time.
     """
 
@@ -151,7 +151,7 @@ class MortalityCodeLabeler(CodeLabeler):
 
 class LupusCodeLabeler(OMOPConceptCodeLabeler):
     """
-    meds.Label if patient is diagnosed with Lupus.
+    meds.Label if subject is diagnosed with Lupus.
     """
 
     original_omop_concept_codes = ["SNOMED/55464009", "SNOMED/201436003"]
@@ -165,7 +165,7 @@ class LupusCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of Hypoglycemia in `time_horizon`."""
 
     # fmt: off
@@ -179,7 +179,7 @@ class HypoglycemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class AKICodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of AKI in `time_horizon`."""
 
     # fmt: off
@@ -190,7 +190,7 @@ class AKICodeLabeler(OMOPConceptCodeLabeler):
 
 
 class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of Anemia in `time_horizon`."""
 
     # fmt: off
@@ -202,7 +202,7 @@ class AnemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of Hyperkalemia in `time_horizon`."""
 
     # fmt: off
@@ -213,7 +213,7 @@ class HyperkalemiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of Hyponatremia in `time_horizon`."""
 
     # fmt: off
@@ -224,7 +224,7 @@ class HyponatremiaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of Thrombocytopenia in `time_horizon`."""
 
     # fmt: off
@@ -235,7 +235,7 @@ class ThrombocytopeniaCodeLabeler(OMOPConceptCodeLabeler):
 
 
 class NeutropeniaCodeLabeler(OMOPConceptCodeLabeler):
-    """Apply a label for whether a patient has at 1+ explicitly
+    """Apply a label for whether a subject has at 1+ explicitly
     coded occurrence(s) of Neutkropenia in `time_horizon`."""
 
     # fmt: off

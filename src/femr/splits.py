@@ -8,40 +8,40 @@ from typing import List
 
 
 @dataclasses.dataclass
-class PatientSplit:
-    train_patient_ids: List[int]
-    test_patient_ids: List[int]
+class SubjectSplit:
+    train_subject_ids: List[int]
+    test_subject_ids: List[int]
 
     def save_to_csv(self, fname: str):
         with open(fname, "w") as f:
-            writer = csv.DictWriter(f, ("patient_id", "split_name"))
+            writer = csv.DictWriter(f, ("subject_id", "split_name"))
             writer.writeheader()
-            for train in self.train_patient_ids:
-                writer.writerow({"patient_id": train, "split_name": "train"})
-            for test in self.test_patient_ids:
-                writer.writerow({"patient_id": test, "split_name": "test"})
+            for train in self.train_subject_ids:
+                writer.writerow({"subject_id": train, "split_name": "train"})
+            for test in self.test_subject_ids:
+                writer.writerow({"subject_id": test, "split_name": "test"})
 
     @classmethod
     def load_from_csv(cls, fname: str):
-        train_patient_ids: List[int] = []
-        test_patient_ids: List[int] = []
+        train_subject_ids: List[int] = []
+        test_subject_ids: List[int] = []
         with open(fname, "r") as f:
             for row in csv.DictReader(f):
                 if row["split_name"] == "train":
-                    train_patient_ids.append(int(row["patient_id"]))
+                    train_subject_ids.append(int(row["subject_id"]))
                 else:
-                    test_patient_ids.append(int(row["patient_id"]))
+                    test_subject_ids.append(int(row["subject_id"]))
 
-        return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids)
+        return SubjectSplit(train_subject_ids=train_subject_ids, test_subject_ids=test_subject_ids)
 
 
-def generate_hash_split(patient_ids: List[int], seed: int, frac_test: float = 0.15) -> PatientSplit:
-    train_patient_ids = []
-    test_patient_ids = []
+def generate_hash_split(subject_ids: List[int], seed: int, frac_test: float = 0.15) -> SubjectSplit:
+    train_subject_ids = []
+    test_subject_ids = []
 
-    for patient_id in patient_ids:
+    for subject_id in subject_ids:
         # Convert the integer to bytes
-        value_bytes = struct.pack(">q", seed) + struct.pack(">q", patient_id)
+        value_bytes = struct.pack(">q", seed) + struct.pack(">q", subject_id)
 
         # Calculate SHA-256 hash
         sha256_hash = hashlib.sha256(value_bytes).hexdigest()
@@ -52,8 +52,8 @@ def generate_hash_split(patient_ids: List[int], seed: int, frac_test: float = 0.
         # Take the modulus
         result = hash_int % (2**16)
         if result <= frac_test * (2**16):
-            test_patient_ids.append(patient_id)
+            test_subject_ids.append(subject_id)
         else:
-            train_patient_ids.append(patient_id)
+            train_subject_ids.append(subject_id)
 
-    return PatientSplit(train_patient_ids=train_patient_ids, test_patient_ids=test_patient_ids)
+    return SubjectSplit(train_subject_ids=train_subject_ids, test_subject_ids=test_subject_ids)

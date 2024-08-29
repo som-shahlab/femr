@@ -1,4 +1,4 @@
-"""An ETL script for doing an end to end transform of Stanford data into a PatientDatabase."""
+"""An ETL script for doing an end to end transform of Stanford data into a SubjectDatabase."""
 
 import argparse
 import functools
@@ -23,32 +23,32 @@ def _is_visit_measurement(e: meds_reader.Event) -> bool:
     return e.table == "visit"
 
 
-def _apply_transformations(patient, *, transforms):
+def _apply_transformations(subject, *, transforms):
     for transform in transforms:
-        patient = transform(patient)
-    return patient
+        subject = transform(subject)
+    return subject
 
 
-def _remove_flowsheets(patient: meds_reader.transform.MutablePatient) -> meds_reader.transform.MutablePatient:
+def _remove_flowsheets(subject: meds_reader.transform.MutableSubject) -> meds_reader.transform.MutableSubject:
     """Flowsheets in STARR-OMOP have known timing bugs, making them unsuitable for use as either features or labels.
 
     TODO: Investigate them so we can add them back as features
     """
     new_events = []
-    for event in patient.events:
+    for event in subject.events:
         if event.code != "STANFORD_OBS/Flowsheet":
             new_events.append(event)
 
-    patient.events = new_events
-    return patient
+    subject.events = new_events
+    return subject
 
 
 def _get_stanford_transformations() -> (
-    Callable[[meds_reader.transform.MutablePatient], meds_reader.transform.MutablePatient]
+    Callable[[meds_reader.transform.MutableSubject], meds_reader.transform.MutableSubject]
 ):
     """Get the list of current OMOP transformations."""
     # All of these transformations are information preserving
-    transforms: Sequence[Callable[[meds_reader.transform.MutablePatient], meds_reader.transform.MutablePatient]] = [
+    transforms: Sequence[Callable[[meds_reader.transform.MutableSubject], meds_reader.transform.MutableSubject]] = [
         move_pre_birth,
         move_visit_start_to_first_event_start,
         move_to_day_end,
@@ -71,7 +71,7 @@ def _get_stanford_transformations() -> (
 
 
 def femr_stanford_omop_fixer_program() -> None:
-    """Extract data from an Stanford STARR-OMOP v5 source to create a femr PatientDatabase."""
+    """Extract data from an Stanford STARR-OMOP v5 source to create a femr SubjectDatabase."""
     parser = argparse.ArgumentParser(description="An extraction tool for STARR-OMOP v5 sources")
 
     parser.add_argument(

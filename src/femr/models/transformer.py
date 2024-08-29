@@ -163,7 +163,7 @@ class FEMRTransformer(nn.Module):
         pos_embed = fixed_pos_embedding(batch["ages"], self.config.hidden_size // self.config.n_heads, x.dtype)
 
         attn_bias = xformers.ops.fmha.attn_bias.BlockDiagonalMask.from_seqlens(
-            batch["patient_lengths"].tolist()
+            batch["subject_lengths"].tolist()
         ).make_local_attention(self.config.attention_width)
 
         for layer in self.layers:
@@ -174,7 +174,7 @@ class FEMRTransformer(nn.Module):
         return final
 
 
-class LabeledPatientTaskHead(nn.Module):
+class LabeledSubjectTaskHead(nn.Module):
     def __init__(self, hidden_size: int):
         super().__init__()
 
@@ -279,8 +279,8 @@ class FEMRModel(transformers.PreTrainedModel):
         task_kwargs = self.config.task_config.task_kwargs
         if task_type == "clmbr":
             return CLMBRTaskHead(hidden_size, **task_kwargs)
-        elif task_type == "labeled_patients":
-            return LabeledPatientTaskHead(hidden_size, **task_kwargs)
+        elif task_type == "labeled_subjects":
+            return LabeledSubjectTaskHead(hidden_size, **task_kwargs)
         elif task_type == "motor":
             return MOTORTaskHead(hidden_size, **task_kwargs)
         else:
@@ -301,7 +301,7 @@ class FEMRModel(transformers.PreTrainedModel):
                 result["representations"] = features
             if return_logits or return_reprs:
                 result["timestamps"] = batch["transformer"]["timestamps"][batch["transformer"]["label_indices"]]
-                result["patient_ids"] = batch["patient_ids"][batch["transformer"]["label_indices"]]
+                result["subject_ids"] = batch["subject_ids"][batch["transformer"]["label_indices"]]
             return loss, result
         else:
             loss = 0
@@ -310,13 +310,13 @@ class FEMRModel(transformers.PreTrainedModel):
                 features = features[batch["transformer"]["label_indices"], :]
                 result = {
                     "timestamps": batch["transformer"]["timestamps"][batch["transformer"]["label_indices"]],
-                    "patient_ids": batch["patient_ids"][batch["transformer"]["label_indices"]],
+                    "subject_ids": batch["subject_ids"][batch["transformer"]["label_indices"]],
                     "representations": features,
                 }
             else:
                 result = {
                     "timestamps": batch["transformer"]["timestamps"],
-                    "patient_ids": batch["patient_ids"],
+                    "subject_ids": batch["subject_ids"],
                     "representations": features,
                 }
 
@@ -337,7 +337,7 @@ def to_device(data: Any, device: torch.device) -> Any:
 
 
 def compute_features(
-    db: meds_reader.PatientDatabase,
+    db: meds_reader.SubjectDatabase,
     model_path: str,
     labels: List[meds.Label],
     num_proc: int = 1,
@@ -348,7 +348,7 @@ def compute_features(
     """ "Compute features for a set of labels given a dataset and a model.
 
     Arguments:
-        dataset: A HuggingFace dataset containing MEDS patients
+        dataset: A HuggingFace dataset containing MEDS subjects
         model_path: A path to a saved pretrained model, including a saved tokenizer
         labels: MEDS labels to compute features for
         num_proc: The number of processors to use
@@ -357,11 +357,11 @@ def compute_features(
         ontology: A FEMR ontology object, which is necessary for models that use a hierarchical tokenizer
 
     Returns:
-        A dictionary of numpy arrays, with three keys, "patient_ids", "feature_times" and "features"
-         -  "patient_ids" and "feature_times" define the patient and time each feature refers to
-         -  "features" provides the representations at each patient id and feature time
+        A dictionary of numpy arrays, with three keys, "subject_ids", "feature_times" and "features"
+         -  "subject_ids" and "feature_times" define the subject and time each feature refers to
+         -  "features" provides the representations at each subject id and feature time
     """
-    task = femr.models.tasks.LabeledPatientTask(labels)
+    task = femr.models.tasks.LabeledSubjectTask(labels)
 
     model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
     tokenizer = femr.models.tokenizer.FEMRTokenizer.from_pretrained(model_path, ontology=ontology)
@@ -375,14 +375,14 @@ def compute_features(
     cpu_device = torch.device("cpu")
 
     batches = processor.convert_dataset(
-        filtered_data, tokens_per_batch=tokens_per_batch, min_patients_per_batch=1, num_proc=num_proc
+        filtered_data, tokens_per_batch=tokens_per_batch, min_subjects_per_batch=1, num_proc=num_proc
     )
 
     batches.set_format("pt")
 
     loader = torch.utils.data.DataLoader(batches, num_workers=num_proc, pin_memory=True, collate_fn=processor.collate)
 
-    all_patient_ids = []
+    all_subject_ids = []
     all_feature_times = []
     all_representations = []
 
@@ -392,16 +392,16 @@ def compute_features(
                 if device:
                     batch = to_device(batch, device)
                 _, result = model(**batch, return_reprs=True)
-                all_patient_ids.append(result["patient_ids"].to(cpu_device, non_blocking=True))
+                all_subject_ids.append(result["subject_ids"].to(cpu_device, non_blocking=True))
                 all_feature_times.append(result["timestamps"].to(cpu_device, non_blocking=True))
                 all_representations.append(result["representations"].to(cpu_device, non_blocking=True))
 
-    all_patient_ids_np = torch.concatenate(all_patient_ids).numpy()
+    all_subject_ids_np = torch.concatenate(all_subject_ids).numpy()
     all_feature_times_np = torch.concatenate(all_feature_times).numpy()
     all_representations_np = torch.concatenate(all_representations).numpy()
 
     return {
-        "patient_ids": all_patient_ids_np,
+        "subject_ids": all_subject_ids_np,
         "feature_times": all_feature_times_np.astype("datetime64[s]"),
         "features": all_representations_np,
     }
