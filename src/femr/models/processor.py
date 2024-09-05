@@ -51,10 +51,10 @@ def map_preliminary_batch_stats(
         # We need exact batching, so we need an algorithm that precisely covers every label in the batch
         if data["needs_exact"]:
             current_start = 0
-            current_end = 0
+            current_end = None
             for label_index in data["transformer"]["label_indices"]:
                 if (label_index - current_start + 1) >= max_length:
-                    if current_start != current_end:
+                    if current_end is not None:
                         lengths.append((subject.subject_id, current_start, current_end - current_start + 1))
                     current_start = label_index - max_length + 1
                     current_end = label_index
@@ -234,6 +234,7 @@ class BatchCreator:
             # Remember, these arrays are all designed for PyTorch EmbeddingBag
 
             # We need to get the start and end at a particular offset
+            assert offset < len(per_subject_token_indices), f'Got it {len(per_subject_token_indices)} {subject.subject_id} {offset} {max_length}'
             internal_start = per_subject_token_indices[offset]
             internal_end = per_subject_token_indices[offset + length_to_add]
 
@@ -325,13 +326,13 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
     with meds_reader.SubjectDatabase(path_to_database) as database:
         for lengths, offsets in batch_data:
             offsets = list(offsets)
-            for start, end in zip(offsets, offsets[1:]):
+            for i, (start, end) in enumerate(zip(offsets, offsets[1:])):
                 creator.start_batch()
                 for subject_index, offset, length in lengths[start:end, :]:
                     creator.add_subject(database[subject_index.item()], offset, length)
 
                 result = creator.get_batch_data()
-                assert "task" in result, f"No task present in {lengths[start:end, :]}"
+                assert "task" in result, f"No task present in {lengths[start:end, :]} {i} {start} {end}"
 
                 yield result
 
@@ -418,9 +419,13 @@ class FEMRBatchProcessor:
         )
 
         lengths = np.concatenate(length_chunks)
+        order = np.argsort(lengths[:, 0])
+        lengths = lengths[order, :]
 
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(342342)
         rng.shuffle(lengths)
+
+        assert len(lengths) != 0
 
         current_batch_length = 0
 
@@ -442,12 +447,16 @@ class FEMRBatchProcessor:
 
         final_batch_data = []
 
-        for batch_part in split_batches:
+        for i, batch_part in enumerate(split_batches):
             if len(batch_part) == 0:
                 continue
             start = batch_part[0][0]
             end = batch_part[-1][-1]
             lengths_part = lengths[start:end, :]
+
+            for j, (a, b) in enumerate(batch_part):
+                assert a != b, f'{a} {b} {i} {j}'
+
             offsets = [0] + [b - start for _, b in batch_part]
 
             final_batch_data.append(
@@ -468,7 +477,7 @@ class FEMRBatchProcessor:
             gen_kwargs={
                 "batch_data": final_batch_data,
             },
-            num_proc=num_proc,
+            num_proc=num_proc // 4,
             writer_batch_size=8,
         )
 

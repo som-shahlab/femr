@@ -59,9 +59,7 @@ class LabeledSubjectTask(Task):
 
         self.label_map: Mapping[int, Any] = collections.defaultdict(list)
         for label in labels:
-            row_without_subject_id = dict(label)
-            del row_without_subject_id["subject_id"]
-            self.label_map[label["subject_id"]].append(row_without_subject_id)
+            self.label_map[label.subject_id].append(label._asdict())
 
         for k, v in self.label_map.items():
             v.sort(key=lambda a: a["prediction_time"])
@@ -102,7 +100,7 @@ class LabeledSubjectTask(Task):
             next_valid = next_date is not None and next_date <= current_label["prediction_time"]
 
             if next_valid:
-                # Next one is valid, so break eary to give it a chance next time
+                # Next one is valid, so break early to give it a chance next time
                 break
 
             if is_valid:

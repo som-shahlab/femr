@@ -318,20 +318,22 @@ def join_labels(features: Mapping[str, np.ndarray], labels: pd.DataFrame) -> Map
     feature_index = 0
 
     for label in labels.itertuples(index=False):
-        while (
-            (feature_index + 1) < len(order)
-            and features["subject_ids"][order[feature_index + 1]] <= label.subject_id
-            and features["feature_times"][order[feature_index + 1]] <= label.prediction_time
-        ):
-            feature_index += 1
+        while ((feature_index + 1) < len(order)):
+            next_key = (features['subject_ids'][order[feature_index + 1]], features["feature_times"][order[feature_index + 1]])
+            if next_key <= (label.subject_id, label.prediction_time):
+                feature_index += 1
+            else:
+                break
+
         is_valid = (
-            feature_index < len(order)
-            and features["subject_ids"][order[feature_index]] == label.subject_id
-            and features["feature_times"][order[feature_index]] <= label.prediction_time
+            (feature_index < len(order))
+            and (features["subject_ids"][order[feature_index]] == label.subject_id)
+            and (features["feature_times"][order[feature_index]] <= label.prediction_time)
         )
+            
         assert is_valid, (
             f'{feature_index} {label} {features["subject_ids"][order[feature_index]]} '
-            + f'{features["feature_times"][order[feature_index]]}'
+            + f'{features["feature_times"][order[feature_index]]} {len(order)} {next_key}'
         )
         indices.append(order[feature_index])
         label_values.append(label.boolean_value)
