@@ -364,7 +364,7 @@ def compute_features(
     task = femr.models.tasks.LabeledSubjectTask(labels)
 
     model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
-    tokenizer = femr.models.tokenizer.FEMRTokenizer.from_pretrained(model_path, ontology=ontology)
+    tokenizer = femr.models.tokenizer.HierarchicalTokenizer.from_pretrained(model_path, ontology=ontology)
     processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
 
     filtered_data = db.filter(list(task.label_map.keys()))
@@ -395,6 +395,8 @@ def compute_features(
                 all_subject_ids.append(result["subject_ids"].to(cpu_device, non_blocking=True))
                 all_feature_times.append(result["timestamps"].to(cpu_device, non_blocking=True))
                 all_representations.append(result["representations"].to(cpu_device, non_blocking=True))
+
+    torch.cuda.synchronize()
 
     all_subject_ids_np = torch.concatenate(all_subject_ids).numpy()
     all_feature_times_np = torch.concatenate(all_feature_times).numpy()

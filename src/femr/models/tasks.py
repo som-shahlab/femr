@@ -296,7 +296,10 @@ class MOTORTask(Task):
         for task, task_stats in zip(tasks, stats):
             frac_events = task_stats[1] / (task_stats[0] + task_stats[1])
             rate = frac_events / task_stats[2].mean()
-            task_data.append((task, rate))
+            if rate != 0:
+                task_data.append((task, rate))
+            else:
+                print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())        
 
         return MOTORTask(task_data, time_bins, final_layer_size)
 
