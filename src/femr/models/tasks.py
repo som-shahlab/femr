@@ -14,6 +14,7 @@ import torch
 import warnings
 
 import femr.models.config
+import femr.models.tokenizer
 import femr.ontology
 import femr.pat_utils
 import femr.stat_utils
@@ -186,6 +187,10 @@ class SurvivalCalculator:
         for event in subject.events:
             if event.time is None:
                 continue
+            if event.code.split('/')[0] in ('LAB', 'MEDICATION', 'INFUSION_START', 'INFUSION_END'):
+                continue
+            if event.numeric_value is not None or event.text_value is not None:
+                continue
             codes = set()
             for parent in ontology.get_all_parents(event.code):
                 if code_whitelist is None or parent in code_whitelist:
@@ -266,11 +271,10 @@ class MOTORTask(Task):
     def fit_pretraining_task_info(
         cls,
         db: meds_reader.SubjectDatabase,
-        tokenizer: femr.models.tokenizer.FEMRTokenizer,
+        tokenizer: femr.models.tokenizer.HierarchicalTokenizer,
         num_tasks: int,
         num_bins: int,
         final_layer_size: int,
-        num_proc: int = 1,
     ) -> MOTORTask:
         tasks = []
         for dict_entry in tokenizer.dictionary["vocab"]:
@@ -280,7 +284,7 @@ class MOTORTask(Task):
                     break
 
         if len(tasks) < num_tasks:
-            warnings.warn(f"Could not find enough tasks in the provided tokenizer {len(tasks)}", warnings.Warning)
+            warnings.warn(f"Could not find enough tasks in the provided tokenizer {len(tasks)}")
 
         length_samples, stats = functools.reduce(
             _prefit_motor_agg, db.map(functools.partial(_prefit_motor_map, tasks=tasks, ontology=tokenizer.ontology))
@@ -297,7 +301,7 @@ class MOTORTask(Task):
             frac_events = task_stats[1] / (task_stats[0] + task_stats[1])
             rate = frac_events / task_stats[2].mean()
             if rate != 0:
-                task_data.append((task, rate))
+                task_data.append((task, rate, task_stats[0], task_stats[1], task_stats[2].mean()))
             else:
                 print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())        
 

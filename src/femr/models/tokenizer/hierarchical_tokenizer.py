@@ -247,7 +247,7 @@ class HierarchicalTokenizer(transformers.utils.PushToHubMixin):
         for banned in banned_properties:
             del properties[banned]
 
-        if False:
+        if True:
             statistics = functools.reduce(
                 agg_statistics,
                 db.map(
