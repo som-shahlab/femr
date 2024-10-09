@@ -18,6 +18,7 @@ import femr.models.tokenizer
 import femr.ontology
 import femr.pat_utils
 import femr.stat_utils
+import random
 
 
 class Task(abc.ABC):
@@ -38,6 +39,10 @@ class Task(abc.ABC):
 
     @abc.abstractmethod
     def needs_exact(self) -> bool: ...
+
+    @abc.abstractmethod
+    def get_sampled_labels(self, length: int) -> int:
+        return length
 
     @abc.abstractmethod
     def add_event(
@@ -165,17 +170,6 @@ class CLMBRTask(Task):
     def get_batch_data(self) -> Mapping[str, np.ndarray]:
         return {"labels": np.array(self.batch_labels, dtype=np.int32)}
 
-
-def should_make_survival_prediction(current_date: datetime.datetime, next_date: Optional[datetime.datetime]):
-    if next_date is None:
-        return False
-
-    if current_date == next_date or current_date.date() == next_date.date():
-        return False
-
-    return True
-
-
 class SurvivalCalculator:
     def __init__(
         self, ontology: femr.ontology.Ontology, subject: meds_reader.Subject, code_whitelist: Optional[Set[str]] = None
@@ -234,25 +228,28 @@ def _prefit_motor_map(
         birth = femr.pat_utils.get_subject_birthdate(subject)
 
         for event, next_event in zip(subject.events, subject.events[1:]):
-            if (event.time is None) or ((event.time - birth).days <= 1):
+            if (event.time is None) or (event.time.date() == birth.date()) or (event.time.date() == next_event.time.date()):
                 continue
-            if should_make_survival_prediction(event.time, next_event.time):
-                censor_time, tte = calculator.get_future_events_for_time(event.time)
 
-                for i, task in enumerate(tasks):
-                    if task in tte:
-                        time = tte[task]
-                        is_censored = False
-                    else:
-                        time = censor_time
-                        is_censored = True
+            censor_time, tte = calculator.get_future_events_for_time(event.time)
 
-                    if is_censored:
-                        task_time_stats[i][0] += 1
-                    else:
-                        event_times.add(time.total_seconds(), 1)
-                        task_time_stats[i][1] += 1
-                    task_time_stats[i][2].add(1, time.total_seconds())
+            if len(tte) == 0:
+                continue
+
+            for i, task in enumerate(tasks):
+                if task in tte:
+                    time = tte[task]
+                    is_censored = False
+                else:
+                    time = censor_time
+                    is_censored = True
+
+                if is_censored:
+                    task_time_stats[i][0] += 1
+                else:
+                    event_times.add(time.total_seconds(), 1)
+                    task_time_stats[i][1] += 1
+                task_time_stats[i][2].add(1, time.total_seconds())
 
     return (event_times, task_time_stats)
 
@@ -300,11 +297,17 @@ class MOTORTask(Task):
         for task, task_stats in zip(tasks, stats):
             frac_events = task_stats[1] / (task_stats[0] + task_stats[1])
             rate = frac_events / task_stats[2].mean()
-            if rate != 0:
-                task_data.append((task, rate, task_stats[0], task_stats[1], task_stats[2].mean()))
-            else:
-                print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())        
 
+            if rate == 0:
+                print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())  
+                continue
+
+            if frac_events < 1/1000:
+                print("Ran into very rare task with less than 10 occurrences", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())
+                continue
+            
+            task_data.append((task, rate, task_stats[0], task_stats[1], task_stats[2].mean()))
+            
         return MOTORTask(task_data, time_bins, final_layer_size)
 
     def __init__(self, pretraining_task_info: List[Tuple[str, float]], time_bins: List[float], final_layer_size: int):
@@ -342,6 +345,10 @@ class MOTORTask(Task):
     def needs_exact(self) -> bool:
         return False
 
+    def get_sampled_labels(self, length: int) -> int:
+        desired_labels = max(5, length // 10)
+        return desired_labels
+
     def start_batch(self) -> None:
         self.censor_time: List[float] = []
 
@@ -368,9 +375,13 @@ class MOTORTask(Task):
         current_date: datetime.datetime,
         next_date: Optional[datetime.datetime],
         next_features: Optional[Sequence[int]] = None,
+        actually_add: bool = True,
     ) -> int:
-        if not should_make_survival_prediction(current_date, next_date):
+        if next_date is None or next_date == current_date:
             return 0
+        
+        if not actually_add:
+            return 1
 
         censor_time, tte = self.calculator.get_future_events_for_time(current_date)
 

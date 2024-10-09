@@ -25,6 +25,7 @@ dependencies = [
     "pandas >= 2.2",
     "pandas-stubs >= 2.2",
     "types-tqdm >= 4.60.0",
+    "xformers >= 0.0.28",
 ]
 requires-python=">3.9"
 dynamic = ["version"]

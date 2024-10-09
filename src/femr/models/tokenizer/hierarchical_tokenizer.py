@@ -7,6 +7,7 @@ import functools
 import math
 import os
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple, Union
+import meds
 
 import meds_reader
 import msgpack
@@ -24,7 +25,8 @@ import traceback
 
 def agg_statistics(stats1, stats2):
     try:
-        stats1["age_stats"].combine(stats2["age_stats"])
+        for k in stats1["age_stats"]:
+            stats1["age_stats"][k].combine(stats2["age_stats"][k])
 
         for k, v in stats2["code_counts"].items():
             stats1["code_counts"][k] += v
@@ -75,7 +77,7 @@ def map_statistics(
     ontology: femr.ontology.Ontology,
     properties: Mapping[str, pa.DataType],
 ) -> Mapping[str, Any]:
-    age_stats = femr.stat_utils.OnlineStatistics()
+    age_stats = collections.defaultdict(femr.stat_utils.OnlineStatistics)
     code_counts: Dict[str, float] = collections.defaultdict(float)
 
     
@@ -107,9 +109,20 @@ def map_statistics(
             } for k in property_samples
         }
 
+        last_time = None
+
         for event in subject.events:
-            if event.time is not None and event.time != birth_date:
-                age_stats.add(weight, (event.time - birth_date).total_seconds())
+            if event.time is not None and event.time.date() > birth_date.date():
+                age = (event.time - birth_date).total_seconds()
+                age_stats["age"].add(weight, age)
+                age_stats["log_age"].add(weight, math.log(1 + age))
+
+            if event.time is not None and event.time.date() > birth_date.date() and last_time is not None and last_time.date() > birth_date.date():
+                delta = (event.time - last_time).total_seconds()
+                age_stats["delta"].add(weight, delta)
+                age_stats["log_delta"].add(weight, math.log(1 + delta))
+
+            last_time = event.time
 
             for k, v in event:
                 if k == 'code':
@@ -138,7 +151,7 @@ def map_statistics(
             res['numeric_count'] += len(v['numeric_samples']) / weight
 
     return {
-        "age_stats": age_stats,
+        "age_stats": dict(age_stats),
         "code_counts": code_counts,
         "property_samples": property_samples,
     }
@@ -157,6 +170,10 @@ def convert_statistics_to_msgpack(
         weight = weight / baseline
 
         weight = min(1, weight)
+
+        if code == meds.birth_code:
+            baseline = 1
+            weight = 0.5
 
         if weight != 0 and weight != 1:
             entry = {
@@ -219,12 +236,16 @@ def convert_statistics_to_msgpack(
     vocab.sort(key=lambda a: a["weight"])
     vocab = vocab[:vocab_size]
 
+    age_stats_dict = {}
+    for k, v in statistics["age_stats"].items():
+        age_stats_dict[k] = {
+            "mean": v.mean(),
+            "std": v.standard_deviation(),
+        }
+
     result = {
         "vocab": vocab,
-        "age_stats": {
-            "mean": statistics["age_stats"].mean(),
-            "std": statistics["age_stats"].standard_deviation(),
-        },
+        "age_stats": age_stats_dict,
     }
 
     return result
@@ -247,25 +268,17 @@ class HierarchicalTokenizer(transformers.utils.PushToHubMixin):
         for banned in banned_properties:
             del properties[banned]
 
-        if True:
-            statistics = functools.reduce(
-                agg_statistics,
-                db.map(
-                    functools.partial(
-                        map_statistics,
-                        num_subjects=len(db),
-                        ontology=ontology,
-                        properties = db.properties,
-                    )
-                ),
-            )
-
-            with open('whatever.pkl', 'wb') as f:
-                pickle.dump(statistics, f)
-
-        else:
-            with open('whatever.pkl', 'rb') as f:
-                statistics = pickle.load(f)
+        statistics = functools.reduce(
+            agg_statistics,
+            db.map(
+                functools.partial(
+                    map_statistics,
+                    num_subjects=len(db),
+                    ontology=ontology,
+                    properties = db.properties,
+                )
+            ),
+        )
 
         whatever = convert_statistics_to_msgpack(statistics, vocab_size, num_numeric, ontology, min_fraction)
 
@@ -409,5 +422,15 @@ class HierarchicalTokenizer(transformers.utils.PushToHubMixin):
         return codes, weights
 
 
-    def normalize_age(self, age: datetime.timedelta) -> float:
-        return (age.total_seconds() - self.dictionary["age_stats"]["mean"]) / (self.dictionary["age_stats"]["std"])
+    def get_time_data(self, age: datetime.timedelta, delta: datetime.timedelta) -> float:
+        result = []
+
+        for v, name in zip((age, delta), ("age", "delta")):
+            for transform, transform_name in ((lambda a:a, ""), (lambda a: math.log(a + 1), "log_")):
+                stats = self.dictionary["age_stats"][transform_name + name]
+                if v is None:
+                    result.append(0)
+                else:
+                    result.append((transform(v.total_seconds()) - stats["mean"]) / stats["std"])
+
+        return result
