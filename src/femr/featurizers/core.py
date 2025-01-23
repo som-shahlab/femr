@@ -340,13 +340,21 @@ def join_labels(features: Mapping[str, np.array], labels: List[meds.Label]) -> M
         if label_index == len(labels):
             break
 
-        assert patient_id <= labels[label_index]["patient_id"], f"Missing features for label {labels[label_index]}"
+        # Skip if current patient_id is greater than label's patient_id 
+        # (means no features found for that label's patient)
+        if patient_id > labels[label_index]["patient_id"]:
+            label_index += 1
+            continue
+            
         if patient_id < labels[label_index]["patient_id"]:
             continue
 
-        assert (
-            feature_time <= labels[label_index]["prediction_time"]
-        ), f"Missing features for label {labels[label_index]}"
+        # Skip if current feature_time is greater than label's prediction_time
+        # (means no features found at or before that label's prediction time)
+        if feature_time > labels[label_index]["prediction_time"]:
+            label_index += 1
+            continue
+            
         if feature_time < labels[label_index]["prediction_time"]:
             continue
 
