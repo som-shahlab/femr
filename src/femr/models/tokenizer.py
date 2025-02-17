@@ -190,14 +190,14 @@ def convert_statistics_to_msgpack(
                 if start_val == end_val:
                     continue
 
-            entry = {
-                "type": "numeric",
-                "code_string": code,
-                "val_start": start_val,
-                "val_end": end_val,
-                "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
-            }
-            vocab.append(entry)
+                entry = {
+                    "type": "numeric",
+                    "code_string": code,
+                    "val_start": start_val,
+                    "val_end": end_val,
+                    "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
+                }
+                vocab.append(entry)
     else:
         assert ontology
         for code, weight in statistics["code_counts"].items():
