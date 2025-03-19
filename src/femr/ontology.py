@@ -38,7 +38,9 @@ class Ontology:
         self.parents_map: Dict[str, Set[str]] = collections.defaultdict(set)
 
         # Load from the athena path ...
-        concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0)
+        concept = pl.scan_csv(
+            os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0, quote_char=None
+        )
         code_col = pl.col("vocabulary_id") + "/" + pl.col("concept_code")
         description_col = pl.col("concept_name")
         concept_id_col = pl.col("concept_id").cast(pl.Int64)
@@ -64,7 +66,10 @@ class Ontology:
                 non_standard_concepts.add(concept_id)
 
         relationship = pl.scan_csv(
-            os.path.join(athena_path, "CONCEPT_RELATIONSHIP.csv"), separator="\t", infer_schema_length=0
+            os.path.join(athena_path, "CONCEPT_RELATIONSHIP.csv"),
+            separator="\t",
+            infer_schema_length=0,
+            quote_char=None,
         )
         relationship_id = pl.col("relationship_id")
         relationship = relationship.filter(
@@ -78,7 +83,9 @@ class Ontology:
             if concept_id_1 in non_standard_concepts:
                 self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
 
-        ancestor = pl.scan_csv(os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), separator="\t", infer_schema_length=0)
+        ancestor = pl.scan_csv(
+            os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), separator="\t", infer_schema_length=0, quote_char=None
+        )
         ancestor = ancestor.filter(pl.col("min_levels_of_separation") == "1")
         for concept_id, parent_concept_id in (
             ancestor.select(
