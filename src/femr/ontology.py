@@ -81,6 +81,10 @@ class Ontology:
             .rows()
         ):
             if concept_id_1 in non_standard_concepts:
+                if concept_id_2 not in concept_id_to_code_map:
+                    raise RuntimeError(f"Could not find concept id {concept_id_2} in CONCEPT.csv. This is likely due to not running cpt.sh")
+                if concept_id_1 not in concept_id_to_code_map:
+                    raise RuntimeError(f"Could not find concept id {concept_id_1} in CONCEPT.csv. This is likely due to not running cpt.sh")
                 self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
 
         ancestor = pl.scan_csv(
