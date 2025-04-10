@@ -20,7 +20,6 @@ import femr.models.rmsnorm
 import femr.models.tasks
 import femr.models.tokenizer
 import femr.models.xformers
-import torch_hawk
 
 
 # From https://github.com/kingoflolz/mesh-transformer-jax
@@ -86,6 +85,7 @@ class FEMREncoderLayer(nn.Module):
             hidden_mult = 1
 
         if self.use_hawk:
+            import torch_hawk
             self.input_proj = nn.Linear(
                 self.config.hidden_size,
                 hidden_mult * self.config.intermediate_size,
