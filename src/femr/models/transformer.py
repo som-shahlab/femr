@@ -173,7 +173,7 @@ class FEMRTransformer(nn.Module):
                 include_last_offset=True,
             )
 
-        self.layers = nn.ModuleList([FEMREncoderLayer(config, use_hawk=(i % 2 == 0)) for i in range(self.config.n_layers)])
+        self.layers = nn.ModuleList([FEMREncoderLayer(config, use_hawk=False) for i in range(self.config.n_layers)])
 
     def forward(self, batch, s):
         if not self.config.is_hierarchical:
@@ -456,7 +456,7 @@ def to_device(data: Any, device: torch.device) -> Any:
 def compute_features(
     db: meds_reader.SubjectDatabase,
     model_path: str,
-    labels: List[meds.Label],
+    labels: Optional[List[meds.Label]] = None,
     num_proc: int = 1,
     tokens_per_batch: int = 1024,
     device: Optional[torch.device] = None,
@@ -478,13 +478,19 @@ def compute_features(
          -  "subject_ids" and "feature_times" define the subject and time each feature refers to
          -  "features" provides the representations at each subject id and feature time
     """
-    task = femr.models.tasks.LabeledSubjectTask(labels)
 
-    model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
+    if labels is None:
+        task = None
+        filtered_data = db
+    else:
+        task = femr.models.tasks.LabeledSubjectTask(labels)
+        filtered_data = db.filter(list(task.label_map.keys()))
+
+    model = femr.models.transformer.FEMRModel.from_pretrained(
+        model_path, task_config=femr.models.config.FEMRTaskConfig(task_type="labeled_subjects")
+    )
     tokenizer = femr.models.tokenizer.HierarchicalTokenizer.from_pretrained(model_path, ontology=ontology)
     processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
-
-    filtered_data = db.filter(list(task.label_map.keys()))
 
     if device:
         model = model.to(device)
