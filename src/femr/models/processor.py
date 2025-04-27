@@ -7,12 +7,12 @@ import random
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import datasets
-import femr.models.tokenizer.flat_tokenizer
 import meds_reader
 import numpy as np
 import torch.utils.data
 
 import femr.models.tokenizer
+import femr.models.tokenizer.flat_tokenizer
 import femr.pat_utils
 
 
@@ -115,7 +115,14 @@ class BatchCreator:
         if self.task is not None:
             self.task.start_batch()
 
-    def add_subject(self, subject: meds_reader.Subject, offset: int = 0, max_length: Optional[int] = None, subsample_task_fraction: float = 1, actually_add: bool = True):
+    def add_subject(
+        self,
+        subject: meds_reader.Subject,
+        offset: int = 0,
+        max_length: Optional[int] = None,
+        subsample_task_fraction: float = 1,
+        actually_add: bool = True,
+    ):
         """Add a subject to the current batch.
 
         Note that the two optional parameters are used to add a subset of a subject to a batch.
@@ -177,7 +184,7 @@ class BatchCreator:
         per_subject_ages.append((event.time - birth) / datetime.timedelta(days=1))
         per_subject_time_data.append([1, 0, 0, 0, 0])
         per_subject_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
-                
+
         for event in subject.events:
             if event.time is None or event.time.date() <= birth.date():
                 continue
@@ -275,12 +282,14 @@ class BatchCreator:
             # Remember, these arrays are all designed for PyTorch EmbeddingBag
 
             # We need to get the start and end at a particular offset
-            assert offset < len(per_subject_token_indices), f'Got it {len(per_subject_token_indices)} {subject.subject_id} {offset} {max_length}'
+            assert offset < len(
+                per_subject_token_indices
+            ), f"Got it {len(per_subject_token_indices)} {subject.subject_id} {offset} {max_length}"
 
             if offset == 0:
                 actual_offset = 0
                 actual_length = length_to_add
-            else:    
+            else:
                 actual_offset = offset + 1
                 actual_length = length_to_add - 1
 
@@ -291,7 +300,7 @@ class BatchCreator:
                 self.token_indices.append(len(self.hierarchical_tokens) + birth_end - birth_start)
                 self.hierarchical_tokens.extend(per_subject_hierarchical_tokens[birth_start:birth_end])
                 self.hierarchical_weights.extend(per_subject_hierarchical_weights[birth_start:birth_end])
-            
+
             internal_start = per_subject_token_indices[actual_offset]
             internal_end = per_subject_token_indices[actual_offset + actual_length]
 
@@ -386,7 +395,12 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
             for i, (start, end) in enumerate(zip(offsets, offsets[1:])):
                 creator.start_batch()
                 for subject_index, offset, length, subsample_task_fraction in lengths[start:end, :]:
-                    creator.add_subject(database[subject_index.item()], offset, length, subsample_task_fraction=float(subsample_task_fraction)/1e6)
+                    creator.add_subject(
+                        database[subject_index.item()],
+                        offset,
+                        length,
+                        subsample_task_fraction=float(subsample_task_fraction) / 1e6,
+                    )
 
                 result = creator.get_batch_data()
                 assert "task" in result, f"No task present in {lengths[start:end, :]} {i} {start} {end}"
@@ -453,13 +467,14 @@ class FEMRBatchProcessor:
         assert len(batches) == 1, "Can only have one batch when collating"
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
-    def convert_dataset(self, 
-                        db: meds_reader.SubjectDatabase, 
-                        tokens_per_batch: int, 
-                        min_subjects_per_batch: int = 2, 
-                        num_proc: int = 1,
-                        max_length: Optional[int] = None,
-                    ):
+    def convert_dataset(
+        self,
+        db: meds_reader.SubjectDatabase,
+        tokens_per_batch: int,
+        min_subjects_per_batch: int = 2,
+        num_proc: int = 1,
+        max_length: Optional[int] = None,
+    ):
         """Convert an entire dataset to batches.
 
         Arguments:
@@ -517,7 +532,7 @@ class FEMRBatchProcessor:
             lengths_part = lengths[start:end, :]
 
             for j, (a, b) in enumerate(batch_part):
-                assert a != b, f'{a} {b} {i} {j}'
+                assert a != b, f"{a} {b} {i} {j}"
 
             offsets = [0] + [b - start for _, b in batch_part]
 

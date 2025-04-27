@@ -6,16 +6,18 @@ import numpy as np
 
 from femr.model_utils import get_model_vocab
 
+
 def get_subject_birthdate(subject: meds_reader.Subject) -> datetime.datetime:
     for e in subject.events:
         if e.code == meds.birth_code and e.time is not None:
             return e.time
     raise ValueError("Couldn't find subject birthdate -- Subject has no events " + str(subject))
 
+
 def get_subject_codes(subjects):
     """
-    Get all codes from subjects in a SubjectDatabase, 
-    
+    Get all codes from subjects in a SubjectDatabase,
+
     Args:
         subjects: An iterable of Subject objects.
 
@@ -31,11 +33,11 @@ def get_subject_codes(subjects):
     for subject in subjects:
         subject_codes = [event.code for event in subject.events if event.code is not None]
         codes.extend(subject_codes)
-    
+
     return codes
 
-def get_all_codes(db: meds_reader.SubjectDatabase,
-                  unnest: bool = True):
+
+def get_all_codes(db: meds_reader.SubjectDatabase, unnest: bool = True):
     """
     Get all codes from all subjects in a SubjectDatabase.
     """
@@ -45,8 +47,8 @@ def get_all_codes(db: meds_reader.SubjectDatabase,
         print(f"{len(set(subject_codes))} unique subject codes found in SubjectDatabase")
     return subject_codes
 
-def check_vocab_overlap(model_name: str,
-                        db: meds_reader.SubjectDatabase):
+
+def check_vocab_overlap(model_name: str, db: meds_reader.SubjectDatabase):
     """
     Check if the codes in the subject data are present in the model vocabulary.
 
@@ -63,8 +65,7 @@ def check_vocab_overlap(model_name: str,
                                 code_col="code")
     """
     # Get model vocabulary codes
-    model_codes = get_model_vocab(model_name=model_name, 
-                                  codes_only=True)
+    model_codes = get_model_vocab(model_name=model_name, codes_only=True)
     # Get codes for each subject
     subject_codes = get_all_codes(db)
 
@@ -75,9 +76,9 @@ def check_vocab_overlap(model_name: str,
     else:
         print(f"Overlap between model vocabulary and subject data for model {model_name}: {len(overlap)}")
     return overlap
- 
-def filter_subjects(db: meds_reader.SubjectDatabase,
-                     subject_ids: list[int]):
+
+
+def filter_subjects(db: meds_reader.SubjectDatabase, subject_ids: list[int]):
     """
     Filter the subjects in the SubjectDatabase based on the subject ids.
 
@@ -102,15 +103,16 @@ def fix_subject_codes(db: meds_reader.SubjectDatabase):
     """
     for subject_id in db:
         for e in db[subject_id].events:
-            if 'code' in e and e.code is not None:
+            if "code" in e and e.code is not None:
                 e.code = e.code.replace("//", "/")
-    return db   
+    return db
+
 
 def count_codes(db: meds_reader.SubjectDatabase):
     """
     Count the number of codes in the SubjectDatabase.
     """
-    
+
     import collections
 
     code_counts = collections.defaultdict(int)
@@ -129,4 +131,3 @@ def count_codes(db: meds_reader.SubjectDatabase):
     print("10 most common codes")
     for code, count in code_and_counts[:10]:
         print(code, count)
-
