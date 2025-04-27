@@ -7,6 +7,7 @@ import random
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import datasets
+import femr.models.tokenizer.flat_tokenizer
 import meds_reader
 import numpy as np
 import torch.utils.data
@@ -96,9 +97,9 @@ class BatchCreator:
         self.offsets = []
         self.subject_lengths = []
 
-        if False:
+        if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
             self.tokens = []
-        elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+        elif isinstance(self.tokenizer, femr.models.tokenizer.hierarchical_tokenizer.HierarchicalTokenizer):
             self.hierarchical_tokens = []
             self.hierarchical_weights = []
             self.token_indices = [0]
@@ -167,8 +168,10 @@ class BatchCreator:
             if event.time is None or event.time.date() <= birth.date():
                 # Get features and weights for the current event
                 features, weights = self.tokenizer.get_feature_codes(event)
-                per_subject_hierarchical_tokens.extend(features)
-                per_subject_hierarchical_weights.extend(weights)
+                # Handle features that are not available for the tokenizer
+                if features is not None and weights is not None:
+                    per_subject_hierarchical_tokens.extend(features)
+                    per_subject_hierarchical_weights.extend(weights)
 
         per_subject_token_indices.append(len(per_subject_hierarchical_tokens))
         per_subject_ages.append((event.time - birth) / datetime.timedelta(days=1))
@@ -211,7 +214,7 @@ class BatchCreator:
                     for _ in range(num_added):
                         per_subject_label_indices.append(len(per_subject_ages) - 1)
 
-            if False:
+            if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
                 assert len(features) == 1
                 per_subject_tokens.append(features[0])
             elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
@@ -264,10 +267,10 @@ class BatchCreator:
         self.time_data[start_index] = per_subject_time_data[0]
         self.timestamps[start_index] = per_subject_timestamps[0]
 
-        if False: #not self.tokenizer.is_hierarchical:
+        if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
             # Easy for simple tokenizer
             self.tokens.extend(per_subject_tokens[offset : offset + length_to_add])
-        elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+        elif isinstance(self.tokenizer, femr.models.tokenizer.hierarchical_tokenizer.HierarchicalTokenizer):
             # Hierarchical tokenizer is more complex since we have to shift the indices as well
             # Remember, these arrays are all designed for PyTorch EmbeddingBag
 
@@ -338,10 +341,10 @@ class BatchCreator:
             "label_indices": np.array(self.label_indices, dtype=np.int32),
         }
 
-        if False: #not self.tokenizer.is_hierarchical:
+        if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
             # For a single tokenizer, these are simple the token indices
             transformer["tokens"] = np.array(self.tokens, dtype=token_dtype)
-        elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+        elif isinstance(self.tokenizer, femr.models.tokenizer.hierarchical_tokenizer.HierarchicalTokenizer):
             # See PyTorch's EmbeddingBag for what these numpy arrays mean.
             transformer["hierarchical_tokens"] = np.array(self.hierarchical_tokens, dtype=token_dtype)
             transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float16)
@@ -450,9 +453,13 @@ class FEMRBatchProcessor:
         assert len(batches) == 1, "Can only have one batch when collating"
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
-    def convert_dataset(
-        self, db: meds_reader.SubjectDatabase, tokens_per_batch: int, min_subjects_per_batch: int = 2, num_proc: int = 1
-    ):
+    def convert_dataset(self, 
+                        db: meds_reader.SubjectDatabase, 
+                        tokens_per_batch: int, 
+                        min_subjects_per_batch: int = 2, 
+                        num_proc: int = 1,
+                        max_length: Optional[int] = None,
+                    ):
         """Convert an entire dataset to batches.
 
         Arguments:
