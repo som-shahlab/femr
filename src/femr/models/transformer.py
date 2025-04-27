@@ -382,8 +382,12 @@ class FEMRModel(transformers.PreTrainedModel):
 
         super().__init__(config)
 
-        self.transformer = FEMRTransformer(self.config.transformer_config)
-        if self.config.task_config is not None:
+        if isinstance(self.config, femr.models.config.FEMRTransformerConfig):
+            self.transformer = FEMRTransformer(self.config)
+        else:
+            self.transformer = FEMRTransformer(self.config.transformer_config)
+
+        if 'task_config' in self.config and self.config.task_config is not None:
             self.task_model = self.create_task_head()
 
     def create_task_head(self) -> nn.Module:

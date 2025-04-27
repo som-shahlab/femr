@@ -75,7 +75,7 @@ def map_statistics(
     *,
     num_subjects: int,
 ) -> Mapping[str, Any]:
-    age_stats = femr.stat_utils.OnlineStatistics()
+    age_stats = collections.defaultdict(femr.stat_utils.OnlineStatistics)
     code_counts: Dict[str, float] = collections.defaultdict(float)
 
     numeric_samples_by_lab = collections.defaultdict(functools.partial(femr.stat_utils.ReservoirSampler, 1_000))
@@ -252,7 +252,7 @@ class FlatTokenizer(transformers.utils.PushToHubMixin):
         with open(dictionary_file, "rb") as f:
             dictionary = msgpack.load(f)
 
-        return FlatTokenizer(dictionary)
+        return FlatTokenizer(dictionary=dictionary)
 
     def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
         """
