@@ -11,12 +11,12 @@ from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple, Uni
 import meds_reader
 import msgpack
 import numpy as np
+import pyarrow as pa
 import transformers
 
 import femr.ontology
-import femr.stat_utils
 import femr.pat_utils
-import pyarrow as pa
+import femr.stat_utils
 
 
 def train_tokenizer(
@@ -36,9 +36,7 @@ def train_tokenizer(
         ),
     )
 
-    return FlatTokenizer(
-        convert_statistics_to_msgpack(statistics, vocab_size, num_numeric)
-    )
+    return FlatTokenizer(convert_statistics_to_msgpack(statistics, vocab_size, num_numeric))
 
 
 def agg_statistics(stats1, stats2):
@@ -61,6 +59,7 @@ def normalize_unit(unit):
     else:
         return None
 
+
 def is_close_float(t, f):
     if f is None:
         return False
@@ -69,6 +68,7 @@ def is_close_float(t, f):
         return math.abs(f - v) < 0.01 * f
     except:
         return False
+
 
 def map_statistics(
     subjects: Iterator[meds_reader.Subject],
@@ -97,7 +97,12 @@ def map_statistics(
                 age_stats["age"].add(weight, age)
                 age_stats["log_age"].add(weight, math.log(1 + age))
 
-            if event.time is not None and event.time.date() > birth_date.date() and last_time is not None and last_time.date() > birth_date.date():
+            if (
+                event.time is not None
+                and event.time.date() > birth_date.date()
+                and last_time is not None
+                and last_time.date() > birth_date.date()
+            ):
                 delta = (event.time - last_time).total_seconds()
                 age_stats["delta"].add(weight, delta)
                 age_stats["log_delta"].add(weight, math.log(1 + delta))
@@ -107,7 +112,7 @@ def map_statistics(
             assert numeric_samples_by_lab is not None
             if event.numeric_value is not None:
                 numeric_samples_by_lab[event.code].add(event.numeric_value, weight)
-            elif 'text_value' in event and event.text_value is not None:
+            elif "text_value" in event and event.text_value is not None:
                 text_counts[(event.code, event.text_value)] += weight
             else:
                 code_counts[event.code] += weight
@@ -121,7 +126,9 @@ def map_statistics(
 
 
 def convert_statistics_to_msgpack(
-    statistics, vocab_size: int, num_numeric: int,
+    statistics,
+    vocab_size: int,
+    num_numeric: int,
 ):
     vocab = []
 
@@ -173,7 +180,6 @@ def convert_statistics_to_msgpack(
             "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
         }
         vocab.append(entry)
- 
 
     vocab.sort(key=lambda a: a["weight"])
     vocab = vocab[:vocab_size]
@@ -309,7 +315,7 @@ class FlatTokenizer(transformers.utils.PushToHubMixin):
                     return [i], None
             else:
                 return [], None
-        elif 'text_value' in event and event.text_value is not None:
+        elif "text_value" in event and event.text_value is not None:
             value = self.string_lookup.get((event.code, event.text_value))
             if value is not None:
                 return [value], None
@@ -329,7 +335,7 @@ class FlatTokenizer(transformers.utils.PushToHubMixin):
         result = []
 
         for v, name in zip((age, delta), ("age", "delta")):
-            for transform, transform_name in ((lambda a:a, ""), (lambda a: math.log(a + 1), "log_")):
+            for transform, transform_name in ((lambda a: a, ""), (lambda a: math.log(a + 1), "log_")):
                 stats = self.dictionary["age_stats"][transform_name + name]
                 if v is None:
                     result.append(0)

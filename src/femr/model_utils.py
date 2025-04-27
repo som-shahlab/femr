@@ -1,9 +1,8 @@
-import transformers
 import msgpack
+import transformers
 
-def get_model_vocab(model_name="StanfordShahLab/clmbr-t-base",
-                    codes_only=False):
-    
+
+def get_model_vocab(model_name="StanfordShahLab/clmbr-t-base", codes_only=False):
     """
     Get the vocabulary of a model.
 
@@ -18,10 +17,11 @@ def get_model_vocab(model_name="StanfordShahLab/clmbr-t-base",
         >>> model_codes  = get_model_vocab(codes_only=True)
         >>> print(len(model_codes))
     """
-    
+
     dictionary_file = transformers.utils.hub.cached_file(
-                model_name, "dictionary.msgpack",
-            )
+        model_name,
+        "dictionary.msgpack",
+    )
 
     with open(dictionary_file, "rb") as f:
         dictionary = msgpack.load(f)
@@ -35,4 +35,3 @@ def get_model_vocab(model_name="StanfordShahLab/clmbr-t-base",
         return codes
     else:
         return vocab
-    
