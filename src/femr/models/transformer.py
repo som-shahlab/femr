@@ -20,7 +20,6 @@ import femr.models.rmsnorm
 import femr.models.tasks
 import femr.models.tokenizer
 import femr.models.xformers
-import torch_hawk
 
 
 # From https://github.com/kingoflolz/mesh-transformer-jax
@@ -86,6 +85,8 @@ class FEMREncoderLayer(nn.Module):
             hidden_mult = 1
 
         if self.use_hawk:
+            import torch_hawk
+
             self.input_proj = nn.Linear(
                 self.config.hidden_size,
                 hidden_mult * self.config.intermediate_size,
@@ -99,12 +100,11 @@ class FEMREncoderLayer(nn.Module):
                 bias=self.config.use_bias,
             )
 
-        
         self.output_proj = nn.Linear(
             self.config.hidden_size + self.config.intermediate_size, self.config.hidden_size, bias=self.config.use_bias
         )
 
-    def forward(self, x, time_data, pos_embed, attn_bias, s):        
+    def forward(self, x, time_data, pos_embed, attn_bias, s):
         x = self.norm(x)
 
         if self.config.use_normed_ages:
@@ -112,8 +112,8 @@ class FEMREncoderLayer(nn.Module):
                 all_time = time_data
             else:
                 all_time = torch.concatenate((time_data, time_data**2), axis=-1)
-        
-            x[:, -all_time.shape[1]:] = all_time.to(dtype=x.dtype)
+
+            x[:, -all_time.shape[1] :] = all_time.to(dtype=x.dtype)
 
         transformed = self.input_proj(x)
 
@@ -121,7 +121,7 @@ class FEMREncoderLayer(nn.Module):
             attn = self.hawk_module(x, s)
             ff = transformed
         else:
-        
+
             ff = transformed[:, : -self.config.hidden_size * 3]
             qkv = transformed[:, -self.config.hidden_size * 3 :]
 
@@ -141,7 +141,6 @@ class FEMREncoderLayer(nn.Module):
             )
 
             attn = attn.reshape(x.shape)
-
 
         if self.config.hidden_act == "gelu":
             ff = F.gelu(ff)
@@ -173,7 +172,7 @@ class FEMRTransformer(nn.Module):
                 include_last_offset=True,
             )
 
-        self.layers = nn.ModuleList([FEMREncoderLayer(config, use_hawk=(i % 2 == 0)) for i in range(self.config.n_layers)])
+        self.layers = nn.ModuleList([FEMREncoderLayer(config, use_hawk=False) for i in range(self.config.n_layers)])
 
     def forward(self, batch, s):
         if not self.config.is_hierarchical:
@@ -273,7 +272,7 @@ class MOTORTaskHead(nn.Module):
 
         #     bias = self.task_layer.bias.reshape(1, 1, -1)
         #     better = torch.exp2((time_dependent_logits - bias).type(torch.bfloat16) + (bias + batch["log_time"]).type(torch.bfloat16)).type(torch.float32)
-            
+
         #     bad_error = torch.mean((actual - bad) **2)
         #     better_error = torch.mean((actual - better) **2)
         #     var = torch.var(actual)
@@ -292,7 +291,6 @@ class MOTORTaskHead(nn.Module):
         # print(self.task_layer.bias.reshape(1, 1, -1) + batch["log_time"])
         # print(self.task_layer.bias)
         # print(time_dependent_logits - self.task_layer.bias.reshape(1, 1, -1))
-        
 
         # total_loss = time_dependent_logits + batch["log_time"]
         # max_loss = torch.max(total_loss)
@@ -303,23 +301,18 @@ class MOTORTaskHead(nn.Module):
 
         # # max_location[0][0] = 532
 
-
         # stats(features[max_location[0], :])
         # stats(time_independent_features[max_location[0], max_location[1], :])
 
-
         # stats(features[532, :])
         # stats(time_independent_features[532, max_location[1], :])
-
 
         # print("Log time", batch["log_time"][max_location])
         # print("Logits", time_dependent_logits[max_location])
         # print("Bias", self.task_layer.bias[max_location[2]][0])
 
-
         # # # print(batch["log_time"][max_location])
 
-        
         # # print(features[max_location[0], :])
         # # print(time_independent_features[max_location[0], max_location[1], :])
         # # print(self.task_layer.weight[max_location[2], :])
@@ -332,7 +325,6 @@ class MOTORTaskHead(nn.Module):
 
         # print("Recompute", (task_vector * feature_vector).sum() + self.task_layer.bias[max_location[2]][0])
 
-
         # features[max_location[0], :] = 0
         # time_independent_features[max_location[0], max_location[1], :] = 0
 
@@ -342,7 +334,6 @@ class MOTORTaskHead(nn.Module):
         # time_dependent_logits[max_location[0], max_location[1], :] = 0
 
         # stats(time_dependent_logits)
-
 
         # print(time_dependent_logits - self.task_layer.bias.unsqueeze(0).unsqueeze(0))
 
@@ -382,8 +373,12 @@ class FEMRModel(transformers.PreTrainedModel):
 
         super().__init__(config)
 
-        self.transformer = FEMRTransformer(self.config.transformer_config)
-        if self.config.task_config is not None:
+        if isinstance(self.config, femr.models.config.FEMRTransformerConfig):
+            self.transformer = FEMRTransformer(self.config)
+        else:
+            self.transformer = FEMRTransformer(self.config.transformer_config)
+
+        if "task_config" in self.config and self.config.task_config is not None:
             self.task_model = self.create_task_head()
 
     def create_task_head(self) -> nn.Module:
@@ -405,8 +400,8 @@ class FEMRModel(transformers.PreTrainedModel):
 
         batch = remove_first_dimension(batch)
 
-        s = torch.zeros_like(batch['subject_ids'])
-        s[1:] = batch['subject_ids'][1:] != batch['subject_ids'][:-1]
+        s = torch.zeros_like(batch["subject_ids"])
+        s[1:] = batch["subject_ids"][1:] != batch["subject_ids"][:-1]
         s = torch.cumsum(s, dim=0).type(torch.uint8)
 
         features = self.transformer(batch["transformer"], s)
@@ -456,7 +451,7 @@ def to_device(data: Any, device: torch.device) -> Any:
 def compute_features(
     db: meds_reader.SubjectDatabase,
     model_path: str,
-    labels: List[meds.Label],
+    labels: Optional[List[meds.Label]] = None,
     num_proc: int = 1,
     tokens_per_batch: int = 1024,
     device: Optional[torch.device] = None,
@@ -478,13 +473,19 @@ def compute_features(
          -  "subject_ids" and "feature_times" define the subject and time each feature refers to
          -  "features" provides the representations at each subject id and feature time
     """
-    task = femr.models.tasks.LabeledSubjectTask(labels)
 
-    model = femr.models.transformer.FEMRModel.from_pretrained(model_path, task_config=task.get_task_config())
+    if labels is None:
+        task = None
+        filtered_data = db
+    else:
+        task = femr.models.tasks.LabeledSubjectTask(labels)
+        filtered_data = db.filter(list(task.label_map.keys()))
+
+    model = femr.models.transformer.FEMRModel.from_pretrained(
+        model_path, task_config=femr.models.config.FEMRTaskConfig(task_type="labeled_subjects")
+    )
     tokenizer = femr.models.tokenizer.HierarchicalTokenizer.from_pretrained(model_path, ontology=ontology)
     processor = femr.models.processor.FEMRBatchProcessor(tokenizer, task=task)
-
-    filtered_data = db.filter(list(task.label_map.keys()))
 
     if device:
         model = model.to(device)

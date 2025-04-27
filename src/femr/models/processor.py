@@ -12,6 +12,7 @@ import numpy as np
 import torch.utils.data
 
 import femr.models.tokenizer
+import femr.models.tokenizer.flat_tokenizer
 import femr.pat_utils
 
 
@@ -96,9 +97,9 @@ class BatchCreator:
         self.offsets = []
         self.subject_lengths = []
 
-        if False:
+        if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
             self.tokens = []
-        elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+        elif isinstance(self.tokenizer, femr.models.tokenizer.hierarchical_tokenizer.HierarchicalTokenizer):
             self.hierarchical_tokens = []
             self.hierarchical_weights = []
             self.token_indices = [0]
@@ -114,7 +115,14 @@ class BatchCreator:
         if self.task is not None:
             self.task.start_batch()
 
-    def add_subject(self, subject: meds_reader.Subject, offset: int = 0, max_length: Optional[int] = None, subsample_task_fraction: float = 1, actually_add: bool = True):
+    def add_subject(
+        self,
+        subject: meds_reader.Subject,
+        offset: int = 0,
+        max_length: Optional[int] = None,
+        subsample_task_fraction: float = 1,
+        actually_add: bool = True,
+    ):
         """Add a subject to the current batch.
 
         Note that the two optional parameters are used to add a subset of a subject to a batch.
@@ -167,14 +175,16 @@ class BatchCreator:
             if event.time is None or event.time.date() <= birth.date():
                 # Get features and weights for the current event
                 features, weights = self.tokenizer.get_feature_codes(event)
-                per_subject_hierarchical_tokens.extend(features)
-                per_subject_hierarchical_weights.extend(weights)
+                # Handle features that are not available for the tokenizer
+                if features is not None and weights is not None:
+                    per_subject_hierarchical_tokens.extend(features)
+                    per_subject_hierarchical_weights.extend(weights)
 
         per_subject_token_indices.append(len(per_subject_hierarchical_tokens))
         per_subject_ages.append((event.time - birth) / datetime.timedelta(days=1))
         per_subject_time_data.append([1, 0, 0, 0, 0])
         per_subject_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
-                
+
         for event in subject.events:
             if event.time is None or event.time.date() <= birth.date():
                 continue
@@ -211,7 +221,7 @@ class BatchCreator:
                     for _ in range(num_added):
                         per_subject_label_indices.append(len(per_subject_ages) - 1)
 
-            if False:
+            if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
                 assert len(features) == 1
                 per_subject_tokens.append(features[0])
             elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
@@ -264,20 +274,22 @@ class BatchCreator:
         self.time_data[start_index] = per_subject_time_data[0]
         self.timestamps[start_index] = per_subject_timestamps[0]
 
-        if False: #not self.tokenizer.is_hierarchical:
+        if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
             # Easy for simple tokenizer
             self.tokens.extend(per_subject_tokens[offset : offset + length_to_add])
-        elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+        elif isinstance(self.tokenizer, femr.models.tokenizer.hierarchical_tokenizer.HierarchicalTokenizer):
             # Hierarchical tokenizer is more complex since we have to shift the indices as well
             # Remember, these arrays are all designed for PyTorch EmbeddingBag
 
             # We need to get the start and end at a particular offset
-            assert offset < len(per_subject_token_indices), f'Got it {len(per_subject_token_indices)} {subject.subject_id} {offset} {max_length}'
+            assert offset < len(
+                per_subject_token_indices
+            ), f"Got it {len(per_subject_token_indices)} {subject.subject_id} {offset} {max_length}"
 
             if offset == 0:
                 actual_offset = 0
                 actual_length = length_to_add
-            else:    
+            else:
                 actual_offset = offset + 1
                 actual_length = length_to_add - 1
 
@@ -288,7 +300,7 @@ class BatchCreator:
                 self.token_indices.append(len(self.hierarchical_tokens) + birth_end - birth_start)
                 self.hierarchical_tokens.extend(per_subject_hierarchical_tokens[birth_start:birth_end])
                 self.hierarchical_weights.extend(per_subject_hierarchical_weights[birth_start:birth_end])
-            
+
             internal_start = per_subject_token_indices[actual_offset]
             internal_end = per_subject_token_indices[actual_offset + actual_length]
 
@@ -338,10 +350,10 @@ class BatchCreator:
             "label_indices": np.array(self.label_indices, dtype=np.int32),
         }
 
-        if False: #not self.tokenizer.is_hierarchical:
+        if isinstance(self.tokenizer, femr.models.tokenizer.flat_tokenizer.FlatTokenizer):
             # For a single tokenizer, these are simple the token indices
             transformer["tokens"] = np.array(self.tokens, dtype=token_dtype)
-        elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+        elif isinstance(self.tokenizer, femr.models.tokenizer.hierarchical_tokenizer.HierarchicalTokenizer):
             # See PyTorch's EmbeddingBag for what these numpy arrays mean.
             transformer["hierarchical_tokens"] = np.array(self.hierarchical_tokens, dtype=token_dtype)
             transformer["hierarchical_weights"] = np.array(self.hierarchical_weights, dtype=np.float16)
@@ -383,7 +395,12 @@ def _batch_generator(batch_data: Tuple[np.ndarray, np.ndarray], *, creator: Batc
             for i, (start, end) in enumerate(zip(offsets, offsets[1:])):
                 creator.start_batch()
                 for subject_index, offset, length, subsample_task_fraction in lengths[start:end, :]:
-                    creator.add_subject(database[subject_index.item()], offset, length, subsample_task_fraction=float(subsample_task_fraction)/1e6)
+                    creator.add_subject(
+                        database[subject_index.item()],
+                        offset,
+                        length,
+                        subsample_task_fraction=float(subsample_task_fraction) / 1e6,
+                    )
 
                 result = creator.get_batch_data()
                 assert "task" in result, f"No task present in {lengths[start:end, :]} {i} {start} {end}"
@@ -451,7 +468,12 @@ class FEMRBatchProcessor:
         return {"batch": _add_dimension(self.creator.cleanup_batch(batches[0]))}
 
     def convert_dataset(
-        self, db: meds_reader.SubjectDatabase, tokens_per_batch: int, min_subjects_per_batch: int = 2, num_proc: int = 1
+        self,
+        db: meds_reader.SubjectDatabase,
+        tokens_per_batch: int,
+        min_subjects_per_batch: int = 2,
+        num_proc: int = 1,
+        max_length: Optional[int] = None,
     ):
         """Convert an entire dataset to batches.
 
@@ -510,7 +532,7 @@ class FEMRBatchProcessor:
             lengths_part = lengths[start:end, :]
 
             for j, (a, b) in enumerate(batch_part):
-                assert a != b, f'{a} {b} {i} {j}'
+                assert a != b, f"{a} {b} {i} {j}"
 
             offsets = [0] + [b - start for _, b in batch_part]
 

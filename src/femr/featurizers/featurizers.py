@@ -234,7 +234,7 @@ class CountFeaturizer(Featurizer):
             yield code
 
     def get_columns(self, event: meds_reader.Event) -> Iterator[int]:
-        if event.text_value is not None:
+        if "text_value" in event and event.text_value is not None:
             k = (event.code, event.text_value[: self.characters_for_string_values])
             if k in self.code_string_to_column_index:
                 yield self.code_string_to_column_index[k]
@@ -276,7 +276,7 @@ class CountFeaturizer(Featurizer):
             if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                 continue
 
-            if event.text_value is not None:
+            if "text_value" in event and event.text_value is not None:
                 if self.string_value_combination:
                     observed_string_value[(event.code, event.text_value[: self.characters_for_string_values])] += 1
             elif event.numeric_value is not None:

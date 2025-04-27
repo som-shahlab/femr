@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import collections
 import os
-from typing import Any, Dict, Iterable, Iterator, Optional, Set
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set
 
 import meds_reader
 import polars as pl
@@ -17,7 +17,16 @@ def _get_all_codes_map(subjects: Iterator[meds_reader.Subject]) -> Set[str]:
 
 
 class Ontology:
-    def __init__(self, athena_path: str, code_metadata_path: Optional[str] = None):
+
+    def __init__(
+        self,
+        athena_path: str,
+        code_metadata_path: Optional[str] = None,
+        infer_schema_length: int = 0,
+        ignore_errors: bool = False,
+        null_values: List[str] = None,
+        schema_overrides: Dict[str, pl.DataType] = None,
+    ):
         """Create an Ontology from an Athena download and an optional meds Code Metadata structure.
 
         NOTE: This is an expensive operation.
@@ -28,7 +37,31 @@ class Ontology:
         self.parents_map: Dict[str, Set[str]] = collections.defaultdict(set)
 
         # Load from the athena path ...
-        concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0)
+        try:
+            concept = pl.scan_csv(
+                os.path.join(athena_path, "CONCEPT.csv"),
+                separator="\t",
+                infer_schema_length=infer_schema_length,
+                ignore_errors=ignore_errors,
+                null_values=null_values,
+                schema_overrides=schema_overrides,
+            )
+        except Exception as e:
+            # If the concept_name contains quotes,
+            # polars throw an error (e.g. for terms like '"y set" tubing for peritoneal dialysis')
+            # So we try to fix it by converting it to a pandas dataframe and back
+            import pandas as pd
+
+            df = pd.read_csv(os.path.join(athena_path, "CONCEPT.csv"), sep="\t")
+            df.to_csv(os.path.join(athena_path, "CONCEPT.csv"), sep="\t", index=False)
+            concept = pl.scan_csv(
+                os.path.join(athena_path, "CONCEPT.csv"),
+                separator="\t",
+                infer_schema_length=infer_schema_length,
+                ignore_errors=ignore_errors,
+                null_values=null_values,
+                schema_overrides=schema_overrides,
+            )
         code_col = pl.col("vocabulary_id") + "/" + pl.col("concept_code")
         description_col = pl.col("concept_name")
         concept_id_col = pl.col("concept_id").cast(pl.Int64)
@@ -54,7 +87,12 @@ class Ontology:
                 non_standard_concepts.add(concept_id)
 
         relationship = pl.scan_csv(
-            os.path.join(athena_path, "CONCEPT_RELATIONSHIP.csv"), separator="\t", infer_schema_length=0
+            os.path.join(athena_path, "CONCEPT_RELATIONSHIP.csv"),
+            separator="\t",
+            infer_schema_length=infer_schema_length,
+            ignore_errors=ignore_errors,
+            null_values=null_values,
+            schema_overrides=schema_overrides,
         )
         relationship_id = pl.col("relationship_id")
         relationship = relationship.filter(
@@ -68,7 +106,14 @@ class Ontology:
             if concept_id_1 in non_standard_concepts:
                 self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
 
-        ancestor = pl.scan_csv(os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), separator="\t", infer_schema_length=0)
+        ancestor = pl.scan_csv(
+            os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"),
+            separator="\t",
+            infer_schema_length=infer_schema_length,
+            ignore_errors=ignore_errors,
+            null_values=null_values,
+            schema_overrides=schema_overrides,
+        )
         ancestor = ancestor.filter(pl.col("min_levels_of_separation") == "1")
         for concept_id, parent_concept_id in (
             ancestor.select(
@@ -79,7 +124,7 @@ class Ontology:
         ):
             self.parents_map[concept_id_to_code_map[concept_id]].add(concept_id_to_code_map[parent_concept_id])
 
-        if code_metadata_path is not None:
+        if code_metadata_path is not None and os.path.exists(code_metadata_path):
             code_metadata = pl.scan_parquet(code_metadata_path)
             code_metadat_items = (
                 code_metadata.select(pl.col("code"), pl.col("description"), pl.col("parent_codes")).collect().to_dicts()

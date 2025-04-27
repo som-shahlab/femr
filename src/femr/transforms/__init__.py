@@ -21,13 +21,13 @@ def remove_nones(
     has_value: Set[Tuple[str, datetime.date]] = set()
 
     for event in subject.events:
-        value = (event.numeric_value, event.text_value)
+        value = (event.numeric_value, None if "text_value" not in event else event.text_value)
         if any(v is not None for v in value):
             has_value.add((event.code, event.time.date()))
 
     new_events: List[meds_reader.transform.MutableEvent] = []
     for event in subject.events:
-        value = (event.numeric_value, event.text_value)
+        value = (event.numeric_value, None if "text_value" not in event else event.text_value)
         if (
             all(v is None for v in value)
             and (event.code, event.time.date()) in has_value
