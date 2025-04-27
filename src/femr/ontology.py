@@ -17,14 +17,16 @@ def _get_all_codes_map(subjects: Iterator[meds_reader.Subject]) -> Set[str]:
 
 
 class Ontology:
-    
-    def __init__(self, 
-                 athena_path: str, 
-                 code_metadata_path: Optional[str] = None,
-                 infer_schema_length: int = 0,
-                 ignore_errors: bool = False,
-                 null_values: List[str] = None,
-                 schema_overrides: Dict[str, pl.DataType] = None):
+
+    def __init__(
+        self,
+        athena_path: str,
+        code_metadata_path: Optional[str] = None,
+        infer_schema_length: int = 0,
+        ignore_errors: bool = False,
+        null_values: List[str] = None,
+        schema_overrides: Dict[str, pl.DataType] = None,
+    ):
         """Create an Ontology from an Athena download and an optional meds Code Metadata structure.
 
         NOTE: This is an expensive operation.
@@ -36,29 +38,30 @@ class Ontology:
 
         # Load from the athena path ...
         try:
-            concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), 
-                                separator="\t", 
-                                infer_schema_length=infer_schema_length,
-                                ignore_errors=ignore_errors,
-                                null_values=null_values,
-                                schema_overrides=schema_overrides
-                                )
+            concept = pl.scan_csv(
+                os.path.join(athena_path, "CONCEPT.csv"),
+                separator="\t",
+                infer_schema_length=infer_schema_length,
+                ignore_errors=ignore_errors,
+                null_values=null_values,
+                schema_overrides=schema_overrides,
+            )
         except Exception as e:
-            # If the concept_name contains quotes, 
+            # If the concept_name contains quotes,
             # polars throw an error (e.g. for terms like '"y set" tubing for peritoneal dialysis')
             # So we try to fix it by converting it to a pandas dataframe and back
             import pandas as pd
-            df = pd.read_csv(os.path.join(athena_path, "CONCEPT.csv"), 
-                        sep="\t")
-            df.to_csv(os.path.join(athena_path, "CONCEPT.csv"), 
-                      sep="\t", index=False)
-            concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), 
-                                separator="\t", 
-                                infer_schema_length=infer_schema_length,
-                                ignore_errors=ignore_errors,
-                                null_values=null_values,
-                                schema_overrides=schema_overrides
-                                )
+
+            df = pd.read_csv(os.path.join(athena_path, "CONCEPT.csv"), sep="\t")
+            df.to_csv(os.path.join(athena_path, "CONCEPT.csv"), sep="\t", index=False)
+            concept = pl.scan_csv(
+                os.path.join(athena_path, "CONCEPT.csv"),
+                separator="\t",
+                infer_schema_length=infer_schema_length,
+                ignore_errors=ignore_errors,
+                null_values=null_values,
+                schema_overrides=schema_overrides,
+            )
         code_col = pl.col("vocabulary_id") + "/" + pl.col("concept_code")
         description_col = pl.col("concept_name")
         concept_id_col = pl.col("concept_id").cast(pl.Int64)
@@ -84,12 +87,12 @@ class Ontology:
                 non_standard_concepts.add(concept_id)
 
         relationship = pl.scan_csv(
-            os.path.join(athena_path, "CONCEPT_RELATIONSHIP.csv"), 
-            separator="\t", 
+            os.path.join(athena_path, "CONCEPT_RELATIONSHIP.csv"),
+            separator="\t",
             infer_schema_length=infer_schema_length,
             ignore_errors=ignore_errors,
             null_values=null_values,
-            schema_overrides=schema_overrides
+            schema_overrides=schema_overrides,
         )
         relationship_id = pl.col("relationship_id")
         relationship = relationship.filter(
@@ -103,13 +106,14 @@ class Ontology:
             if concept_id_1 in non_standard_concepts:
                 self.parents_map[concept_id_to_code_map[concept_id_1]].add(concept_id_to_code_map[concept_id_2])
 
-        ancestor = pl.scan_csv(os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"), 
-                               separator="\t", 
-                               infer_schema_length=infer_schema_length,
-                               ignore_errors=ignore_errors,
-                               null_values=null_values,
-                               schema_overrides=schema_overrides
-                               )
+        ancestor = pl.scan_csv(
+            os.path.join(athena_path, "CONCEPT_ANCESTOR.csv"),
+            separator="\t",
+            infer_schema_length=infer_schema_length,
+            ignore_errors=ignore_errors,
+            null_values=null_values,
+            schema_overrides=schema_overrides,
+        )
         ancestor = ancestor.filter(pl.col("min_levels_of_separation") == "1")
         for concept_id, parent_concept_id in (
             ancestor.select(

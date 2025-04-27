@@ -378,7 +378,7 @@ class FEMRModel(transformers.PreTrainedModel):
         else:
             self.transformer = FEMRTransformer(self.config.transformer_config)
 
-        if 'task_config' in self.config and self.config.task_config is not None:
+        if "task_config" in self.config and self.config.task_config is not None:
             self.task_model = self.create_task_head()
 
     def create_task_head(self) -> nn.Module:
