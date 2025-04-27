@@ -17,7 +17,10 @@ import femr.pat_utils
 
 
 def map_preliminary_batch_stats(
-    subjects: Iterable[meds_reader.Subject], *, processor: FEMRBatchProcessor, max_length: int
+    subjects: Iterable[meds_reader.Subject], 
+    *, 
+    processor: FEMRBatchProcessor, 
+    max_length: int
 ):
     """
     This function creates preliminary batch statistics, to be used for final batching.
@@ -86,7 +89,9 @@ def map_preliminary_batch_stats(
 class BatchCreator:
     """The BatchCreator is designed to generate batches from subject data."""
 
-    def __init__(self, tokenizer: femr.models.tokenizer.FEMRTokenizer, task: Optional[femr.models.tasks.Task] = None):
+    def __init__(self, 
+                 tokenizer: femr.models.tokenizer.FEMRTokenizer, 
+                 task: Optional[femr.models.tasks.Task] = None):
         """Initialize a BatchCreator, with a tokenizer, and optionally a task."""
         self.tokenizer = tokenizer
         self.task = task
