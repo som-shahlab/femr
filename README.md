@@ -31,7 +31,7 @@ pip install xformers
 
 The first step of using **FEMR** is to convert your subject data into [MEDS](https://github.com/Medical-Event-Data-Standard), the standard input format expected by **FEMR** codebase.
 
-**Note: FEMR currently only supports MEDS v3, so you will need to install MEDS v3 versions of packages. Aka pip install meds-etl==0.3.10**
+**Note: FEMR currently only supports MEDS v3, so you will need to install MEDS v3 versions of packages. Aka pip install meds-etl==0.3.11**
 
 The best way to do this is with the [ETLs provided by MEDS](https://github.com/Medical-Event-Data-Standard/meds_etl).
 
