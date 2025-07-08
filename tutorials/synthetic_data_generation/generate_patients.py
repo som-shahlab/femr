@@ -31,15 +31,12 @@ if __name__ == "__main__":
         gender = "Gender/" + random.choice(["F", "M"])
         race = "Race/" + random.choice(["White", "Non-White"])
 
-        subject = {
-            "subject_id": subject_id,
-            "events": [],
-        }
+        rows = []
 
         birth_codes = [meds.birth_code, gender, race]
 
         for birth_code in birth_codes:
-            subject["events"].append({"time": birth, "code": birth_code})
+            rows.append({"subject_id": subject_id, "time": birth, "code": birth_code})
 
         code_cats = ["ICD9CM", "RxNorm"]
         for code in range(random.randint(1, 10 + (20 if gender == "Gender/F" else 0))):
@@ -52,19 +49,20 @@ if __name__ == "__main__":
                     code = code[:3] + "." + code[3:]
             current_date = current_date + datetime.timedelta(days=random.randint(1, 100))
             code = code_cat + "/" + code
-            subject["events"].append({"time": current_date, "code": code})
+            rows.append({"subject_id": subject_id, "time": current_date, "code": code})
 
-        return subject
+        return rows
 
     subjects = []
     for i in range(200):
-        subjects.append(get_random_subject(i))
+        subjects.extend(get_random_subject(i))
 
-    subject_schema = meds.schema.subject_schema()
+    subject_schema = meds.schema.data_schema()
 
     subject_table = pyarrow.Table.from_pylist(subjects, subject_schema)
 
     os.makedirs(os.path.join(args.destination, "data"), exist_ok=True)
+    os.makedirs(os.path.join(args.destination, "metadata"), exist_ok=True)
 
     pyarrow.parquet.write_table(subject_table, os.path.join(args.destination, "data", "subjects.parquet"))
 
@@ -76,13 +74,13 @@ if __name__ == "__main__":
         "code_metadata": {},
     }
 
-    jsonschema.validate(instance=metadata, schema=meds.dataset_metadata)
+    jsonschema.validate(instance=metadata, schema=meds.dataset_metadata_schema)
 
-    with open(os.path.join(args.destination, "metadata.json"), "w") as f:
+    with open(os.path.join(args.destination, "metadata", "metadata.json"), "w") as f:
         json.dump(metadata, f)
 
     print("Converting")
-    os.system(f"convert_to_meds_reader {args.destination} {args.destination}_meds")
+    os.system(f"meds_reader_convert {args.destination} {args.destination}_meds")
 
     print("Opening database")
 

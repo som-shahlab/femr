@@ -64,7 +64,7 @@ class LabeledSubjectTask(Task):
 
         self.label_map: Mapping[int, Any] = collections.defaultdict(list)
         for label in labels:
-            self.label_map[label.subject_id].append(label._asdict())
+            self.label_map[label['subject_id']].append(label)
 
         for k, v in self.label_map.items():
             v.sort(key=lambda a: a["prediction_time"])
@@ -181,10 +181,9 @@ class SurvivalCalculator:
         for event in subject.events:
             if event.time is None:
                 continue
-            if event.code.split('/')[0] in ('LAB', 'MEDICATION', 'INFUSION_START', 'INFUSION_END'):
+            if getattr(event, 'numeric_value', None) is not None or getattr(event, 'text_value', None) is not None:
                 continue
-            if event.numeric_value is not None or event.text_value is not None:
-                continue
+
             codes = set()
             for parent in ontology.get_all_parents(event.code):
                 if code_whitelist is None or parent in code_whitelist:
@@ -272,6 +271,7 @@ class MOTORTask(Task):
         num_tasks: int,
         num_bins: int,
         final_layer_size: int,
+        min_fraction: float = 1/1000,
     ) -> MOTORTask:
         tasks = []
         for dict_entry in tokenizer.dictionary["vocab"]:
@@ -299,11 +299,11 @@ class MOTORTask(Task):
             rate = frac_events / task_stats[2].mean()
 
             if rate == 0:
-                print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())  
+                # print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())  
                 continue
 
-            if frac_events < 1/1000:
-                print("Ran into very rare task with less than 10 occurrences", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())
+            if frac_events < min_fraction:
+                # print("Ran into very rare task with less than 10 occurrences", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())
                 continue
             
             task_data.append((task, rate, task_stats[0], task_stats[1], task_stats[2].mean()))

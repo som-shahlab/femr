@@ -171,7 +171,7 @@ class BatchCreator:
                 per_subject_hierarchical_weights.extend(weights)
 
         per_subject_token_indices.append(len(per_subject_hierarchical_tokens))
-        per_subject_ages.append((event.time - birth) / datetime.timedelta(days=1))
+        per_subject_ages.append((birth - birth) / datetime.timedelta(days=1))
         per_subject_time_data.append([1, 0, 0, 0, 0])
         per_subject_timestamps.append(event.time.replace(tzinfo=datetime.timezone.utc).timestamp())
                 
@@ -211,14 +211,14 @@ class BatchCreator:
                     for _ in range(num_added):
                         per_subject_label_indices.append(len(per_subject_ages) - 1)
 
-            if False:
-                assert len(features) == 1
-                per_subject_tokens.append(features[0])
-            elif isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
+
+            if isinstance(self.tokenizer, femr.models.tokenizer.HierarchicalTokenizer):
                 assert weights is not None
                 per_subject_hierarchical_tokens.extend(features)
                 per_subject_hierarchical_weights.extend(weights)
                 per_subject_token_indices.append(len(per_subject_hierarchical_tokens))
+            else:
+                assert False, "Only hierarchical tokenizer is currently supported"
 
             per_subject_ages.append((event.time - birth) / datetime.timedelta(days=1))
 

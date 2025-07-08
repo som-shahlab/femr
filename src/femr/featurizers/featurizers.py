@@ -234,11 +234,11 @@ class CountFeaturizer(Featurizer):
             yield code
 
     def get_columns(self, event: meds_reader.Event) -> Iterator[int]:
-        if event.text_value is not None:
+        if getattr(event, 'text_value', None) is not None:
             k = (event.code, event.text_value[: self.characters_for_string_values])
             if k in self.code_string_to_column_index:
                 yield self.code_string_to_column_index[k]
-        elif event.numeric_value is not None:
+        elif getattr(event, 'numeric_value', None) is not None:
             if event.code in self.code_value_to_column_index:
                 column, quantiles = self.code_value_to_column_index[event.code]
                 for i, (start, end) in enumerate(zip(quantiles, quantiles[1:])):
@@ -276,10 +276,10 @@ class CountFeaturizer(Featurizer):
             if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                 continue
 
-            if event.text_value is not None:
+            if getattr(event, 'text_value', None) is not None:
                 if self.string_value_combination:
                     observed_string_value[(event.code, event.text_value[: self.characters_for_string_values])] += 1
-            elif event.numeric_value is not None:
+            elif getattr(event, 'numeric_value', None) is not None:
                 if self.numeric_value_decile:
                     observed_numeric_value[event.code].add(event.numeric_value)
             else:
