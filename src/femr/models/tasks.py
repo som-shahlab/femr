@@ -40,7 +40,6 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def needs_exact(self) -> bool: ...
 
-    @abc.abstractmethod
     def get_sampled_labels(self, length: int) -> int:
         return length
 
@@ -93,6 +92,7 @@ class LabeledSubjectTask(Task):
         current_date: datetime.datetime,
         next_date: Optional[datetime.datetime],
         next_features: Optional[Sequence[int]] = None,
+        actually_add: bool = False
     ) -> int:
         has_label = False
 

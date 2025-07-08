@@ -28,7 +28,7 @@ class Ontology:
         self.parents_map: Dict[str, Set[str]] = collections.defaultdict(set)
 
         # Load from the athena path ...
-        concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0)
+        concept = pl.scan_csv(os.path.join(athena_path, "CONCEPT.csv"), separator="\t", infer_schema_length=0, quote_char=None)
         code_col = pl.col("vocabulary_id") + "/" + pl.col("concept_code")
         description_col = pl.col("concept_name")
         concept_id_col = pl.col("concept_id").cast(pl.Int64)
