@@ -532,7 +532,7 @@ class FEMRBatchProcessor:
             gen_kwargs={
                 "batch_data": final_batch_data,
             },
-            num_proc=num_proc // 4,
+            num_proc=(num_proc + 3) // 4,
             writer_batch_size=8,
         )
 
