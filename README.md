@@ -3,7 +3,7 @@
 
 **FEMR** is a Python package for manipulating longitudinal EHR data for machine learning, with a focus on supporting the creation of foundation models and verifying their [presumed benefits](https://hai.stanford.edu/news/how-foundation-models-can-advance-ai-healthcare) in healthcare. Such a framework is needed given the [current state of large language models in healthcare](https://hai.stanford.edu/news/shaky-foundations-foundation-models-healthcare) and the need for better evaluation frameworks.
 
-The currently supported foundation models is [MOTOR](https://arxiv.org/abs/2301.03150).
+The currently supported foundation models is [MOTOR](https://arxiv.org/abs/2301.03150). (Users who want to train auto-regressive CLMBR-style models should use https://github.com/som-shahlab/hf_ehr)
 
 **FEMR** works with data that has been converted to the [MEDS](https://github.com/Medical-Event-Data-Standard/) schema, a simple schema that supports a wide variety of EHR / claims datasets. Please see the MEDS documentation, and in particular its [provided ETLs](https://github.com/Medical-Event-Data-Standard/meds_etl) for help converting your data to MEDS.
 
