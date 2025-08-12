@@ -6,21 +6,20 @@ import datetime
 import functools
 import math
 import os
+import pickle
+import traceback
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple, Union
-import meds
 
+import meds
 import meds_reader
 import msgpack
 import numpy as np
-import transformers
 import pyarrow as pa
+import transformers
 
 import femr.ontology
-import femr.stat_utils
 import femr.pat_utils
-
-import pickle
-import traceback
+import femr.stat_utils
 
 
 def agg_statistics(stats1, stats2):
@@ -34,7 +33,7 @@ def agg_statistics(stats1, stats2):
         for k in stats1["property_samples"]:
             v1 = stats1["property_samples"][k]
             v2 = stats2["property_samples"][k]
-            
+
             for k, v in v2["text_counts"].items():
                 v1["text_counts"][k] += v
             v1["numeric_samples"].combine(v2["numeric_samples"])
@@ -43,7 +42,6 @@ def agg_statistics(stats1, stats2):
     except Exception as e:
         traceback.print_exc()
         raise e
-        
 
     return stats1
 
@@ -54,6 +52,7 @@ def normalize_unit(unit):
     else:
         return None
 
+
 def is_close_float(t, f):
     if f is None:
         return False
@@ -62,6 +61,7 @@ def is_close_float(t, f):
         return math.abs(f - v) < 0.01 * f
     except:
         return False
+
 
 def try_float(v):
     try:
@@ -80,15 +80,16 @@ def map_statistics(
     age_stats = collections.defaultdict(femr.stat_utils.OnlineStatistics)
     code_counts: Dict[str, float] = collections.defaultdict(float)
 
-    
-    bad_properties = {'code', 'time'}
+    bad_properties = {"code", "time"}
 
     property_samples = {
         k: {
-            'numeric_samples': femr.stat_utils.ReservoirSampler(10_000),
-            'text_counts': collections.defaultdict(float),
-            'numeric_count': 0,
-        } for k in properties if k not in bad_properties
+            "numeric_samples": femr.stat_utils.ReservoirSampler(10_000),
+            "text_counts": collections.defaultdict(float),
+            "numeric_count": 0,
+        }
+        for k in properties
+        if k not in bad_properties
     }
 
     for subject in subjects:
@@ -101,12 +102,12 @@ def map_statistics(
         birth_date = femr.pat_utils.get_subject_birthdate(subject)
         code_set = set()
 
-
         pat_samples = {
             k: {
-                'numeric_samples': [],
-                'text_counts': set(),
-            } for k in property_samples
+                "numeric_samples": [],
+                "text_counts": set(),
+            }
+            for k in property_samples
         }
 
         last_time = None
@@ -117,7 +118,12 @@ def map_statistics(
                 age_stats["age"].add(weight, age)
                 age_stats["log_age"].add(weight, math.log(1 + age))
 
-            if event.time is not None and event.time.date() > birth_date.date() and last_time is not None and last_time.date() > birth_date.date():
+            if (
+                event.time is not None
+                and event.time.date() > birth_date.date()
+                and last_time is not None
+                and last_time.date() > birth_date.date()
+            ):
                 delta = (event.time - last_time).total_seconds()
                 age_stats["delta"].add(weight, delta)
                 age_stats["log_delta"].add(weight, math.log(1 + delta))
@@ -125,15 +131,14 @@ def map_statistics(
             last_time = event.time
 
             for k, v in event:
-                if k == 'code':
+                if k == "code":
                     code_set.add(v)
                 elif k in pat_samples:
                     possib_float = try_float(v)
                     if possib_float is not None:
-                        pat_samples[k]['numeric_samples'].append(possib_float)
+                        pat_samples[k]["numeric_samples"].append(possib_float)
                     else:
-                        pat_samples[k]['text_counts'].add(str(v))
-
+                        pat_samples[k]["text_counts"].add(str(v))
 
         final_codes: Set[str] = set()
         for code in code_set:
@@ -144,11 +149,11 @@ def map_statistics(
 
         for k, v in pat_samples.items():
             res = property_samples[k]
-            for text in v['text_counts']:
-                res['text_counts'][text] += 1 / num_subjects
-            for value in v['numeric_samples']:
-                res['numeric_samples'].add(value, 1 / (num_subjects * len(v['numeric_samples'])))
-            res['numeric_count'] += len(v['numeric_samples']) / weight
+            for text in v["text_counts"]:
+                res["text_counts"][text] += 1 / num_subjects
+            for value in v["numeric_samples"]:
+                res["numeric_samples"].add(value, 1 / (num_subjects * len(v["numeric_samples"])))
+            res["numeric_count"] += len(v["numeric_samples"]) / weight
 
     return {
         "age_stats": dict(age_stats),
@@ -160,8 +165,13 @@ def map_statistics(
 def entropy(p):
     return p * math.log(p) + (1 - p) * math.log(1 - p)
 
+
 def convert_statistics_to_msgpack(
-    statistics, vocab_size: int, num_numeric: int, ontology: femr.ontology.Ontology, min_fraction: float,
+    statistics,
+    vocab_size: int,
+    num_numeric: int,
+    ontology: femr.ontology.Ontology,
+    min_fraction: float,
 ):
     vocab = []
 
@@ -183,8 +193,9 @@ def convert_statistics_to_msgpack(
             }
             vocab.append(entry)
 
-
-    total_numeric_weight = sum(property_data["numeric_count"] for property_data in statistics["property_samples"].values())
+    total_numeric_weight = sum(
+        property_data["numeric_count"] for property_data in statistics["property_samples"].values()
+    )
 
     for property, property_data in statistics["property_samples"].items():
         for text, weight in property_data["text_counts"].items():
@@ -213,7 +224,7 @@ def convert_statistics_to_msgpack(
             bins = sorted(list(set(np.quantile(numeric_samples, np.linspace(0, 1, num=num_numeric_for_property + 1)))))
             bins = bins[1:-1]
 
-            samples = [float('-inf')]
+            samples = [float("-inf")]
             samples.extend(bins)
             samples.append(float("inf"))
 
@@ -259,8 +270,8 @@ class HierarchicalTokenizer(transformers.utils.PushToHubMixin):
         vocab_size: int,
         ontology: femr.ontology.Ontology,
         num_numeric: int = 1000,
-        min_fraction: float = 1/1000,
-        banned_properties: Set[str] = {}, 
+        min_fraction: float = 1 / 1000,
+        banned_properties: Set[str] = {},
     ) -> HierarchicalTokenizer:
         """Train a FEMR tokenizer from the given dataset"""
 
@@ -275,17 +286,14 @@ class HierarchicalTokenizer(transformers.utils.PushToHubMixin):
                     map_statistics,
                     num_subjects=len(db),
                     ontology=ontology,
-                    properties = db.properties,
+                    properties=db.properties,
                 )
             ),
         )
 
         whatever = convert_statistics_to_msgpack(statistics, vocab_size, num_numeric, ontology, min_fraction)
 
-        return HierarchicalTokenizer(
-            whatever, ontology
-        )
-
+        return HierarchicalTokenizer(whatever, ontology)
 
     def __init__(self, dictionary: Mapping[str, Any], ontology: femr.ontology.Ontology):
         self.dictionary = dictionary
@@ -421,12 +429,11 @@ class HierarchicalTokenizer(transformers.utils.PushToHubMixin):
 
         return codes, weights
 
-
     def get_time_data(self, age: datetime.timedelta, delta: datetime.timedelta) -> float:
         result = []
 
         for v, name in zip((age, delta), ("age", "delta")):
-            for transform, transform_name in ((lambda a:a, ""), (lambda a: math.log(a + 1), "log_")):
+            for transform, transform_name in ((lambda a: a, ""), (lambda a: math.log(a + 1), "log_")):
                 stats = self.dictionary["age_stats"][transform_name + name]
                 if v is None:
                     result.append(0)
