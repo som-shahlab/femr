@@ -379,14 +379,14 @@ class MOTORTask(Task):
     ) -> int:
         if next_date is None or next_date == current_date:
             return 0
-        
-        if not actually_add:
-            return 1
 
         censor_time, tte = self.calculator.get_future_events_for_time(current_date)
 
         if len(tte) == 0:
             return 0
+        
+        if not actually_add:
+            return 1
 
         censor_seconds = censor_time.total_seconds()
         self.per_subject_censor_time.append(censor_seconds)
