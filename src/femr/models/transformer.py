@@ -9,6 +9,7 @@ import meds_reader
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch_hawk
 import transformers
 import xformers.ops
 from torch import nn
@@ -20,7 +21,6 @@ import femr.models.rmsnorm
 import femr.models.tasks
 import femr.models.tokenizer
 import femr.models.xformers
-import torch_hawk
 
 
 # From https://github.com/kingoflolz/mesh-transformer-jax
@@ -99,12 +99,11 @@ class FEMREncoderLayer(nn.Module):
                 bias=self.config.use_bias,
             )
 
-        
         self.output_proj = nn.Linear(
             self.config.hidden_size + self.config.intermediate_size, self.config.hidden_size, bias=self.config.use_bias
         )
 
-    def forward(self, x, time_data, pos_embed, attn_bias, s):        
+    def forward(self, x, time_data, pos_embed, attn_bias, s):
         x = self.norm(x)
 
         if self.config.use_normed_ages:
@@ -112,8 +111,8 @@ class FEMREncoderLayer(nn.Module):
                 all_time = time_data
             else:
                 all_time = torch.concatenate((time_data, time_data**2), axis=-1)
-        
-            x[:, -all_time.shape[1]:] = all_time.to(dtype=x.dtype)
+
+            x[:, -all_time.shape[1] :] = all_time.to(dtype=x.dtype)
 
         transformed = self.input_proj(x)
 
@@ -121,7 +120,7 @@ class FEMREncoderLayer(nn.Module):
             attn = self.hawk_module(x, s)
             ff = transformed
         else:
-        
+
             ff = transformed[:, : -self.config.hidden_size * 3]
             qkv = transformed[:, -self.config.hidden_size * 3 :]
 
@@ -141,7 +140,6 @@ class FEMREncoderLayer(nn.Module):
             )
 
             attn = attn.reshape(x.shape)
-
 
         if self.config.hidden_act == "gelu":
             ff = F.gelu(ff)
@@ -173,7 +171,9 @@ class FEMRTransformer(nn.Module):
                 include_last_offset=True,
             )
 
-        self.layers = nn.ModuleList([FEMREncoderLayer(config, use_hawk=(i % 2 == 0)) for i in range(self.config.n_layers)])
+        self.layers = nn.ModuleList(
+            [FEMREncoderLayer(config, use_hawk=(i % 2 == 0)) for i in range(self.config.n_layers)]
+        )
 
     def forward(self, batch, s):
         if not self.config.is_hierarchical:
@@ -273,7 +273,7 @@ class MOTORTaskHead(nn.Module):
 
         #     bias = self.task_layer.bias.reshape(1, 1, -1)
         #     better = torch.exp2((time_dependent_logits - bias).type(torch.bfloat16) + (bias + batch["log_time"]).type(torch.bfloat16)).type(torch.float32)
-            
+
         #     bad_error = torch.mean((actual - bad) **2)
         #     better_error = torch.mean((actual - better) **2)
         #     var = torch.var(actual)
@@ -292,7 +292,6 @@ class MOTORTaskHead(nn.Module):
         # print(self.task_layer.bias.reshape(1, 1, -1) + batch["log_time"])
         # print(self.task_layer.bias)
         # print(time_dependent_logits - self.task_layer.bias.reshape(1, 1, -1))
-        
 
         # total_loss = time_dependent_logits + batch["log_time"]
         # max_loss = torch.max(total_loss)
@@ -303,23 +302,18 @@ class MOTORTaskHead(nn.Module):
 
         # # max_location[0][0] = 532
 
-
         # stats(features[max_location[0], :])
         # stats(time_independent_features[max_location[0], max_location[1], :])
 
-
         # stats(features[532, :])
         # stats(time_independent_features[532, max_location[1], :])
-
 
         # print("Log time", batch["log_time"][max_location])
         # print("Logits", time_dependent_logits[max_location])
         # print("Bias", self.task_layer.bias[max_location[2]][0])
 
-
         # # # print(batch["log_time"][max_location])
 
-        
         # # print(features[max_location[0], :])
         # # print(time_independent_features[max_location[0], max_location[1], :])
         # # print(self.task_layer.weight[max_location[2], :])
@@ -332,7 +326,6 @@ class MOTORTaskHead(nn.Module):
 
         # print("Recompute", (task_vector * feature_vector).sum() + self.task_layer.bias[max_location[2]][0])
 
-
         # features[max_location[0], :] = 0
         # time_independent_features[max_location[0], max_location[1], :] = 0
 
@@ -342,7 +335,6 @@ class MOTORTaskHead(nn.Module):
         # time_dependent_logits[max_location[0], max_location[1], :] = 0
 
         # stats(time_dependent_logits)
-
 
         # print(time_dependent_logits - self.task_layer.bias.unsqueeze(0).unsqueeze(0))
 
@@ -405,8 +397,8 @@ class FEMRModel(transformers.PreTrainedModel):
 
         batch = remove_first_dimension(batch)
 
-        s = torch.zeros_like(batch['subject_ids'])
-        s[1:] = batch['subject_ids'][1:] != batch['subject_ids'][:-1]
+        s = torch.zeros_like(batch["subject_ids"])
+        s[1:] = batch["subject_ids"][1:] != batch["subject_ids"][:-1]
         s = torch.cumsum(s, dim=0).type(torch.uint8)
 
         features = self.transformer(batch["transformer"], s)
