@@ -49,23 +49,6 @@ If you have OMOP CDM formated data, follow these instructions:
 meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
 ```
 
-3. Use HuggingFace's Datasets library to load our dataset in Python
-```bash
-
-dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
-
-# Print dataset stats
-print(dataset)
->>> Dataset({
->>>   features: ['subject_id', 'events'],
->>>   num_rows: 6732
->>> })
-
-# Print number of events in first subject in dataset
-print(len(dataset[0]['events']))
->>> 2287
-```
-
 ## Stanford STARR-OMOP Data
 
 If you are using the STARR-OMOP dataset from Stanford (which uses the OMOP CDM), we add an initial Stanford-specific preprocessing step. Otherwise this should be identical to the **OMOP Data** section. Follow these instructions:
@@ -78,23 +61,6 @@ meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]_raw
 
 # Apply Stanford fixes
 femr_stanford_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS]
-```
-
-3. Use HuggingFace's Datasets library to load our dataset in Python
-```bash
-
-dataset = datasets.Dataset.from_parquet(PATH_TO_OUTPUT_MEDS + 'data/*')
-
-# Print dataset stats
-print(dataset)
->>> Dataset({
->>>   features: ['subject_id', 'events'],
->>>   num_rows: 6732
->>> })
-
-# Print number of events in first subject in dataset
-print(len(dataset[0]['events']))
->>> 2287
 ```
 
 # Development
