@@ -307,6 +307,41 @@ def test_count_bins_featurizer() -> None:
     _assert_featurized_subjects_structure(all_labels, featurized_subjects)
 
 
+def test_count_bins_featurizer_with_ontology() -> None:
+    time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
+    dataset = femr_test_tools.create_subjects_dataset(100)
+    labels = CodeLabeler(["2"], time_horizon, ["3"]).label(dataset[0])
+
+    class DummyOntology:
+        def get_all_parents(self, code):
+            if code in ("2", meds.birth_code):
+                return {"parent", code}
+            return {code}
+
+    featurizer = CountFeaturizer(
+        ontology=cast(femr.ontology.Ontology, DummyOntology()),
+        is_ontology_expansion=True,
+        numeric_value_decile=True,
+        string_value_combination=True,
+        time_bins=[
+            datetime.timedelta(days=90),
+            datetime.timedelta(days=180),
+            datetime.timedelta(weeks=1e4),
+        ],
+    )
+    data = featurizer.get_initial_preprocess_data()
+    featurizer.add_preprocess_data(data, dataset[0], labels)
+    featurizer.encorperate_prepreprocessed_data([data])
+
+    features = featurizer.featurize(dataset[0], labels)
+    named_features = [{(featurizer.get_column_name(value.column), value.value) for value in row} for row in features]
+
+    assert ("parent_70000 days, 0:00:00", 1) in named_features[0]
+    assert ("parent_70000 days, 0:00:00", 3) in named_features[1]
+    assert ("parent_90 days, 0:00:00", 2) in named_features[2]
+    assert ("parent_70000 days, 0:00:00", 3) in named_features[2]
+
+
 def test_complete_featurization() -> None:
     time_horizon = TimeHorizon(datetime.timedelta(days=0), datetime.timedelta(days=180))
 

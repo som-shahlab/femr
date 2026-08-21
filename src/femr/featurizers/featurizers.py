@@ -87,9 +87,18 @@ class AgeFeaturizer(Featurizer):
         )
 
 
+def _modify_count_time_bin(code_counts: Dict[int, int], event_codes: Tuple[int, ...], delta: int) -> None:
+    for event_code in event_codes:
+        new_count = code_counts.get(event_code, 0) + delta
+        if new_count:
+            code_counts[event_code] = new_count
+        else:
+            del code_counts[event_code]
+
+
 def _reshuffle_count_time_bins(
     time_bins: List[datetime.timedelta],
-    codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]],
+    codes_per_bin: Dict[int, Deque[Tuple[Tuple[int, ...], datetime.datetime]]],
     code_counts_per_bin: Dict[int, Dict[int, int]],
     label: femr.labelers.Label,
 ):
@@ -98,7 +107,7 @@ def _reshuffle_count_time_bins(
         while len(codes_per_bin[bin_idx]) > 0:
             # Get the least recently added event (i.e. farthest back in subject's timeline
             # from the currently processed label)
-            oldest_event_code, oldest_event_start = codes_per_bin[bin_idx][0]
+            oldest_event_codes, oldest_event_start = codes_per_bin[bin_idx][0]
 
             if (label.prediction_time - oldest_event_start) <= bin_end:
                 # The oldest event that we're tracking is still within the closest (i.e. smallest distance)
@@ -108,20 +117,13 @@ def _reshuffle_count_time_bins(
                 break
             else:
                 # Goal: Readjust codes so that they fall under the proper time bin
-                # Move (oldest_event_code, oldest_event_start) from entry @ `bin_idx`
+                # Move (oldest_event_codes, oldest_event_start) from entry @ `bin_idx`
                 # to entry @ `bin_idx + 1`.
-                # Basically, move this code from the bin that is closer to the prediction time (`bin_idx`)
+                # Basically, move this event from the bin that is closer to the prediction time (`bin_idx`)
                 # to a bin that is further away from the prediction time (`bin_idx + 1`)
                 codes_per_bin[bin_idx + 1].append(codes_per_bin[bin_idx].popleft())
-
-                # Remove oldest_event_code from current (closer to prediction time) bin `bin_idx`
-                code_counts_per_bin[bin_idx][oldest_event_code] -= 1
-                # Add oldest_event_code to the (farther from prediction time) bin `bin_idx + 11
-                code_counts_per_bin[bin_idx + 1][oldest_event_code] += 1
-
-                # Clear out ColumnValues with a value of 0 to preserve sparsity of matrix
-                if code_counts_per_bin[bin_idx][oldest_event_code] == 0:
-                    del code_counts_per_bin[bin_idx][oldest_event_code]
+                _modify_count_time_bin(code_counts_per_bin[bin_idx], oldest_event_codes, -1)
+                _modify_count_time_bin(code_counts_per_bin[bin_idx + 1], oldest_event_codes, 1)
 
 
 class ReservoirSampler:
@@ -245,10 +247,15 @@ class CountFeaturizer(Featurizer):
                     if start <= event.numeric_value < end:
                         yield i + column
         else:
-            for code in self.get_codes(event.code):
-                # If we haven't seen this code before, then add it to our list of included codes
-                if code in self.code_to_column_index:
-                    yield self.code_to_column_index[code]
+            column_indices = self.code_to_column_indices_cache.get(event.code)
+            if column_indices is None:
+                column_indices = tuple(
+                    self.code_to_column_index[code]
+                    for code in self.get_codes(event.code)
+                    if code in self.code_to_column_index
+                )
+                self.code_to_column_indices_cache[event.code] = column_indices
+            yield from column_indices
 
     def get_initial_preprocess_data(self) -> Any:
         return {
@@ -310,6 +317,7 @@ class CountFeaturizer(Featurizer):
         self.code_to_column_index = {}
         self.code_string_to_column_index = {}
         self.code_value_to_column_index = {}
+        self.code_to_column_indices_cache = {}
 
         self.num_columns = 0
 
@@ -351,7 +359,7 @@ class CountFeaturizer(Featurizer):
             for event in subject.events:
                 while event.time is not None and event.time > labels[label_idx].prediction_time:
                     label_idx += 1
-                    # Create all features for label at index `label_idx`
+                    # Create all features for label at index `label_idx`
                     all_columns.append([ColumnValue(code, count) for code, count in code_counter.items()])
                     if label_idx >= len(labels):
                         # We've reached the end of the labels for this subject,
@@ -375,7 +383,7 @@ class CountFeaturizer(Featurizer):
             # First, sort time bins in ascending order (i.e. [100 days, 90 days, 1 days] -> [1, 90, 100])
             time_bins: List[datetime.timedelta] = sorted([x for x in self.time_bins if x is not None])
 
-            codes_per_bin: Dict[int, Deque[Tuple[int, datetime.datetime]]] = {
+            codes_per_bin: Dict[int, Deque[Tuple[Tuple[int, ...], datetime.datetime]]] = {
                 i: deque() for i in range(len(self.time_bins) + 1)
             }
 
@@ -393,7 +401,7 @@ class CountFeaturizer(Featurizer):
                         labels[label_idx],
                     )
                     label_idx += 1
-                    # Create all features for label at index `label_idx`
+                    # Create all features for label at index `label_idx`
                     all_columns.append(
                         [
                             ColumnValue(
@@ -414,9 +422,10 @@ class CountFeaturizer(Featurizer):
                 if self.excluded_event_filter is not None and self.excluded_event_filter(event):
                     continue
 
-                for column_idx in self.get_columns(event):
-                    codes_per_bin[0].append((column_idx, event.time))
-                    code_counts_per_bin[0][column_idx] += 1
+                column_indices = tuple(self.get_columns(event))
+                if column_indices:
+                    codes_per_bin[0].append((column_indices, event.time))
+                    _modify_count_time_bin(code_counts_per_bin[0], column_indices, 1)
 
             for label in labels[label_idx:]:
                 _reshuffle_count_time_bins(
