@@ -3,7 +3,7 @@
 
 **FEMR** is a Python package for manipulating longitudinal EHR data for machine learning, with a focus on supporting the creation of foundation models and verifying their [presumed benefits](https://hai.stanford.edu/news/how-foundation-models-can-advance-ai-healthcare) in healthcare. Such a framework is needed given the [current state of large language models in healthcare](https://hai.stanford.edu/news/shaky-foundations-foundation-models-healthcare) and the need for better evaluation frameworks.
 
-The currently supported foundation models is [MOTOR](https://arxiv.org/abs/2301.03150). 
+The currently supported foundation models is [MOTOR](https://arxiv.org/abs/2301.03150).
 
 (Users who want to train auto-regressive CLMBR-style models should use [FEMR 0.1.16](https://github.com/som-shahlab/femr/releases/tag/0.1.16) or https://github.com/som-shahlab/hf_ehr)
 
