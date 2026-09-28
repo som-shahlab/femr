@@ -7,6 +7,7 @@ import femr.models.processor
 import femr.models.tasks
 import femr.models.tokenizer
 
+
 class DummyTokenizer(femr.models.tokenizer.HierarchicalTokenizer):
     def __init__(self, is_hierarchical: bool = True):
         self.is_hierarchical = is_hierarchical
@@ -22,9 +23,8 @@ class DummyTokenizer(femr.models.tokenizer.HierarchicalTokenizer):
         else:
             return [int(event.code)], [1]
 
-
     def get_time_data(self, age: datetime.timedelta, delta: datetime.timedelta) -> float:
-        return [1,1,1,1]
+        return [1, 1, 1, 1]
 
     def normalize_age(self, age):
         return 0.5
@@ -34,8 +34,8 @@ def assert_two_batches_equal_third(batch1, batch2, batch3):
     """This asserts that batch1 + batch2 = batchs3"""
     assert batch3["subject_ids"].tolist() == batch1["subject_ids"].tolist() + batch2["subject_ids"].tolist()
 
-    batch3['transformer']['ages'][len(batch1["transformer"]["ages"])] = 0
-    batch3['transformer']['timestamps'][len(batch1["transformer"]["ages"])] = batch3['transformer']['timestamps'][0]
+    batch3["transformer"]["ages"][len(batch1["transformer"]["ages"])] = 0
+    batch3["transformer"]["timestamps"][len(batch1["transformer"]["ages"])] = batch3["transformer"]["timestamps"][0]
 
     assert (
         batch3["transformer"]["ages"].tolist()
@@ -68,12 +68,15 @@ def assert_two_batches_equal_third(batch1, batch2, batch3):
     assert target_label_ages == actual_label_ages
     assert target_label_subject_ids == actual_label_subject_ids
 
-    batch3['transformer']['hierarchical_tokens'][len(batch1["transformer"]["hierarchical_tokens"])] = batch3['transformer']['hierarchical_tokens'][0]
+    batch3["transformer"]["hierarchical_tokens"][len(batch1["transformer"]["hierarchical_tokens"])] = batch3[
+        "transformer"
+    ]["hierarchical_tokens"][0]
 
     assert (
         batch3["transformer"]["hierarchical_tokens"].tolist()
         == batch1["transformer"]["hierarchical_tokens"].tolist() + batch2["transformer"]["hierarchical_tokens"].tolist()
     )
+
 
 def test_two_subjects_concat_no_task():
     tokenizer = DummyTokenizer()
