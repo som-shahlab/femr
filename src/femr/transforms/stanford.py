@@ -3,10 +3,24 @@
 """Transforms that are unique to STARR OMOP."""
 
 import datetime
-from typing import Dict, Tuple
+import functools
+from typing import Callable, Dict, FrozenSet, Optional, Sequence, Tuple
 
 import meds
 import meds_reader.transform
+
+SubjectTransform = Callable[[meds_reader.transform.MutableSubject], meds_reader.transform.MutableSubject]
+
+# Default source tables for the billing-code timing fix, based on the original
+# Clarity queries used to form STRIDE.
+_BILLING_TABLE_SUFFIXES = ("pat_enc_dx", "hsp_acct_dx_list", "arpb_transactions")
+_BILLING_TABLE_PREFIXES = ("shc", "lpch")
+
+DEFAULT_BILLING_CODE_TABLES: Tuple[str, ...] = tuple(
+    f"{prefix}_{suffix}" for prefix in _BILLING_TABLE_PREFIXES for suffix in _BILLING_TABLE_SUFFIXES
+)
+
+DEFAULT_ENCOUNTER_TABLES: Tuple[str, ...] = ("lpch_pat_enc", "shc_pat_enc")
 
 
 def _move_date_to_end(
@@ -131,34 +145,24 @@ def move_pre_birth(subject: meds_reader.transform.MutableSubject) -> meds_reader
     return subject
 
 
-def move_billing_codes(subject: meds_reader.transform.MutableSubject) -> meds_reader.transform.MutableSubject:
-    """Move billing codes to the end of each visit.
-
-    One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
-    This class fixes that by assigning them to the end of the visit.
-    """
+def _move_billing_codes_impl(
+    subject: meds_reader.transform.MutableSubject,
+    billing_code_tables: FrozenSet[str],
+    encounter_tables: FrozenSet[str],
+) -> meds_reader.transform.MutableSubject:
     end_visits: Dict[int, datetime.datetime] = {}  # Map from visit ID to visit end time
     lowest_visit: Dict[Tuple[datetime.datetime, str], int] = {}  # Map from code/start time pairs to visit ID
 
-    # List of billing code tables based on the original Clarity queries used to form STRIDE
-    billing_codes = [
-        "pat_enc_dx",
-        "hsp_acct_dx_list",
-        "arpb_transactions",
-    ]
-
-    all_billing_codes = {(prefix + "_" + billing_code) for billing_code in billing_codes for prefix in ["shc", "lpch"]}
-
     for event in subject.events:
         # For events that share the same code/start time, we find the lowest visit ID
-        if event.clarity_table in all_billing_codes and event.visit_id is not None:
+        if event.clarity_table in billing_code_tables and event.visit_id is not None:
             key = (event.time, event.code)
             if key not in lowest_visit:
                 lowest_visit[key] = event.visit_id
             else:
                 lowest_visit[key] = min(lowest_visit[key], event.visit_id)
 
-        if event.clarity_table in ("lpch_pat_enc", "shc_pat_enc"):
+        if event.clarity_table in encounter_tables:
             if event.end is not None:
                 if event.visit_id is None:
                     # Every event with an end time should have a visit ID associated with it
@@ -170,7 +174,7 @@ def move_billing_codes(subject: meds_reader.transform.MutableSubject) -> meds_re
                 end_visits[event.visit_id] = event.end
 
     for event in subject.events:
-        if event.clarity_table in all_billing_codes:
+        if event.clarity_table in billing_code_tables:
             key = (event.time, event.code)
             if event.visit_id != lowest_visit.get(key, None):
                 # Drop this event as we already have it, just with a different visit_id?
@@ -197,3 +201,50 @@ def move_billing_codes(subject: meds_reader.transform.MutableSubject) -> meds_re
     subject.events.sort(key=lambda a: a.time)
 
     return subject
+
+
+def make_move_billing_codes(
+    billing_code_tables: Optional[Sequence[str]] = None,
+    encounter_tables: Optional[Sequence[str]] = None,
+) -> SubjectTransform:
+    """Create a transform that moves billing codes to the end of each visit.
+
+    Some OMOP extracts incorrectly stamp billing codes at the start of the visit.
+    This transform re-stamps them at the visit end time instead.
+
+    Args:
+        billing_code_tables: The source (clarity) tables that hold billing codes.
+            Defaults to the Stanford Clarity billing tables.
+        encounter_tables: The source (clarity) tables that hold encounter/visit records,
+            used to determine each visit's end time. Defaults to the Stanford
+            Clarity encounter tables.
+
+    Returns:
+        A subject transform implementing the billing-code timing fix. The returned
+        transform is picklable, so it can be used with multiprocessing-based
+        dataset transforms such as ``meds_reader.transform.transform_meds_dataset``.
+    """
+    if billing_code_tables is None:
+        billing_code_tables = DEFAULT_BILLING_CODE_TABLES
+    if encounter_tables is None:
+        encounter_tables = DEFAULT_ENCOUNTER_TABLES
+
+    return functools.partial(
+        _move_billing_codes_impl,
+        billing_code_tables=frozenset(billing_code_tables),
+        encounter_tables=frozenset(encounter_tables),
+    )
+
+
+def move_billing_codes(
+    subject: meds_reader.transform.MutableSubject,
+) -> meds_reader.transform.MutableSubject:
+    """Move billing codes to the end of each visit.
+
+    One issue with our OMOP extract is that billing codes are incorrectly assigned at the start of the visit.
+    This class fixes that by assigning them to the end of the visit.
+
+    This uses the default (Stanford Clarity) source tables. For other sites, use
+    :func:`make_move_billing_codes` with the site's own table names.
+    """
+    return make_move_billing_codes()(subject)

@@ -38,6 +38,7 @@ version_file = "src/femr/_version.py"
 [project.scripts]
 
 femr_stanford_omop_fixer = "femr.post_etl_pipelines.stanford:femr_stanford_omop_fixer_program"
+femr_omop_fixer = "femr.post_etl_pipelines.site_fixes:femr_omop_fixer_program"
 
 [project.optional-dependencies]
 build = [
