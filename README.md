@@ -49,9 +49,65 @@ If you have OMOP CDM formated data, follow these instructions:
 meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]
 ```
 
+## Site-specific post-ETL fixes
+
+OMOP extracts from different sites have different data-quality quirks (midnight timestamps, billing codes stamped at
+visit start, unreliable flowsheet measurements, ...). FEMR provides a configurable post-ETL fix system via
+`femr_omop_fixer`, which applies a sequence of small, named "fixes" (subject-level transforms) to a MEDS dataset:
+
+```bash
+# Apply the generic profile: site-agnostic timing/code fixes for any OMOP => MEDS output
+femr_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS]
+
+# Apply the Stanford profile (exactly reproduces femr_stanford_omop_fixer)
+femr_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS] --profile stanford
+
+# Or describe the fixes yourself in a JSON config file
+femr_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS] --config my_site.json
+```
+
+A config file selects a base profile and/or lists the fixes to apply (a `"fixes"` list replaces the profile's list):
+
+```json
+{
+    "profile": "generic",
+    "fixes": [
+        {"name": "move_pre_birth"},
+        {"name": "move_to_day_end"},
+        {"name": "remove_codes", "params": {"codes": ["MY_OBS/Flowsheet"]}},
+        {
+            "name": "move_billing_codes",
+            "params": {
+                "billing_code_tables": ["mysite_pat_enc_dx"],
+                "encounter_tables": ["mysite_pat_enc"]
+            }
+        }
+    ]
+}
+```
+
+Built-in fixes: `move_pre_birth`, `move_visit_start_to_first_event_start`, `move_to_day_end`, `switch_to_icd10cm`,
+`move_billing_codes`, `remove_nones`, `delta_encode`, `remove_codes`, `fix_events`.
+
+Sites can add their own fixes without forking FEMR internals by registering a fix factory:
+
+```python
+from femr.post_etl_pipelines import site_fixes
+
+@site_fixes.register_fix("drop_test_patients")
+def _make_drop_test_patients() -> site_fixes.SubjectTransform:
+    def drop_test_patients(subject):
+        ...
+        return subject
+    return drop_test_patients
+```
+
+and then referencing `"drop_test_patients"` by name in the config.
+
 ## Stanford STARR-OMOP Data
 
-If you are using the STARR-OMOP dataset from Stanford (which uses the OMOP CDM), we add an initial Stanford-specific preprocessing step. Otherwise this should be identical to the **OMOP Data** section. Follow these instructions:
+If you are using the STARR-OMOP dataset from Stanford (which uses the OMOP CDM), we add an initial Stanford-specific
+preprocessing step. Otherwise this should be identical to the **OMOP Data** section. Follow these instructions:
 
 1. Download your STARR-OMOP dataset to `[PATH_TO_SOURCE_OMOP]`.
 2. Convert STARR-OMOP => MEDS using the following:
@@ -62,6 +118,9 @@ meds_etl_omop [PATH_TO_SOURCE_OMOP] [PATH_TO_OUTPUT_MEDS]_raw
 # Apply Stanford fixes
 femr_stanford_omop_fixer [PATH_TO_OUTPUT_MEDS]_raw [PATH_TO_OUTPUT_MEDS]
 ```
+
+`femr_stanford_omop_fixer` is retained for backwards compatibility and is exactly equivalent to
+`femr_omop_fixer --profile stanford`; see **Site-specific post-ETL fixes** above for the general mechanism.
 
 # Development
 
