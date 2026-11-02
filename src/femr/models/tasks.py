@@ -4,6 +4,8 @@ import abc
 import collections
 import datetime
 import functools
+import random
+import warnings
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
 import meds
@@ -11,14 +13,12 @@ import meds_reader
 import numpy as np
 import scipy.sparse
 import torch
-import warnings
 
 import femr.models.config
 import femr.models.tokenizer
 import femr.ontology
 import femr.pat_utils
 import femr.stat_utils
-import random
 
 
 class Task(abc.ABC):
@@ -64,7 +64,7 @@ class LabeledSubjectTask(Task):
 
         self.label_map: Mapping[int, Any] = collections.defaultdict(list)
         for label in labels:
-            self.label_map[label['subject_id']].append(label)
+            self.label_map[label["subject_id"]].append(label)
 
         for k, v in self.label_map.items():
             v.sort(key=lambda a: a["prediction_time"])
@@ -92,7 +92,7 @@ class LabeledSubjectTask(Task):
         current_date: datetime.datetime,
         next_date: Optional[datetime.datetime],
         next_features: Optional[Sequence[int]] = None,
-        actually_add: bool = False
+        actually_add: bool = False,
     ) -> int:
         has_label = False
 
@@ -170,6 +170,7 @@ class CLMBRTask(Task):
     def get_batch_data(self) -> Mapping[str, np.ndarray]:
         return {"labels": np.array(self.batch_labels, dtype=np.int32)}
 
+
 class SurvivalCalculator:
     def __init__(
         self, ontology: femr.ontology.Ontology, subject: meds_reader.Subject, code_whitelist: Optional[Set[str]] = None
@@ -181,7 +182,7 @@ class SurvivalCalculator:
         for event in subject.events:
             if event.time is None:
                 continue
-            if getattr(event, 'numeric_value', None) is not None or getattr(event, 'text_value', None) is not None:
+            if getattr(event, "numeric_value", None) is not None or getattr(event, "text_value", None) is not None:
                 continue
 
             codes = set()
@@ -227,7 +228,11 @@ def _prefit_motor_map(
         birth = femr.pat_utils.get_subject_birthdate(subject)
 
         for event, next_event in zip(subject.events, subject.events[1:]):
-            if (event.time is None) or (event.time.date() == birth.date()) or (event.time.date() == next_event.time.date()):
+            if (
+                (event.time is None)
+                or (event.time.date() == birth.date())
+                or (event.time.date() == next_event.time.date())
+            ):
                 continue
 
             censor_time, tte = calculator.get_future_events_for_time(event.time)
@@ -271,7 +276,7 @@ class MOTORTask(Task):
         num_tasks: int,
         num_bins: int,
         final_layer_size: int,
-        min_fraction: float = 1/1000,
+        min_fraction: float = 1 / 1000,
     ) -> MOTORTask:
         tasks = []
         for dict_entry in tokenizer.dictionary["vocab"]:
@@ -299,15 +304,15 @@ class MOTORTask(Task):
             rate = frac_events / task_stats[2].mean()
 
             if rate == 0:
-                # print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())  
+                # print("Ran into task of rate 0?", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())
                 continue
 
             if frac_events < min_fraction:
                 # print("Ran into very rare task with less than 10 occurrences", task, frac_events, task_stats[0], task_stats[1], task_stats[2].mean())
                 continue
-            
+
             task_data.append((task, rate, task_stats[0], task_stats[1], task_stats[2].mean()))
-            
+
         return MOTORTask(task_data, time_bins, final_layer_size)
 
     def __init__(self, pretraining_task_info: List[Tuple[str, float]], time_bins: List[float], final_layer_size: int):
@@ -384,7 +389,7 @@ class MOTORTask(Task):
 
         if len(tte) == 0:
             return 0
-        
+
         if not actually_add:
             return 1
 

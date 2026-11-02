@@ -27,8 +27,7 @@ def create_fake_athena(tmp_path: pathlib.Path) -> pathlib.Path:
 """
     )
     relationship = athena / "CONCEPT_RELATIONSHIP.csv"
-    relationship.write_text(
-        """concept_id_1	concept_id_2	relationship_id	valid_start_date	valid_end_date	invalid_reason
+    relationship.write_text("""concept_id_1	concept_id_2	relationship_id	valid_start_date	valid_end_date	invalid_reason
 37200198	380097	Maps to	20171001	20991231
 37200198	1567956	Is a	20170428	20991231
 37200198	1567959	Is a	20170428	20991231
@@ -37,8 +36,7 @@ def create_fake_athena(tmp_path: pathlib.Path) -> pathlib.Path:
 37200198	45552385	Is a	20170428	20991231
 35977781	35977781	Mapped from	20200913	20991231
 46135811	40642538	Has status	20220128	20991231
-46135811	35631990	Has Module	20220128	20991231"""
-    )
+46135811	35631990	Has Module	20220128	20991231""")
 
     ancestor = athena / "CONCEPT_ANCESTOR.csv"
     ancestor.write_text(
