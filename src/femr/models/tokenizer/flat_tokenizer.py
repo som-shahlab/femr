@@ -11,12 +11,12 @@ from typing import Any, Dict, Iterator, List, Mapping, Optional, Set, Tuple, Uni
 import meds_reader
 import msgpack
 import numpy as np
+import pyarrow as pa
 import transformers
 
 import femr.ontology
-import femr.stat_utils
 import femr.pat_utils
-import pyarrow as pa
+import femr.stat_utils
 
 
 def train_tokenizer(
@@ -36,9 +36,7 @@ def train_tokenizer(
         ),
     )
 
-    return FlatTokenizer(
-        convert_statistics_to_msgpack(statistics, vocab_size, num_numeric)
-    )
+    return FlatTokenizer(convert_statistics_to_msgpack(statistics, vocab_size, num_numeric))
 
 
 def agg_statistics(stats1, stats2):
@@ -61,6 +59,7 @@ def normalize_unit(unit):
     else:
         return None
 
+
 def is_close_float(t, f):
     if f is None:
         return False
@@ -69,6 +68,7 @@ def is_close_float(t, f):
         return math.abs(f - v) < 0.01 * f
     except:
         return False
+
 
 def map_statistics(
     subjects: Iterator[meds_reader.Subject],
@@ -111,7 +111,9 @@ def map_statistics(
 
 
 def convert_statistics_to_msgpack(
-    statistics, vocab_size: int, num_numeric: int,
+    statistics,
+    vocab_size: int,
+    num_numeric: int,
 ):
     vocab = []
 
@@ -163,7 +165,6 @@ def convert_statistics_to_msgpack(
             "weight": weight * math.log(weight) + (1 - weight) * math.log(1 - weight),
         }
         vocab.append(entry)
- 
 
     vocab.sort(key=lambda a: a["weight"])
     vocab = vocab[:vocab_size]
